@@ -1,0 +1,93 @@
+/**
+ * Mock data for Current Stock and Stock Adjustments (Screen 2 & 3)
+ */
+
+export const CURRENT_STOCK_KPIS = [
+  {
+    id: 'c-kpi-1',
+    label: 'Total Products',
+    value: '1,248',
+    subtext: '',
+    variant: 'teal',
+  },
+  {
+    id: 'c-kpi-2',
+    label: 'Low Stock Items',
+    value: '24',
+    subtext: '',
+    variant: 'amber',
+  },
+  {
+    id: 'c-kpi-3',
+    label: 'Near Expiry Items',
+    value: '18',
+    subtext: '',
+    variant: 'blue',
+  },
+  {
+    id: 'c-kpi-4',
+    label: 'Expired Items',
+    value: '6',
+    subtext: '',
+    variant: 'red',
+  },
+];
+
+export const MOCK_STOCK_ITEMS = [
+  {
+    id: 'stk-1',
+    medicineName: 'ABCW',
+    sku: 'SKU001',
+    batchNo: 'B-1001',
+    quantity: 500,
+    amount: '₹120.00',
+    branchId: 'BR-01',
+    shelfLocation: 'A1-S3',
+    supplierName: 'PharmaCo',
+    updatedBy: 'Manager',
+    lastUpdated: '2026-08-28',
+    status: 'In Stock',
+  },
+  {
+    id: 'stk-2',
+    medicineName: 'ABC',
+    sku: 'SKU002',
+    batchNo: 'B-2001',
+    quantity: 320,
+    amount: '₹250.00',
+    branchId: 'BR-02',
+    shelfLocation: 'B2-S1',
+    supplierName: 'NutriLife',
+    updatedBy: 'Manager',
+    lastUpdated: '2026-08-27',
+    status: 'In Stock',
+  },
+  {
+    id: 'stk-3',
+    medicineName: 'HDSJS',
+    sku: 'SKU003',
+    batchNo: 'B-3001',
+    quantity: 750,
+    amount: '₹85.00',
+    branchId: 'BR-01',
+    shelfLocation: 'C3-S2',
+    supplierName: 'CarePlus',
+    updatedBy: 'Admin',
+    lastUpdated: '2026-08-26',
+    status: 'In Stock',
+  },
+  {
+    id: 'stk-4',
+    medicineName: 'JNSJ',
+    sku: 'SKU004',
+    batchNo: 'B-4001',
+    quantity: 180,
+    amount: '₹45.00',
+    branchId: 'BR-03',
+    shelfLocation: 'D1-S4',
+    supplierName: 'GenSupply',
+    updatedBy: 'Inventory',
+    lastUpdated: '2026-08-25',
+    status: 'In Stock',
+  },
+];

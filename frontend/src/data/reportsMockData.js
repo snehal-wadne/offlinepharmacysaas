@@ -1,0 +1,280 @@
+/**
+ * Mock data for Inventory Reports, Purchase Reports & Expiry Reports
+ */
+
+export const INVENTORY_REPORTS_KPIS = [
+  {
+    id: 'rep-inv-1',
+    label: 'Total Stock Valuation',
+    value: '₹14,80,250',
+    subtext: 'Across all 5 branches',
+    variant: 'teal',
+  },
+  {
+    id: 'rep-inv-2',
+    label: 'Stock Turnover Rate',
+    value: '4.8x',
+    subtext: 'Annualized velocity',
+    variant: 'teal',
+  },
+  {
+    id: 'rep-inv-3',
+    label: 'Fast-Moving SKUs',
+    value: '142',
+    subtext: 'High sales frequency',
+    variant: 'amber',
+  },
+  {
+    id: 'rep-inv-4',
+    label: 'Dead / Slow Stock Value',
+    value: '₹34,200',
+    subtext: '> 90 days no movement',
+    variant: 'red',
+  },
+];
+
+export const MOCK_INVENTORY_CATEGORY_VALUATION = [
+  {
+    category: 'Medicines & Antibiotics',
+    totalItems: 680,
+    valuation: '₹8,45,000.00',
+    turnover: '5.2x',
+    holdingPercent: '57.1%',
+    status: 'Optimal',
+  },
+  {
+    category: 'Vitamins & Supplements',
+    totalItems: 320,
+    valuation: '₹3,60,000.00',
+    turnover: '4.1x',
+    holdingPercent: '24.3%',
+    status: 'Optimal',
+  },
+  {
+    category: 'Personal Care & Hygiene',
+    totalItems: 180,
+    valuation: '₹1,95,250.00',
+    turnover: '3.6x',
+    holdingPercent: '13.2%',
+    status: 'Moderate',
+  },
+  {
+    category: 'Medical Devices & First Aid',
+    totalItems: 68,
+    valuation: '₹80,000.00',
+    turnover: '2.1x',
+    holdingPercent: '5.4%',
+    status: 'Slow Moving',
+  },
+];
+
+export const MOCK_FAST_MOVING_ITEMS = [
+  {
+    sku: 'SKU-001',
+    medicine: 'Paracetamol 500mg',
+    unitsSoldMonthly: 2400,
+    monthlyRevenue: '₹67,200.00',
+    daysOfStockLeft: 6,
+    reorderUrgency: 'High',
+  },
+  {
+    sku: 'SKU-002',
+    medicine: 'Amoxicillin 500mg',
+    unitsSoldMonthly: 1250,
+    monthlyRevenue: '₹90,000.00',
+    daysOfStockLeft: 8,
+    reorderUrgency: 'High',
+  },
+  {
+    sku: 'SKU-003',
+    medicine: 'Metformin 500mg',
+    unitsSoldMonthly: 1800,
+    monthlyRevenue: '₹68,400.00',
+    daysOfStockLeft: 12,
+    reorderUrgency: 'Medium',
+  },
+  {
+    sku: 'SKU-005',
+    medicine: 'Omeprazole 20mg',
+    unitsSoldMonthly: 980,
+    monthlyRevenue: '₹44,100.00',
+    daysOfStockLeft: 10,
+    reorderUrgency: 'Medium',
+  },
+  {
+    sku: 'SKU-006',
+    medicine: 'Cetirizine 10mg',
+    unitsSoldMonthly: 1400,
+    monthlyRevenue: '₹28,000.00',
+    daysOfStockLeft: 14,
+    reorderUrgency: 'Low',
+  },
+];
+
+export const PURCHASE_REPORTS_KPIS = [
+  {
+    id: 'rep-pur-1',
+    label: 'Total Procurement Spend',
+    value: '₹8,42,000',
+    subtext: 'This quarter (Q3 2026)',
+    variant: 'teal',
+  },
+  {
+    id: 'rep-pur-2',
+    label: 'Average Lead Time',
+    value: '3.2 Days',
+    subtext: 'Order to warehouse',
+    variant: 'teal',
+  },
+  {
+    id: 'rep-pur-3',
+    label: 'On-Time Fulfillment Rate',
+    value: '96.4%',
+    subtext: 'Vendor compliance',
+    variant: 'teal',
+  },
+  {
+    id: 'rep-pur-4',
+    label: 'Outstanding Payables',
+    value: '₹1,84,600',
+    subtext: 'Due within 30 days',
+    variant: 'amber',
+  },
+];
+
+export const MOCK_VENDOR_SPEND_ANALYSIS = [
+  {
+    supplier: 'Sun Pharma Care',
+    totalPOs: 18,
+    totalSpent: '₹2,84,500.00',
+    leadTimeAvg: '2.5 Days',
+    fulfillmentRate: '98.5%',
+    qualityAcceptance: '99.8%',
+    primaryCategory: 'Prescription Medicines',
+  },
+  {
+    supplier: 'Cipla Healthcare Ltd',
+    totalPOs: 14,
+    totalSpent: '₹1,95,200.00',
+    leadTimeAvg: '3.1 Days',
+    fulfillmentRate: '97.0%',
+    qualityAcceptance: '100%',
+    primaryCategory: 'Generics & Respiratory',
+  },
+  {
+    supplier: 'Abbott Laboratories',
+    totalPOs: 10,
+    totalSpent: '₹1,58,000.00',
+    leadTimeAvg: '4.0 Days',
+    fulfillmentRate: '94.2%',
+    qualityAcceptance: '99.1%',
+    primaryCategory: 'Nutrition & Vaccines',
+  },
+  {
+    supplier: 'NutriLife Care',
+    totalPOs: 8,
+    totalSpent: '₹98,400.00',
+    leadTimeAvg: '2.8 Days',
+    fulfillmentRate: '96.5%',
+    qualityAcceptance: '100%',
+    primaryCategory: 'Supplements & OTC',
+  },
+  {
+    supplier: 'CarePlus Pharma',
+    totalPOs: 6,
+    totalSpent: '₹64,300.00',
+    leadTimeAvg: '3.5 Days',
+    fulfillmentRate: '95.0%',
+    qualityAcceptance: '98.0%',
+    primaryCategory: 'Consumables & First Aid',
+  },
+];
+
+export const EXPIRY_REPORTS_KPIS = [
+  {
+    id: 'exp-rep-1',
+    label: 'Total Expired Value Loss',
+    value: '₹18,400',
+    subtext: 'Current fiscal quarter',
+    variant: 'red',
+  },
+  {
+    id: 'exp-rep-2',
+    label: 'Expiring in 30 Days',
+    value: '8 Batches',
+    subtext: 'Critical risk mitigation',
+    variant: 'red',
+  },
+  {
+    id: 'exp-rep-3',
+    label: 'Expiring in 90 Days',
+    value: '24 Batches',
+    subtext: 'Discount / Return window',
+    variant: 'amber',
+  },
+  {
+    id: 'exp-rep-4',
+    label: 'Quarantine / Disposal',
+    value: '4 Batches',
+    subtext: 'Awaiting destruction audit',
+    variant: 'orange',
+  },
+];
+
+export const MOCK_EXPIRY_RISK_ITEMS = [
+  {
+    batchNo: 'B-8802',
+    medicine: 'Ibuprofen 400mg',
+    supplier: 'GenSupply Dist.',
+    expiryDate: '15 Sep 2026',
+    daysRemaining: '17 Days',
+    quantity: 60,
+    costValue: '₹5,400.00',
+    riskLevel: 'Critical',
+    recommendedAction: 'Vendor Return / Discount Sale',
+  },
+  {
+    batchNo: 'B-9011',
+    medicine: 'Azithromycin 500mg',
+    supplier: 'PharmaCo Ltd',
+    expiryDate: '28 Sep 2026',
+    daysRemaining: '30 Days',
+    quantity: 40,
+    costValue: '₹12,800.00',
+    riskLevel: 'Critical',
+    recommendedAction: 'Prioritize Dispensing',
+  },
+  {
+    batchNo: 'B-1011',
+    medicine: 'Pantoprazole 40mg',
+    supplier: 'NutriLife Care',
+    expiryDate: '15 Oct 2026',
+    daysRemaining: '47 Days',
+    quantity: 120,
+    costValue: '₹16,800.00',
+    riskLevel: 'High Risk',
+    recommendedAction: 'Transfer to Downtown Branch',
+  },
+  {
+    batchNo: 'B-4001',
+    medicine: 'Atorvastatin 10mg',
+    supplier: 'GenSupply Dist.',
+    expiryDate: '20 Nov 2026',
+    daysRemaining: '83 Days',
+    quantity: 80,
+    costValue: '₹3,600.00',
+    riskLevel: 'Medium Risk',
+    recommendedAction: 'Stock Rotation',
+  },
+  {
+    batchNo: 'B-3001',
+    medicine: 'Metformin 500mg',
+    supplier: 'CarePlus Pharma',
+    expiryDate: '10 Aug 2026',
+    daysRemaining: 'Expired',
+    quantity: 25,
+    costValue: '₹2,125.00',
+    riskLevel: 'Expired',
+    recommendedAction: 'Write-Off & Destroy',
+  },
+];

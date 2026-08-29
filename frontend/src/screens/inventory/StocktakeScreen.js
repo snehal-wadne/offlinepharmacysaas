@@ -1,0 +1,675 @@
+import React, { useState, useCallback } from 'react';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Modal, FlatList, StyleSheet, SafeAreaView } from 'react-native';
+
+const COLORS = {
+  primary: '#0F766E',
+  primaryHover: '#0D9488',
+  primaryLight: '#CCFBF1',
+  secondary: '#2563EB',
+  secondaryLight: '#DBEAFE',
+  success: '#16A34A',
+  successLight: '#DCFCE7',
+  warning: '#D97706',
+  warningLight: '#FEF3C7',
+  danger: '#DC2626',
+  dangerLight: '#FEE2E2',
+  background: '#F8FAFC',
+  surface: '#FFFFFF',
+  surfaceHover: '#F1F5F9',
+  textPrimary: '#0F172A',
+  textSecondary: '#64748B',
+  textMuted: '#94A3B8',
+  border: '#E2E8F0',
+};
+
+const MOCK_STOCKTAKES = [
+  { id: 'ST-2026-08', date: '29 Aug 2026', branch: 'Main Branch', itemsCounted: 48, totalItems: 156, discrepancies: 5, status: 'In Progress', createdBy: 'Admin' },
+  { id: 'ST-2026-07', date: '20 Aug 2026', branch: 'BR-02', itemsCounted: 156, totalItems: 156, discrepancies: 12, status: 'Completed', createdBy: 'Manager' },
+  { id: 'ST-2026-06', date: '15 Aug 2026', branch: 'Main Branch', itemsCounted: 156, totalItems: 156, discrepancies: 3, status: 'Completed', createdBy: 'Admin' },
+  { id: 'ST-2026-05', date: '10 Aug 2026', branch: 'BR-03', itemsCounted: 156, totalItems: 156, discrepancies: 8, status: 'Completed', createdBy: 'Staff' },
+  { id: 'ST-2026-04', date: '01 Aug 2026', branch: 'BR-04', itemsCounted: 156, totalItems: 156, discrepancies: 2, status: 'Completed', createdBy: 'Manager' },
+  { id: 'ST-2026-03', date: '20 Jul 2026', branch: 'Main Branch', itemsCounted: 156, totalItems: 156, discrepancies: 15, status: 'Completed', createdBy: 'Admin' },
+  { id: 'ST-2026-02', date: '10 Jul 2026', branch: 'BR-02', itemsCounted: 156, totalItems: 156, discrepancies: 6, status: 'Completed', createdBy: 'Admin' },
+  { id: 'ST-2026-01', date: '01 Jul 2026', branch: 'Main Branch', itemsCounted: 156, totalItems: 156, discrepancies: 4, status: 'Completed', createdBy: 'Manager' },
+  { id: 'ST-2026-C1', date: '15 Jun 2026', branch: 'BR-05', itemsCounted: 156, totalItems: 156, discrepancies: 9, status: 'Completed', createdBy: 'Staff' },
+  { id: 'ST-2026-C2', date: '01 Jun 2026', branch: 'Main Branch', itemsCounted: 156, totalItems: 156, discrepancies: 7, status: 'Cancelled', createdBy: 'Admin' },
+];
+
+const MOCK_DETAIL = [
+  { product: 'Paracetamol 500mg', batch: 'B-1001', systemQty: 205, countedQty: 200, variance: -5, status: 'Discrepancy' },
+  { product: 'Amoxicillin 500mg', batch: 'B-2001', systemQty: 320, countedQty: 320, variance: 0, status: 'Matched' },
+  { product: 'Metformin 500mg', batch: 'B-3001', systemQty: 752, countedQty: 750, variance: -2, status: 'Discrepancy' },
+  { product: 'Atorvastatin 10mg', batch: 'B-4001', systemQty: 180, countedQty: 180, variance: 0, status: 'Matched' },
+  { product: 'Omeprazole 20mg', batch: 'B-5001', systemQty: 95, countedQty: 98, variance: 3, status: 'Discrepancy' },
+  { product: 'Cetirizine 10mg', batch: 'B-6001', systemQty: 440, countedQty: 440, variance: 0, status: 'Matched' },
+  { product: 'Vitamin C 500mg', batch: 'B-7001', systemQty: 280, countedQty: 280, variance: 0, status: 'Matched' },
+  { product: 'Ibuprofen 400mg', batch: 'B-8001', systemQty: 38, countedQty: 35, variance: -3, status: 'Discrepancy' },
+  { product: 'Azithromycin 500mg', batch: 'B-9001', systemQty: 150, countedQty: 155, variance: 5, status: 'Discrepancy' },
+  { product: 'Aspirin 75mg', batch: 'B-A001', systemQty: 400, countedQty: 400, variance: 0, status: 'Matched' },
+];
+
+export default function StocktakeScreen({ navigation, route }) {
+  const [activeTab, setActiveTab] = useState('active');
+  const [selectedStocktake, setSelectedStocktake] = useState(null);
+  
+  // Modal state
+  const [showNewModal, setShowNewModal] = useState(false);
+  const [modalBranch, setModalBranch] = useState('Main Branch');
+  const [showBranchDropdown, setShowBranchDropdown] = useState(false);
+  const [modalNotes, setModalNotes] = useState('');
+  const [modalCountType, setModalCountType] = useState('full');
+
+  const branches = ['Main Branch', 'BR-02', 'BR-03', 'BR-04', 'BR-05'];
+
+  const getFilteredData = useCallback(() => {
+    switch (activeTab) {
+      case 'active':
+        return MOCK_STOCKTAKES.filter(item => item.status === 'In Progress');
+      case 'completed':
+        return MOCK_STOCKTAKES.filter(item => item.status === 'Completed');
+      case 'all':
+      default:
+        return MOCK_STOCKTAKES;
+    }
+  }, [activeTab]);
+
+  const getStatusStyle = (status) => {
+    switch (status) {
+      case 'In Progress':
+        return { bg: COLORS.secondaryLight, text: COLORS.secondary };
+      case 'Completed':
+      case 'Matched':
+        return { bg: COLORS.successLight, text: COLORS.success };
+      case 'Discrepancy':
+        return { bg: COLORS.warningLight, text: COLORS.warning };
+      case 'Cancelled':
+        return { bg: COLORS.surfaceHover, text: COLORS.textSecondary };
+      default:
+        return { bg: COLORS.border, text: COLORS.textPrimary };
+    }
+  };
+
+  const renderStocktakeItem = ({ item, index }) => {
+    const isEven = index % 2 === 0;
+    const statusStyle = getStatusStyle(item.status);
+
+    return (
+      <TouchableOpacity 
+        style={[styles.tableRow, isEven ? styles.rowEven : styles.rowOdd]} 
+        onPress={() => setSelectedStocktake(item)}
+      >
+        <Text style={[styles.cell, { width: 120, fontWeight: '600' }]}>{item.id}</Text>
+        <Text style={[styles.cell, { width: 120 }]}>{item.date}</Text>
+        <Text style={[styles.cell, { width: 140 }]}>{item.branch}</Text>
+        <Text style={[styles.cell, { width: 140 }]}>{item.itemsCounted} / {item.totalItems}</Text>
+        <Text style={[styles.cell, { width: 120 }]}>{item.discrepancies}</Text>
+        <View style={[styles.cell, { width: 140 }]}>
+          <View style={[styles.badge, { backgroundColor: statusStyle.bg }]}>
+            <Text style={[styles.badgeText, { color: statusStyle.text }]}>{item.status}</Text>
+          </View>
+        </View>
+        <Text style={[styles.cell, { width: 120 }]}>{item.createdBy}</Text>
+        <View style={[styles.cell, { width: 120 }]}>
+          <TouchableOpacity onPress={() => setSelectedStocktake(item)}>
+            <Text style={styles.actionText}>View</Text>
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderDetailItem = ({ item, index }) => {
+    const isEven = index % 2 === 0;
+    const statusStyle = getStatusStyle(item.status);
+    
+    let varianceDisplay = <Text style={[styles.cell, { width: 100, color: COLORS.textMuted }]}>—</Text>;
+    if (item.variance > 0) {
+      varianceDisplay = <Text style={[styles.cell, { width: 100, color: COLORS.success, fontWeight: 'bold' }]}>+{item.variance}</Text>;
+    } else if (item.variance < 0) {
+      varianceDisplay = <Text style={[styles.cell, { width: 100, color: COLORS.danger, fontWeight: 'bold' }]}>{item.variance}</Text>;
+    }
+
+    return (
+      <View style={[styles.tableRow, isEven ? styles.rowEven : styles.rowOdd]}>
+        <Text style={[styles.cell, { width: 200, fontWeight: '500' }]}>{item.product}</Text>
+        <Text style={[styles.cell, { width: 120 }]}>{item.batch}</Text>
+        <Text style={[styles.cell, { width: 120 }]}>{item.systemQty}</Text>
+        <Text style={[styles.cell, { width: 120 }]}>{item.countedQty}</Text>
+        {varianceDisplay}
+        <View style={[styles.cell, { width: 140 }]}>
+          <View style={[styles.badge, { backgroundColor: statusStyle.bg }]}>
+            <Text style={[styles.badgeText, { color: statusStyle.text }]}>{item.status}</Text>
+          </View>
+        </View>
+        <View style={[styles.cell, { width: 120 }]}>
+          <TouchableOpacity>
+            <Text style={styles.actionText}>Edit</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.title}>Stocktake</Text>
+          <Text style={styles.subtitle}>Physical stock count and variance reconciliation</Text>
+        </View>
+        <TouchableOpacity style={styles.primaryButton} onPress={() => setShowNewModal(true)}>
+          <Text style={styles.primaryButtonText}>New Stocktake</Text>
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 40 }}>
+        {/* Active Banner */}
+        <View style={styles.activeBanner}>
+          <Text style={styles.activeBannerText}>🔵 Active Stocktake in Progress — ST-2026-08 | Started: 29 Aug 2026</Text>
+          <TouchableOpacity style={styles.bannerButton}>
+            <Text style={styles.bannerButtonText}>View Details</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Tab Bar */}
+        <View style={styles.tabBar}>
+          <TouchableOpacity 
+            style={[styles.tab, activeTab === 'active' && styles.tabActive]} 
+            onPress={() => setActiveTab('active')}
+          >
+            <Text style={[styles.tabText, activeTab === 'active' && styles.tabTextActive]}>Active Stocktakes (1)</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.tab, activeTab === 'all' && styles.tabActive]} 
+            onPress={() => setActiveTab('all')}
+          >
+            <Text style={[styles.tabText, activeTab === 'all' && styles.tabTextActive]}>All Stocktakes</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.tab, activeTab === 'completed' && styles.tabActive]} 
+            onPress={() => setActiveTab('completed')}
+          >
+            <Text style={[styles.tabText, activeTab === 'completed' && styles.tabTextActive]}>Completed (8)</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Main Table */}
+        <View style={styles.card}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+            <View>
+              <View style={styles.tableHeader}>
+                <Text style={[styles.columnHeader, { width: 120 }]}>Stocktake ID</Text>
+                <Text style={[styles.columnHeader, { width: 120 }]}>Date</Text>
+                <Text style={[styles.columnHeader, { width: 140 }]}>Branch</Text>
+                <Text style={[styles.columnHeader, { width: 140 }]}>Items Counted</Text>
+                <Text style={[styles.columnHeader, { width: 120 }]}>Discrepancies</Text>
+                <Text style={[styles.columnHeader, { width: 140 }]}>Status</Text>
+                <Text style={[styles.columnHeader, { width: 120 }]}>Created By</Text>
+                <Text style={[styles.columnHeader, { width: 120 }]}>Actions</Text>
+              </View>
+              <FlatList
+                data={getFilteredData()}
+                keyExtractor={(item) => item.id}
+                renderItem={renderStocktakeItem}
+                scrollEnabled={false}
+              />
+            </View>
+          </ScrollView>
+        </View>
+
+        {/* Detail Panel */}
+        {selectedStocktake && (
+          <View style={styles.detailPanel}>
+            <View style={styles.detailHeader}>
+              <Text style={styles.detailTitle}>Stocktake Details — {selectedStocktake.id}</Text>
+              <TouchableOpacity onPress={() => setSelectedStocktake(null)} style={styles.closeButton}>
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+              <View>
+                <View style={styles.tableHeader}>
+                  <Text style={[styles.columnHeader, { width: 200 }]}>Product</Text>
+                  <Text style={[styles.columnHeader, { width: 120 }]}>Batch</Text>
+                  <Text style={[styles.columnHeader, { width: 120 }]}>System Qty</Text>
+                  <Text style={[styles.columnHeader, { width: 120 }]}>Counted Qty</Text>
+                  <Text style={[styles.columnHeader, { width: 100 }]}>Variance</Text>
+                  <Text style={[styles.columnHeader, { width: 140 }]}>Status</Text>
+                  <Text style={[styles.columnHeader, { width: 120 }]}>Actions</Text>
+                </View>
+                <FlatList
+                  data={MOCK_DETAIL}
+                  keyExtractor={(item, index) => `${item.product}-${index}`}
+                  renderItem={renderDetailItem}
+                  scrollEnabled={false}
+                />
+              </View>
+            </ScrollView>
+          </View>
+        )}
+      </ScrollView>
+
+      {/* New Stocktake Modal */}
+      <Modal
+        visible={showNewModal}
+        transparent={true}
+        animationType="fade"
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>New Stocktake</Text>
+            
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Branch</Text>
+              <TouchableOpacity 
+                style={styles.dropdownButton}
+                onPress={() => setShowBranchDropdown(!showBranchDropdown)}
+              >
+                <Text style={styles.dropdownText}>{modalBranch}</Text>
+                <Text style={styles.dropdownIcon}>▼</Text>
+              </TouchableOpacity>
+              
+              {showBranchDropdown && (
+                <View style={styles.dropdownMenu}>
+                  {branches.map((branch) => (
+                    <TouchableOpacity 
+                      key={branch}
+                      style={styles.dropdownItem}
+                      onPress={() => {
+                        setModalBranch(branch);
+                        setShowBranchDropdown(false);
+                      }}
+                    >
+                      <Text style={styles.dropdownItemText}>{branch}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Notes</Text>
+              <TextInput
+                style={styles.textArea}
+                multiline
+                numberOfLines={3}
+                placeholder="Optional notes for this stocktake"
+                value={modalNotes}
+                onChangeText={setModalNotes}
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Count Type</Text>
+              <View style={styles.toggleGroup}>
+                <TouchableOpacity 
+                  style={[styles.toggleButton, modalCountType === 'full' && styles.toggleButtonActive]}
+                  onPress={() => setModalCountType('full')}
+                >
+                  <Text style={[styles.toggleButtonText, modalCountType === 'full' && styles.toggleButtonTextActive]}>Full Count</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.toggleButton, modalCountType === 'spot' && styles.toggleButtonActive]}
+                  onPress={() => setModalCountType('spot')}
+                >
+                  <Text style={[styles.toggleButtonText, modalCountType === 'spot' && styles.toggleButtonTextActive]}>Spot Check</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.infoBox}>
+              <Text style={styles.infoBoxText}>Products from this branch will be loaded automatically</Text>
+            </View>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity 
+                style={styles.cancelButton} 
+                onPress={() => setShowNewModal(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.primaryButton}
+                onPress={() => {
+                  // Handle creation logic here
+                  setShowNewModal(false);
+                }}
+              >
+                <Text style={styles.primaryButtonText}>Create Stocktake</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: COLORS.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: COLORS.textPrimary,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginTop: 4,
+  },
+  content: {
+    flex: 1,
+    padding: 20,
+  },
+  activeBanner: {
+    backgroundColor: COLORS.secondaryLight,
+    padding: 16,
+    borderRadius: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  activeBannerText: {
+    color: COLORS.secondary,
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  bannerButton: {
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: COLORS.secondary,
+  },
+  bannerButtonText: {
+    color: COLORS.secondary,
+    fontWeight: '600',
+    fontSize: 12,
+  },
+  tabBar: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    marginBottom: 20,
+  },
+  tab: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  tabActive: {
+    borderBottomColor: COLORS.primary,
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: COLORS.textSecondary,
+  },
+  tabTextActive: {
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
+  card: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  tableHeader: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.surfaceHover,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  columnHeader: {
+    padding: 16,
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: COLORS.textSecondary,
+    textTransform: 'uppercase',
+  },
+  tableRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    alignItems: 'center',
+  },
+  rowEven: {
+    backgroundColor: COLORS.surface,
+  },
+  rowOdd: {
+    backgroundColor: COLORS.background,
+  },
+  cell: {
+    padding: 16,
+    fontSize: 14,
+    color: COLORS.textPrimary,
+  },
+  badge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  badgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  actionText: {
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
+  detailPanel: {
+    marginTop: 24,
+    backgroundColor: COLORS.surface,
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    overflow: 'hidden',
+  },
+  detailHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    backgroundColor: COLORS.surface,
+  },
+  detailTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: COLORS.textPrimary,
+  },
+  closeButton: {
+    padding: 4,
+  },
+  closeButtonText: {
+    fontSize: 18,
+    color: COLORS.textSecondary,
+    fontWeight: 'bold',
+  },
+  primaryButton: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 6,
+  },
+  primaryButtonText: {
+    color: COLORS.surface,
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '90%',
+    maxWidth: 500,
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: COLORS.textPrimary,
+    marginBottom: 20,
+  },
+  formGroup: {
+    marginBottom: 16,
+    zIndex: 1,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: COLORS.textSecondary,
+    marginBottom: 8,
+  },
+  dropdownButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 6,
+    padding: 12,
+    backgroundColor: COLORS.surface,
+  },
+  dropdownText: {
+    fontSize: 14,
+    color: COLORS.textPrimary,
+  },
+  dropdownIcon: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  dropdownMenu: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 6,
+    marginTop: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    zIndex: 10,
+  },
+  dropdownItem: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.surfaceHover,
+  },
+  dropdownItemText: {
+    fontSize: 14,
+    color: COLORS.textPrimary,
+  },
+  textArea: {
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 6,
+    padding: 12,
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    textAlignVertical: 'top',
+    backgroundColor: COLORS.surface,
+  },
+  toggleGroup: {
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  toggleButton: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    backgroundColor: COLORS.surfaceHover,
+  },
+  toggleButtonActive: {
+    backgroundColor: COLORS.primaryLight,
+  },
+  toggleButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: COLORS.textSecondary,
+  },
+  toggleButtonTextActive: {
+    color: COLORS.primaryHover,
+    fontWeight: '600',
+  },
+  infoBox: {
+    backgroundColor: COLORS.background,
+    padding: 12,
+    borderRadius: 6,
+    marginBottom: 20,
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.textMuted,
+  },
+  infoBoxText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+    marginTop: 8,
+  },
+  cancelButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 6,
+    justifyContent: 'center',
+  },
+  cancelButtonText: {
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+    fontSize: 14,
+  },
+});
