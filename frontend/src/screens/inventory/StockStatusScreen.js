@@ -9,56 +9,94 @@ import {
   useWindowDimensions,
   Platform,
 } from 'react-native';
+import InventoryStatCard from '../../components/inventory/InventoryStatCard';
 import {
   MOCK_LOW_STOCK_ITEMS,
-  MOCK_EXPIRY_ITEMS,
+  MOCK_EXPIRY_BATCHES,
 } from '../../data/lowStockExpiryMockData';
 
+const STOCK_STATUS_KPIS = [
+  {
+    id: 'kpi-1',
+    label: 'Low Stock Alerts',
+    value: '24',
+    subtext: 'Reorder triggered',
+    variant: 'amber',
+  },
+  {
+    id: 'kpi-2',
+    label: 'Expiring in 30 Days',
+    value: '18',
+    subtext: 'Requires monitoring',
+    variant: 'blue',
+  },
+  {
+    id: 'kpi-3',
+    label: 'Expired Items',
+    value: '6',
+    subtext: 'Action required',
+    variant: 'red',
+  },
+  {
+    id: 'kpi-4',
+    label: 'Reorder Deficit',
+    value: '₹48,250',
+    subtext: 'Procurement value',
+    variant: 'teal',
+  },
+];
+
 const STOCK_STATUS_BADGES = {
+  'In Stock': { bg: '#DCFCE7', text: '#15803D' },
   'Low Stock': { bg: '#FEF3C7', text: '#B45309' },
-  Critical: { bg: '#FFEDD5', text: '#C2410C' },
-  'Out of Stock': { bg: '#FEE2E2', text: '#B91C1C' },
+  Critical: { bg: '#FEE2E2', text: '#B91C1C' },
+  'Out of Stock': { bg: '#FEE2E2', text: '#DC2626' },
 };
 
 const BATCH_TIMELINE_BADGES = {
   Safe: { bg: '#DCFCE7', text: '#15803D' },
   'Expiring Soon': { bg: '#FEF3C7', text: '#B45309' },
-  Expired: { bg: '#FEE2E2', text: '#B91C1C' },
+  Expired: { bg: '#FEE2E2', text: '#DC2626' },
 };
 
-export default function StockStatusScreen({ onShowToast }) {
+export default function StockStatusScreen({ onNavigate, onShowToast, isMultiBranch = true }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
 
-  // Active Tab: 'low-stock' or 'batch-timeline'
   const [activeTab, setActiveTab] = useState('low-stock');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Low Stock Items filter
-  const filteredLowStock = MOCK_LOW_STOCK_ITEMS.filter(
-    (item) =>
-      item.medicine.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.supplier.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredLowStock = MOCK_LOW_STOCK_ITEMS.filter((item) => {
+    const q = searchQuery.toLowerCase();
+    return (
+      (item.brandName && item.brandName.toLowerCase().includes(q)) ||
+      (item.genericName && item.genericName.toLowerCase().includes(q)) ||
+      (item.medicine && item.medicine.toLowerCase().includes(q)) ||
+      (item.sku && item.sku.toLowerCase().includes(q)) ||
+      (item.supplier && item.supplier.toLowerCase().includes(q))
+    );
+  });
 
-  // Batch Timeline filter
-  const filteredExpiry = MOCK_EXPIRY_ITEMS.filter(
-    (item) =>
-      item.medicine.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.batchNo.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.supplier.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredExpiry = MOCK_EXPIRY_BATCHES.filter((item) => {
+    const q = searchQuery.toLowerCase();
+    return (
+      (item.brandName && item.brandName.toLowerCase().includes(q)) ||
+      (item.genericName && item.genericName.toLowerCase().includes(q)) ||
+      (item.medicine && item.medicine.toLowerCase().includes(q)) ||
+      (item.batchNo && item.batchNo.toLowerCase().includes(q)) ||
+      (item.supplier && item.supplier.toLowerCase().includes(q))
+    );
+  });
 
   const handleReorder = (item) => {
     if (onShowToast) {
-      onShowToast(`Draft purchase order created for "${item.medicine}" (Reorder level: ${item.reorderLevel})`);
+      onShowToast(`+ Triggered purchase reorder for ${item.brandName || item.medicine} (${item.sku})`);
     }
   };
 
   const handleWriteOff = (item) => {
     if (onShowToast) {
-      onShowToast(`Disposal / write-off logged for batch ${item.batchNo} (${item.medicine})`);
+      onShowToast(`Initiated batch audit for ${item.brandName || item.medicine} (Batch: ${item.batchNo})`);
     }
   };
 
@@ -68,36 +106,18 @@ export default function StockStatusScreen({ onShowToast }) {
       contentContainerStyle={styles.contentContainer}
       showsVerticalScrollIndicator={true}
     >
-      {/* Header */}
-      <View style={styles.headerSection}>
-        <Text style={styles.pageTitle}>Stock Status</Text>
-        <Text style={styles.pageSubtitle}>
-          Real-time inventory levels, reorder threshold alerts, and batch expiration timelines across branches.
-        </Text>
-      </View>
-
-      {/* Summary Alert Strip */}
-      <View style={styles.summaryStrip}>
-        <View style={[styles.summaryCard, { borderLeftColor: '#D97706' }]}>
-          <Text style={styles.summaryLabel}>LOW STOCK ITEMS</Text>
-          <Text style={[styles.summaryVal, { color: '#D97706' }]}>7</Text>
-          <Text style={styles.summarySub}>Needs reorder</Text>
-        </View>
-        <View style={[styles.summaryCard, { borderLeftColor: '#EA580C' }]}>
-          <Text style={styles.summaryLabel}>CRITICAL DEFICIT</Text>
-          <Text style={[styles.summaryVal, { color: '#EA580C' }]}>3</Text>
-          <Text style={styles.summarySub}>Stock &lt; 10 units</Text>
-        </View>
-        <View style={[styles.summaryCard, { borderLeftColor: '#F59E0B' }]}>
-          <Text style={styles.summaryLabel}>EXPIRING SOON</Text>
-          <Text style={[styles.summaryVal, { color: '#D97706' }]}>3</Text>
-          <Text style={styles.summarySub}>Within 90 days</Text>
-        </View>
-        <View style={[styles.summaryCard, { borderLeftColor: '#DC2626' }]}>
-          <Text style={styles.summaryLabel}>EXPIRED BATCHES</Text>
-          <Text style={[styles.summaryVal, { color: '#DC2626' }]}>2</Text>
-          <Text style={styles.summarySub}>Immediate removal</Text>
-        </View>
+      {/* Top 4 KPI Cards */}
+      <View style={[styles.kpiRow, isCompact && styles.kpiRowCompact]}>
+        {STOCK_STATUS_KPIS.map((kpi) => (
+          <InventoryStatCard
+            key={kpi.id}
+            label={kpi.label}
+            value={kpi.value}
+            subtext={kpi.subtext}
+            variant={kpi.variant}
+            onPress={() => onShowToast && onShowToast(`Filter: ${kpi.label}`)}
+          />
+        ))}
       </View>
 
       {/* Main Table Card with Tabs */}
@@ -128,7 +148,7 @@ export default function StockStatusScreen({ onShowToast }) {
                 activeTab === 'batch-timeline' && styles.tabButtonTextActive,
               ]}
             >
-              Batch Expiry Timeline ({MOCK_EXPIRY_ITEMS.length})
+              Batch Expiry Timeline ({MOCK_EXPIRY_BATCHES.length})
             </Text>
           </Pressable>
         </View>
@@ -140,8 +160,8 @@ export default function StockStatusScreen({ onShowToast }) {
               style={styles.searchInput}
               placeholder={
                 activeTab === 'low-stock'
-                  ? 'Search low stock medicine, SKU, supplier...'
-                  : 'Search batch, medicine, supplier...'
+                  ? 'Search brand name, generic name, SKU, supplier...'
+                  : 'Search brand name, batch, supplier...'
               }
               placeholderTextColor="#94A3B8"
               value={searchQuery}
@@ -160,21 +180,24 @@ export default function StockStatusScreen({ onShowToast }) {
           <ScrollView horizontal showsHorizontalScrollIndicator={true}>
             <View style={styles.tableWrapper}>
               <View style={styles.tableHeader}>
-                <Text style={[styles.thCell, { width: 180 }]}>MEDICINE</Text>
-                <Text style={[styles.thCell, { width: 90 }]}>SKU</Text>
-                <Text style={[styles.thCell, { width: 110, textAlign: 'center' }]}>
+                <Text style={[styles.thCell, { width: 140 }]}>BRAND NAME</Text>
+                <Text style={[styles.thCell, { width: 160 }]}>GENERIC / SALT</Text>
+                <Text style={[styles.thCell, { width: 100 }]}>SKU</Text>
+                <Text style={[styles.thCell, { width: 100, textAlign: 'center' }]}>
                   CURRENT STOCK
                 </Text>
-                <Text style={[styles.thCell, { width: 100, textAlign: 'center' }]}>
+                <Text style={[styles.thCell, { width: 90, textAlign: 'center' }]}>
                   MIN STOCK
                 </Text>
-                <Text style={[styles.thCell, { width: 110, textAlign: 'center' }]}>
-                  REORDER LEVEL
+                <Text style={[styles.thCell, { width: 100, textAlign: 'center' }]}>
+                  REORDER LVL
                 </Text>
                 <Text style={[styles.thCell, { width: 150 }]}>SUPPLIER</Text>
-                <Text style={[styles.thCell, { width: 130 }]}>BRANCH</Text>
-                <Text style={[styles.thCell, { width: 110, textAlign: 'center' }]}>STATUS</Text>
-                <Text style={[styles.thCell, { width: 100, textAlign: 'center' }]}>ACTION</Text>
+                {isMultiBranch && (
+                  <Text style={[styles.thCell, { width: 120 }]}>BRANCH</Text>
+                )}
+                <Text style={[styles.thCell, { width: 100, textAlign: 'center' }]}>STATUS</Text>
+                <Text style={[styles.thCell, { width: 95, textAlign: 'center' }]}>ACTION</Text>
               </View>
 
               {filteredLowStock.map((item, index) => {
@@ -186,36 +209,41 @@ export default function StockStatusScreen({ onShowToast }) {
                     key={item.id}
                     style={[styles.tableRow, index % 2 === 1 && styles.tableRowAlt]}
                   >
-                    <Text style={[styles.tdCell, styles.medName, { width: 180 }]} numberOfLines={1}>
-                      {item.medicine}
+                    <Text style={[styles.tdCell, styles.brandNameCell, { width: 140 }]} numberOfLines={1}>
+                      {item.brandName || item.medicine}
                     </Text>
-                    <Text style={[styles.tdCell, { width: 90 }]}>{item.sku}</Text>
+                    <Text style={[styles.tdCell, styles.genericNameCell, { width: 160 }]} numberOfLines={1}>
+                      {item.genericName || item.medicine}
+                    </Text>
+                    <Text style={[styles.tdCell, styles.skuCell, { width: 100 }]}>{item.sku}</Text>
                     <Text
                       style={[
                         styles.tdCell,
                         styles.currentStockNum,
                         isCritical && styles.stockCritical,
-                        { width: 110, textAlign: 'center' },
+                        { width: 100, textAlign: 'center' },
                       ]}
                     >
                       {item.currentStock}
                     </Text>
-                    <Text style={[styles.tdCell, { width: 100, textAlign: 'center' }]}>
+                    <Text style={[styles.tdCell, { width: 90, textAlign: 'center' }]}>
                       {item.minimumStock}
                     </Text>
                     <Text
                       style={[
                         styles.tdCell,
-                        { width: 110, textAlign: 'center', fontWeight: '600' },
+                        { width: 100, textAlign: 'center', fontWeight: '600' },
                       ]}
                     >
                       {item.reorderLevel}
                     </Text>
-                    <Text style={[styles.tdCell, { width: 150 }]}>{item.supplier}</Text>
-                    <Text style={[styles.tdCell, { width: 130 }]}>{item.branch}</Text>
+                    <Text style={[styles.tdCell, { width: 150 }]} numberOfLines={1}>{item.supplier}</Text>
+                    {isMultiBranch && (
+                      <Text style={[styles.tdCell, { width: 120 }]} numberOfLines={1}>{item.branch}</Text>
+                    )}
 
                     {/* Status */}
-                    <View style={[styles.statusWrapper, { width: 110 }]}>
+                    <View style={[styles.statusWrapper, { width: 100 }]}>
                       <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
                         <Text style={[styles.statusBadgeText, { color: badge.text }]}>
                           {item.status}
@@ -224,7 +252,7 @@ export default function StockStatusScreen({ onShowToast }) {
                     </View>
 
                     {/* Reorder Action */}
-                    <View style={[styles.actionWrapper, { width: 100 }]}>
+                    <View style={[styles.actionWrapper, { width: 95 }]}>
                       <Pressable
                         onPress={() => handleReorder(item)}
                         style={styles.reorderBtn}
@@ -244,16 +272,19 @@ export default function StockStatusScreen({ onShowToast }) {
           <ScrollView horizontal showsHorizontalScrollIndicator={true}>
             <View style={styles.tableWrapper}>
               <View style={styles.tableHeader}>
-                <Text style={[styles.thCell, { width: 180 }]}>MEDICINE</Text>
-                <Text style={[styles.thCell, { width: 100 }]}>BATCH NO.</Text>
-                <Text style={[styles.thCell, { width: 130 }]}>EXPIRY DATE</Text>
-                <Text style={[styles.thCell, { width: 100, textAlign: 'center' }]}>
+                <Text style={[styles.thCell, { width: 140 }]}>BRAND NAME</Text>
+                <Text style={[styles.thCell, { width: 160 }]}>GENERIC / SALT</Text>
+                <Text style={[styles.thCell, { width: 95 }]}>BATCH NO.</Text>
+                <Text style={[styles.thCell, { width: 110 }]}>EXPIRY DATE</Text>
+                <Text style={[styles.thCell, { width: 90, textAlign: 'center' }]}>
                   QUANTITY
                 </Text>
-                <Text style={[styles.thCell, { width: 140 }]}>BRANCH</Text>
+                {isMultiBranch && (
+                  <Text style={[styles.thCell, { width: 120 }]}>BRANCH</Text>
+                )}
                 <Text style={[styles.thCell, { width: 150 }]}>SUPPLIER</Text>
-                <Text style={[styles.thCell, { width: 120, textAlign: 'center' }]}>STATUS</Text>
-                <Text style={[styles.thCell, { width: 110, textAlign: 'center' }]}>ACTION</Text>
+                <Text style={[styles.thCell, { width: 110, textAlign: 'center' }]}>STATUS</Text>
+                <Text style={[styles.thCell, { width: 95, textAlign: 'center' }]}>ACTION</Text>
               </View>
 
               {filteredExpiry.map((item, index) => {
@@ -266,17 +297,20 @@ export default function StockStatusScreen({ onShowToast }) {
                     key={item.id}
                     style={[styles.tableRow, index % 2 === 1 && styles.tableRowAlt]}
                   >
-                    <Text style={[styles.tdCell, styles.medName, { width: 180 }]} numberOfLines={1}>
-                      {item.medicine}
+                    <Text style={[styles.tdCell, styles.brandNameCell, { width: 140 }]} numberOfLines={1}>
+                      {item.brandName || item.medicine}
                     </Text>
-                    <Text style={[styles.tdCell, { width: 100 }]}>{item.batchNo}</Text>
+                    <Text style={[styles.tdCell, styles.genericNameCell, { width: 160 }]} numberOfLines={1}>
+                      {item.genericName || item.medicine}
+                    </Text>
+                    <Text style={[styles.tdCell, { width: 95 }]}>{item.batchNo}</Text>
                     <Text
                       style={[
                         styles.tdCell,
                         styles.expiryDateText,
                         isExpired && styles.dateExpired,
                         isSoon && styles.dateSoon,
-                        { width: 130 },
+                        { width: 110 },
                       ]}
                     >
                       {item.expiryDate}
@@ -284,16 +318,18 @@ export default function StockStatusScreen({ onShowToast }) {
                     <Text
                       style={[
                         styles.tdCell,
-                        { width: 100, textAlign: 'center', fontWeight: '700' },
+                        { width: 90, textAlign: 'center', fontWeight: '700' },
                       ]}
                     >
                       {item.quantity}
                     </Text>
-                    <Text style={[styles.tdCell, { width: 140 }]}>{item.branch}</Text>
-                    <Text style={[styles.tdCell, { width: 150 }]}>{item.supplier}</Text>
+                    {isMultiBranch && (
+                      <Text style={[styles.tdCell, { width: 120 }]} numberOfLines={1}>{item.branch}</Text>
+                    )}
+                    <Text style={[styles.tdCell, { width: 150 }]} numberOfLines={1}>{item.supplier}</Text>
 
                     {/* Status */}
-                    <View style={[styles.statusWrapper, { width: 120 }]}>
+                    <View style={[styles.statusWrapper, { width: 110 }]}>
                       <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
                         <Text style={[styles.statusBadgeText, { color: badge.text }]}>
                           {item.status}
@@ -302,7 +338,7 @@ export default function StockStatusScreen({ onShowToast }) {
                     </View>
 
                     {/* Action */}
-                    <View style={[styles.actionWrapper, { width: 110 }]}>
+                    <View style={[styles.actionWrapper, { width: 95 }]}>
                       <Pressable
                         onPress={() => handleWriteOff(item)}
                         style={[
@@ -341,50 +377,13 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     gap: 24,
   },
-  headerSection: {
-    marginBottom: 4,
-  },
-  pageTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#0F172A',
-    letterSpacing: -0.4,
-  },
-  pageSubtitle: {
-    fontSize: 13.5,
-    fontWeight: '500',
-    color: '#64748B',
-    marginTop: 4,
-  },
-  summaryStrip: {
+  kpiRow: {
     flexDirection: 'row',
     gap: 16,
     flexWrap: 'wrap',
   },
-  summaryCard: {
-    flex: 1,
-    minWidth: 200,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderLeftWidth: 4,
-    padding: 16,
-  },
-  summaryLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#64748B',
-    letterSpacing: 0.5,
-  },
-  summaryVal: {
-    fontSize: 28,
-    fontWeight: '800',
-    marginVertical: 4,
-  },
-  summarySub: {
-    fontSize: 12,
-    color: '#94A3B8',
+  kpiRowCompact: {
+    gap: 12,
   },
   cardContainer: {
     backgroundColor: '#FFFFFF',
@@ -405,11 +404,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
-    backgroundColor: '#FAFAFA',
+    backgroundColor: '#F8FAFC',
   },
   tabButton: {
     paddingVertical: 14,
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
     cursor: 'pointer',
@@ -429,19 +428,19 @@ const styles = StyleSheet.create({
   },
   searchBarContainer: {
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
     borderRadius: 8,
+    backgroundColor: '#F8FAFC',
     paddingHorizontal: 12,
-    height: 38,
+    height: 40,
   },
   searchInput: {
     flex: 1,
@@ -457,7 +456,7 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
   },
   tableWrapper: {
-    minWidth: 1080,
+    minWidth: 1240,
     paddingHorizontal: 8,
   },
   tableHeader: {
@@ -470,11 +469,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   thCell: {
-    fontSize: 11.5,
+    fontSize: 11,
     fontWeight: '700',
     color: '#64748B',
     paddingHorizontal: 6,
-    letterSpacing: 0.3,
+    letterSpacing: 0.5,
   },
   tableRow: {
     flexDirection: 'row',
@@ -492,12 +491,20 @@ const styles = StyleSheet.create({
     color: '#334155',
     paddingHorizontal: 6,
   },
-  medName: {
-    fontWeight: '600',
+  brandNameCell: {
+    fontWeight: '700',
     color: '#0F172A',
   },
+  genericNameCell: {
+    color: '#475569',
+    fontWeight: '500',
+  },
+  skuCell: {
+    fontWeight: '600',
+    color: '#64748B',
+  },
   currentStockNum: {
-    fontWeight: '800',
+    fontWeight: '700',
     color: '#D97706',
   },
   stockCritical: {
@@ -505,18 +512,17 @@ const styles = StyleSheet.create({
   },
   expiryDateText: {
     fontWeight: '600',
+    color: '#334155',
+  },
+  dateSoon: {
+    color: '#D97706',
   },
   dateExpired: {
     color: '#DC2626',
     fontWeight: '700',
   },
-  dateSoon: {
-    color: '#D97706',
-    fontWeight: '700',
-  },
   statusWrapper: {
     alignItems: 'center',
-    justifyContent: 'center',
   },
   statusBadge: {
     paddingHorizontal: 8,
@@ -529,13 +535,12 @@ const styles = StyleSheet.create({
   },
   actionWrapper: {
     alignItems: 'center',
-    justifyContent: 'center',
   },
   reorderBtn: {
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 6,
     backgroundColor: '#0F766E',
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: 6,
     cursor: 'pointer',
   },
   reorderBtnText: {
@@ -544,22 +549,24 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   writeOffBtn: {
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 6,
     backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: 6,
     cursor: 'pointer',
   },
   writeOffBtnExpired: {
     backgroundColor: '#FEE2E2',
+    borderColor: '#FECACA',
   },
   writeOffBtnText: {
     fontSize: 11.5,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#475569',
   },
   writeOffTextExpired: {
     color: '#DC2626',
-    fontWeight: '700',
   },
 });

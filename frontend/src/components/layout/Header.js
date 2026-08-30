@@ -19,6 +19,8 @@ const BRANCH_OPTIONS = [
 export default function Header({
   currentBranch = 'Main Branch',
   onBranchChange,
+  isMultiBranch = true,
+  onTogglePharmacyMode,
   syncStatus = 'online',
 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -32,18 +34,43 @@ export default function Header({
 
   return (
     <View style={styles.headerContainer}>
-      {/* Left: Branch Selector Dropdown */}
+      {/* Left: Branch Info (Conditional for Single-Shop vs Multi-Branch) */}
       <View style={styles.leftSection}>
-        <Text style={styles.branchLabel}>Branch</Text>
-        <Pressable
-          onPress={() => setDropdownOpen(true)}
-          style={styles.branchButton}
-          accessibilityRole="button"
-          accessibilityLabel="Select Branch"
-        >
-          <Text style={styles.branchButtonText}>{currentBranch}</Text>
-          <Text style={styles.chevron}>▾</Text>
-        </Pressable>
+        {isMultiBranch ? (
+          // MULTI-BRANCH MODE: Active Branch Switcher Dropdown
+          <View style={styles.branchSelectorRow}>
+            <Text style={styles.branchLabel}>Branch</Text>
+            <Pressable
+              onPress={() => setDropdownOpen(true)}
+              style={styles.branchButton}
+              accessibilityRole="button"
+              accessibilityLabel="Select Branch"
+            >
+              <Text style={styles.branchButtonText}>{currentBranch}</Text>
+              <Text style={styles.chevron}>▾</Text>
+            </Pressable>
+          </View>
+        ) : (
+          // SINGLE-SHOP MODE: Clean Non-Clickable Store Label
+          <View style={styles.singleShopBadge}>
+            <View style={styles.singleShopDot} />
+            <Text style={styles.singleShopLabel}>Single Store</Text>
+          </View>
+        )}
+
+        {/* Quick Mode Toggle for Testing / Enterprise Tier Switching */}
+        {onTogglePharmacyMode && (
+          <Pressable
+            onPress={onTogglePharmacyMode}
+            style={styles.modeTogglePill}
+            accessibilityRole="button"
+            accessibilityLabel="Toggle Single/Multi Branch Mode"
+          >
+            <Text style={styles.modeToggleText}>
+              Mode: {isMultiBranch ? 'Multi-Branch' : 'Single-Shop'} ⇄
+            </Text>
+          </Pressable>
+        )}
       </View>
 
       {/* Right: Sync Status & User Profile */}
@@ -63,45 +90,47 @@ export default function Header({
         </View>
       </View>
 
-      {/* Branch Dropdown Modal */}
-      <Modal
-        visible={dropdownOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setDropdownOpen(false)}
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setDropdownOpen(false)}
+      {/* Branch Dropdown Modal (Only relevant in Multi-Branch Mode) */}
+      {isMultiBranch && (
+        <Modal
+          visible={dropdownOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setDropdownOpen(false)}
         >
-          <View style={styles.dropdownCard}>
-            <Text style={styles.dropdownTitle}>Select Active Branch</Text>
-            {BRANCH_OPTIONS.map((branch) => {
-              const isSelected = branch === currentBranch;
-              return (
-                <Pressable
-                  key={branch}
-                  onPress={() => handleSelectBranch(branch)}
-                  style={[
-                    styles.dropdownItem,
-                    isSelected && styles.dropdownItemSelected,
-                  ]}
-                >
-                  <Text
+          <Pressable
+            style={styles.modalOverlay}
+            onPress={() => setDropdownOpen(false)}
+          >
+            <View style={styles.dropdownCard}>
+              <Text style={styles.dropdownTitle}>Select Active Branch</Text>
+              {BRANCH_OPTIONS.map((branch) => {
+                const isSelected = branch === currentBranch;
+                return (
+                  <Pressable
+                    key={branch}
+                    onPress={() => handleSelectBranch(branch)}
                     style={[
-                      styles.dropdownItemText,
-                      isSelected && styles.dropdownItemTextSelected,
+                      styles.dropdownItem,
+                      isSelected && styles.dropdownItemSelected,
                     ]}
                   >
-                    {branch}
-                  </Text>
-                  {isSelected && <Text style={styles.checkmark}>✓</Text>}
-                </Pressable>
-              );
-            })}
-          </View>
-        </Pressable>
-      </Modal>
+                    <Text
+                      style={[
+                        styles.dropdownItemText,
+                        isSelected && styles.dropdownItemTextSelected,
+                      ]}
+                    >
+                      {branch}
+                    </Text>
+                    {isSelected && <Text style={styles.checkmark}>✓</Text>}
+                  </Pressable>
+                );
+              })}
+            </View>
+          </Pressable>
+        </Modal>
+      )}
     </View>
   );
 }
@@ -121,7 +150,12 @@ const styles = StyleSheet.create({
   leftSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 14,
+  },
+  branchSelectorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   branchLabel: {
     fontSize: 12,
@@ -155,6 +189,42 @@ const styles = StyleSheet.create({
   chevron: {
     fontSize: 12,
     color: '#64748B',
+  },
+  singleShopBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    gap: 7,
+  },
+  singleShopDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#0F766E',
+  },
+  singleShopLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  modeTogglePill: {
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    cursor: 'pointer',
+  },
+  modeToggleText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#475569',
   },
   rightSection: {
     flexDirection: 'row',

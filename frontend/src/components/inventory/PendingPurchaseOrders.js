@@ -20,10 +20,7 @@ export default function PendingPurchaseOrders({
         <Text style={styles.cardTitle}>Pending Purchase Orders</Text>
         <Pressable
           onPress={onViewAll}
-          style={({ pressed, hovered }) => [
-            styles.viewAllLink,
-            (pressed || hovered) && styles.viewAllLinkHovered,
-          ]}
+          style={styles.viewAllLink}
           accessibilityRole="button"
           accessibilityLabel="View all pending purchase orders"
         >
@@ -39,10 +36,9 @@ export default function PendingPurchaseOrders({
             <Pressable
               key={order.id || index}
               onPress={() => onOrderPress && onOrderPress(order)}
-              style={({ pressed, hovered }) => [
+              style={[
                 styles.orderItem,
                 !isLast && styles.orderItemBorder,
-                (pressed || hovered) && styles.orderItemHovered,
               ]}
             >
               {/* Left Info: PO Number & Supplier */}
@@ -53,7 +49,7 @@ export default function PendingPurchaseOrders({
 
               {/* Right Info: Amount & Time */}
               <View style={styles.orderRight}>
-                <Text style={styles.amount}>{order.formattedAmount}</Text>
+                <Text style={styles.amount}>{order.amount || order.formattedAmount}</Text>
                 <Text style={styles.timeAgo}>{order.timeAgo}</Text>
               </View>
             </Pressable>
@@ -100,9 +96,6 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     cursor: 'pointer',
   },
-  viewAllLinkHovered: {
-    backgroundColor: '#F1F5F9',
-  },
   viewAllText: {
     fontSize: 13,
     fontWeight: '600',
@@ -122,9 +115,6 @@ const styles = StyleSheet.create({
   orderItemBorder: {
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
-  },
-  orderItemHovered: {
-    backgroundColor: '#F8FAFC',
   },
   orderLeft: {
     flexDirection: 'column',

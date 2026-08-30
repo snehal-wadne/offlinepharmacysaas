@@ -25,13 +25,9 @@ export default function QuickActions({ onAction }) {
             <Pressable
               key={action.id}
               onPress={() => onAction && onAction(action.id, action.label)}
-              style={({ pressed, hovered }) => [
+              style={[
                 styles.actionBtn,
                 isPrimary ? styles.actionBtnPrimary : styles.actionBtnSecondary,
-                (pressed || hovered) &&
-                  (isPrimary
-                    ? styles.actionBtnPrimaryHovered
-                    : styles.actionBtnSecondaryHovered),
               ]}
               accessibilityRole="button"
               accessibilityLabel={action.label}
@@ -99,17 +95,10 @@ const styles = StyleSheet.create({
   actionBtnPrimary: {
     backgroundColor: '#0F766E',
   },
-  actionBtnPrimaryHovered: {
-    backgroundColor: '#0D9488',
-  },
   actionBtnSecondary: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-  },
-  actionBtnSecondaryHovered: {
-    backgroundColor: '#F8FAFC',
-    borderColor: '#CBD5E1',
   },
   actionText: {
     fontSize: 13.5,

@@ -10,34 +10,29 @@ import { MOCK_RECENT_MOVEMENTS } from '../../data/inventoryDashboardMockData';
 
 const TYPE_CONFIG = {
   Purchase: {
-    bgColor: '#CCFBF1',
-    textColor: '#0F766E',
-    borderColor: '#99F6E4',
+    bgColor: '#E6F4EA',
+    textColor: '#137333',
+    label: 'Purchase',
   },
   Sale: {
-    bgColor: '#DBEAFE',
-    textColor: '#1D4ED8',
-    borderColor: '#BFDBFE',
+    bgColor: '#E8F0FE',
+    textColor: '#1A73E8',
+    label: 'Sale',
   },
   Adjustment: {
-    bgColor: '#FEF3C7',
-    textColor: '#B45309',
-    borderColor: '#FDE68A',
+    bgColor: '#F3E8FF',
+    textColor: '#7C3AED',
+    label: 'Adjustment',
   },
   Transfer: {
-    bgColor: '#EDE9FE',
-    textColor: '#6D28D9',
-    borderColor: '#DDD6FE',
+    bgColor: '#E0F2FE',
+    textColor: '#0369A1',
+    label: 'Transfer',
   },
   Return: {
-    bgColor: '#FEE2E2',
-    textColor: '#B91C1C',
-    borderColor: '#FECACA',
-  },
-  Stocktake: {
-    bgColor: '#F1F5F9',
-    textColor: '#475569',
-    borderColor: '#E2E8F0',
+    bgColor: '#FEF3C7',
+    textColor: '#B45309',
+    label: 'Return',
   },
 };
 
@@ -45,38 +40,34 @@ const STATUS_CONFIG = {
   Completed: {
     bgColor: '#DCFCE7',
     textColor: '#15803D',
-  },
-  Synced: {
-    bgColor: '#DCFCE7',
-    textColor: '#15803D',
+    label: 'Completed',
   },
   Approved: {
     bgColor: '#DCFCE7',
     textColor: '#15803D',
+    label: 'Approved',
   },
   'In Transit': {
     bgColor: '#DBEAFE',
     textColor: '#1D4ED8',
+    label: 'In Transit',
   },
   Pending: {
     bgColor: '#FEF3C7',
     textColor: '#B45309',
+    label: 'Pending',
+  },
+  Cancelled: {
+    bgColor: '#FEE2E2',
+    textColor: '#B91C1C',
+    label: 'Cancelled',
   },
 };
-
-function Badge({ label, config }) {
-  const c = config || { bgColor: '#F1F5F9', textColor: '#475569' };
-  return (
-    <View style={[styles.badge, { backgroundColor: c.bgColor }]}>
-      <Text style={[styles.badgeText, { color: c.textColor }]}>{label}</Text>
-    </View>
-  );
-}
 
 export default function RecentStockMovements({
   movements = MOCK_RECENT_MOVEMENTS,
   onViewAll,
-  onRowPress,
+  onMovementPress,
 }) {
   return (
     <View style={styles.cardContainer}>
@@ -85,10 +76,7 @@ export default function RecentStockMovements({
         <Text style={styles.cardTitle}>Recent Stock Movements</Text>
         <Pressable
           onPress={onViewAll}
-          style={({ pressed, hovered }) => [
-            styles.viewAllLink,
-            (pressed || hovered) && styles.viewAllLinkHovered,
-          ]}
+          style={styles.viewAllLink}
           accessibilityRole="button"
           accessibilityLabel="View all recent stock movements"
         >
@@ -112,14 +100,16 @@ export default function RecentStockMovements({
         {movements.map((mov, index) => {
           const isPositive = mov.quantity.startsWith('+');
           const isNegative = mov.quantity.startsWith('-');
+          const typeConf = TYPE_CONFIG[mov.type] || TYPE_CONFIG.Purchase;
+          const statusConf = STATUS_CONFIG[mov.status] || STATUS_CONFIG.Completed;
+
           return (
             <Pressable
               key={mov.id || index}
-              onPress={() => onRowPress && onRowPress(mov)}
-              style={({ pressed, hovered }) => [
+              onPress={() => onMovementPress && onMovementPress(mov)}
+              style={[
                 styles.tableRow,
                 index % 2 === 1 && styles.tableRowAlt,
-                (pressed || hovered) && styles.tableRowHovered,
               ]}
             >
               {/* Date */}
@@ -129,10 +119,21 @@ export default function RecentStockMovements({
 
               {/* Movement Type */}
               <View style={[styles.colType, styles.badgeWrapper]}>
-                <Badge
-                  label={mov.type}
-                  config={TYPE_CONFIG[mov.type]}
-                />
+                <View
+                  style={[
+                    styles.badge,
+                    { backgroundColor: typeConf.bgColor },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.badgeText,
+                      { color: typeConf.textColor },
+                    ]}
+                  >
+                    {typeConf.label}
+                  </Text>
+                </View>
               </View>
 
               {/* Item Name */}
@@ -163,10 +164,21 @@ export default function RecentStockMovements({
 
               {/* Status */}
               <View style={[styles.colStatus, styles.badgeWrapper]}>
-                <Badge
-                  label={mov.status}
-                  config={STATUS_CONFIG[mov.status]}
-                />
+                <View
+                  style={[
+                    styles.badge,
+                    { backgroundColor: statusConf.bgColor },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.badgeText,
+                      { color: statusConf.textColor },
+                    ]}
+                  >
+                    {statusConf.label}
+                  </Text>
+                </View>
               </View>
             </Pressable>
           );
@@ -199,7 +211,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: '#E2E8F0',
   },
   cardTitle: {
     fontSize: 16,
@@ -212,35 +224,33 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     cursor: 'pointer',
   },
-  viewAllLinkHovered: {
-    backgroundColor: '#F1F5F9',
-  },
   viewAllText: {
     fontSize: 13,
     fontWeight: '600',
     color: '#0F766E',
   },
   tableContainer: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
   },
   tableHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
   },
   thCell: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 11.5,
+    fontWeight: '700',
     color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   tableRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
+    paddingVertical: 11,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
     cursor: 'pointer',
@@ -248,57 +258,53 @@ const styles = StyleSheet.create({
   tableRowAlt: {
     backgroundColor: '#F8FAFC',
   },
-  tableRowHovered: {
-    backgroundColor: '#F1F5F9',
-  },
   tdCell: {
     fontSize: 13,
-    color: '#334155',
   },
   colDate: {
     flex: 1.2,
   },
   colType: {
-    flex: 1.5,
+    flex: 1.2,
   },
   colItem: {
-    flex: 2.8,
+    flex: 2,
   },
   colQty: {
-    flex: 1.2,
+    flex: 1,
     textAlign: 'center',
   },
   colRef: {
-    flex: 1.5,
+    flex: 1.2,
+    textAlign: 'center',
   },
   colStatus: {
-    flex: 1.5,
-    alignItems: 'flex-start',
-  },
-  badgeWrapper: {
-    alignItems: 'flex-start',
+    flex: 1.2,
+    alignItems: 'center',
   },
   dateText: {
-    fontWeight: '500',
     color: '#64748B',
+    fontWeight: '500',
   },
   itemText: {
-    fontWeight: '600',
     color: '#0F172A',
+    fontWeight: '600',
   },
   qtyText: {
     fontWeight: '700',
   },
   qtyPositive: {
-    color: '#16A34A',
+    color: '#15803D',
   },
   qtyNegative: {
-    color: '#334155',
+    color: '#DC2626',
   },
   refText: {
-    fontSize: 12.5,
-    fontWeight: '500',
     color: '#64748B',
+    fontWeight: '500',
+  },
+  badgeWrapper: {
+    alignItems: 'flex-start',
   },
   badge: {
     paddingHorizontal: 8,
@@ -307,6 +313,6 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     fontSize: 11.5,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 });

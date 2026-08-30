@@ -116,10 +116,7 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
         </View>
         <Pressable
           onPress={handleOpenModal}
-          style={({ pressed, hovered }) => [
-            styles.receiveButton,
-            (pressed || hovered) && styles.receiveButtonHovered,
-          ]}
+          style={styles.receiveButton}
           accessibilityRole="button"
           accessibilityLabel="Receive Shipment"
         >
@@ -476,7 +473,7 @@ const styles = StyleSheet.create({
     cursor: 'pointer',
   },
   filterChipActive: {
-    backgroundColor: '#CCFBF1',
+    backgroundColor: '#0F766E',
     borderColor: '#0F766E',
   },
   filterChipText: {
@@ -486,7 +483,7 @@ const styles = StyleSheet.create({
   },
   filterChipTextActive: {
     fontWeight: '700',
-    color: '#0F766E',
+    color: '#FFFFFF',
   },
   tableWrapper: {
     minWidth: 1100,

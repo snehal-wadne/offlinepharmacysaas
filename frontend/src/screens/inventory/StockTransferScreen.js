@@ -141,10 +141,7 @@ export default function StockTransferScreen({ onShowToast }) {
         </View>
         <Pressable
           onPress={handleOpenModal}
-          style={({ pressed, hovered }) => [
-            styles.newTransferButton,
-            (pressed || hovered) && styles.newTransferButtonHovered,
-          ]}
+          style={styles.newTransferButton}
           accessibilityRole="button"
           accessibilityLabel="+ New Transfer"
         >
@@ -558,7 +555,7 @@ const styles = StyleSheet.create({
     cursor: 'pointer',
   },
   filterChipActive: {
-    backgroundColor: '#CCFBF1',
+    backgroundColor: '#0F766E',
     borderColor: '#0F766E',
   },
   filterChipText: {
@@ -568,7 +565,7 @@ const styles = StyleSheet.create({
   },
   filterChipTextActive: {
     fontWeight: '700',
-    color: '#0F766E',
+    color: '#FFFFFF',
   },
   tableSubheader: {
     flexDirection: 'row',

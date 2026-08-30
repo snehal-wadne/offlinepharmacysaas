@@ -120,10 +120,7 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
         </View>
         <Pressable
           onPress={handleOpenModal}
-          style={({ pressed, hovered }) => [
-            styles.newSupButton,
-            (pressed || hovered) && styles.newSupButtonHovered,
-          ]}
+          style={styles.newSupButton}
           accessibilityRole="button"
           accessibilityLabel="+ Add Supplier"
         >

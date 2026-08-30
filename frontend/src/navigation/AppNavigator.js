@@ -36,6 +36,9 @@ export default function AppNavigator() {
   const [selectedBranch, setSelectedBranch] = useState('Main Branch');
   const [toastMessage, setToastMessage] = useState('');
 
+  // Pharmacy Architecture Mode: Multi-Branch (true) vs Single-Shop (false)
+  const [isMultiBranch, setIsMultiBranch] = useState(true);
+
   const showToast = (msg) => {
     setToastMessage(msg);
     setTimeout(() => {
@@ -47,6 +50,19 @@ export default function AppNavigator() {
     setCurrentRoute(routeKey);
   };
 
+  const handleTogglePharmacyMode = () => {
+    const nextMode = !isMultiBranch;
+    setIsMultiBranch(nextMode);
+    if (!nextMode && currentRoute === 'stock-transfer') {
+      setCurrentRoute('stock-adjustments');
+    }
+    showToast(
+      nextMode
+        ? 'Switched to Multi-Branch Mode (Branch Switcher & Transfer Enabled)'
+        : 'Switched to Single-Shop Mode (Streamlined for 1 Pharmacy Store)'
+    );
+  };
+
   // Render Active Screen Component
   const renderScreen = () => {
     switch (currentRoute) {
@@ -55,6 +71,7 @@ export default function AppNavigator() {
           <InventoryDashboard
             onNavigate={handleNavigate}
             onShowToast={showToast}
+            isMultiBranch={isMultiBranch}
           />
         );
       case 'stock-adjustments':
@@ -62,13 +79,20 @@ export default function AppNavigator() {
           <StockAdjustmentsScreen
             onNavigate={handleNavigate}
             onShowToast={showToast}
+            isMultiBranch={isMultiBranch}
           />
         );
       case 'stock-transfer':
-        return (
+        return isMultiBranch ? (
           <StockTransferScreen
             onNavigate={handleNavigate}
             onShowToast={showToast}
+          />
+        ) : (
+          <StockAdjustmentsScreen
+            onNavigate={handleNavigate}
+            onShowToast={showToast}
+            isMultiBranch={false}
           />
         );
       case 'stock-status':
@@ -77,6 +101,7 @@ export default function AppNavigator() {
           <StockStatusScreen
             onNavigate={handleNavigate}
             onShowToast={showToast}
+            isMultiBranch={isMultiBranch}
           />
         );
       case 'purchases':
@@ -84,6 +109,7 @@ export default function AppNavigator() {
           <PurchasesScreen
             onNavigate={handleNavigate}
             onShowToast={showToast}
+            isMultiBranch={isMultiBranch}
           />
         );
       case 'goods-receiving':
@@ -91,6 +117,7 @@ export default function AppNavigator() {
           <GoodsReceivingScreen
             onNavigate={handleNavigate}
             onShowToast={showToast}
+            isMultiBranch={isMultiBranch}
           />
         );
       case 'suppliers':
@@ -98,6 +125,7 @@ export default function AppNavigator() {
           <SuppliersScreen
             onNavigate={handleNavigate}
             onShowToast={showToast}
+            isMultiBranch={isMultiBranch}
           />
         );
       case 'inventory-reports':
@@ -105,6 +133,7 @@ export default function AppNavigator() {
           <InventoryReportsScreen
             onNavigate={handleNavigate}
             onShowToast={showToast}
+            isMultiBranch={isMultiBranch}
           />
         );
       case 'purchase-reports':
@@ -112,6 +141,7 @@ export default function AppNavigator() {
           <PurchaseReportsScreen
             onNavigate={handleNavigate}
             onShowToast={showToast}
+            isMultiBranch={isMultiBranch}
           />
         );
       case 'expiry-reports':
@@ -119,6 +149,7 @@ export default function AppNavigator() {
           <ExpiryReportsScreen
             onNavigate={handleNavigate}
             onShowToast={showToast}
+            isMultiBranch={isMultiBranch}
           />
         );
       default:
@@ -126,6 +157,7 @@ export default function AppNavigator() {
           <InventoryDashboard
             onNavigate={handleNavigate}
             onShowToast={showToast}
+            isMultiBranch={isMultiBranch}
           />
         );
     }
@@ -138,18 +170,21 @@ export default function AppNavigator() {
         <Sidebar
           activeItem={currentRoute}
           onNavigate={handleNavigate}
+          isMultiBranch={isMultiBranch}
         />
       )}
 
       {/* 2. Main Application Wrapper */}
       <View style={styles.mainWrapper}>
-        {/* Top Header */}
+        {/* Top Header with Multi/Single Branch Mode */}
         <Header
           currentBranch={selectedBranch}
           onBranchChange={(b) => {
             setSelectedBranch(b);
             showToast(`Switched active branch to ${b}`);
           }}
+          isMultiBranch={isMultiBranch}
+          onTogglePharmacyMode={handleTogglePharmacyMode}
           syncStatus="online"
         />
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -9,8 +9,6 @@ import {
 import { MOCK_STOCK_SUMMARY } from '../../data/inventoryDashboardMockData';
 
 export default function StockSummary({ data = MOCK_STOCK_SUMMARY, onViewAll }) {
-  const [btnHovered, setBtnHovered] = useState(false);
-
   return (
     <View style={styles.cardContainer}>
       {/* Header */}
@@ -73,13 +71,7 @@ export default function StockSummary({ data = MOCK_STOCK_SUMMARY, onViewAll }) {
       <View style={styles.cardFooter}>
         <Pressable
           onPress={onViewAll}
-          onHoverIn={() => setBtnHovered(true)}
-          onHoverOut={() => setBtnHovered(false)}
-          style={({ pressed }) => [
-            styles.viewAllBtn,
-            btnHovered && styles.viewAllBtnHovered,
-            pressed && styles.viewAllBtnPressed,
-          ]}
+          style={styles.viewAllBtn}
           accessibilityRole="button"
           accessibilityLabel="View All Stock"
         >
@@ -110,7 +102,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: '#E2E8F0',
   },
   cardTitle: {
     fontSize: 16,
@@ -118,27 +110,34 @@ const styles = StyleSheet.create({
     color: '#0F172A',
   },
   tableContainer: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
   },
   tableHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
   },
   thCell: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 11.5,
+    fontWeight: '700',
     color: '#64748B',
-    textTransform: 'none',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  categoryCol: {
+    flex: 2,
+  },
+  numCol: {
+    flex: 1,
+    textAlign: 'center',
   },
   tableRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 13,
-    paddingHorizontal: 12,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
@@ -146,27 +145,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   tdCell: {
-    fontSize: 13.5,
-    color: '#334155',
-  },
-  categoryCol: {
-    flex: 2.2,
-  },
-  numCol: {
-    flex: 1.2,
-    textAlign: 'center',
+    fontSize: 13,
   },
   categoryText: {
     fontWeight: '600',
-    color: '#0F172A',
+    color: '#334155',
   },
   totalText: {
-    fontWeight: '600',
-    color: '#334155',
+    fontWeight: '700',
+    color: '#0F172A',
   },
   inStockText: {
     fontWeight: '600',
-    color: '#16A34A',
+    color: '#15803D',
   },
   lowStockText: {
     fontWeight: '700',
@@ -181,30 +172,24 @@ const styles = StyleSheet.create({
   },
   cardFooter: {
     paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
-    backgroundColor: '#FAFAFA',
+    backgroundColor: '#FFFFFF',
     alignItems: 'flex-start',
   },
   viewAllBtn: {
     paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 6,
+    paddingHorizontal: 16,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: '#0F766E',
     backgroundColor: '#FFFFFF',
     cursor: 'pointer',
   },
-  viewAllBtnHovered: {
-    backgroundColor: '#CCFBF1',
-  },
-  viewAllBtnPressed: {
-    backgroundColor: '#99F6E4',
-  },
   viewAllBtnText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#0F766E',
   },
 });

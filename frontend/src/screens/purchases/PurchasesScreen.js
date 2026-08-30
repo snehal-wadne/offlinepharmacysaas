@@ -135,10 +135,7 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
         </View>
         <Pressable
           onPress={handleOpenModal}
-          style={({ pressed, hovered }) => [
-            styles.newPOButton,
-            (pressed || hovered) && styles.newPOButtonHovered,
-          ]}
+          style={styles.newPOButton}
           accessibilityRole="button"
           accessibilityLabel="New Purchase Order"
         >
@@ -535,7 +532,7 @@ const styles = StyleSheet.create({
     cursor: 'pointer',
   },
   filterChipActive: {
-    backgroundColor: '#CCFBF1',
+    backgroundColor: '#0F766E',
     borderColor: '#0F766E',
   },
   filterChipText: {
@@ -545,7 +542,7 @@ const styles = StyleSheet.create({
   },
   filterChipTextActive: {
     fontWeight: '700',
-    color: '#0F766E',
+    color: '#FFFFFF',
   },
   tableWrapper: {
     minWidth: 1100,

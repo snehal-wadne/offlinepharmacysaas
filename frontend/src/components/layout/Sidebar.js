@@ -8,9 +8,9 @@ import {
   Platform,
 } from 'react-native';
 
-const INVENTORY_SUBITEMS = [
+const ALL_INVENTORY_SUBITEMS = [
   { title: 'Stock Adjustments', key: 'stock-adjustments' },
-  { title: 'Stock Transfer', key: 'stock-transfer' },
+  { title: 'Stock Transfer', key: 'stock-transfer', multiOnly: true },
   { title: 'Stock Status', key: 'stock-status' },
 ];
 
@@ -26,8 +26,13 @@ const REPORTS_SUBITEMS = [
   { title: 'Expiry Reports', key: 'expiry-reports' },
 ];
 
-export default function Sidebar({ activeItem = 'dashboard', onNavigate }) {
-  const isInventoryActive = INVENTORY_SUBITEMS.some((item) => item.key === activeItem);
+export default function Sidebar({ activeItem = 'dashboard', onNavigate, isMultiBranch = true }) {
+  // Filter inventory subitems conditionally based on Single-Shop vs Multi-Branch
+  const inventorySubItems = ALL_INVENTORY_SUBITEMS.filter(
+    (item) => !item.multiOnly || isMultiBranch
+  );
+
+  const isInventoryActive = inventorySubItems.some((item) => item.key === activeItem);
   const isPurchasesActive = PURCHASES_SUBITEMS.some((item) => item.key === activeItem);
   const isReportsActive = REPORTS_SUBITEMS.some((item) => item.key === activeItem);
 
@@ -108,10 +113,9 @@ export default function Sidebar({ activeItem = 'dashboard', onNavigate }) {
         {/* 1. Dashboard */}
         <Pressable
           onPress={handleDashboardClick}
-          style={({ pressed, hovered }) => [
+          style={[
             styles.mainNavItem,
             activeItem === 'dashboard' && styles.mainNavItemActive,
-            (pressed || hovered) && activeItem !== 'dashboard' && styles.mainNavItemHovered,
           ]}
           accessibilityRole="button"
           accessibilityLabel="Dashboard"
@@ -130,14 +134,13 @@ export default function Sidebar({ activeItem = 'dashboard', onNavigate }) {
         {/* Section Divider */}
         <View style={styles.sectionDivider} />
 
-        {/* 2. Inventory Section (Expandable - 3 Items) */}
+        {/* 2. Inventory Section (Dynamic subitems) */}
         <View style={styles.expandableSection}>
           <Pressable
             onPress={handleInventoryClick}
-            style={({ pressed, hovered }) => [
+            style={[
               styles.expandableHeader,
               isInventoryActive && styles.expandableHeaderSelected,
-              (pressed || hovered) && styles.expandableHeaderHovered,
             ]}
             accessibilityRole="button"
             accessibilityLabel="Inventory Menu"
@@ -160,19 +163,18 @@ export default function Sidebar({ activeItem = 'dashboard', onNavigate }) {
             </Text>
           </Pressable>
 
-          {/* Submenu: Stock Adjustments, Stock Transfer, Stock Status */}
+          {/* Submenu */}
           {inventoryExpanded && (
             <View style={styles.submenuContainer}>
-              {INVENTORY_SUBITEMS.map((subItem) => {
+              {inventorySubItems.map((subItem) => {
                 const isActive = activeItem === subItem.key;
                 return (
                   <Pressable
                     key={subItem.key}
                     onPress={() => handleSubItemClick(subItem.key)}
-                    style={({ pressed, hovered }) => [
+                    style={[
                       styles.subNavItem,
                       isActive && styles.subNavItemActive,
-                      (pressed || hovered) && !isActive && styles.subNavItemHovered,
                     ]}
                     accessibilityRole="button"
                     accessibilityLabel={subItem.title}
@@ -197,10 +199,9 @@ export default function Sidebar({ activeItem = 'dashboard', onNavigate }) {
         <View style={styles.expandableSection}>
           <Pressable
             onPress={handlePurchasesClick}
-            style={({ pressed, hovered }) => [
+            style={[
               styles.expandableHeader,
               isPurchasesActive && styles.expandableHeaderSelected,
-              (pressed || hovered) && styles.expandableHeaderHovered,
             ]}
             accessibilityRole="button"
             accessibilityLabel="Purchases Menu"
@@ -232,10 +233,9 @@ export default function Sidebar({ activeItem = 'dashboard', onNavigate }) {
                   <Pressable
                     key={subItem.key}
                     onPress={() => handleSubItemClick(subItem.key)}
-                    style={({ pressed, hovered }) => [
+                    style={[
                       styles.subNavItem,
                       isActive && styles.subNavItemActive,
-                      (pressed || hovered) && !isActive && styles.subNavItemHovered,
                     ]}
                     accessibilityRole="button"
                     accessibilityLabel={subItem.title}
@@ -260,10 +260,9 @@ export default function Sidebar({ activeItem = 'dashboard', onNavigate }) {
         <View style={styles.expandableSection}>
           <Pressable
             onPress={handleReportsClick}
-            style={({ pressed, hovered }) => [
+            style={[
               styles.expandableHeader,
               isReportsActive && styles.expandableHeaderSelected,
-              (pressed || hovered) && styles.expandableHeaderHovered,
             ]}
             accessibilityRole="button"
             accessibilityLabel="Reports Menu"
@@ -295,10 +294,9 @@ export default function Sidebar({ activeItem = 'dashboard', onNavigate }) {
                   <Pressable
                     key={subItem.key}
                     onPress={() => handleSubItemClick(subItem.key)}
-                    style={({ pressed, hovered }) => [
+                    style={[
                       styles.subNavItem,
                       isActive && styles.subNavItemActive,
-                      (pressed || hovered) && !isActive && styles.subNavItemHovered,
                     ]}
                     accessibilityRole="button"
                     accessibilityLabel={subItem.title}
@@ -406,12 +404,10 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     position: 'relative',
     cursor: 'pointer',
+    backgroundColor: 'transparent',
   },
   mainNavItemActive: {
-    backgroundColor: '#CCFBF1',
-  },
-  mainNavItemHovered: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F1F5F9',
   },
   activeIndicator: {
     position: 'absolute',
@@ -442,12 +438,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 8,
     cursor: 'pointer',
+    backgroundColor: 'transparent',
   },
   expandableHeaderSelected: {
-    backgroundColor: '#F8FAFC',
-  },
-  expandableHeaderHovered: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: 'transparent',
   },
   expandableTextSelected: {
     color: '#0F766E',
@@ -474,12 +468,10 @@ const styles = StyleSheet.create({
     marginBottom: 2,
     position: 'relative',
     cursor: 'pointer',
+    backgroundColor: 'transparent',
   },
   subNavItemActive: {
-    backgroundColor: '#CCFBF1',
-  },
-  subNavItemHovered: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F1F5F9',
   },
   subActiveIndicator: {
     position: 'absolute',

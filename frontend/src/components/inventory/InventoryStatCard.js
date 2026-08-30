@@ -28,10 +28,9 @@ export default function InventoryStatCard({
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed, hovered }) => [
+      style={[
         styles.cardContainer,
         { borderLeftColor: colors.border },
-        (pressed || hovered) && styles.cardHovered,
       ]}
       accessibilityRole="button"
       accessibilityLabel={`${label}: ${value}`}
@@ -71,14 +70,6 @@ const styles = StyleSheet.create({
       },
       default: {
         elevation: 1,
-      },
-    }),
-  },
-  cardHovered: {
-    borderColor: '#CBD5E1',
-    ...Platform.select({
-      web: {
-        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.06), 0 2px 4px -1px rgba(0, 0, 0, 0.04)',
       },
     }),
   },
