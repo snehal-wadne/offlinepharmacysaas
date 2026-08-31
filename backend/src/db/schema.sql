@@ -254,6 +254,7 @@ CREATE TABLE IF NOT EXISTS suppliers (
 -- Represents stock of a product at a branch for a particular
 -- batch. Batch number, expiry, MRP and quantity belong here,
 -- not in products.
+-- branch_number is human readable number for batch like B-001, -- B-002
 
 CREATE TABLE IF NOT EXISTS inventory_batches (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
@@ -298,6 +299,7 @@ CREATE TABLE IF NOT EXISTS stock_transfers (
     status VARCHAR(30) NOT NULL DEFAULT 'DRAFT',
 
     transfer_number VARCHAR(50) NOT NULL,
+    -- transfer_number is human readable text like TR-001
 
     notes TEXT,
 
@@ -403,6 +405,7 @@ purchase_number VARCHAR(50) NOT NULL,
     CONSTRAINT purchases_status_check
         CHECK (
             status IN (
+                'DRAFT'
                 'PENDING',
                 'APPROVED',
                 'PARTIALLY_RECEIVED',
