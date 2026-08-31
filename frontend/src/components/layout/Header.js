@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Platform,
 } from 'react-native';
+import { API_URL } from '../../config';
 
 const BRANCH_OPTIONS = [
   'Main Branch',
@@ -21,9 +22,49 @@ export default function Header({
   onBranchChange,
   isMultiBranch = true,
   onTogglePharmacyMode,
-  syncStatus = 'online',
+  currentUser,
+  onSignOut,
 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
+
+  // Dynamic connection monitoring to backend server
+  useEffect(() => {
+    let active = true;
+    const checkConnection = async () => {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        const response = await fetch(`${API_URL}/health`, {
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        if (response.ok && active) {
+          setIsOnline(true);
+        } else if (active) {
+          setIsOnline(false);
+        }
+      } catch (err) {
+        if (active) setIsOnline(false);
+      }
+    };
+
+    checkConnection();
+    const interval = setInterval(checkConnection, 10000);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  const displayName = currentUser?.display_name || 'User';
+  const initials = displayName
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
 
   const handleSelectBranch = (branch) => {
     if (onBranchChange) {
@@ -76,17 +117,30 @@ export default function Header({
       {/* Right: Sync Status & User Profile */}
       <View style={styles.rightSection}>
         {/* Sync Status Badge */}
-        <View style={styles.syncBadge}>
-          <View style={styles.syncDot} />
-          <Text style={styles.syncText}>Online</Text>
+        <View style={[styles.syncBadge, !isOnline && styles.syncBadgeOffline]}>
+          <View style={[styles.syncDot, !isOnline && styles.syncDotOffline]} />
+          <Text style={[styles.syncText, !isOnline && styles.syncTextOffline]}>
+            {isOnline ? 'Online' : 'Offline'}
+          </Text>
         </View>
 
         {/* User Profile */}
         <View style={styles.profileContainer}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>IM</Text>
+            <Text style={styles.avatarText}>{initials}</Text>
           </View>
-          <Text style={styles.userRole}>Inventory Manager</Text>
+          <Text style={styles.userRole}>{displayName}</Text>
+          
+          {onSignOut && (
+            <Pressable
+              onPress={onSignOut}
+              style={styles.signOutButton}
+              accessibilityRole="button"
+              accessibilityLabel="Sign Out"
+            >
+              <Text style={styles.signOutText}>Sign Out</Text>
+            </Pressable>
+          )}
         </View>
       </View>
 
@@ -332,5 +386,30 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#0F766E',
     fontWeight: '700',
+  },
+  syncBadgeOffline: {
+    backgroundColor: '#FEE2E2',
+    borderColor: '#FCA5A5',
+  },
+  syncDotOffline: {
+    backgroundColor: '#EF4444',
+  },
+  syncTextOffline: {
+    color: '#B91C1C',
+  },
+  signOutButton: {
+    marginLeft: 8,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFF',
+    cursor: 'pointer',
+  },
+  signOutText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#64748B',
   },
 });

@@ -1,8 +1,6 @@
 # Falah Pharmacy Billing & Management SaaS 💊
 
-A universal, offline-first, multi-tenant Pharmacy Billing and Inventory Management Software as a Service (SaaS). Designed to provide fast POS checkout, stock management, and transaction sync for pharmacies of all sizes.
-
----
+ ---
 
 ## 🚀 Tech Stack
 

@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import Sidebar from '../components/layout/Sidebar';
 import Header from '../components/layout/Header';
+import LoginScreen from '../screens/auth/LoginScreen';
 
 // 1. Master Dashboard
 import InventoryDashboard from '../screens/inventory/InventoryDashboard';
@@ -36,6 +37,9 @@ export default function AppNavigator() {
   const [selectedBranch, setSelectedBranch] = useState('Main Branch');
   const [toastMessage, setToastMessage] = useState('');
 
+  // Authenticated User State
+  const [currentUser, setCurrentUser] = useState(null);
+
   // Pharmacy Architecture Mode: Multi-Branch (true) vs Single-Shop (false)
   const [isMultiBranch, setIsMultiBranch] = useState(true);
 
@@ -61,6 +65,11 @@ export default function AppNavigator() {
         ? 'Switched to Multi-Branch Mode (Branch Switcher & Transfer Enabled)'
         : 'Switched to Single-Shop Mode (Streamlined for 1 Pharmacy Store)'
     );
+  };
+
+  const handleSignOut = () => {
+    setCurrentUser(null);
+    showToast('Signed out successfully.');
   };
 
   // Render Active Screen Component
@@ -163,6 +172,18 @@ export default function AppNavigator() {
     }
   };
 
+  // Auth Guard: If no user is logged in, present the Login Screen
+  if (!currentUser) {
+    return (
+      <LoginScreen
+        onLoginSuccess={(user) => {
+          setCurrentUser(user);
+          showToast(`Welcome back, ${user.display_name}!`);
+        }}
+      />
+    );
+  }
+
   return (
     <View style={styles.appContainer}>
       {/* 1. Fixed Left Sidebar */}
@@ -185,7 +206,8 @@ export default function AppNavigator() {
           }}
           isMultiBranch={isMultiBranch}
           onTogglePharmacyMode={handleTogglePharmacyMode}
-          syncStatus="online"
+          currentUser={currentUser}
+          onSignOut={handleSignOut}
         />
 
         {/* Global Action Feedback Toast */}
