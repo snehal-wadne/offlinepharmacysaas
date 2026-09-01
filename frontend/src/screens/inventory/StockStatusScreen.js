@@ -62,6 +62,7 @@ const BATCH_TIMELINE_BADGES = {
 export default function StockStatusScreen({ onNavigate, onShowToast, isMultiBranch = true }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
+  const isMobile = width < 768;
 
   const [activeTab, setActiveTab] = useState('low-stock');
   const [searchQuery, setSearchQuery] = useState('');
@@ -103,7 +104,7 @@ export default function StockStatusScreen({ onNavigate, onShowToast, isMultiBran
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.contentContainer}
+      contentContainerStyle={[styles.contentContainer, isMobile && styles.contentContainerMobile]}
       showsVerticalScrollIndicator={true}
     >
       {/* Top 4 KPI Cards */}
@@ -175,75 +176,21 @@ export default function StockStatusScreen({ onNavigate, onShowToast, isMultiBran
           </View>
         </View>
 
-        {/* Tab 1: Low Stock Table */}
+        {/* Tab 1: Low Stock Items */}
         {activeTab === 'low-stock' && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-            <View style={styles.tableWrapper}>
-              <View style={styles.tableHeader}>
-                <Text style={[styles.thCell, { width: 140 }]}>BRAND NAME</Text>
-                <Text style={[styles.thCell, { width: 160 }]}>GENERIC / SALT</Text>
-                <Text style={[styles.thCell, { width: 100 }]}>SKU</Text>
-                <Text style={[styles.thCell, { width: 100, textAlign: 'center' }]}>
-                  CURRENT STOCK
-                </Text>
-                <Text style={[styles.thCell, { width: 90, textAlign: 'center' }]}>
-                  MIN STOCK
-                </Text>
-                <Text style={[styles.thCell, { width: 100, textAlign: 'center' }]}>
-                  REORDER LVL
-                </Text>
-                <Text style={[styles.thCell, { width: 150 }]}>SUPPLIER</Text>
-                {isMultiBranch && (
-                  <Text style={[styles.thCell, { width: 120 }]}>BRANCH</Text>
-                )}
-                <Text style={[styles.thCell, { width: 100, textAlign: 'center' }]}>STATUS</Text>
-                <Text style={[styles.thCell, { width: 95, textAlign: 'center' }]}>ACTION</Text>
-              </View>
-
-              {filteredLowStock.map((item, index) => {
+          isMobile ? (
+            /* Mobile Low Stock Card List */
+            <View style={styles.mobileCardList}>
+              {filteredLowStock.map((item) => {
                 const badge = STOCK_STATUS_BADGES[item.status] || STOCK_STATUS_BADGES['Low Stock'];
                 const isCritical = item.status === 'Critical' || item.status === 'Out of Stock';
-
                 return (
-                  <View
-                    key={item.id}
-                    style={[styles.tableRow, index % 2 === 1 && styles.tableRowAlt]}
-                  >
-                    <Text style={[styles.tdCell, styles.brandNameCell, { width: 140 }]} numberOfLines={1}>
-                      {item.brandName || item.medicine}
-                    </Text>
-                    <Text style={[styles.tdCell, styles.genericNameCell, { width: 160 }]} numberOfLines={1}>
-                      {item.genericName || item.medicine}
-                    </Text>
-                    <Text style={[styles.tdCell, styles.skuCell, { width: 100 }]}>{item.sku}</Text>
-                    <Text
-                      style={[
-                        styles.tdCell,
-                        styles.currentStockNum,
-                        isCritical && styles.stockCritical,
-                        { width: 100, textAlign: 'center' },
-                      ]}
-                    >
-                      {item.currentStock}
-                    </Text>
-                    <Text style={[styles.tdCell, { width: 90, textAlign: 'center' }]}>
-                      {item.minimumStock}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.tdCell,
-                        { width: 100, textAlign: 'center', fontWeight: '600' },
-                      ]}
-                    >
-                      {item.reorderLevel}
-                    </Text>
-                    <Text style={[styles.tdCell, { width: 150 }]} numberOfLines={1}>{item.supplier}</Text>
-                    {isMultiBranch && (
-                      <Text style={[styles.tdCell, { width: 120 }]} numberOfLines={1}>{item.branch}</Text>
-                    )}
-
-                    {/* Status */}
-                    <View style={[styles.statusWrapper, { width: 100 }]}>
+                  <View key={item.id} style={styles.mobileStatusCard}>
+                    <View style={styles.mobileStatusHeader}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.mobileBrandTitle}>{item.brandName || item.medicine}</Text>
+                        <Text style={styles.mobileGenericSubtitle}>{item.genericName || item.medicine}</Text>
+                      </View>
                       <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
                         <Text style={[styles.statusBadgeText, { color: badge.text }]}>
                           {item.status}
@@ -251,85 +198,156 @@ export default function StockStatusScreen({ onNavigate, onShowToast, isMultiBran
                       </View>
                     </View>
 
-                    {/* Reorder Action */}
-                    <View style={[styles.actionWrapper, { width: 95 }]}>
+                    <View style={styles.mobileGrid}>
+                      <View style={styles.mobileGridCol}>
+                        <Text style={styles.mobileLabel}>SKU Code</Text>
+                        <Text style={styles.mobileValBold}>{item.sku}</Text>
+                      </View>
+                      <View style={styles.mobileGridCol}>
+                        <Text style={styles.mobileLabel}>Current Stock</Text>
+                        <Text style={[styles.mobileValBold, isCritical ? { color: '#DC2626' } : { color: '#D97706' }]}>
+                          {item.currentStock} units
+                        </Text>
+                      </View>
+                      <View style={styles.mobileGridCol}>
+                        <Text style={styles.mobileLabel}>Min Stock Level</Text>
+                        <Text style={styles.mobileVal}>{item.minimumStock} units</Text>
+                      </View>
+                      <View style={styles.mobileGridCol}>
+                        <Text style={styles.mobileLabel}>Reorder Level</Text>
+                        <Text style={styles.mobileValBold}>{item.reorderLevel} units</Text>
+                      </View>
+                      <View style={styles.mobileGridColFull}>
+                        <Text style={styles.mobileLabel}>Supplier / Branch</Text>
+                        <Text style={styles.mobileVal} numberOfLines={1}>
+                          {item.supplier} {isMultiBranch ? `• ${item.branch}` : ''}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.mobileActionFooter}>
                       <Pressable
                         onPress={() => handleReorder(item)}
-                        style={styles.reorderBtn}
+                        style={styles.mobileReorderBtn}
+                        accessibilityRole="button"
                       >
-                        <Text style={styles.reorderBtnText}>+ Reorder</Text>
+                        <Text style={styles.mobileReorderBtnText}>+ Purchase Reorder</Text>
                       </Pressable>
                     </View>
                   </View>
                 );
               })}
             </View>
-          </ScrollView>
+          ) : (
+            /* Desktop Low Stock Table */
+            <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+              <View style={styles.tableWrapper}>
+                <View style={styles.tableHeader}>
+                  <Text style={[styles.thCell, { width: 140 }]}>BRAND NAME</Text>
+                  <Text style={[styles.thCell, { width: 160 }]}>GENERIC / SALT</Text>
+                  <Text style={[styles.thCell, { width: 100 }]}>SKU</Text>
+                  <Text style={[styles.thCell, { width: 100, textAlign: 'center' }]}>
+                    CURRENT STOCK
+                  </Text>
+                  <Text style={[styles.thCell, { width: 90, textAlign: 'center' }]}>
+                    MIN STOCK
+                  </Text>
+                  <Text style={[styles.thCell, { width: 100, textAlign: 'center' }]}>
+                    REORDER LVL
+                  </Text>
+                  <Text style={[styles.thCell, { width: 150 }]}>SUPPLIER</Text>
+                  {isMultiBranch && (
+                    <Text style={[styles.thCell, { width: 120 }]}>BRANCH</Text>
+                  )}
+                  <Text style={[styles.thCell, { width: 100, textAlign: 'center' }]}>STATUS</Text>
+                  <Text style={[styles.thCell, { width: 95, textAlign: 'center' }]}>ACTION</Text>
+                </View>
+
+                {filteredLowStock.map((item, index) => {
+                  const badge = STOCK_STATUS_BADGES[item.status] || STOCK_STATUS_BADGES['Low Stock'];
+                  const isCritical = item.status === 'Critical' || item.status === 'Out of Stock';
+
+                  return (
+                    <View
+                      key={item.id}
+                      style={[styles.tableRow, index % 2 === 1 && styles.tableRowAlt]}
+                    >
+                      <Text style={[styles.tdCell, styles.brandNameCell, { width: 140 }]} numberOfLines={1}>
+                        {item.brandName || item.medicine}
+                      </Text>
+                      <Text style={[styles.tdCell, styles.genericNameCell, { width: 160 }]} numberOfLines={1}>
+                        {item.genericName || item.medicine}
+                      </Text>
+                      <Text style={[styles.tdCell, styles.skuCell, { width: 100 }]}>{item.sku}</Text>
+                      <Text
+                        style={[
+                          styles.tdCell,
+                          styles.currentStockNum,
+                          isCritical && styles.stockCritical,
+                          { width: 100, textAlign: 'center' },
+                        ]}
+                      >
+                        {item.currentStock}
+                      </Text>
+                      <Text style={[styles.tdCell, { width: 90, textAlign: 'center' }]}>
+                        {item.minimumStock}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.tdCell,
+                          { width: 100, textAlign: 'center', fontWeight: '600' },
+                        ]}
+                      >
+                        {item.reorderLevel}
+                      </Text>
+                      <Text style={[styles.tdCell, { width: 150 }]} numberOfLines={1}>{item.supplier}</Text>
+                      {isMultiBranch && (
+                        <Text style={[styles.tdCell, { width: 120 }]} numberOfLines={1}>{item.branch}</Text>
+                      )}
+
+                      {/* Status */}
+                      <View style={[styles.statusWrapper, { width: 100 }]}>
+                        <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
+                          <Text style={[styles.statusBadgeText, { color: badge.text }]}>
+                            {item.status}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Reorder Action */}
+                      <View style={[styles.actionWrapper, { width: 95 }]}>
+                        <Pressable
+                          onPress={() => handleReorder(item)}
+                          style={styles.reorderBtn}
+                        >
+                          <Text style={styles.reorderBtnText}>+ Reorder</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          )
         )}
 
-        {/* Tab 2: Batch Timeline Table */}
+        {/* Tab 2: Batch Timeline */}
         {activeTab === 'batch-timeline' && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-            <View style={styles.tableWrapper}>
-              <View style={styles.tableHeader}>
-                <Text style={[styles.thCell, { width: 140 }]}>BRAND NAME</Text>
-                <Text style={[styles.thCell, { width: 160 }]}>GENERIC / SALT</Text>
-                <Text style={[styles.thCell, { width: 95 }]}>BATCH NO.</Text>
-                <Text style={[styles.thCell, { width: 110 }]}>EXPIRY DATE</Text>
-                <Text style={[styles.thCell, { width: 90, textAlign: 'center' }]}>
-                  QUANTITY
-                </Text>
-                {isMultiBranch && (
-                  <Text style={[styles.thCell, { width: 120 }]}>BRANCH</Text>
-                )}
-                <Text style={[styles.thCell, { width: 150 }]}>SUPPLIER</Text>
-                <Text style={[styles.thCell, { width: 110, textAlign: 'center' }]}>STATUS</Text>
-                <Text style={[styles.thCell, { width: 95, textAlign: 'center' }]}>ACTION</Text>
-              </View>
-
-              {filteredExpiry.map((item, index) => {
+          isMobile ? (
+            /* Mobile Batch Expiry Card List */
+            <View style={styles.mobileCardList}>
+              {filteredExpiry.map((item) => {
                 const badge = BATCH_TIMELINE_BADGES[item.status] || BATCH_TIMELINE_BADGES.Safe;
                 const isExpired = item.status === 'Expired';
                 const isSoon = item.status === 'Expiring Soon';
 
                 return (
-                  <View
-                    key={item.id}
-                    style={[styles.tableRow, index % 2 === 1 && styles.tableRowAlt]}
-                  >
-                    <Text style={[styles.tdCell, styles.brandNameCell, { width: 140 }]} numberOfLines={1}>
-                      {item.brandName || item.medicine}
-                    </Text>
-                    <Text style={[styles.tdCell, styles.genericNameCell, { width: 160 }]} numberOfLines={1}>
-                      {item.genericName || item.medicine}
-                    </Text>
-                    <Text style={[styles.tdCell, { width: 95 }]}>{item.batchNo}</Text>
-                    <Text
-                      style={[
-                        styles.tdCell,
-                        styles.expiryDateText,
-                        isExpired && styles.dateExpired,
-                        isSoon && styles.dateSoon,
-                        { width: 110 },
-                      ]}
-                    >
-                      {item.expiryDate}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.tdCell,
-                        { width: 90, textAlign: 'center', fontWeight: '700' },
-                      ]}
-                    >
-                      {item.quantity}
-                    </Text>
-                    {isMultiBranch && (
-                      <Text style={[styles.tdCell, { width: 120 }]} numberOfLines={1}>{item.branch}</Text>
-                    )}
-                    <Text style={[styles.tdCell, { width: 150 }]} numberOfLines={1}>{item.supplier}</Text>
-
-                    {/* Status */}
-                    <View style={[styles.statusWrapper, { width: 110 }]}>
+                  <View key={item.id} style={styles.mobileStatusCard}>
+                    <View style={styles.mobileStatusHeader}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.mobileBrandTitle}>{item.brandName || item.medicine}</Text>
+                        <Text style={styles.mobileGenericSubtitle}>Batch: {item.batchNo}</Text>
+                      </View>
                       <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
                         <Text style={[styles.statusBadgeText, { color: badge.text }]}>
                           {item.status}
@@ -337,22 +355,44 @@ export default function StockStatusScreen({ onNavigate, onShowToast, isMultiBran
                       </View>
                     </View>
 
-                    {/* Action */}
-                    <View style={[styles.actionWrapper, { width: 95 }]}>
+                    <View style={styles.mobileGrid}>
+                      <View style={styles.mobileGridCol}>
+                        <Text style={styles.mobileLabel}>Expiry Date</Text>
+                        <Text
+                          style={[
+                            styles.mobileValBold,
+                            isExpired && { color: '#DC2626' },
+                            isSoon && { color: '#D97706' },
+                          ]}
+                        >
+                          {item.expiryDate}
+                        </Text>
+                      </View>
+                      <View style={styles.mobileGridCol}>
+                        <Text style={styles.mobileLabel}>Quantity</Text>
+                        <Text style={styles.mobileValBold}>{item.quantity} units</Text>
+                      </View>
+                      <View style={styles.mobileGridColFull}>
+                        <Text style={styles.mobileLabel}>Supplier</Text>
+                        <Text style={styles.mobileVal} numberOfLines={1}>{item.supplier}</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.mobileActionFooter}>
                       <Pressable
                         onPress={() => handleWriteOff(item)}
                         style={[
-                          styles.writeOffBtn,
-                          isExpired && styles.writeOffBtnExpired,
+                          styles.mobileWriteOffBtn,
+                          isExpired && styles.mobileWriteOffBtnExpired,
                         ]}
                       >
                         <Text
                           style={[
-                            styles.writeOffBtnText,
-                            isExpired && styles.writeOffTextExpired,
+                            styles.mobileWriteOffText,
+                            isExpired && styles.mobileWriteOffTextExpired,
                           ]}
                         >
-                          {isExpired ? 'Write-Off' : 'Inspect'}
+                          {isExpired ? 'Write-Off Loss' : 'Audit / Inspect'}
                         </Text>
                       </Pressable>
                     </View>
@@ -360,7 +400,101 @@ export default function StockStatusScreen({ onNavigate, onShowToast, isMultiBran
                 );
               })}
             </View>
-          </ScrollView>
+          ) : (
+            /* Desktop Batch Timeline Table */
+            <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+              <View style={styles.tableWrapper}>
+                <View style={styles.tableHeader}>
+                  <Text style={[styles.thCell, { width: 140 }]}>BRAND NAME</Text>
+                  <Text style={[styles.thCell, { width: 160 }]}>GENERIC / SALT</Text>
+                  <Text style={[styles.thCell, { width: 95 }]}>BATCH NO.</Text>
+                  <Text style={[styles.thCell, { width: 110 }]}>EXPIRY DATE</Text>
+                  <Text style={[styles.thCell, { width: 90, textAlign: 'center' }]}>
+                    QUANTITY
+                  </Text>
+                  {isMultiBranch && (
+                    <Text style={[styles.thCell, { width: 120 }]}>BRANCH</Text>
+                  )}
+                  <Text style={[styles.thCell, { width: 150 }]}>SUPPLIER</Text>
+                  <Text style={[styles.thCell, { width: 110, textAlign: 'center' }]}>STATUS</Text>
+                  <Text style={[styles.thCell, { width: 95, textAlign: 'center' }]}>ACTION</Text>
+                </View>
+
+                {filteredExpiry.map((item, index) => {
+                  const badge = BATCH_TIMELINE_BADGES[item.status] || BATCH_TIMELINE_BADGES.Safe;
+                  const isExpired = item.status === 'Expired';
+                  const isSoon = item.status === 'Expiring Soon';
+
+                  return (
+                    <View
+                      key={item.id}
+                      style={[styles.tableRow, index % 2 === 1 && styles.tableRowAlt]}
+                    >
+                      <Text style={[styles.tdCell, styles.brandNameCell, { width: 140 }]} numberOfLines={1}>
+                        {item.brandName || item.medicine}
+                      </Text>
+                      <Text style={[styles.tdCell, styles.genericNameCell, { width: 160 }]} numberOfLines={1}>
+                        {item.genericName || item.medicine}
+                      </Text>
+                      <Text style={[styles.tdCell, { width: 95 }]}>{item.batchNo}</Text>
+                      <Text
+                        style={[
+                          styles.tdCell,
+                          styles.expiryDateText,
+                          isExpired && styles.dateExpired,
+                          isSoon && styles.dateSoon,
+                          { width: 110 },
+                        ]}
+                      >
+                        {item.expiryDate}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.tdCell,
+                          { width: 90, textAlign: 'center', fontWeight: '700' },
+                        ]}
+                      >
+                        {item.quantity}
+                      </Text>
+                      {isMultiBranch && (
+                        <Text style={[styles.tdCell, { width: 120 }]} numberOfLines={1}>{item.branch}</Text>
+                      )}
+                      <Text style={[styles.tdCell, { width: 150 }]} numberOfLines={1}>{item.supplier}</Text>
+
+                      {/* Status */}
+                      <View style={[styles.statusWrapper, { width: 110 }]}>
+                        <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
+                          <Text style={[styles.statusBadgeText, { color: badge.text }]}>
+                            {item.status}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Action */}
+                      <View style={[styles.actionWrapper, { width: 95 }]}>
+                        <Pressable
+                          onPress={() => handleWriteOff(item)}
+                          style={[
+                            styles.writeOffBtn,
+                            isExpired && styles.writeOffBtnExpired,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.writeOffBtnText,
+                              isExpired && styles.writeOffTextExpired,
+                            ]}
+                          >
+                            {isExpired ? 'Write-Off' : 'Inspect'}
+                          </Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          )
         )}
       </View>
     </ScrollView>
@@ -376,6 +510,12 @@ const styles = StyleSheet.create({
     paddingTop: 24,
     paddingBottom: 40,
     gap: 24,
+  },
+  contentContainerMobile: {
+    paddingHorizontal: 12,
+    paddingTop: 16,
+    paddingBottom: 32,
+    gap: 16,
   },
   kpiRow: {
     flexDirection: 'row',
@@ -399,6 +539,106 @@ const styles = StyleSheet.create({
         elevation: 1,
       },
     }),
+  },
+  /* Mobile Card Styles */
+  mobileCardList: {
+    padding: 12,
+    gap: 12,
+  },
+  mobileStatusCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 14,
+  },
+  mobileStatusHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    gap: 8,
+  },
+  mobileBrandTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  mobileGenericSubtitle: {
+    fontSize: 12.5,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  mobileGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingVertical: 10,
+    gap: 10,
+  },
+  mobileGridCol: {
+    width: '47%',
+  },
+  mobileGridColFull: {
+    width: '100%',
+  },
+  mobileLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#94A3B8',
+    textTransform: 'uppercase',
+  },
+  mobileVal: {
+    fontSize: 12.5,
+    color: '#334155',
+    marginTop: 1,
+  },
+  mobileValBold: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginTop: 1,
+  },
+  mobileActionFooter: {
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  mobileReorderBtn: {
+    backgroundColor: '#0F766E',
+    paddingVertical: 7,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    alignItems: 'center',
+    cursor: 'pointer',
+  },
+  mobileReorderBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  mobileWriteOffBtn: {
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingVertical: 7,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    alignItems: 'center',
+    cursor: 'pointer',
+  },
+  mobileWriteOffBtnExpired: {
+    backgroundColor: '#FEE2E2',
+    borderColor: '#FECACA',
+  },
+  mobileWriteOffText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  mobileWriteOffTextExpired: {
+    color: '#DC2626',
   },
   tabBar: {
     flexDirection: 'row',

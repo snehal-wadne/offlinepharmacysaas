@@ -8,10 +8,11 @@ import {
 } from 'react-native';
 
 const ACTIONS = [
-  { id: 'stock-adjustment', label: 'New Stock Adjustment', type: 'primary' },
-  { id: 'stock-transfer', label: 'Initiate Stock Transfer', type: 'secondary' },
+  { id: 'view-stock', label: 'View Stock Inventory', type: 'primary' },
+  { id: 'stock-adjustment', label: 'New Stock Adjustment', type: 'secondary' },
+  { id: 'add-customer', label: 'Add Patient / Customer', type: 'secondary' },
   { id: 'receive-stock', label: 'Receive Goods Shipment', type: 'secondary' },
-  { id: 'create-stocktake', label: 'View Inventory Reports', type: 'secondary' },
+  { id: 'customer-ledger', label: 'View Customer Ledger', type: 'secondary' },
 ];
 
 export default function QuickActions({ onAction }) {

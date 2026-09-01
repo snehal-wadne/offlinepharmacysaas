@@ -28,6 +28,7 @@ const PO_STATUS_BADGES = {
 export default function PurchasesScreen({ onShowToast, onNavigate }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
+  const isMobile = width < 768;
 
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
@@ -122,11 +123,11 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.contentContainer}
+      contentContainerStyle={[styles.contentContainer, isMobile && styles.contentContainerMobile]}
       showsVerticalScrollIndicator={true}
     >
       {/* Header Row */}
-      <View style={styles.headerRow}>
+      <View style={[styles.headerRow, isMobile && styles.headerRowMobile]}>
         <View>
           <Text style={styles.pageTitle}>Purchases</Text>
           <Text style={styles.pageSubtitle}>
@@ -201,55 +202,25 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
           </View>
         </View>
 
-        {/* Purchase Orders Table */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-          <View style={styles.tableWrapper}>
-            {/* Header */}
-            <View style={styles.tableHeader}>
-              <Text style={[styles.thCell, { width: 110 }]}>PO NUMBER</Text>
-              <Text style={[styles.thCell, { width: 180 }]}>SUPPLIER</Text>
-              <Text style={[styles.thCell, { width: 120 }]}>ORDER DATE</Text>
-              <Text style={[styles.thCell, { width: 120 }]}>EXPECTED</Text>
-              <Text style={[styles.thCell, { width: 120, textAlign: 'right' }]}>AMOUNT</Text>
-              <Text style={[styles.thCell, { width: 80, textAlign: 'center' }]}>ITEMS</Text>
-              <Text style={[styles.thCell, { width: 130 }]}>BRANCH</Text>
-              <Text style={[styles.thCell, { width: 130, textAlign: 'center' }]}>STATUS</Text>
-              <Text style={[styles.thCell, { width: 110, textAlign: 'center' }]}>ACTION</Text>
-            </View>
-
-            {/* Rows */}
+        {isMobile ? (
+          /* Mobile Purchase Order Cards (No horizontal scroll) */
+          <View style={styles.mobileCardList}>
             {filteredOrders.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyTitle}>No purchase orders found</Text>
                 <Text style={styles.emptySubtitle}>Try changing your search keywords.</Text>
               </View>
             ) : (
-              filteredOrders.map((po, index) => {
+              filteredOrders.map((po) => {
                 const badge = PO_STATUS_BADGES[po.status] || PO_STATUS_BADGES.Pending;
                 return (
-                  <View
-                    key={po.id}
-                    style={[
-                      styles.tableRow,
-                      index % 2 === 1 && styles.tableRowAlt,
-                    ]}
-                  >
-                    <Text style={[styles.tdCell, styles.poId, { width: 110 }]}>{po.id}</Text>
-                    <Text style={[styles.tdCell, styles.supplierName, { width: 180 }]} numberOfLines={1}>
-                      {po.supplier}
-                    </Text>
-                    <Text style={[styles.tdCell, { width: 120 }]}>{po.orderDate}</Text>
-                    <Text style={[styles.tdCell, { width: 120 }]}>{po.expectedDate}</Text>
-                    <Text style={[styles.tdCell, styles.amountText, { width: 120, textAlign: 'right' }]}>
-                      {po.amount}
-                    </Text>
-                    <Text style={[styles.tdCell, { width: 80, textAlign: 'center', fontWeight: '600' }]}>
-                      {po.itemsCount}
-                    </Text>
-                    <Text style={[styles.tdCell, { width: 130 }]}>{po.branch}</Text>
-
-                    {/* Status Badge */}
-                    <View style={[styles.statusWrapper, { width: 130 }]}>
+                  <View key={po.id} style={styles.mobilePOCard}>
+                    {/* Header: PO ID & Status Badge */}
+                    <View style={styles.mobilePOHeader}>
+                      <View>
+                        <Text style={styles.mobilePOId}>{po.id}</Text>
+                        <Text style={styles.mobilePOSupplier}>{po.supplier}</Text>
+                      </View>
                       <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
                         <Text style={[styles.statusBadgeText, { color: badge.text }]}>
                           {po.status}
@@ -257,13 +228,38 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
                       </View>
                     </View>
 
-                    {/* Action Button */}
-                    <View style={[styles.actionCell, { width: 110 }]}>
+                    {/* PO Details Grid */}
+                    <View style={styles.mobileGrid}>
+                      <View style={styles.mobileGridCol}>
+                        <Text style={styles.mobileLabel}>Order Date</Text>
+                        <Text style={styles.mobileVal}>{po.orderDate}</Text>
+                      </View>
+                      <View style={styles.mobileGridCol}>
+                        <Text style={styles.mobileLabel}>Expected Delivery</Text>
+                        <Text style={styles.mobileVal}>{po.expectedDate}</Text>
+                      </View>
+                      <View style={styles.mobileGridCol}>
+                        <Text style={styles.mobileLabel}>Total Amount</Text>
+                        <Text style={[styles.mobileValBold, { color: '#0F172A' }]}>{po.amount}</Text>
+                      </View>
+                      <View style={styles.mobileGridCol}>
+                        <Text style={styles.mobileLabel}>Items Count</Text>
+                        <Text style={styles.mobileValBold}>{po.itemsCount} units</Text>
+                      </View>
+                      <View style={styles.mobileGridColFull}>
+                        <Text style={styles.mobileLabel}>Destination Branch</Text>
+                        <Text style={styles.mobileVal}>{po.branch}</Text>
+                      </View>
+                    </View>
+
+                    {/* Action */}
+                    <View style={styles.mobilePOFooter}>
                       <Pressable
                         onPress={() => handleReceiveStockShortcut(po)}
-                        style={styles.receiveBtn}
+                        style={styles.mobileReceiveBtn}
+                        accessibilityRole="button"
                       >
-                        <Text style={styles.receiveBtnText}>Receive</Text>
+                        <Text style={styles.mobileReceiveBtnText}>Receive Stock →</Text>
                       </Pressable>
                     </View>
                   </View>
@@ -271,7 +267,79 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
               })
             )}
           </View>
-        </ScrollView>
+        ) : (
+          /* Desktop Table View */
+          <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+            <View style={styles.tableWrapper}>
+              {/* Header */}
+              <View style={styles.tableHeader}>
+                <Text style={[styles.thCell, { width: 110 }]}>PO NUMBER</Text>
+                <Text style={[styles.thCell, { width: 180 }]}>SUPPLIER</Text>
+                <Text style={[styles.thCell, { width: 120 }]}>ORDER DATE</Text>
+                <Text style={[styles.thCell, { width: 120 }]}>EXPECTED</Text>
+                <Text style={[styles.thCell, { width: 120, textAlign: 'right' }]}>AMOUNT</Text>
+                <Text style={[styles.thCell, { width: 80, textAlign: 'center' }]}>ITEMS</Text>
+                <Text style={[styles.thCell, { width: 130 }]}>BRANCH</Text>
+                <Text style={[styles.thCell, { width: 130, textAlign: 'center' }]}>STATUS</Text>
+                <Text style={[styles.thCell, { width: 110, textAlign: 'center' }]}>ACTION</Text>
+              </View>
+
+              {/* Rows */}
+              {filteredOrders.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyTitle}>No purchase orders found</Text>
+                  <Text style={styles.emptySubtitle}>Try changing your search keywords.</Text>
+                </View>
+              ) : (
+                filteredOrders.map((po, index) => {
+                  const badge = PO_STATUS_BADGES[po.status] || PO_STATUS_BADGES.Pending;
+                  return (
+                    <View
+                      key={po.id}
+                      style={[
+                        styles.tableRow,
+                        index % 2 === 1 && styles.tableRowAlt,
+                      ]}
+                    >
+                      <Text style={[styles.tdCell, styles.poId, { width: 110 }]}>{po.id}</Text>
+                      <Text style={[styles.tdCell, styles.supplierName, { width: 180 }]} numberOfLines={1}>
+                        {po.supplier}
+                      </Text>
+                      <Text style={[styles.tdCell, { width: 120 }]}>{po.orderDate}</Text>
+                      <Text style={[styles.tdCell, { width: 120 }]}>{po.expectedDate}</Text>
+                      <Text style={[styles.tdCell, styles.amountText, { width: 120, textAlign: 'right' }]}>
+                        {po.amount}
+                      </Text>
+                      <Text style={[styles.tdCell, { width: 80, textAlign: 'center', fontWeight: '600' }]}>
+                        {po.itemsCount}
+                      </Text>
+                      <Text style={[styles.tdCell, { width: 130 }]}>{po.branch}</Text>
+
+                      {/* Status Badge */}
+                      <View style={[styles.statusWrapper, { width: 130 }]}>
+                        <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
+                          <Text style={[styles.statusBadgeText, { color: badge.text }]}>
+                            {po.status}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Action Button */}
+                      <View style={[styles.actionCell, { width: 110 }]}>
+                        <Pressable
+                          onPress={() => handleReceiveStockShortcut(po)}
+                          style={styles.receiveBtn}
+                        >
+                          <Text style={styles.receiveBtnText}>Receive</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  );
+                })
+              )}
+            </View>
+          </ScrollView>
+        )}
       </View>
 
       {/* New Purchase Order Modal */}
@@ -413,12 +481,23 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     gap: 24,
   },
+  contentContainerMobile: {
+    paddingHorizontal: 12,
+    paddingTop: 16,
+    paddingBottom: 32,
+    gap: 16,
+  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     flexWrap: 'wrap',
     gap: 16,
+  },
+  headerRowMobile: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: 12,
   },
   pageTitle: {
     fontSize: 24,
@@ -477,6 +556,92 @@ const styles = StyleSheet.create({
         elevation: 1,
       },
     }),
+  },
+  /* Mobile Purchase Order Card Styles */
+  mobileCardList: {
+    padding: 12,
+    gap: 12,
+  },
+  mobilePOCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 14,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
+      },
+    }),
+  },
+  mobilePOHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    gap: 8,
+  },
+  mobilePOId: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F766E',
+  },
+  mobilePOSupplier: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0F172A',
+    marginTop: 2,
+  },
+  mobileGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingVertical: 10,
+    gap: 10,
+  },
+  mobileGridCol: {
+    width: '47%',
+  },
+  mobileGridColFull: {
+    width: '100%',
+  },
+  mobileLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#94A3B8',
+    textTransform: 'uppercase',
+  },
+  mobileVal: {
+    fontSize: 12.5,
+    color: '#334155',
+    marginTop: 1,
+  },
+  mobileValBold: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginTop: 1,
+  },
+  mobilePOFooter: {
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    alignItems: 'flex-end',
+  },
+  mobileReceiveBtn: {
+    backgroundColor: '#2563EB',
+    paddingVertical: 7,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    cursor: 'pointer',
+    width: '100%',
+    alignItems: 'center',
+  },
+  mobileReceiveBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   filtersBar: {
     flexDirection: 'row',

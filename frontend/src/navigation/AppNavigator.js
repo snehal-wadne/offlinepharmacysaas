@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
+  Modal,
+  Pressable,
   StyleSheet,
   useWindowDimensions,
   Platform,
@@ -23,7 +25,13 @@ import PurchasesScreen from '../screens/purchases/PurchasesScreen';
 import GoodsReceivingScreen from '../screens/purchases/GoodsReceivingScreen';
 import SuppliersScreen from '../screens/purchases/SuppliersScreen';
 
-// 4. Reports Screens (3 Pages: Inventory Reports, Purchase Reports, Expiry Reports)
+// 4. Customers Screens (4 Pages: Customers / Patients, Customer Details, Customer Ledger / Credit, Customer Payments)
+import CustomersPatientsScreen from '../screens/customers/CustomersPatientsScreen';
+import CustomerDetailsScreen from '../screens/customers/CustomerDetailsScreen';
+import CustomerLedgerScreen from '../screens/customers/CustomerLedgerScreen';
+import CustomerPaymentsScreen from '../screens/customers/CustomerPaymentsScreen';
+
+// 5. Reports Screens (3 Pages: Inventory Reports, Purchase Reports, Expiry Reports)
 import InventoryReportsScreen from '../screens/reports/InventoryReportsScreen';
 import PurchaseReportsScreen from '../screens/reports/PurchaseReportsScreen';
 import ExpiryReportsScreen from '../screens/reports/ExpiryReportsScreen';
@@ -35,7 +43,9 @@ export default function AppNavigator() {
   // Active Route State (Default: 'dashboard')
   const [currentRoute, setCurrentRoute] = useState('dashboard');
   const [selectedBranch, setSelectedBranch] = useState('Main Branch');
+  const [selectedCustomerId, setSelectedCustomerId] = useState('CUST-1040');
   const [toastMessage, setToastMessage] = useState('');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Authenticated User State
   const [currentUser, setCurrentUser] = useState(null);
@@ -50,8 +60,12 @@ export default function AppNavigator() {
     }, 4000);
   };
 
-  const handleNavigate = (routeKey) => {
+  const handleNavigate = (routeKey, payload) => {
+    if (payload) {
+      setSelectedCustomerId(payload);
+    }
     setCurrentRoute(routeKey);
+    setMobileMenuOpen(false);
   };
 
   const handleTogglePharmacyMode = () => {
@@ -137,6 +151,39 @@ export default function AppNavigator() {
             isMultiBranch={isMultiBranch}
           />
         );
+      case 'customers-patients':
+        return (
+          <CustomersPatientsScreen
+            onNavigate={handleNavigate}
+            onShowToast={showToast}
+            isMultiBranch={isMultiBranch}
+          />
+        );
+      case 'customer-details':
+        return (
+          <CustomerDetailsScreen
+            customerId={selectedCustomerId}
+            onNavigate={handleNavigate}
+            onShowToast={showToast}
+            isMultiBranch={isMultiBranch}
+          />
+        );
+      case 'customer-ledger':
+        return (
+          <CustomerLedgerScreen
+            onNavigate={handleNavigate}
+            onShowToast={showToast}
+            isMultiBranch={isMultiBranch}
+          />
+        );
+      case 'customer-payments':
+        return (
+          <CustomerPaymentsScreen
+            onNavigate={handleNavigate}
+            onShowToast={showToast}
+            isMultiBranch={isMultiBranch}
+          />
+        );
       case 'inventory-reports':
         return (
           <InventoryReportsScreen
@@ -186,13 +233,55 @@ export default function AppNavigator() {
 
   return (
     <View style={styles.appContainer}>
-      {/* 1. Fixed Left Sidebar */}
+      {/* 1. Fixed Left Sidebar for Desktop */}
       {!isMobile && (
         <Sidebar
           activeItem={currentRoute}
           onNavigate={handleNavigate}
           isMultiBranch={isMultiBranch}
         />
+      )}
+
+      {/* Mobile Drawer Navigation Modal (Positioned on Left) */}
+      {isMobile && (
+        <Modal
+          visible={mobileMenuOpen}
+          animationType="fade"
+          transparent={true}
+          onRequestClose={() => setMobileMenuOpen(false)}
+        >
+          <View style={styles.mobileDrawerOverlay}>
+            <View style={styles.mobileDrawerContent}>
+              <View style={styles.mobileDrawerHeader}>
+                <View style={styles.drawerBrandRow}>
+                  <View style={styles.drawerBrandIcon}>
+                    <Text style={styles.drawerBrandIconText}>Rx</Text>
+                  </View>
+                  <Text style={styles.mobileDrawerTitle}>PharmaFlow ERP</Text>
+                </View>
+                <Pressable
+                  onPress={() => setMobileMenuOpen(false)}
+                  style={styles.mobileCloseButton}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close navigation menu"
+                >
+                  <Text style={styles.mobileCloseText}>✕</Text>
+                </Pressable>
+              </View>
+              <Sidebar
+                activeItem={currentRoute}
+                onNavigate={handleNavigate}
+                isMultiBranch={isMultiBranch}
+                isMobile={true}
+              />
+            </View>
+            <Pressable
+              style={styles.mobileDrawerBackdrop}
+              onPress={() => setMobileMenuOpen(false)}
+              accessibilityLabel="Dismiss menu"
+            />
+          </View>
+        </Modal>
       )}
 
       {/* 2. Main Application Wrapper */}
@@ -208,6 +297,9 @@ export default function AppNavigator() {
           onTogglePharmacyMode={handleTogglePharmacyMode}
           currentUser={currentUser}
           onSignOut={handleSignOut}
+          syncStatus="online"
+          isMobile={isMobile}
+          onToggleMobileMenu={() => setMobileMenuOpen(true)}
         />
 
         {/* Global Action Feedback Toast */}
@@ -273,5 +365,66 @@ const styles = StyleSheet.create({
   screenContainer: {
     flex: 1,
     backgroundColor: '#F8FAFC',
+  },
+  mobileDrawerOverlay: {
+    flex: 1,
+    flexDirection: 'row',
+    backgroundColor: 'rgba(15, 23, 42, 0.5)',
+  },
+  mobileDrawerBackdrop: {
+    flex: 1,
+  },
+  mobileDrawerContent: {
+    width: 290,
+    maxWidth: '82%',
+    backgroundColor: '#FFFFFF',
+    height: '100%',
+    shadowColor: '#000',
+    shadowOffset: { width: 4, height: 0 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  mobileDrawerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#0D9488',
+    backgroundColor: '#0F766E',
+  },
+  drawerBrandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  drawerBrandIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: '#14B8A6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  drawerBrandIconText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  mobileDrawerTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  mobileCloseButton: {
+    padding: 6,
+  },
+  mobileCloseText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
   },
 });

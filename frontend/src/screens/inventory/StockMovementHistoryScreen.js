@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, SafeAreaView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, SafeAreaView, useWindowDimensions } from 'react-native';
 
 const COLORS = {
   primary: '#0F766E',
@@ -126,6 +126,9 @@ export default function StockMovementHistoryScreen({ navigation, route }) {
     );
   };
 
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -142,7 +145,7 @@ export default function StockMovementHistoryScreen({ navigation, route }) {
       <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
         {/* Filters */}
         <View style={styles.filterCard}>
-          <View style={styles.filterRow}>
+          <View style={[styles.filterRow, isMobile && styles.filterRowMobile]}>
             <TextInput
               style={[styles.input, { flex: 1 }]}
               placeholder="Search product, reference or batch..."
@@ -151,7 +154,7 @@ export default function StockMovementHistoryScreen({ navigation, route }) {
               placeholderTextColor={COLORS.textMuted}
             />
             
-            <View style={styles.dropdownContainer}>
+            <View style={[styles.dropdownContainer, isMobile && { width: '100%' }]}>
               <TouchableOpacity style={styles.dropdownBtn} onPress={() => toggleDropdown('type')}>
                 <Text style={styles.dropdownBtnText}>{movementType}</Text>
                 <Text style={styles.dropdownBtnIcon}>▾</Text>
@@ -167,7 +170,7 @@ export default function StockMovementHistoryScreen({ navigation, route }) {
               )}
             </View>
 
-            <View style={styles.dropdownContainer}>
+            <View style={[styles.dropdownContainer, isMobile && { width: '100%' }]}>
               <TouchableOpacity style={styles.dropdownBtn} onPress={() => toggleDropdown('branch')}>
                 <Text style={styles.dropdownBtnText}>{branchFilter}</Text>
                 <Text style={styles.dropdownBtnIcon}>▾</Text>
@@ -184,23 +187,23 @@ export default function StockMovementHistoryScreen({ navigation, route }) {
             </View>
           </View>
 
-          <View style={[styles.filterRow, { marginTop: 12 }]}>
+          <View style={[styles.filterRow, isMobile && styles.filterRowMobile, { marginTop: 12 }]}>
             <TextInput
-              style={styles.input}
+              style={[styles.input, isMobile && { width: '100%' }]}
               placeholder="From Date"
               value={fromDate}
               onChangeText={setFromDate}
               placeholderTextColor={COLORS.textMuted}
             />
             <TextInput
-              style={styles.input}
+              style={[styles.input, isMobile && { width: '100%' }]}
               placeholder="To Date"
               value={toDate}
               onChangeText={setToDate}
               placeholderTextColor={COLORS.textMuted}
             />
 
-            <View style={styles.dropdownContainer}>
+            <View style={[styles.dropdownContainer, isMobile && { width: '100%' }]}>
               <TouchableOpacity style={styles.dropdownBtn} onPress={() => toggleDropdown('user')}>
                 <Text style={styles.dropdownBtnText}>{userFilter}</Text>
                 <Text style={styles.dropdownBtnIcon}>▾</Text>
@@ -250,50 +253,97 @@ export default function StockMovementHistoryScreen({ navigation, route }) {
           </View>
         </ScrollView>
 
-        {/* Data Table */}
-        <View style={styles.tableCard}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View>
-              {/* Table Header */}
-              <View style={styles.tableHeader}>
-                <Text style={[styles.colHeader, { width: 110 }]}>Date</Text>
-                <Text style={[styles.colHeader, { width: 120 }]}>Movement Type</Text>
-                <Text style={[styles.colHeader, { width: 180 }]}>Product</Text>
-                <Text style={[styles.colHeader, { width: 100 }]}>Batch</Text>
-                <Text style={[styles.colHeader, { width: 90 }]}>Quantity</Text>
-                <Text style={[styles.colHeader, { width: 110 }]}>Reference</Text>
-                <Text style={[styles.colHeader, { width: 120 }]}>Branch</Text>
-                <Text style={[styles.colHeader, { width: 90 }]}>User</Text>
-                <Text style={[styles.colHeader, { width: 200 }]}>Reason/Notes</Text>
+        {/* Data Table / Mobile Movement Cards */}
+        {isMobile ? (
+          <View style={styles.mobileCardList}>
+            {filteredData.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyStateText}>No movements found matching filters.</Text>
               </View>
-
-              {/* Table Body */}
-              {filteredData.map((item, index) => (
-                <View key={item.id} style={[styles.tableRow, index % 2 === 1 && styles.tableRowAlt]}>
-                  <Text style={[styles.cellText, { width: 110 }]}>{item.date}</Text>
-                  <View style={[styles.cellContent, { width: 120 }]}>
+            ) : (
+              filteredData.map((item) => (
+                <View key={item.id} style={styles.mobileMovementCard}>
+                  <View style={styles.mobileCardHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.mobileProductTitle}>{item.product}</Text>
+                      <Text style={styles.mobileBatchText}>Batch: {item.batch}</Text>
+                    </View>
                     {renderBadge(item.type)}
                   </View>
-                  <Text style={[styles.cellText, { width: 180, fontWeight: '500' }]}>{item.product}</Text>
-                  <Text style={[styles.cellText, { width: 100 }]}>{item.batch}</Text>
-                  <Text style={[styles.cellText, { width: 90, color: item.quantity > 0 ? COLORS.success : item.quantity < 0 ? COLORS.danger : COLORS.textSecondary, fontWeight: '600' }]}>
-                    {item.quantity > 0 ? `+${item.quantity}` : item.quantity}
-                  </Text>
-                  <Text style={[styles.cellText, styles.referenceLink, { width: 110 }]}>{item.reference}</Text>
-                  <Text style={[styles.cellText, { width: 120 }]}>{item.branch}</Text>
-                  <Text style={[styles.cellText, { width: 90 }]}>{item.user}</Text>
-                  <Text style={[styles.cellText, { width: 200 }]} numberOfLines={1}>{item.reason}</Text>
+
+                  <View style={styles.mobileGrid}>
+                    <View style={styles.mobileGridCol}>
+                      <Text style={styles.mobileLabel}>Date</Text>
+                      <Text style={styles.mobileVal}>{item.date}</Text>
+                    </View>
+                    <View style={styles.mobileGridCol}>
+                      <Text style={styles.mobileLabel}>Quantity</Text>
+                      <Text style={[styles.mobileValBold, { color: item.quantity > 0 ? COLORS.success : item.quantity < 0 ? COLORS.danger : COLORS.textSecondary }]}>
+                        {item.quantity > 0 ? `+${item.quantity}` : item.quantity} units
+                      </Text>
+                    </View>
+                    <View style={styles.mobileGridCol}>
+                      <Text style={styles.mobileLabel}>Reference</Text>
+                      <Text style={[styles.mobileValBold, { color: COLORS.primary }]}>{item.reference}</Text>
+                    </View>
+                    <View style={styles.mobileGridCol}>
+                      <Text style={styles.mobileLabel}>Branch & User</Text>
+                      <Text style={styles.mobileVal}>{item.branch} • {item.user}</Text>
+                    </View>
+                    <View style={styles.mobileGridColFull}>
+                      <Text style={styles.mobileLabel}>Reason</Text>
+                      <Text style={styles.mobileVal}>{item.reason}</Text>
+                    </View>
+                  </View>
                 </View>
-              ))}
-              
-              {filteredData.length === 0 && (
-                <View style={styles.emptyState}>
-                  <Text style={styles.emptyStateText}>No movements found matching filters.</Text>
+              ))
+            )}
+          </View>
+        ) : (
+          <View style={styles.tableCard}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View>
+                {/* Table Header */}
+                <View style={styles.tableHeader}>
+                  <Text style={[styles.colHeader, { width: 110 }]}>Date</Text>
+                  <Text style={[styles.colHeader, { width: 120 }]}>Movement Type</Text>
+                  <Text style={[styles.colHeader, { width: 180 }]}>Product</Text>
+                  <Text style={[styles.colHeader, { width: 100 }]}>Batch</Text>
+                  <Text style={[styles.colHeader, { width: 90 }]}>Quantity</Text>
+                  <Text style={[styles.colHeader, { width: 110 }]}>Reference</Text>
+                  <Text style={[styles.colHeader, { width: 120 }]}>Branch</Text>
+                  <Text style={[styles.colHeader, { width: 90 }]}>User</Text>
+                  <Text style={[styles.colHeader, { width: 200 }]}>Reason/Notes</Text>
                 </View>
-              )}
-            </View>
-          </ScrollView>
-        </View>
+
+                {/* Table Body */}
+                {filteredData.map((item, index) => (
+                  <View key={item.id} style={[styles.tableRow, index % 2 === 1 && styles.tableRowAlt]}>
+                    <Text style={[styles.cellText, { width: 110 }]}>{item.date}</Text>
+                    <View style={[styles.cellContent, { width: 120 }]}>
+                      {renderBadge(item.type)}
+                    </View>
+                    <Text style={[styles.cellText, { width: 180, fontWeight: '500' }]}>{item.product}</Text>
+                    <Text style={[styles.cellText, { width: 100 }]}>{item.batch}</Text>
+                    <Text style={[styles.cellText, { width: 90, color: item.quantity > 0 ? COLORS.success : item.quantity < 0 ? COLORS.danger : COLORS.textSecondary, fontWeight: '600' }]}>
+                      {item.quantity > 0 ? `+${item.quantity}` : item.quantity}
+                    </Text>
+                    <Text style={[styles.cellText, styles.referenceLink, { width: 110 }]}>{item.reference}</Text>
+                    <Text style={[styles.cellText, { width: 120 }]}>{item.branch}</Text>
+                    <Text style={[styles.cellText, { width: 90 }]}>{item.user}</Text>
+                    <Text style={[styles.cellText, { width: 200 }]} numberOfLines={1}>{item.reason}</Text>
+                  </View>
+                ))}
+                
+                {filteredData.length === 0 && (
+                  <View style={styles.emptyState}>
+                    <Text style={styles.emptyStateText}>No movements found matching filters.</Text>
+                  </View>
+                )}
+              </View>
+            </ScrollView>
+          </View>
+        )}
         
         <View style={styles.pagination}>
           <Text style={styles.paginationText}>Showing {Math.min(1, filteredData.length)}–{Math.min(20, filteredData.length)} of 1,842 movements</Text>
@@ -363,6 +413,71 @@ const styles = StyleSheet.create({
     gap: 12,
     alignItems: 'center',
     zIndex: 1,
+  },
+  filterRowMobile: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: 10,
+  },
+  /* Mobile Movement Card Styles */
+  mobileCardList: {
+    gap: 12,
+    marginBottom: 20,
+  },
+  mobileMovementCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 14,
+  },
+  mobileCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.surfaceHover,
+    gap: 8,
+  },
+  mobileProductTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  mobileBatchText: {
+    fontSize: 12.5,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  mobileGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingVertical: 10,
+    gap: 10,
+  },
+  mobileGridCol: {
+    width: '47%',
+  },
+  mobileGridColFull: {
+    width: '100%',
+  },
+  mobileLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.textMuted,
+    textTransform: 'uppercase',
+  },
+  mobileVal: {
+    fontSize: 12.5,
+    color: COLORS.textSecondary,
+    marginTop: 1,
+  },
+  mobileValBold: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    marginTop: 1,
   },
   input: {
     height: 40,

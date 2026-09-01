@@ -18,6 +18,7 @@ import {
 export default function CurrentStockScreen({ onShowToast }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
+  const isMobile = width < 768;
 
   // Stock Items State
   const [stockItems, setStockItems] = useState(MOCK_STOCK_ITEMS);
@@ -95,10 +96,10 @@ export default function CurrentStockScreen({ onShowToast }) {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.contentContainer}
+      contentContainerStyle={[styles.contentContainer, isMobile && styles.contentContainerMobile]}
       showsVerticalScrollIndicator={true}
     >
-      {/* Top 4 KPI Cards (Matching Screenshot 2) */}
+      {/* Top 4 KPI Cards */}
       <View style={[styles.kpiRow, isCompact && styles.kpiRowCompact]}>
         {CURRENT_STOCK_KPIS.map((kpi) => (
           <InventoryStatCard
@@ -119,70 +120,128 @@ export default function CurrentStockScreen({ onShowToast }) {
           <Text style={styles.cardTitle}>Stock Information</Text>
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-          <View style={styles.tableWrapper}>
-            {/* Table Header */}
-            <View style={styles.tableHeader}>
-              <Text style={[styles.thCell, { width: 140 }]}>Medicine Name</Text>
-              <Text style={[styles.thCell, { width: 100 }]}>SKU</Text>
-              <Text style={[styles.thCell, { width: 100 }]}>Batch No.</Text>
-              <Text style={[styles.thCell, { width: 120, textAlign: 'center' }]}>
-                Quantity Available
-              </Text>
-              <Text style={[styles.thCell, { width: 100, textAlign: 'right' }]}>Amount</Text>
-              <Text style={[styles.thCell, { width: 100, textAlign: 'center' }]}>Branch ID</Text>
-              <Text style={[styles.thCell, { width: 100, textAlign: 'center' }]}>Shelf Location</Text>
-              <Text style={[styles.thCell, { width: 120 }]}>Supplier Name</Text>
-              <Text style={[styles.thCell, { width: 100 }]}>Updated By</Text>
-              <Text style={[styles.thCell, { width: 110 }]}>Last Updated</Text>
-              <Text style={[styles.thCell, { width: 90, textAlign: 'center' }]}>Modify</Text>
-            </View>
+        {isMobile ? (
+          /* Mobile Card View */
+          <View style={styles.mobileCardList}>
+            {stockItems.map((item) => (
+              <View key={item.id} style={styles.mobileStockCard}>
+                <View style={styles.mobileStockHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.mobileMedTitle}>{item.medicineName}</Text>
+                    <Text style={styles.mobileSkuText}>SKU: {item.sku}</Text>
+                  </View>
+                  <View style={styles.mobileInStockBadge}>
+                    <Text style={styles.mobileInStockText}>In Stock</Text>
+                  </View>
+                </View>
 
-            {/* Table Rows */}
-            {stockItems.map((item, index) => (
-              <View
-                key={item.id}
-                style={[
-                  styles.tableRow,
-                  index % 2 === 1 && styles.tableRowAlt,
-                ]}
-              >
-                <Text style={[styles.tdCell, styles.medName, { width: 140 }]} numberOfLines={1}>
-                  {item.medicineName}
-                </Text>
-                <Text style={[styles.tdCell, { width: 100 }]}>{item.sku}</Text>
-                <Text style={[styles.tdCell, { width: 100 }]}>{item.batchNo}</Text>
-                <Text style={[styles.tdCell, { width: 120, textAlign: 'center', fontWeight: '600' }]}>
-                  {item.quantity}
-                </Text>
-                <Text style={[styles.tdCell, styles.amountCell, { width: 100, textAlign: 'right' }]}>
-                  {item.amount}
-                </Text>
-                <Text style={[styles.tdCell, { width: 100, textAlign: 'center' }]}>
-                  {item.branchId}
-                </Text>
-                <Text style={[styles.tdCell, { width: 100, textAlign: 'center' }]}>
-                  {item.shelfLocation}
-                </Text>
-                <Text style={[styles.tdCell, { width: 120 }]}>{item.supplierName}</Text>
-                <Text style={[styles.tdCell, { width: 100 }]}>{item.updatedBy}</Text>
-                <Text style={[styles.tdCell, { width: 110 }]}>{item.lastUpdated}</Text>
+                <View style={styles.mobileGrid}>
+                  <View style={styles.mobileGridCol}>
+                    <Text style={styles.mobileLabel}>Batch No.</Text>
+                    <Text style={styles.mobileValBold}>{item.batchNo}</Text>
+                  </View>
+                  <View style={styles.mobileGridCol}>
+                    <Text style={styles.mobileLabel}>Qty Available</Text>
+                    <Text style={[styles.mobileValBold, { color: '#0F766E' }]}>{item.quantity} units</Text>
+                  </View>
+                  <View style={styles.mobileGridCol}>
+                    <Text style={styles.mobileLabel}>Amount</Text>
+                    <Text style={styles.mobileValBold}>{item.amount}</Text>
+                  </View>
+                  <View style={styles.mobileGridCol}>
+                    <Text style={styles.mobileLabel}>Shelf Location</Text>
+                    <Text style={styles.mobileVal}>{item.shelfLocation}</Text>
+                  </View>
+                  <View style={styles.mobileGridCol}>
+                    <Text style={styles.mobileLabel}>Branch</Text>
+                    <Text style={styles.mobileVal}>{item.branchId}</Text>
+                  </View>
+                  <View style={styles.mobileGridCol}>
+                    <Text style={styles.mobileLabel}>Supplier</Text>
+                    <Text style={styles.mobileVal} numberOfLines={1}>{item.supplierName}</Text>
+                  </View>
+                </View>
 
-                {/* Modify Button Pill */}
-                <View style={[styles.modifyWrapper, { width: 90 }]}>
+                <View style={styles.mobileCardFooter}>
+                  <Text style={styles.mobileUpdatedText}>Updated: {item.lastUpdated}</Text>
                   <Pressable
                     onPress={() => handleEditOrDelete(item)}
-                    style={styles.modifyButton}
+                    style={styles.mobileModBtn}
                     accessibilityRole="button"
-                    accessibilityLabel="Edit or Delete medicine"
                   >
-                    <Text style={styles.modifyButtonText}>Edit/Del</Text>
+                    <Text style={styles.mobileModBtnText}>Modify</Text>
                   </Pressable>
                 </View>
               </View>
             ))}
           </View>
-        </ScrollView>
+        ) : (
+          /* Desktop Table View */
+          <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+            <View style={styles.tableWrapper}>
+              {/* Table Header */}
+              <View style={styles.tableHeader}>
+                <Text style={[styles.thCell, { width: 140 }]}>Medicine Name</Text>
+                <Text style={[styles.thCell, { width: 100 }]}>SKU</Text>
+                <Text style={[styles.thCell, { width: 100 }]}>Batch No.</Text>
+                <Text style={[styles.thCell, { width: 120, textAlign: 'center' }]}>
+                  Quantity Available
+                </Text>
+                <Text style={[styles.thCell, { width: 100, textAlign: 'right' }]}>Amount</Text>
+                <Text style={[styles.thCell, { width: 100, textAlign: 'center' }]}>Branch ID</Text>
+                <Text style={[styles.thCell, { width: 100, textAlign: 'center' }]}>Shelf Location</Text>
+                <Text style={[styles.thCell, { width: 120 }]}>Supplier Name</Text>
+                <Text style={[styles.thCell, { width: 100 }]}>Updated By</Text>
+                <Text style={[styles.thCell, { width: 110 }]}>Last Updated</Text>
+                <Text style={[styles.thCell, { width: 90, textAlign: 'center' }]}>Modify</Text>
+              </View>
+
+              {/* Table Rows */}
+              {stockItems.map((item, index) => (
+                <View
+                  key={item.id}
+                  style={[
+                    styles.tableRow,
+                    index % 2 === 1 && styles.tableRowAlt,
+                  ]}
+                >
+                  <Text style={[styles.tdCell, styles.medName, { width: 140 }]} numberOfLines={1}>
+                    {item.medicineName}
+                  </Text>
+                  <Text style={[styles.tdCell, { width: 100 }]}>{item.sku}</Text>
+                  <Text style={[styles.tdCell, { width: 100 }]}>{item.batchNo}</Text>
+                  <Text style={[styles.tdCell, { width: 120, textAlign: 'center', fontWeight: '600' }]}>
+                    {item.quantity}
+                  </Text>
+                  <Text style={[styles.tdCell, styles.amountCell, { width: 100, textAlign: 'right' }]}>
+                    {item.amount}
+                  </Text>
+                  <Text style={[styles.tdCell, { width: 100, textAlign: 'center' }]}>
+                    {item.branchId}
+                  </Text>
+                  <Text style={[styles.tdCell, { width: 100, textAlign: 'center' }]}>
+                    {item.shelfLocation}
+                  </Text>
+                  <Text style={[styles.tdCell, { width: 120 }]}>{item.supplierName}</Text>
+                  <Text style={[styles.tdCell, { width: 100 }]}>{item.updatedBy}</Text>
+                  <Text style={[styles.tdCell, { width: 110 }]}>{item.lastUpdated}</Text>
+
+                  {/* Modify Button Pill */}
+                  <View style={[styles.modifyWrapper, { width: 90 }]}>
+                    <Pressable
+                      onPress={() => handleEditOrDelete(item)}
+                      style={styles.modifyButton}
+                      accessibilityRole="button"
+                      accessibilityLabel="Edit or Delete medicine"
+                    >
+                      <Text style={styles.modifyButtonText}>Edit/Del</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </ScrollView>
+        )}
       </View>
 
       {/* Add Medicine Entry Form Card */}
@@ -302,6 +361,12 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     gap: 24,
   },
+  contentContainerMobile: {
+    paddingHorizontal: 12,
+    paddingTop: 16,
+    paddingBottom: 32,
+    gap: 16,
+  },
   kpiRow: {
     flexDirection: 'row',
     gap: 16,
@@ -335,6 +400,100 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
     color: '#0F172A',
+  },
+  /* Mobile Card View Styles */
+  mobileCardList: {
+    padding: 12,
+    gap: 12,
+  },
+  mobileStockCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 14,
+  },
+  mobileStockHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    gap: 8,
+  },
+  mobileMedTitle: {
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  mobileSkuText: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  mobileInStockBadge: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  mobileInStockText: {
+    color: '#15803D',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  mobileGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingVertical: 10,
+    gap: 10,
+  },
+  mobileGridCol: {
+    width: '47%',
+  },
+  mobileLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#94A3B8',
+    textTransform: 'uppercase',
+  },
+  mobileVal: {
+    fontSize: 12.5,
+    color: '#334155',
+    marginTop: 1,
+  },
+  mobileValBold: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginTop: 1,
+  },
+  mobileCardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    marginTop: 4,
+  },
+  mobileUpdatedText: {
+    fontSize: 11,
+    color: '#94A3B8',
+  },
+  mobileModBtn: {
+    backgroundColor: '#E2E8F0',
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    borderRadius: 4,
+    cursor: 'pointer',
+  },
+  mobileModBtnText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#334155',
   },
   tableWrapper: {
     minWidth: 1100,
@@ -413,7 +572,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   formFieldHalf: {
-    width: '48.5%',
+    flex: 1,
     minWidth: 260,
   },
   fieldLabel: {
