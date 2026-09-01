@@ -13,12 +13,44 @@ import {
   PURCHASE_REPORTS_KPIS,
   MOCK_VENDOR_SPEND_ANALYSIS,
 } from '../../data/reportsMockData';
+import { exportToCSV, exportToPDF } from '../../utils/exportUtils';
 
 export default function PurchaseReportsScreen({ onShowToast, onNavigate }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
 
   const handleExport = (type) => {
+    const headers = [
+      'Supplier / Distributor',
+      'Total POs',
+      'Total Spent',
+      'Avg Lead Time',
+      'Fulfillment Rate',
+      'Quality Score',
+      'Primary Category',
+    ];
+    const rows = MOCK_VENDOR_SPEND_ANALYSIS.map((v) => [
+      v.supplier,
+      v.totalPOs,
+      v.totalSpent,
+      v.leadTimeAvg,
+      v.fulfillmentRate,
+      v.qualityAcceptance,
+      v.primaryCategory,
+    ]);
+
+    if (type === 'csv') {
+      exportToCSV(headers, rows, 'vendor_procurement_analytics.csv');
+    } else if (type === 'pdf') {
+      exportToPDF(
+        'Vendor Spend & Delivery Performance',
+        'Comparison of procurement volume, on-time delivery percentages, and quality ratings.',
+        headers,
+        rows,
+        'vendor_procurement_analytics.pdf'
+      );
+    }
+
     if (onShowToast) {
       onShowToast(`✓ Exported Vendor Procurement Analytics as ${type.toUpperCase()}!`);
     }
