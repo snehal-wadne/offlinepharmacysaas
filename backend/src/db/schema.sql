@@ -13,17 +13,32 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- handled through organisation_memberships.
 
 CREATE TABLE IF NOT EXISTS users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
-    email VARCHAR(255) UNIQUE,
-    password_hash VARCHAR(255) NOT NULL,
-    name VARCHAR(100) NOT NULL,
-    status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
-    email_verified_at TIMESTAMPTZ,
-    last_login_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
+-- Primary account identity used by the application.
+email VARCHAR(255) UNIQUE NOT NULL,
+
+-- BCrypt/Argon2-style password hash for local authentication.
+-- NULL means the user does not currently have password login enabled.
+password_hash VARCHAR(255),
+
+-- Stable Google account identifier obtained from the verified Google identity.
+-- NULL means Google login has not been linked to this account.
+google_sub VARCHAR(255) UNIQUE,
+name VARCHAR(100) NOT NULL,
+status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
+email_verified_at TIMESTAMPTZ,
+last_login_at TIMESTAMPTZ,
+created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+-- Every user must have at least one way to authenticate.
+CONSTRAINT users_auth_method_check
+        CHECK (
+            password_hash IS NOT NULL
+            OR google_sub IS NOT NULL
+        )
+);
 -- ============================================================
 -- 2. ORGANISATIONS
 -- ============================================================
