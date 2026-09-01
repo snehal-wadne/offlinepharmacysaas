@@ -14,58 +14,66 @@ import InventoryStatCard from '../../components/inventory/InventoryStatCard';
 import {
   SUPPLIERS_KPIS,
   MOCK_SUPPLIERS_LIST,
+  SUPPLIER_CATEGORY_FILTER,
 } from '../../data/suppliersMockData';
 
 export default function SuppliersScreen({ onShowToast, onNavigate }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
+  const isMobile = width < 768;
 
+  // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('All Categories');
+
+  // Suppliers List State
   const [suppliers, setSuppliers] = useState(MOCK_SUPPLIERS_LIST);
 
+  // Add Supplier Modal State
   const [modalVisible, setModalVisible] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
+    category: 'Branded Formulations',
     contactPerson: '',
     phone: '',
     email: '',
-    city: '',
+    city: 'Mumbai',
     gstin: '',
-    paymentTerms: 'Net 30',
-    category: 'Medicines & Injections',
   });
   const [formErrors, setFormErrors] = useState({});
 
+  // Filtered Suppliers
   const filteredSuppliers = suppliers.filter((sup) => {
-    const query = searchQuery.toLowerCase();
-    return (
-      sup.name.toLowerCase().includes(query) ||
-      sup.contactPerson.toLowerCase().includes(query) ||
-      sup.city.toLowerCase().includes(query) ||
-      sup.gstin.toLowerCase().includes(query) ||
-      sup.category.toLowerCase().includes(query)
-    );
+    const matchesSearch =
+      sup.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      sup.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      sup.contactPerson.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      sup.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      sup.gstin.toLowerCase().includes(searchQuery.toLowerCase());
+
+    const matchesCategory =
+      selectedCategory === 'All Categories' || sup.category === selectedCategory;
+
+    return matchesSearch && matchesCategory;
   });
 
   const handleOpenModal = () => {
     setFormData({
       name: '',
+      category: 'Branded Formulations',
       contactPerson: '',
       phone: '',
       email: '',
-      city: '',
+      city: 'Mumbai',
       gstin: '',
-      paymentTerms: 'Net 30',
-      category: 'Medicines & Injections',
     });
     setFormErrors({});
     setModalVisible(true);
   };
 
-  const handleAddSupplier = () => {
+  const handleSaveSupplier = () => {
     const errors = {};
-    if (!formData.name.trim()) errors.name = 'Supplier Name is required';
-    if (!formData.contactPerson.trim()) errors.contactPerson = 'Contact person is required';
+    if (!formData.name.trim()) errors.name = 'Supplier name is required';
     if (!formData.phone.trim()) errors.phone = 'Phone number is required';
 
     if (Object.keys(errors).length > 0) {
@@ -74,24 +82,23 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
     }
 
     const newSup = {
-      id: `SUP-00${suppliers.length + 1}`,
+      id: `SUP-10${10 + suppliers.length}`,
       name: formData.name,
-      contactPerson: formData.contactPerson,
+      category: formData.category || 'Pharmaceuticals',
+      contactPerson: formData.contactPerson || 'Account Executive',
       phone: formData.phone,
-      email: formData.email || 'info@supplier.com',
-      city: formData.city || 'Mumbai, MH',
-      gstin: formData.gstin || '27AAACB0000A1Z5',
-      paymentTerms: formData.paymentTerms || 'Net 30',
+      email: formData.email || 'orders@pharma.in',
+      city: formData.city || 'Mumbai',
+      gstin: formData.gstin || '27AABCT1234F1Z0',
       balance: '₹0.00',
       status: 'Active',
-      category: formData.category || 'General Pharma',
     };
 
     setSuppliers((prev) => [newSup, ...prev]);
     setModalVisible(false);
 
     if (onShowToast) {
-      onShowToast(`✓ Added vendor "${newSup.name}" to directory!`);
+      onShowToast(`✓ Added ${newSup.name} to Vendor Directory!`);
     }
   };
 
@@ -100,32 +107,32 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
       onNavigate('purchases');
     }
     if (onShowToast) {
-      onShowToast(`Create PO for ${sup.name}`);
+      onShowToast(`Created draft PO with ${sup.name}`);
     }
   };
 
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.contentContainer}
+      contentContainerStyle={[styles.contentContainer, isMobile && styles.contentContainerMobile]}
       showsVerticalScrollIndicator={true}
     >
-      {/* Header */}
-      <View style={styles.headerRow}>
+      {/* Header Row */}
+      <View style={[styles.headerRow, isMobile && styles.headerRowMobile]}>
         <View>
           <Text style={styles.pageTitle}>Suppliers Directory</Text>
           <Text style={styles.pageSubtitle}>
-            Manage pharmaceutical manufacturers, distributors, GSTIN tax records, and vendor terms.
+            Maintain pharmaceutical manufacturers, verified distributors, credit terms and GST records.
           </Text>
         </View>
         <Pressable
           onPress={handleOpenModal}
           style={styles.newSupButton}
           accessibilityRole="button"
-          accessibilityLabel="+ Add Supplier"
+          accessibilityLabel="Add New Supplier"
         >
-          <Text style={styles.newSupIcon}>+</Text>
-          <Text style={styles.newSupText}>Add Supplier</Text>
+          <Text style={styles.btnIcon}>+</Text>
+          <Text style={styles.btnText}>Add Supplier</Text>
         </Pressable>
       </View>
 
@@ -143,14 +150,14 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
         ))}
       </View>
 
-      {/* Suppliers Table Card */}
+      {/* Main Table Card */}
       <View style={styles.cardContainer}>
-        {/* Search Bar */}
-        <View style={styles.filtersBar}>
+        {/* Search & Filter Header */}
+        <View style={[styles.filtersBar, isCompact && styles.filtersBarCompact]}>
           <View style={styles.searchBox}>
             <TextInput
               style={styles.searchInput}
-              placeholder="Search supplier name, contact person, city or GSTIN..."
+              placeholder="Search supplier, contact, city or GSTIN..."
               placeholderTextColor="#94A3B8"
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -161,79 +168,165 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
               </Pressable>
             ) : null}
           </View>
+
+          {/* Category Filter Chips */}
+          <View style={styles.filterChipRow}>
+            {(SUPPLIER_CATEGORY_FILTER || ['All Categories']).map((cat) => (
+              <Pressable
+                key={cat}
+                onPress={() => setSelectedCategory(cat)}
+                style={[
+                  styles.filterChip,
+                  selectedCategory === cat && styles.filterChipActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    selectedCategory === cat && styles.filterChipTextActive,
+                  ]}
+                >
+                  {cat}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
         </View>
 
-        {/* Directory Table */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-          <View style={styles.tableWrapper}>
-            {/* Header */}
-            <View style={styles.tableHeader}>
-              <Text style={[styles.thCell, { width: 100 }]}>VENDOR ID</Text>
-              <Text style={[styles.thCell, { width: 190 }]}>SUPPLIER NAME</Text>
-              <Text style={[styles.thCell, { width: 140 }]}>CONTACT PERSON</Text>
-              <Text style={[styles.thCell, { width: 130 }]}>PHONE</Text>
-              <Text style={[styles.thCell, { width: 180 }]}>EMAIL</Text>
-              <Text style={[styles.thCell, { width: 130 }]}>CITY</Text>
-              <Text style={[styles.thCell, { width: 160 }]}>GSTIN</Text>
-              <Text style={[styles.thCell, { width: 120, textAlign: 'right' }]}>OUTSTANDING</Text>
-              <Text style={[styles.thCell, { width: 90, textAlign: 'center' }]}>STATUS</Text>
-              <Text style={[styles.thCell, { width: 100, textAlign: 'center' }]}>ACTION</Text>
-            </View>
-
-            {/* Rows */}
+        {isMobile ? (
+          /* Mobile Supplier Cards */
+          <View style={styles.mobileCardList}>
             {filteredSuppliers.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyTitle}>No suppliers found</Text>
                 <Text style={styles.emptySubtitle}>Try changing your search terms.</Text>
               </View>
             ) : (
-              filteredSuppliers.map((sup, index) => (
-                <View
-                  key={sup.id}
-                  style={[
-                    styles.tableRow,
-                    index % 2 === 1 && styles.tableRowAlt,
-                  ]}
-                >
-                  <Text style={[styles.tdCell, styles.supId, { width: 100 }]}>{sup.id}</Text>
-                  <View style={[{ width: 190 }]}>
-                    <Text style={[styles.tdCell, styles.supName]} numberOfLines={1}>
-                      {sup.name}
-                    </Text>
-                    <Text style={styles.categorySubtext}>{sup.category}</Text>
-                  </View>
-                  <Text style={[styles.tdCell, { width: 140 }]}>{sup.contactPerson}</Text>
-                  <Text style={[styles.tdCell, { width: 130 }]}>{sup.phone}</Text>
-                  <Text style={[styles.tdCell, styles.emailText, { width: 180 }]} numberOfLines={1}>
-                    {sup.email}
-                  </Text>
-                  <Text style={[styles.tdCell, { width: 130 }]}>{sup.city}</Text>
-                  <Text style={[styles.tdCell, styles.gstinText, { width: 160 }]}>{sup.gstin}</Text>
-                  <Text style={[styles.tdCell, styles.balanceText, { width: 120, textAlign: 'right' }]}>
-                    {sup.balance}
-                  </Text>
-
-                  {/* Status Badge */}
-                  <View style={[styles.statusWrapper, { width: 90 }]}>
+              filteredSuppliers.map((sup) => (
+                <View key={sup.id} style={styles.mobileSupplierCard}>
+                  <View style={styles.mobileSupHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.mobileSupName}>{sup.name}</Text>
+                      <Text style={styles.mobileCategoryText}>{sup.category} • {sup.id}</Text>
+                    </View>
                     <View style={styles.statusBadgeActive}>
                       <Text style={styles.statusBadgeTextActive}>{sup.status}</Text>
                     </View>
                   </View>
 
-                  {/* Action */}
-                  <View style={[styles.actionWrapper, { width: 100 }]}>
+                  <View style={styles.mobileGrid}>
+                    <View style={styles.mobileGridCol}>
+                      <Text style={styles.mobileLabel}>Contact Person</Text>
+                      <Text style={styles.mobileValBold}>{sup.contactPerson}</Text>
+                    </View>
+                    <View style={styles.mobileGridCol}>
+                      <Text style={styles.mobileLabel}>Phone</Text>
+                      <Text style={styles.mobileValBold}>{sup.phone}</Text>
+                    </View>
+                    <View style={styles.mobileGridCol}>
+                      <Text style={styles.mobileLabel}>Email</Text>
+                      <Text style={styles.mobileVal} numberOfLines={1}>{sup.email}</Text>
+                    </View>
+                    <View style={styles.mobileGridCol}>
+                      <Text style={styles.mobileLabel}>City</Text>
+                      <Text style={styles.mobileVal}>{sup.city}</Text>
+                    </View>
+                    <View style={styles.mobileGridCol}>
+                      <Text style={styles.mobileLabel}>GSTIN</Text>
+                      <Text style={styles.mobileVal}>{sup.gstin}</Text>
+                    </View>
+                    <View style={styles.mobileGridCol}>
+                      <Text style={styles.mobileLabel}>Balance Dues</Text>
+                      <Text style={[styles.mobileValBold, { color: '#DC2626' }]}>{sup.balance}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.mobileSupFooter}>
                     <Pressable
                       onPress={() => handleCreatePOWithSupplier(sup)}
-                      style={styles.orderBtn}
+                      style={styles.mobileOrderBtn}
+                      accessibilityRole="button"
                     >
-                      <Text style={styles.orderBtnText}>+ Order</Text>
+                      <Text style={styles.mobileOrderBtnText}>+ Create Purchase Order</Text>
                     </Pressable>
                   </View>
                 </View>
               ))
             )}
           </View>
-        </ScrollView>
+        ) : (
+          /* Desktop Suppliers Table */
+          <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+            <View style={styles.tableWrapper}>
+              {/* Header */}
+              <View style={styles.tableHeader}>
+                <Text style={[styles.thCell, { width: 100 }]}>SUPPLIER ID</Text>
+                <Text style={[styles.thCell, { width: 190 }]}>COMPANY NAME</Text>
+                <Text style={[styles.thCell, { width: 140 }]}>CONTACT PERSON</Text>
+                <Text style={[styles.thCell, { width: 130 }]}>PHONE</Text>
+                <Text style={[styles.thCell, { width: 180 }]}>EMAIL</Text>
+                <Text style={[styles.thCell, { width: 130 }]}>CITY</Text>
+                <Text style={[styles.thCell, { width: 160 }]}>GSTIN</Text>
+                <Text style={[styles.thCell, { width: 120, textAlign: 'right' }]}>BALANCE DUE</Text>
+                <Text style={[styles.thCell, { width: 90, textAlign: 'center' }]}>STATUS</Text>
+                <Text style={[styles.thCell, { width: 100, textAlign: 'center' }]}>ACTION</Text>
+              </View>
+
+              {/* Rows */}
+              {filteredSuppliers.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyTitle}>No suppliers found</Text>
+                  <Text style={styles.emptySubtitle}>Try changing your search terms.</Text>
+                </View>
+              ) : (
+                filteredSuppliers.map((sup, index) => (
+                  <View
+                    key={sup.id}
+                    style={[
+                      styles.tableRow,
+                      index % 2 === 1 && styles.tableRowAlt,
+                    ]}
+                  >
+                    <Text style={[styles.tdCell, styles.supId, { width: 100 }]}>{sup.id}</Text>
+                    <View style={[{ width: 190 }]}>
+                      <Text style={[styles.tdCell, styles.supName]} numberOfLines={1}>
+                        {sup.name}
+                      </Text>
+                      <Text style={styles.categorySubtext}>{sup.category}</Text>
+                    </View>
+                    <Text style={[styles.tdCell, { width: 140 }]}>{sup.contactPerson}</Text>
+                    <Text style={[styles.tdCell, { width: 130 }]}>{sup.phone}</Text>
+                    <Text style={[styles.tdCell, styles.emailText, { width: 180 }]} numberOfLines={1}>
+                      {sup.email}
+                    </Text>
+                    <Text style={[styles.tdCell, { width: 130 }]}>{sup.city}</Text>
+                    <Text style={[styles.tdCell, styles.gstinText, { width: 160 }]}>{sup.gstin}</Text>
+                    <Text style={[styles.tdCell, styles.balanceText, { width: 120, textAlign: 'right' }]}>
+                      {sup.balance}
+                    </Text>
+
+                    {/* Status Badge */}
+                    <View style={[styles.statusWrapper, { width: 90 }]}>
+                      <View style={styles.statusBadgeActive}>
+                        <Text style={styles.statusBadgeTextActive}>{sup.status}</Text>
+                      </View>
+                    </View>
+
+                    {/* Action */}
+                    <View style={[styles.actionWrapper, { width: 100 }]}>
+                      <Pressable
+                        onPress={() => handleCreatePOWithSupplier(sup)}
+                        style={styles.orderBtn}
+                      >
+                        <Text style={styles.orderBtnText}>+ Order</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                ))
+              )}
+            </View>
+          </ScrollView>
+        )}
       </View>
 
       {/* Add Supplier Modal */}
@@ -372,7 +465,7 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </Pressable>
               <Pressable
-                onPress={handleAddSupplier}
+                onPress={handleSaveSupplier}
                 style={styles.submitModalButton}
               >
                 <Text style={styles.submitModalButtonText}>Save Supplier</Text>
@@ -395,12 +488,23 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     gap: 24,
   },
+  contentContainerMobile: {
+    paddingHorizontal: 12,
+    paddingTop: 16,
+    paddingBottom: 32,
+    gap: 16,
+  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     flexWrap: 'wrap',
     gap: 16,
+  },
+  headerRowMobile: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: 12,
   },
   pageTitle: {
     fontSize: 24,
@@ -432,6 +536,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginRight: 6,
   },
+  btnIcon: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
+    marginRight: 6,
+  },
+  btnText: {
+    color: '#FFFFFF',
+    fontSize: 13.5,
+    fontWeight: '700',
+  },
   newSupText: {
     color: '#FFFFFF',
     fontSize: 13.5,
@@ -460,12 +575,120 @@ const styles = StyleSheet.create({
       },
     }),
   },
+  /* Mobile Supplier Card Styles */
+  mobileCardList: {
+    padding: 12,
+    gap: 12,
+  },
+  mobileSupplierCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 14,
+  },
+  mobileSupHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    gap: 8,
+  },
+  mobileSupName: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  mobileCategoryText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#0F766E',
+    marginTop: 2,
+  },
+  mobileGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingVertical: 10,
+    gap: 10,
+  },
+  mobileGridCol: {
+    width: '47%',
+  },
+  mobileLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#94A3B8',
+    textTransform: 'uppercase',
+  },
+  mobileVal: {
+    fontSize: 12.5,
+    color: '#334155',
+    marginTop: 1,
+  },
+  mobileValBold: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginTop: 1,
+  },
+  mobileSupFooter: {
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  mobileOrderBtn: {
+    backgroundColor: '#0F766E',
+    paddingVertical: 7,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    alignItems: 'center',
+    cursor: 'pointer',
+  },
+  mobileOrderBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
   filtersBar: {
     paddingHorizontal: 20,
     paddingVertical: 12,
     backgroundColor: '#FAFAFA',
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
+    gap: 12,
+  },
+  filtersBarCompact: {
+    flexDirection: 'column',
+  },
+  filterChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+  },
+  filterChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    cursor: 'pointer',
+  },
+  filterChipActive: {
+    backgroundColor: '#0F766E',
+    borderColor: '#0F766E',
+  },
+  filterChipText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#64748B',
+  },
+  filterChipTextActive: {
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   searchBox: {
     flexDirection: 'row',

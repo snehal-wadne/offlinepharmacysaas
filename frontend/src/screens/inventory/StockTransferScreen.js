@@ -26,6 +26,7 @@ const STATUS_PILLS = {
 export default function StockTransferScreen({ onShowToast }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
+  const isMobile = width < 768;
 
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
@@ -199,54 +200,21 @@ export default function StockTransferScreen({ onShowToast }) {
           <Text style={styles.paginationInfo}>Showing 1-{filteredTransfers.length} of 29</Text>
         </View>
 
-        {/* Transfers Table */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-          <View style={styles.tableWrapper}>
-            {/* Header Row */}
-            <View style={styles.tableHeader}>
-              <Text style={[styles.thCell, { width: 110 }]}>TRANSFER ID</Text>
-              <Text style={[styles.thCell, { width: 150 }]}>FROM BRANCH</Text>
-              <Text style={[styles.thCell, { width: 150 }]}>TO BRANCH</Text>
-              <Text style={[styles.thCell, { width: 130 }]}>TRANSFER DATE</Text>
-              <Text style={[styles.thCell, { width: 80, textAlign: 'center' }]}>ITEMS</Text>
-              <Text style={[styles.thCell, { width: 120, textAlign: 'center' }]}>TOTAL QUANTITY</Text>
-              <Text style={[styles.thCell, { width: 120, textAlign: 'center' }]}>STATUS</Text>
-              <Text style={[styles.thCell, { width: 120 }]}>CREATED BY</Text>
-              <Text style={[styles.thCell, { width: 80, textAlign: 'center' }]}>ACTIONS</Text>
-            </View>
-
-            {/* Table Rows */}
+        {isMobile ? (
+          /* Mobile Transfer Cards */
+          <View style={styles.mobileCardList}>
             {filteredTransfers.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyTitle}>No transfers found</Text>
                 <Text style={styles.emptySubtitle}>Try changing your search keywords or filters.</Text>
               </View>
             ) : (
-              filteredTransfers.map((tr, index) => {
+              filteredTransfers.map((tr) => {
                 const pill = STATUS_PILLS[tr.status] || STATUS_PILLS.Draft;
                 return (
-                  <View
-                    key={tr.id}
-                    style={[
-                      styles.tableRow,
-                      index % 2 === 1 && styles.tableRowAlt,
-                    ]}
-                  >
-                    <Text style={[styles.tdCell, styles.transferId, { width: 110 }]}>
-                      {tr.id}
-                    </Text>
-                    <Text style={[styles.tdCell, { width: 150 }]}>{tr.fromBranch}</Text>
-                    <Text style={[styles.tdCell, { width: 150 }]}>{tr.toBranch}</Text>
-                    <Text style={[styles.tdCell, { width: 130 }]}>{tr.transferDate}</Text>
-                    <Text style={[styles.tdCell, { width: 80, textAlign: 'center', fontWeight: '600' }]}>
-                      {tr.items}
-                    </Text>
-                    <Text style={[styles.tdCell, { width: 120, textAlign: 'center', fontWeight: '700' }]}>
-                      {tr.totalQuantity}
-                    </Text>
-
-                    {/* Status Pill */}
-                    <View style={[styles.statusCell, { width: 120 }]}>
+                  <View key={tr.id} style={styles.mobileTransferCard}>
+                    <View style={styles.mobileTrHeader}>
+                      <Text style={styles.mobileTrId}>{tr.id}</Text>
                       <View style={[styles.statusPill, { backgroundColor: pill.bg }]}>
                         <Text style={[styles.statusPillText, { color: pill.text }]}>
                           {tr.status}
@@ -254,23 +222,109 @@ export default function StockTransferScreen({ onShowToast }) {
                       </View>
                     </View>
 
-                    <Text style={[styles.tdCell, { width: 120 }]}>{tr.createdBy}</Text>
+                    <View style={styles.mobileRouteRow}>
+                      <Text style={styles.mobileFromBranch}>{tr.fromBranch}</Text>
+                      <Text style={styles.mobileArrow}>→</Text>
+                      <Text style={styles.mobileToBranch}>{tr.toBranch}</Text>
+                    </View>
 
-                    {/* Actions Menu */}
-                    <Pressable
-                      onPress={() => onShowToast && onShowToast(`Options for ${tr.id}`)}
-                      style={[styles.actionDotsBtn, { width: 80 }]}
-                      accessibilityRole="button"
-                      accessibilityLabel="Transfer Actions"
-                    >
-                      <Text style={styles.actionDotsText}>⋮</Text>
-                    </Pressable>
+                    <View style={styles.mobileGrid}>
+                      <View style={styles.mobileGridCol}>
+                        <Text style={styles.mobileLabel}>Date</Text>
+                        <Text style={styles.mobileVal}>{tr.transferDate}</Text>
+                      </View>
+                      <View style={styles.mobileGridCol}>
+                        <Text style={styles.mobileLabel}>Total Qty</Text>
+                        <Text style={[styles.mobileValBold, { color: '#0F766E' }]}>{tr.totalQuantity} units</Text>
+                      </View>
+                      <View style={styles.mobileGridCol}>
+                        <Text style={styles.mobileLabel}>Item Lines</Text>
+                        <Text style={styles.mobileValBold}>{tr.items} items</Text>
+                      </View>
+                      <View style={styles.mobileGridCol}>
+                        <Text style={styles.mobileLabel}>Initiated By</Text>
+                        <Text style={styles.mobileVal}>{tr.createdBy}</Text>
+                      </View>
+                    </View>
                   </View>
                 );
               })
             )}
           </View>
-        </ScrollView>
+        ) : (
+          /* Transfers Table */
+          <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+            <View style={styles.tableWrapper}>
+              {/* Header Row */}
+              <View style={styles.tableHeader}>
+                <Text style={[styles.thCell, { width: 110 }]}>TRANSFER ID</Text>
+                <Text style={[styles.thCell, { width: 150 }]}>FROM BRANCH</Text>
+                <Text style={[styles.thCell, { width: 150 }]}>TO BRANCH</Text>
+                <Text style={[styles.thCell, { width: 130 }]}>TRANSFER DATE</Text>
+                <Text style={[styles.thCell, { width: 80, textAlign: 'center' }]}>ITEMS</Text>
+                <Text style={[styles.thCell, { width: 120, textAlign: 'center' }]}>TOTAL QUANTITY</Text>
+                <Text style={[styles.thCell, { width: 120, textAlign: 'center' }]}>STATUS</Text>
+                <Text style={[styles.thCell, { width: 120 }]}>CREATED BY</Text>
+                <Text style={[styles.thCell, { width: 80, textAlign: 'center' }]}>ACTIONS</Text>
+              </View>
+
+              {/* Table Rows */}
+              {filteredTransfers.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyTitle}>No transfers found</Text>
+                  <Text style={styles.emptySubtitle}>Try changing your search keywords or filters.</Text>
+                </View>
+              ) : (
+                filteredTransfers.map((tr, index) => {
+                  const pill = STATUS_PILLS[tr.status] || STATUS_PILLS.Draft;
+                  return (
+                    <View
+                      key={tr.id}
+                      style={[
+                        styles.tableRow,
+                        index % 2 === 1 && styles.tableRowAlt,
+                      ]}
+                    >
+                      <Text style={[styles.tdCell, styles.transferId, { width: 110 }]}>
+                        {tr.id}
+                      </Text>
+                      <Text style={[styles.tdCell, { width: 150 }]}>{tr.fromBranch}</Text>
+                      <Text style={[styles.tdCell, { width: 150 }]}>{tr.toBranch}</Text>
+                      <Text style={[styles.tdCell, { width: 130 }]}>{tr.transferDate}</Text>
+                      <Text style={[styles.tdCell, { width: 80, textAlign: 'center', fontWeight: '600' }]}>
+                        {tr.items}
+                      </Text>
+                      <Text style={[styles.tdCell, { width: 120, textAlign: 'center', fontWeight: '700' }]}>
+                        {tr.totalQuantity}
+                      </Text>
+
+                      {/* Status Pill */}
+                      <View style={[styles.statusCell, { width: 120 }]}>
+                        <View style={[styles.statusPill, { backgroundColor: pill.bg }]}>
+                          <Text style={[styles.statusPillText, { color: pill.text }]}>
+                            {tr.status}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <Text style={[styles.tdCell, { width: 120 }]}>{tr.createdBy}</Text>
+
+                      {/* Actions Menu */}
+                      <Pressable
+                        onPress={() => onShowToast && onShowToast(`Options for ${tr.id}`)}
+                        style={[styles.actionDotsBtn, { width: 80 }]}
+                        accessibilityRole="button"
+                        accessibilityLabel="Transfer Actions"
+                      >
+                        <Text style={styles.actionDotsText}>⋮</Text>
+                      </Pressable>
+                    </View>
+                  );
+                })
+              )}
+            </View>
+          </ScrollView>
+        )}
 
         {/* Bottom Pagination */}
         <View style={styles.paginationFooter}>
@@ -445,12 +499,23 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     gap: 24,
   },
+  contentContainerMobile: {
+    paddingHorizontal: 12,
+    paddingTop: 16,
+    paddingBottom: 32,
+    gap: 16,
+  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     flexWrap: 'wrap',
     gap: 16,
+  },
+  headerRowMobile: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: 12,
   },
   pageTitle: {
     fontSize: 24,
@@ -487,6 +552,14 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     fontWeight: '700',
   },
+  kpiRow: {
+    flexDirection: 'row',
+    gap: 16,
+    flexWrap: 'wrap',
+  },
+  kpiRowCompact: {
+    gap: 12,
+  },
   cardContainer: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
@@ -501,6 +574,83 @@ const styles = StyleSheet.create({
         elevation: 1,
       },
     }),
+  },
+  /* Mobile Transfer Card Styles */
+  mobileCardList: {
+    padding: 12,
+    gap: 12,
+  },
+  mobileTransferCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 14,
+  },
+  mobileTrHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  mobileTrId: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F766E',
+  },
+  mobileRouteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+  },
+  mobileFromBranch: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0F172A',
+    flex: 1,
+  },
+  mobileArrow: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  mobileToBranch: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0F766E',
+    flex: 1,
+    textAlign: 'right',
+  },
+  mobileGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingVertical: 8,
+    gap: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  mobileGridCol: {
+    width: '47%',
+  },
+  mobileLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#94A3B8',
+    textTransform: 'uppercase',
+  },
+  mobileVal: {
+    fontSize: 12.5,
+    color: '#334155',
+    marginTop: 1,
+  },
+  mobileValBold: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginTop: 1,
   },
   filtersBar: {
     flexDirection: 'row',

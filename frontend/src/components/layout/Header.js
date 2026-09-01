@@ -22,6 +22,8 @@ export default function Header({
   isMultiBranch = true,
   onTogglePharmacyMode,
   syncStatus = 'online',
+  isMobile = false,
+  onToggleMobileMenu,
 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
@@ -33,20 +35,33 @@ export default function Header({
   };
 
   return (
-    <View style={styles.headerContainer}>
-      {/* Left: Branch Info (Conditional for Single-Shop vs Multi-Branch) */}
+    <View style={[styles.headerContainer, isMobile && styles.headerContainerMobile]}>
+      {/* Left: Mobile Hamburger Button & Branch Info */}
       <View style={styles.leftSection}>
+        {isMobile && (
+          <Pressable
+            onPress={onToggleMobileMenu}
+            style={styles.hamburgerButton}
+            accessibilityRole="button"
+            accessibilityLabel="Open Navigation Menu"
+          >
+            <Text style={styles.hamburgerIcon}>☰</Text>
+          </Pressable>
+        )}
+
         {isMultiBranch ? (
           // MULTI-BRANCH MODE: Active Branch Switcher Dropdown
           <View style={styles.branchSelectorRow}>
-            <Text style={styles.branchLabel}>Branch</Text>
+            {!isMobile && <Text style={styles.branchLabel}>Branch</Text>}
             <Pressable
               onPress={() => setDropdownOpen(true)}
               style={styles.branchButton}
               accessibilityRole="button"
               accessibilityLabel="Select Branch"
             >
-              <Text style={styles.branchButtonText}>{currentBranch}</Text>
+              <Text style={styles.branchButtonText} numberOfLines={1}>
+                {currentBranch}
+              </Text>
               <Text style={styles.chevron}>▾</Text>
             </Pressable>
           </View>
@@ -59,7 +74,7 @@ export default function Header({
         )}
 
         {/* Quick Mode Toggle for Testing / Enterprise Tier Switching */}
-        {onTogglePharmacyMode && (
+        {onTogglePharmacyMode && !isMobile && (
           <Pressable
             onPress={onTogglePharmacyMode}
             style={styles.modeTogglePill}
@@ -76,17 +91,19 @@ export default function Header({
       {/* Right: Sync Status & User Profile */}
       <View style={styles.rightSection}>
         {/* Sync Status Badge */}
-        <View style={styles.syncBadge}>
-          <View style={styles.syncDot} />
-          <Text style={styles.syncText}>Online</Text>
-        </View>
+        {!isMobile && (
+          <View style={styles.syncBadge}>
+            <View style={styles.syncDot} />
+            <Text style={styles.syncText}>Online</Text>
+          </View>
+        )}
 
         {/* User Profile */}
         <View style={styles.profileContainer}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>IM</Text>
           </View>
-          <Text style={styles.userRole}>Inventory Manager</Text>
+          {!isMobile && <Text style={styles.userRole}>Inventory Manager</Text>}
         </View>
       </View>
 
@@ -146,6 +163,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 28,
     zIndex: 10,
+  },
+  headerContainerMobile: {
+    paddingHorizontal: 12,
+  },
+  hamburgerButton: {
+    padding: 8,
+    marginRight: 4,
+    borderRadius: 6,
+    backgroundColor: '#F1F5F9',
+  },
+  hamburgerIcon: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#0F766E',
   },
   leftSection: {
     flexDirection: 'row',

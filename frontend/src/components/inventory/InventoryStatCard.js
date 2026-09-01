@@ -5,6 +5,7 @@ import {
   Pressable,
   StyleSheet,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 
 const VARIANT_COLORS = {
@@ -23,6 +24,8 @@ export default function InventoryStatCard({
   variant = 'teal',
   onPress,
 }) {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
   const colors = VARIANT_COLORS[variant] || VARIANT_COLORS.teal;
 
   return (
@@ -30,6 +33,7 @@ export default function InventoryStatCard({
       onPress={onPress}
       style={[
         styles.cardContainer,
+        isMobile && styles.cardContainerMobile,
         { borderLeftColor: colors.border },
       ]}
       accessibilityRole="button"
@@ -73,18 +77,26 @@ const styles = StyleSheet.create({
       },
     }),
   },
+  cardContainerMobile: {
+    minWidth: '47%',
+    maxWidth: '48.5%',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderLeftWidth: 3.5,
+  },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   cardLabel: {
     fontSize: 11.5,
     fontWeight: '700',
     color: '#64748B',
     textTransform: 'uppercase',
-    letterSpacing: 0.6,
+    letterSpacing: 0.5,
     flex: 1,
   },
   statusDot: {
@@ -94,14 +106,14 @@ const styles = StyleSheet.create({
     marginLeft: 6,
   },
   cardValue: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '800',
     color: '#0F172A',
     letterSpacing: -0.5,
-    marginBottom: 3,
+    marginBottom: 2,
   },
   cardSubtext: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '500',
     color: '#94A3B8',
   },

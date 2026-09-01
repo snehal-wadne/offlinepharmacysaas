@@ -3,6 +3,7 @@ import {
   View,
   Text,
   Pressable,
+  ScrollView,
   StyleSheet,
   Platform,
 } from 'react-native';
@@ -13,69 +14,82 @@ export default function StockSummary({ data = MOCK_STOCK_SUMMARY, onViewAll }) {
     <View style={styles.cardContainer}>
       {/* Header */}
       <View style={styles.cardHeader}>
-        <Text style={styles.cardTitle}>Stock Summary</Text>
+        <View>
+          <Text style={styles.cardTitle}>Stock Summary</Text>
+          <Text style={styles.cardSubtitle}>Categorized live item breakdown</Text>
+        </View>
+        <Pressable
+          onPress={onViewAll}
+          style={styles.headerActionBtn}
+          accessibilityRole="button"
+          accessibilityLabel="View All Stock"
+        >
+          <Text style={styles.headerActionText}>View Stock →</Text>
+        </Pressable>
       </View>
 
       {/* Table Container */}
-      <View style={styles.tableContainer}>
-        {/* Table Header */}
-        <View style={styles.tableHeaderRow}>
-          <Text style={[styles.thCell, styles.categoryCol]}>Category</Text>
-          <Text style={[styles.thCell, styles.numCol]}>Total Items</Text>
-          <Text style={[styles.thCell, styles.numCol]}>In-Stock</Text>
-          <Text style={[styles.thCell, styles.numCol]}>Low Stock</Text>
-          <Text style={[styles.thCell, styles.numCol]}>Out-of-Stock</Text>
-        </View>
-
-        {/* Table Rows */}
-        {data.map((row, index) => (
-          <View
-            key={row.id || index}
-            style={[
-              styles.tableRow,
-              index % 2 === 1 && styles.tableRowAlt,
-            ]}
-          >
-            <Text style={[styles.tdCell, styles.categoryCol, styles.categoryText]}>
-              {row.category}
-            </Text>
-            <Text style={[styles.tdCell, styles.numCol, styles.totalText]}>
-              {row.totalItems}
-            </Text>
-            <Text style={[styles.tdCell, styles.numCol, styles.inStockText]}>
-              {row.inStock}
-            </Text>
-            <Text
-              style={[
-                styles.tdCell,
-                styles.numCol,
-                row.lowStock > 0 ? styles.lowStockText : styles.zeroText,
-              ]}
-            >
-              {row.lowStock}
-            </Text>
-            <Text
-              style={[
-                styles.tdCell,
-                styles.numCol,
-                row.outOfStock > 0 ? styles.outOfStockText : styles.zeroText,
-              ]}
-            >
-              {row.outOfStock}
-            </Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <View style={styles.tableContainer}>
+          {/* Table Header */}
+          <View style={styles.tableHeaderRow}>
+            <Text style={[styles.thCell, styles.categoryCol]}>CATEGORY</Text>
+            <Text style={[styles.thCell, styles.numCol]}>TOTAL ITEMS</Text>
+            <Text style={[styles.thCell, styles.numCol]}>IN-STOCK</Text>
+            <Text style={[styles.thCell, styles.numCol]}>LOW STOCK</Text>
+            <Text style={[styles.thCell, styles.numCol]}>OUT OF STOCK</Text>
           </View>
-        ))}
-      </View>
 
-      {/* Footer Action */}
+          {/* Table Rows */}
+          {data.map((row, index) => (
+            <View
+              key={row.id || index}
+              style={[
+                styles.tableRow,
+                index % 2 === 1 && styles.tableRowAlt,
+              ]}
+            >
+              <Text style={[styles.tdCell, styles.categoryCol, styles.categoryText]}>
+                {row.category}
+              </Text>
+              <Text style={[styles.tdCell, styles.numCol, styles.totalText]}>
+                {row.totalItems}
+              </Text>
+              <Text style={[styles.tdCell, styles.numCol, styles.inStockText]}>
+                {row.inStock}
+              </Text>
+              <Text
+                style={[
+                  styles.tdCell,
+                  styles.numCol,
+                  row.lowStock > 0 ? styles.lowStockText : styles.zeroText,
+                ]}
+              >
+                {row.lowStock}
+              </Text>
+              <Text
+                style={[
+                  styles.tdCell,
+                  styles.numCol,
+                  row.outOfStock > 0 ? styles.outOfStockText : styles.zeroText,
+                ]}
+              >
+                {row.outOfStock}
+              </Text>
+            </View>
+          ))}
+        </View>
+      </ScrollView>
+
+      {/* Footer Action Button */}
       <View style={styles.cardFooter}>
         <Pressable
           onPress={onViewAll}
           style={styles.viewAllBtn}
           accessibilityRole="button"
-          accessibilityLabel="View All Stock"
+          accessibilityLabel="View All Stock Inventory"
         >
-          <Text style={styles.viewAllBtnText}>View All Stock</Text>
+          <Text style={styles.viewAllBtnText}>📦 View All Stock Inventory →</Text>
         </Pressable>
       </View>
     </View>
@@ -100,18 +114,41 @@ const styles = StyleSheet.create({
   },
   cardHeader: {
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   cardTitle: {
     fontSize: 16,
     fontWeight: '700',
     color: '#0F172A',
   },
+  cardSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  headerActionBtn: {
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1,
+    borderColor: '#CCFBF1',
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    cursor: 'pointer',
+  },
+  headerActionText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F766E',
+  },
   tableContainer: {
-    paddingHorizontal: 20,
-    paddingVertical: 8,
+    minWidth: 500,
+    paddingHorizontal: 16,
+    paddingVertical: 4,
   },
   tableHeaderRow: {
     flexDirection: 'row',
@@ -121,17 +158,17 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E2E8F0',
   },
   thCell: {
-    fontSize: 11.5,
+    fontSize: 11,
     fontWeight: '700',
     color: '#64748B',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   categoryCol: {
-    flex: 2,
+    width: 130,
   },
   numCol: {
-    flex: 1,
+    width: 90,
     textAlign: 'center',
   },
   tableRow: {
@@ -172,24 +209,33 @@ const styles = StyleSheet.create({
   },
   cardFooter: {
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingVertical: 16,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    backgroundColor: '#FFFFFF',
-    alignItems: 'flex-start',
+    borderTopColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
   },
   viewAllBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 18,
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#0F766E',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#0F766E',
     cursor: 'pointer',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 1px 2px rgba(15, 118, 110, 0.2)',
+      },
+    }),
   },
   viewAllBtnText: {
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: '700',
-    color: '#0F766E',
+    color: '#FFFFFF',
+    letterSpacing: 0.2,
   },
 });
