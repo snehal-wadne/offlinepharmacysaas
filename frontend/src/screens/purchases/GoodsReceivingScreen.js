@@ -26,6 +26,7 @@ const GRN_STATUS_BADGES = {
 export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
+  const isMobile = width < 768;
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('All Statuses');
@@ -33,11 +34,10 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
 
   const [modalVisible, setModalVisible] = useState(false);
   const [formData, setFormData] = useState({
-    poReference: 'PO-1026',
-    supplier: 'Sun Pharma Care',
-    invoiceNo: 'INV-SP-9012',
-    packagesCount: '8',
-    branch: 'Main Branch',
+    poReference: 'PO-1024',
+    supplier: 'Cipla Healthcare',
+    invoiceNo: 'INV-CIP-8821',
+    packagesCount: '4 Boxes',
     notes: '',
   });
   const [formErrors, setFormErrors] = useState({});
@@ -57,11 +57,10 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
 
   const handleOpenModal = () => {
     setFormData({
-      poReference: 'PO-1026',
-      supplier: 'Sun Pharma Care',
-      invoiceNo: 'INV-SP-9012',
-      packagesCount: '8',
-      branch: 'Main Branch',
+      poReference: 'PO-1024',
+      supplier: 'Cipla Healthcare',
+      invoiceNo: 'INV-CIP-8821',
+      packagesCount: '4 Boxes',
       notes: '',
     });
     setFormErrors({});
@@ -80,45 +79,44 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
     }
 
     const newGRN = {
-      id: `GRN-2026-0${90 + grnList.length}`,
+      id: `GRN-2026-${8826 + grnList.length}`,
       poReference: formData.poReference,
       supplier: formData.supplier,
       receivedDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-      receivedBy: 'Manager (HP)',
-      itemsCount: 4,
-      packagesCount: Number(formData.packagesCount || 5),
+      receivedBy: 'Manager',
+      itemsCount: 1,
+      packagesCount: formData.packagesCount || '1 Box',
       invoiceNo: formData.invoiceNo,
       status: 'Verified',
-      branch: formData.branch || 'Main Branch',
     };
 
     setGrnList((prev) => [newGRN, ...prev]);
     setModalVisible(false);
 
     if (onShowToast) {
-      onShowToast(`✓ Logged Goods Received Note ${newGRN.id} for ${newGRN.poReference}!`);
+      onShowToast(`✓ Successfully generated ${newGRN.id} for ${newGRN.supplier}! Stock added.`);
     }
   };
 
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.contentContainer}
+      contentContainerStyle={[styles.contentContainer, isMobile && styles.contentContainerMobile]}
       showsVerticalScrollIndicator={true}
     >
       {/* Header Row */}
-      <View style={styles.headerRow}>
+      <View style={[styles.headerRow, isMobile && styles.headerRowMobile]}>
         <View>
-          <Text style={styles.pageTitle}>Goods Receiving</Text>
+          <Text style={styles.pageTitle}>Goods Receiving (GRN)</Text>
           <Text style={styles.pageSubtitle}>
-            Verify incoming medicine shipments against POs and log Goods Received Notes (GRN).
+            Inspect, verify packages and record batch goods receipt notes against vendor purchase orders.
           </Text>
         </View>
         <Pressable
           onPress={handleOpenModal}
           style={styles.receiveButton}
           accessibilityRole="button"
-          accessibilityLabel="Receive Shipment"
+          accessibilityLabel="Receive New Shipment"
         >
           <Text style={styles.receiveText}>+ Receive Shipment</Text>
         </Pressable>
@@ -181,60 +179,51 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
           </View>
         </View>
 
-        {/* GRN Table */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-          <View style={styles.tableWrapper}>
-            {/* Table Header */}
-            <View style={styles.tableHeader}>
-              <Text style={[styles.thCell, { width: 140 }]}>GRN NUMBER</Text>
-              <Text style={[styles.thCell, { width: 110 }]}>PO REF</Text>
-              <Text style={[styles.thCell, { width: 170 }]}>SUPPLIER</Text>
-              <Text style={[styles.thCell, { width: 120 }]}>RECEIVED DATE</Text>
-              <Text style={[styles.thCell, { width: 130 }]}>RECEIVED BY</Text>
-              <Text style={[styles.thCell, { width: 80, textAlign: 'center' }]}>ITEMS</Text>
-              <Text style={[styles.thCell, { width: 90, textAlign: 'center' }]}>PACKAGES</Text>
-              <Text style={[styles.thCell, { width: 130 }]}>INVOICE NO</Text>
-              <Text style={[styles.thCell, { width: 140, textAlign: 'center' }]}>STATUS</Text>
-            </View>
-
-            {/* Table Rows */}
+        {isMobile ? (
+          /* Mobile GRN Cards */
+          <View style={styles.mobileCardList}>
             {filteredGRNs.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyTitle}>No goods received records found</Text>
                 <Text style={styles.emptySubtitle}>Try changing your search filters.</Text>
               </View>
             ) : (
-              filteredGRNs.map((grn, index) => {
+              filteredGRNs.map((grn) => {
                 const badge = GRN_STATUS_BADGES[grn.status] || GRN_STATUS_BADGES.Verified;
                 return (
-                  <View
-                    key={grn.id}
-                    style={[
-                      styles.tableRow,
-                      index % 2 === 1 && styles.tableRowAlt,
-                    ]}
-                  >
-                    <Text style={[styles.tdCell, styles.grnId, { width: 140 }]}>{grn.id}</Text>
-                    <Text style={[styles.tdCell, styles.poRef, { width: 110 }]}>{grn.poReference}</Text>
-                    <Text style={[styles.tdCell, styles.supplierText, { width: 170 }]} numberOfLines={1}>
-                      {grn.supplier}
-                    </Text>
-                    <Text style={[styles.tdCell, { width: 120 }]}>{grn.receivedDate}</Text>
-                    <Text style={[styles.tdCell, { width: 130 }]}>{grn.receivedBy}</Text>
-                    <Text style={[styles.tdCell, { width: 80, textAlign: 'center', fontWeight: '600' }]}>
-                      {grn.itemsCount}
-                    </Text>
-                    <Text style={[styles.tdCell, { width: 90, textAlign: 'center' }]}>
-                      {grn.packagesCount}
-                    </Text>
-                    <Text style={[styles.tdCell, { width: 130 }]}>{grn.invoiceNo}</Text>
-
-                    {/* Status Badge */}
-                    <View style={[styles.statusWrapper, { width: 140 }]}>
+                  <View key={grn.id} style={styles.mobileGRNCard}>
+                    <View style={styles.mobileGRNHeader}>
+                      <View>
+                        <Text style={styles.mobileGRNId}>{grn.id}</Text>
+                        <Text style={styles.mobileSupplierName}>{grn.supplier}</Text>
+                      </View>
                       <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
                         <Text style={[styles.statusBadgeText, { color: badge.text }]}>
                           {grn.status}
                         </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.mobileGrid}>
+                      <View style={styles.mobileGridCol}>
+                        <Text style={styles.mobileLabel}>PO Reference</Text>
+                        <Text style={styles.mobileValBold}>{grn.poReference}</Text>
+                      </View>
+                      <View style={styles.mobileGridCol}>
+                        <Text style={styles.mobileLabel}>Invoice No.</Text>
+                        <Text style={styles.mobileValBold}>{grn.invoiceNo}</Text>
+                      </View>
+                      <View style={styles.mobileGridCol}>
+                        <Text style={styles.mobileLabel}>Received Date</Text>
+                        <Text style={styles.mobileVal}>{grn.receivedDate}</Text>
+                      </View>
+                      <View style={styles.mobileGridCol}>
+                        <Text style={styles.mobileLabel}>Packages / Items</Text>
+                        <Text style={styles.mobileVal}>{grn.packagesCount} • {grn.itemsCount} items</Text>
+                      </View>
+                      <View style={styles.mobileGridColFull}>
+                        <Text style={styles.mobileLabel}>Inspected & Received By</Text>
+                        <Text style={styles.mobileVal}>{grn.receivedBy}</Text>
                       </View>
                     </View>
                   </View>
@@ -242,7 +231,70 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
               })
             )}
           </View>
-        </ScrollView>
+        ) : (
+          /* Desktop GRN Table */
+          <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+            <View style={styles.tableWrapper}>
+              {/* Table Header */}
+              <View style={styles.tableHeader}>
+                <Text style={[styles.thCell, { width: 140 }]}>GRN NUMBER</Text>
+                <Text style={[styles.thCell, { width: 110 }]}>PO REF</Text>
+                <Text style={[styles.thCell, { width: 170 }]}>SUPPLIER</Text>
+                <Text style={[styles.thCell, { width: 120 }]}>RECEIVED DATE</Text>
+                <Text style={[styles.thCell, { width: 130 }]}>RECEIVED BY</Text>
+                <Text style={[styles.thCell, { width: 80, textAlign: 'center' }]}>ITEMS</Text>
+                <Text style={[styles.thCell, { width: 90, textAlign: 'center' }]}>PACKAGES</Text>
+                <Text style={[styles.thCell, { width: 130 }]}>INVOICE NO</Text>
+                <Text style={[styles.thCell, { width: 140, textAlign: 'center' }]}>STATUS</Text>
+              </View>
+
+              {/* Table Rows */}
+              {filteredGRNs.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyTitle}>No goods received records found</Text>
+                  <Text style={styles.emptySubtitle}>Try changing your search filters.</Text>
+                </View>
+              ) : (
+                filteredGRNs.map((grn, index) => {
+                  const badge = GRN_STATUS_BADGES[grn.status] || GRN_STATUS_BADGES.Verified;
+                  return (
+                    <View
+                      key={grn.id}
+                      style={[
+                        styles.tableRow,
+                        index % 2 === 1 && styles.tableRowAlt,
+                      ]}
+                    >
+                      <Text style={[styles.tdCell, styles.grnId, { width: 140 }]}>{grn.id}</Text>
+                      <Text style={[styles.tdCell, styles.poRef, { width: 110 }]}>{grn.poReference}</Text>
+                      <Text style={[styles.tdCell, styles.supplierText, { width: 170 }]} numberOfLines={1}>
+                        {grn.supplier}
+                      </Text>
+                      <Text style={[styles.tdCell, { width: 120 }]}>{grn.receivedDate}</Text>
+                      <Text style={[styles.tdCell, { width: 130 }]}>{grn.receivedBy}</Text>
+                      <Text style={[styles.tdCell, { width: 80, textAlign: 'center', fontWeight: '600' }]}>
+                        {grn.itemsCount}
+                      </Text>
+                      <Text style={[styles.tdCell, { width: 90, textAlign: 'center' }]}>
+                        {grn.packagesCount}
+                      </Text>
+                      <Text style={[styles.tdCell, { width: 130 }]}>{grn.invoiceNo}</Text>
+
+                      {/* Status Badge */}
+                      <View style={[styles.statusWrapper, { width: 140 }]}>
+                        <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
+                          <Text style={[styles.statusBadgeText, { color: badge.text }]}>
+                            {grn.status}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })
+              )}
+            </View>
+          </ScrollView>
+        )}
       </View>
 
       {/* Receive Shipment Modal */}
@@ -363,12 +415,23 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     gap: 24,
   },
+  contentContainerMobile: {
+    paddingHorizontal: 12,
+    paddingTop: 16,
+    paddingBottom: 32,
+    gap: 16,
+  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     flexWrap: 'wrap',
     gap: 16,
+  },
+  headerRowMobile: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: 12,
   },
   pageTitle: {
     fontSize: 24,
@@ -383,11 +446,31 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   receiveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#0F766E',
     paddingVertical: 10,
     paddingHorizontal: 18,
     borderRadius: 8,
     cursor: 'pointer',
+  },
+  receiveShipmentButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0F766E',
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 8,
+    cursor: 'pointer',
+  },
+  btnIcon: {
+    fontSize: 16,
+    marginRight: 6,
+  },
+  btnText: {
+    color: '#FFFFFF',
+    fontSize: 13.5,
+    fontWeight: '700',
   },
   receiveButtonHovered: {
     backgroundColor: '#0D9488',
@@ -419,6 +502,67 @@ const styles = StyleSheet.create({
         elevation: 1,
       },
     }),
+  },
+  /* Mobile GRN Card Styles */
+  mobileCardList: {
+    padding: 12,
+    gap: 12,
+  },
+  mobileGRNCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 14,
+  },
+  mobileGRNHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    gap: 8,
+  },
+  mobileGRNId: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F766E',
+  },
+  mobileSupplierName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0F172A',
+    marginTop: 2,
+  },
+  mobileGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingVertical: 10,
+    gap: 10,
+  },
+  mobileGridCol: {
+    width: '47%',
+  },
+  mobileGridColFull: {
+    width: '100%',
+  },
+  mobileLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#94A3B8',
+    textTransform: 'uppercase',
+  },
+  mobileVal: {
+    fontSize: 12.5,
+    color: '#334155',
+    marginTop: 1,
+  },
+  mobileValBold: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginTop: 1,
   },
   filtersBar: {
     flexDirection: 'row',

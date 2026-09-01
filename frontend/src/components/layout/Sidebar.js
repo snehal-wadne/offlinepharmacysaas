@@ -9,24 +9,36 @@ import {
 } from 'react-native';
 
 const ALL_INVENTORY_SUBITEMS = [
-  { title: 'Stock Adjustments', key: 'stock-adjustments' },
-  { title: 'Stock Transfer', key: 'stock-transfer', multiOnly: true },
-  { title: 'Stock Status', key: 'stock-status' },
+  { title: 'Stock Adjustments', key: 'stock-adjustments', icon: '📝' },
+  { title: 'Stock Transfer', key: 'stock-transfer', multiOnly: true, icon: '🔄' },
+  { title: 'Stock Status', key: 'stock-status', icon: '⚠️' },
 ];
 
 const PURCHASES_SUBITEMS = [
-  { title: 'Purchases', key: 'purchases' },
-  { title: 'Goods Receiving', key: 'goods-receiving' },
-  { title: 'Suppliers', key: 'suppliers' },
+  { title: 'Purchases', key: 'purchases', icon: '🛒' },
+  { title: 'Goods Receiving', key: 'goods-receiving', icon: '📦' },
+  { title: 'Suppliers Directory', key: 'suppliers', icon: '🏢' },
+];
+
+const CUSTOMERS_SUBITEMS = [
+  { title: 'Customers / Patients', key: 'customers-patients', icon: '👥' },
+  { title: 'Customer Details', key: 'customer-details', icon: '👤' },
+  { title: 'Customer Ledger', key: 'customer-ledger', icon: '📑' },
+  { title: 'Payment Receipts', key: 'customer-payments', icon: '💳' },
 ];
 
 const REPORTS_SUBITEMS = [
-  { title: 'Inventory Reports', key: 'inventory-reports' },
-  { title: 'Purchase Reports', key: 'purchase-reports' },
-  { title: 'Expiry Reports', key: 'expiry-reports' },
+  { title: 'Inventory Reports', key: 'inventory-reports', icon: '📊' },
+  { title: 'Purchase Reports', key: 'purchase-reports', icon: '📈' },
+  { title: 'Expiry Reports', key: 'expiry-reports', icon: '⏳' },
 ];
 
-export default function Sidebar({ activeItem = 'dashboard', onNavigate, isMultiBranch = true }) {
+export default function Sidebar({
+  activeItem = 'dashboard',
+  onNavigate,
+  isMultiBranch = true,
+  isMobile = false,
+}) {
   // Filter inventory subitems conditionally based on Single-Shop vs Multi-Branch
   const inventorySubItems = ALL_INVENTORY_SUBITEMS.filter(
     (item) => !item.multiOnly || isMultiBranch
@@ -34,11 +46,14 @@ export default function Sidebar({ activeItem = 'dashboard', onNavigate, isMultiB
 
   const isInventoryActive = inventorySubItems.some((item) => item.key === activeItem);
   const isPurchasesActive = PURCHASES_SUBITEMS.some((item) => item.key === activeItem);
+  const isCustomersActive = CUSTOMERS_SUBITEMS.some((item) => item.key === activeItem);
   const isReportsActive = REPORTS_SUBITEMS.some((item) => item.key === activeItem);
 
-  const [inventoryExpanded, setInventoryExpanded] = useState(isInventoryActive);
-  const [purchasesExpanded, setPurchasesExpanded] = useState(isPurchasesActive);
-  const [reportsExpanded, setReportsExpanded] = useState(isReportsActive);
+  // Default all sections to expanded so Suppliers, Payments, etc. are always immediately visible
+  const [inventoryExpanded, setInventoryExpanded] = useState(true);
+  const [purchasesExpanded, setPurchasesExpanded] = useState(true);
+  const [customersExpanded, setCustomersExpanded] = useState(true);
+  const [reportsExpanded, setReportsExpanded] = useState(true);
 
   // Bottom-left clock
   const [currentTime, setCurrentTime] = useState('');
@@ -54,7 +69,7 @@ export default function Sidebar({ activeItem = 'dashboard', onNavigate, isMultiB
     return () => clearInterval(timer);
   }, []);
 
-  // Auto-expand sections on active navigation
+  // Ensure sections stay expanded when navigated
   useEffect(() => {
     if (isInventoryActive) setInventoryExpanded(true);
   }, [activeItem, isInventoryActive]);
@@ -62,6 +77,10 @@ export default function Sidebar({ activeItem = 'dashboard', onNavigate, isMultiB
   useEffect(() => {
     if (isPurchasesActive) setPurchasesExpanded(true);
   }, [activeItem, isPurchasesActive]);
+
+  useEffect(() => {
+    if (isCustomersActive) setCustomersExpanded(true);
+  }, [activeItem, isCustomersActive]);
 
   useEffect(() => {
     if (isReportsActive) setReportsExpanded(true);
@@ -81,6 +100,10 @@ export default function Sidebar({ activeItem = 'dashboard', onNavigate, isMultiB
     setPurchasesExpanded(!purchasesExpanded);
   };
 
+  const handleCustomersClick = () => {
+    setCustomersExpanded(!customersExpanded);
+  };
+
   const handleReportsClick = () => {
     setReportsExpanded(!reportsExpanded);
   };
@@ -92,17 +115,19 @@ export default function Sidebar({ activeItem = 'dashboard', onNavigate, isMultiB
   };
 
   return (
-    <View style={styles.sidebarContainer}>
-      {/* Brand Header */}
-      <View style={styles.brandContainer}>
-        <View style={styles.logoBadge}>
-          <Text style={styles.logoBadgeText}>PF</Text>
+    <View style={[styles.sidebarContainer, isMobile && styles.sidebarContainerMobile]}>
+      {/* Brand Header (Desktop only - Mobile has modal header) */}
+      {!isMobile && (
+        <View style={styles.brandContainer}>
+          <View style={styles.logoBadge}>
+            <Text style={styles.logoBadgeText}>PF</Text>
+          </View>
+          <View style={styles.brandTextContainer}>
+            <Text style={styles.brandTitle}>PharmaFlow</Text>
+            <Text style={styles.brandSubtitle}>Pharmacy Billing & ERP</Text>
+          </View>
         </View>
-        <View style={styles.brandTextContainer}>
-          <Text style={styles.brandTitle}>PharmaFlow</Text>
-          <Text style={styles.brandSubtitle}>Pharmacy Billing & ERP</Text>
-        </View>
-      </View>
+      )}
 
       {/* Navigation List */}
       <ScrollView
@@ -256,7 +281,68 @@ export default function Sidebar({ activeItem = 'dashboard', onNavigate, isMultiB
           )}
         </View>
 
-        {/* 4. Reports Section (Expandable - 3 Items) */}
+        {/* 4. Customers Section (Expandable - 3 Items) */}
+        <View style={styles.expandableSection}>
+          <Pressable
+            onPress={handleCustomersClick}
+            style={[
+              styles.expandableHeader,
+              isCustomersActive && styles.expandableHeaderSelected,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Customers Menu"
+          >
+            <Text
+              style={[
+                styles.mainNavText,
+                isCustomersActive && styles.expandableTextSelected,
+              ]}
+            >
+              Customers
+            </Text>
+            <Text
+              style={[
+                styles.chevronText,
+                isCustomersActive && styles.chevronSelected,
+              ]}
+            >
+              {customersExpanded ? '▴' : '▾'}
+            </Text>
+          </Pressable>
+
+          {/* Submenu: Customers / Patients, Customer Ledger / Credit, Customer Payments */}
+          {customersExpanded && (
+            <View style={styles.submenuContainer}>
+              {CUSTOMERS_SUBITEMS.map((subItem) => {
+                const isActive = activeItem === subItem.key;
+                return (
+                  <Pressable
+                    key={subItem.key}
+                    onPress={() => handleSubItemClick(subItem.key)}
+                    style={[
+                      styles.subNavItem,
+                      isActive && styles.subNavItemActive,
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel={subItem.title}
+                  >
+                    {isActive && <View style={styles.subActiveIndicator} />}
+                    <Text
+                      style={[
+                        styles.subNavText,
+                        isActive && styles.subNavTextActive,
+                      ]}
+                    >
+                      {subItem.title}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+        </View>
+
+        {/* 5. Reports Section (Expandable - 3 Items) */}
         <View style={styles.expandableSection}>
           <Pressable
             onPress={handleReportsClick}
@@ -341,6 +427,17 @@ const styles = StyleSheet.create({
         height: '100vh',
         position: 'sticky',
         top: 0,
+      },
+    }),
+  },
+  sidebarContainerMobile: {
+    width: '100%',
+    borderRightWidth: 0,
+    height: '100%',
+    ...Platform.select({
+      web: {
+        height: '100%',
+        position: 'relative',
       },
     }),
   },

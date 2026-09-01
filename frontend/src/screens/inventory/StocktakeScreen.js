@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Modal, FlatList, StyleSheet, SafeAreaView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Modal, FlatList, StyleSheet, SafeAreaView, useWindowDimensions } from 'react-native';
 
 const COLORS = {
   primary: '#0F766E',
@@ -49,6 +49,9 @@ const MOCK_DETAIL = [
 ];
 
 export default function StocktakeScreen({ navigation, route }) {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
+
   const [activeTab, setActiveTab] = useState('active');
   const [selectedStocktake, setSelectedStocktake] = useState(null);
   
@@ -94,57 +97,54 @@ export default function StocktakeScreen({ navigation, route }) {
     const statusStyle = getStatusStyle(item.status);
 
     return (
-      <TouchableOpacity 
-        style={[styles.tableRow, isEven ? styles.rowEven : styles.rowOdd]} 
-        onPress={() => setSelectedStocktake(item)}
-      >
-        <Text style={[styles.cell, { width: 120, fontWeight: '600' }]}>{item.id}</Text>
-        <Text style={[styles.cell, { width: 120 }]}>{item.date}</Text>
-        <Text style={[styles.cell, { width: 140 }]}>{item.branch}</Text>
-        <Text style={[styles.cell, { width: 140 }]}>{item.itemsCounted} / {item.totalItems}</Text>
-        <Text style={[styles.cell, { width: 120 }]}>{item.discrepancies}</Text>
-        <View style={[styles.cell, { width: 140 }]}>
-          <View style={[styles.badge, { backgroundColor: statusStyle.bg }]}>
-            <Text style={[styles.badgeText, { color: statusStyle.text }]}>{item.status}</Text>
-          </View>
+      <View style={[styles.tableRow, isEven ? styles.rowEven : styles.rowOdd]}>
+        <Text style={[styles.cellText, { width: 120, color: COLORS.primary, fontWeight: 'bold' }]}>{item.id}</Text>
+        <Text style={[styles.cellText, { width: 120 }]}>{item.date}</Text>
+        <Text style={[styles.cellText, { width: 140 }]}>{item.branch}</Text>
+        <Text style={[styles.cellText, { width: 140 }]}>{item.itemsCounted} / {item.totalItems}</Text>
+        <Text style={[styles.cellText, { width: 120, color: item.discrepancies > 0 ? COLORS.danger : COLORS.textPrimary }]}>
+          {item.discrepancies}
+        </Text>
+        <View style={[styles.badge, { backgroundColor: statusStyle.bg, width: 120 }]}>
+          <Text style={[styles.badgeText, { color: statusStyle.text }]}>{item.status}</Text>
         </View>
-        <Text style={[styles.cell, { width: 120 }]}>{item.createdBy}</Text>
-        <View style={[styles.cell, { width: 120 }]}>
-          <TouchableOpacity onPress={() => setSelectedStocktake(item)}>
-            <Text style={styles.actionText}>View</Text>
+        <Text style={[styles.cellText, { width: 120 }]}>{item.createdBy}</Text>
+        <View style={{ width: 120, flexDirection: 'row' }}>
+          <TouchableOpacity 
+            style={[styles.actionButton, item.status === 'In Progress' ? styles.actionPrimary : styles.actionSecondary]}
+            onPress={() => setSelectedStocktake(item)}
+          >
+            <Text style={[styles.actionButtonText, item.status === 'In Progress' ? styles.actionTextPrimary : styles.actionTextSecondary]}>
+              {item.status === 'In Progress' ? 'Resume' : 'View'}
+            </Text>
           </TouchableOpacity>
         </View>
-      </TouchableOpacity>
+      </View>
     );
   };
 
   const renderDetailItem = ({ item, index }) => {
     const isEven = index % 2 === 0;
     const statusStyle = getStatusStyle(item.status);
-    
-    let varianceDisplay = <Text style={[styles.cell, { width: 100, color: COLORS.textMuted }]}>—</Text>;
-    if (item.variance > 0) {
-      varianceDisplay = <Text style={[styles.cell, { width: 100, color: COLORS.success, fontWeight: 'bold' }]}>+{item.variance}</Text>;
-    } else if (item.variance < 0) {
-      varianceDisplay = <Text style={[styles.cell, { width: 100, color: COLORS.danger, fontWeight: 'bold' }]}>{item.variance}</Text>;
-    }
 
     return (
       <View style={[styles.tableRow, isEven ? styles.rowEven : styles.rowOdd]}>
-        <Text style={[styles.cell, { width: 200, fontWeight: '500' }]}>{item.product}</Text>
-        <Text style={[styles.cell, { width: 120 }]}>{item.batch}</Text>
-        <Text style={[styles.cell, { width: 120 }]}>{item.systemQty}</Text>
-        <Text style={[styles.cell, { width: 120 }]}>{item.countedQty}</Text>
-        {varianceDisplay}
-        <View style={[styles.cell, { width: 140 }]}>
-          <View style={[styles.badge, { backgroundColor: statusStyle.bg }]}>
-            <Text style={[styles.badgeText, { color: statusStyle.text }]}>{item.status}</Text>
-          </View>
+        <Text style={[styles.cellText, { width: 200, fontWeight: '500' }]}>{item.product}</Text>
+        <Text style={[styles.cellText, { width: 120 }]}>{item.batch}</Text>
+        <Text style={[styles.cellText, { width: 120 }]}>{item.systemQty}</Text>
+        <Text style={[styles.cellText, { width: 120 }]}>{item.countedQty}</Text>
+        <Text style={[styles.cellText, { width: 100, color: item.variance !== 0 ? COLORS.danger : COLORS.success, fontWeight: 'bold' }]}>
+          {item.variance > 0 ? `+${item.variance}` : item.variance}
+        </Text>
+        <View style={[styles.badge, { backgroundColor: statusStyle.bg, width: 120 }]}>
+          <Text style={[styles.badgeText, { color: statusStyle.text }]}>{item.status}</Text>
         </View>
-        <View style={[styles.cell, { width: 120 }]}>
-          <TouchableOpacity>
-            <Text style={styles.actionText}>Edit</Text>
-          </TouchableOpacity>
+        <View style={{ width: 120 }}>
+          {item.status === 'Discrepancy' && (
+            <TouchableOpacity style={styles.actionWarning}>
+              <Text style={styles.actionTextWarning}>Recount</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     );
@@ -155,25 +155,41 @@ export default function StocktakeScreen({ navigation, route }) {
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>Stocktake</Text>
-          <Text style={styles.subtitle}>Physical stock count and variance reconciliation</Text>
+          <Text style={styles.headerTitle}>Physical Stocktake</Text>
+          <Text style={styles.headerSubtitle}>Reconcile recorded inventory with actual physical stock counts</Text>
         </View>
         <TouchableOpacity style={styles.primaryButton} onPress={() => setShowNewModal(true)}>
-          <Text style={styles.primaryButtonText}>New Stocktake</Text>
+          <Text style={styles.primaryButtonText}>+ New Stocktake</Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 40 }}>
-        {/* Active Banner */}
-        <View style={styles.activeBanner}>
-          <Text style={styles.activeBannerText}>🔵 Active Stocktake in Progress — ST-2026-08 | Started: 29 Aug 2026</Text>
-          <TouchableOpacity style={styles.bannerButton}>
-            <Text style={styles.bannerButtonText}>View Details</Text>
-          </TouchableOpacity>
+      <ScrollView style={styles.content}>
+        {/* KPI Cards */}
+        <View style={[styles.kpiRow, isMobile && styles.kpiRowMobile]}>
+          <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile]}>
+            <Text style={styles.kpiLabel}>Total Stocktakes</Text>
+            <Text style={styles.kpiValue}>10</Text>
+            <Text style={styles.kpiSubtext}>All time records</Text>
+          </View>
+          <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile]}>
+            <Text style={styles.kpiLabel}>Active Audits</Text>
+            <Text style={[styles.kpiValue, { color: COLORS.secondary }]}>1</Text>
+            <Text style={styles.kpiSubtext}>Currently in progress</Text>
+          </View>
+          <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile]}>
+            <Text style={styles.kpiLabel}>Completed</Text>
+            <Text style={[styles.kpiValue, { color: COLORS.success }]}>8</Text>
+            <Text style={styles.kpiSubtext}>Reconciled audits</Text>
+          </View>
+          <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile]}>
+            <Text style={styles.kpiLabel}>Avg Discrepancy</Text>
+            <Text style={[styles.kpiValue, { color: COLORS.warning }]}>6.9</Text>
+            <Text style={styles.kpiSubtext}>Items per session</Text>
+          </View>
         </View>
 
-        {/* Tab Bar */}
-        <View style={styles.tabBar}>
+        {/* Tab Navigation */}
+        <View style={styles.tabContainer}>
           <TouchableOpacity 
             style={[styles.tab, activeTab === 'active' && styles.tabActive]} 
             onPress={() => setActiveTab('active')}
@@ -194,29 +210,82 @@ export default function StocktakeScreen({ navigation, route }) {
           </TouchableOpacity>
         </View>
 
-        {/* Main Table */}
-        <View style={styles.card}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-            <View>
-              <View style={styles.tableHeader}>
-                <Text style={[styles.columnHeader, { width: 120 }]}>Stocktake ID</Text>
-                <Text style={[styles.columnHeader, { width: 120 }]}>Date</Text>
-                <Text style={[styles.columnHeader, { width: 140 }]}>Branch</Text>
-                <Text style={[styles.columnHeader, { width: 140 }]}>Items Counted</Text>
-                <Text style={[styles.columnHeader, { width: 120 }]}>Discrepancies</Text>
-                <Text style={[styles.columnHeader, { width: 140 }]}>Status</Text>
-                <Text style={[styles.columnHeader, { width: 120 }]}>Created By</Text>
-                <Text style={[styles.columnHeader, { width: 120 }]}>Actions</Text>
+        {/* Main Table / Mobile Cards */}
+        {isMobile ? (
+          <View style={styles.mobileCardList}>
+            {getFilteredData().map((item) => {
+              const statusStyle = getStatusStyle(item.status);
+              return (
+                <View key={item.id} style={styles.mobileCard}>
+                  <View style={styles.mobileCardHeader}>
+                    <View>
+                      <Text style={styles.mobileCardId}>{item.id}</Text>
+                      <Text style={styles.mobileCardBranch}>{item.branch}</Text>
+                    </View>
+                    <View style={[styles.badge, { backgroundColor: statusStyle.bg }]}>
+                      <Text style={[styles.badgeText, { color: statusStyle.text }]}>{item.status}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.mobileGrid}>
+                    <View style={styles.mobileGridCol}>
+                      <Text style={styles.mobileLabel}>Date</Text>
+                      <Text style={styles.mobileVal}>{item.date}</Text>
+                    </View>
+                    <View style={styles.mobileGridCol}>
+                      <Text style={styles.mobileLabel}>Count Progress</Text>
+                      <Text style={styles.mobileValBold}>{item.itemsCounted} / {item.totalItems}</Text>
+                    </View>
+                    <View style={styles.mobileGridCol}>
+                      <Text style={styles.mobileLabel}>Discrepancies</Text>
+                      <Text style={[styles.mobileValBold, { color: item.discrepancies > 0 ? COLORS.danger : COLORS.success }]}>
+                        {item.discrepancies} items
+                      </Text>
+                    </View>
+                    <View style={styles.mobileGridCol}>
+                      <Text style={styles.mobileLabel}>Created By</Text>
+                      <Text style={styles.mobileVal}>{item.createdBy}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.mobileCardFooter}>
+                    <TouchableOpacity
+                      style={[styles.mobileActionBtn, item.status === 'In Progress' ? styles.actionPrimary : styles.actionSecondary]}
+                      onPress={() => setSelectedStocktake(item)}
+                    >
+                      <Text style={[styles.actionButtonText, item.status === 'In Progress' ? styles.actionTextPrimary : styles.actionTextSecondary]}>
+                        {item.status === 'In Progress' ? 'Resume Stocktake →' : 'View Audit Details'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        ) : (
+          <View style={styles.card}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+              <View>
+                <View style={styles.tableHeader}>
+                  <Text style={[styles.columnHeader, { width: 120 }]}>Stocktake ID</Text>
+                  <Text style={[styles.columnHeader, { width: 120 }]}>Date</Text>
+                  <Text style={[styles.columnHeader, { width: 140 }]}>Branch</Text>
+                  <Text style={[styles.columnHeader, { width: 140 }]}>Items Counted</Text>
+                  <Text style={[styles.columnHeader, { width: 120 }]}>Discrepancies</Text>
+                  <Text style={[styles.columnHeader, { width: 140 }]}>Status</Text>
+                  <Text style={[styles.columnHeader, { width: 120 }]}>Created By</Text>
+                  <Text style={[styles.columnHeader, { width: 120 }]}>Actions</Text>
+                </View>
+                <FlatList
+                  data={getFilteredData()}
+                  keyExtractor={(item) => item.id}
+                  renderItem={renderStocktakeItem}
+                  scrollEnabled={false}
+                />
               </View>
-              <FlatList
-                data={getFilteredData()}
-                keyExtractor={(item) => item.id}
-                renderItem={renderStocktakeItem}
-                scrollEnabled={false}
-              />
-            </View>
-          </ScrollView>
-        </View>
+            </ScrollView>
+          </View>
+        )}
 
         {/* Detail Panel */}
         {selectedStocktake && (
@@ -228,25 +297,63 @@ export default function StocktakeScreen({ navigation, route }) {
               </TouchableOpacity>
             </View>
 
-            <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-              <View>
-                <View style={styles.tableHeader}>
-                  <Text style={[styles.columnHeader, { width: 200 }]}>Product</Text>
-                  <Text style={[styles.columnHeader, { width: 120 }]}>Batch</Text>
-                  <Text style={[styles.columnHeader, { width: 120 }]}>System Qty</Text>
-                  <Text style={[styles.columnHeader, { width: 120 }]}>Counted Qty</Text>
-                  <Text style={[styles.columnHeader, { width: 100 }]}>Variance</Text>
-                  <Text style={[styles.columnHeader, { width: 140 }]}>Status</Text>
-                  <Text style={[styles.columnHeader, { width: 120 }]}>Actions</Text>
-                </View>
-                <FlatList
-                  data={MOCK_DETAIL}
-                  keyExtractor={(item, index) => `${item.product}-${index}`}
-                  renderItem={renderDetailItem}
-                  scrollEnabled={false}
-                />
+            {isMobile ? (
+              <View style={styles.mobileCardList}>
+                {MOCK_DETAIL.map((item, index) => {
+                  const statusStyle = getStatusStyle(item.status);
+                  return (
+                    <View key={`${item.product}-${index}`} style={styles.mobileCard}>
+                      <View style={styles.mobileCardHeader}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.mobileCardId}>{item.product}</Text>
+                          <Text style={styles.mobileCardBranch}>Batch: {item.batch}</Text>
+                        </View>
+                        <View style={[styles.badge, { backgroundColor: statusStyle.bg }]}>
+                          <Text style={[styles.badgeText, { color: statusStyle.text }]}>{item.status}</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.mobileGrid}>
+                        <View style={styles.mobileGridCol}>
+                          <Text style={styles.mobileLabel}>System Qty</Text>
+                          <Text style={styles.mobileVal}>{item.systemQty}</Text>
+                        </View>
+                        <View style={styles.mobileGridCol}>
+                          <Text style={styles.mobileLabel}>Counted Qty</Text>
+                          <Text style={styles.mobileValBold}>{item.countedQty}</Text>
+                        </View>
+                        <View style={styles.mobileGridCol}>
+                          <Text style={styles.mobileLabel}>Variance</Text>
+                          <Text style={[styles.mobileValBold, { color: item.variance !== 0 ? COLORS.danger : COLORS.success }]}>
+                            {item.variance > 0 ? `+${item.variance}` : item.variance}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })}
               </View>
-            </ScrollView>
+            ) : (
+              <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+                <View>
+                  <View style={styles.tableHeader}>
+                    <Text style={[styles.columnHeader, { width: 200 }]}>Product</Text>
+                    <Text style={[styles.columnHeader, { width: 120 }]}>Batch</Text>
+                    <Text style={[styles.columnHeader, { width: 120 }]}>System Qty</Text>
+                    <Text style={[styles.columnHeader, { width: 120 }]}>Counted Qty</Text>
+                    <Text style={[styles.columnHeader, { width: 100 }]}>Variance</Text>
+                    <Text style={[styles.columnHeader, { width: 140 }]}>Status</Text>
+                    <Text style={[styles.columnHeader, { width: 120 }]}>Actions</Text>
+                  </View>
+                  <FlatList
+                    data={MOCK_DETAIL}
+                    keyExtractor={(item, index) => `${item.product}-${index}`}
+                    renderItem={renderDetailItem}
+                    scrollEnabled={false}
+                  />
+                </View>
+              </ScrollView>
+            )}
           </View>
         )}
       </ScrollView>
@@ -371,9 +478,146 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginTop: 4,
   },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: COLORS.textPrimary,
+  },
+  headerSubtitle: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  kpiRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 20,
+    flexWrap: 'wrap',
+  },
+  kpiRowMobile: {
+    gap: 10,
+  },
+  kpiCard: {
+    flex: 1,
+    minWidth: 140,
+    backgroundColor: COLORS.surface,
+    padding: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  kpiCardMobile: {
+    minWidth: '47%',
+    maxWidth: '48.5%',
+    padding: 12,
+  },
+  kpiLabel: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    textTransform: 'uppercase',
+  },
+  kpiValue: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: COLORS.textPrimary,
+    marginVertical: 3,
+  },
+  kpiSubtext: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    marginBottom: 16,
+  },
+  /* Mobile Card Styles */
+  mobileCardList: {
+    gap: 12,
+    marginBottom: 20,
+  },
+  mobileCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 14,
+  },
+  mobileCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.surfaceHover,
+  },
+  mobileCardId: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: COLORS.primary,
+  },
+  mobileCardBranch: {
+    fontSize: 12.5,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  mobileGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingVertical: 10,
+    gap: 10,
+  },
+  mobileGridCol: {
+    width: '47%',
+  },
+  mobileLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.textMuted,
+    textTransform: 'uppercase',
+  },
+  mobileVal: {
+    fontSize: 12.5,
+    color: COLORS.textSecondary,
+    marginTop: 1,
+  },
+  mobileValBold: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    marginTop: 1,
+  },
+  mobileCardFooter: {
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.surfaceHover,
+  },
+  mobileActionBtn: {
+    paddingVertical: 8,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  actionPrimary: {
+    backgroundColor: COLORS.primaryLight,
+  },
+  actionSecondary: {
+    backgroundColor: COLORS.surfaceHover,
+  },
+  actionTextPrimary: {
+    color: COLORS.primary,
+    fontWeight: '700',
+    fontSize: 12.5,
+  },
+  actionTextSecondary: {
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+    fontSize: 12.5,
+  },
   content: {
     flex: 1,
-    padding: 20,
+    padding: 16,
   },
   activeBanner: {
     backgroundColor: COLORS.secondaryLight,

@@ -33,6 +33,15 @@ export const SUPPLIERS_KPIS = [
   },
 ];
 
+export const SUPPLIER_CATEGORY_FILTER = [
+  'All Categories',
+  'Medicines & Injections',
+  'Generic Medicines',
+  'Nutrition & Diagnostics',
+  'Supplements & Vitamins',
+  'Medical Consumables',
+];
+
 export const MOCK_SUPPLIERS_LIST = [
   {
     id: 'SUP-001',

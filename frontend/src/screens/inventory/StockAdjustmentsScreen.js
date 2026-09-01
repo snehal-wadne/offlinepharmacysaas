@@ -15,6 +15,7 @@ import { CURRENT_STOCK_KPIS, MOCK_STOCK_ITEMS } from '../../data/currentStockMoc
 export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = true }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
+  const isMobile = width < 768;
 
   // Stock Items State for Adjustments Table
   const [stockItems, setStockItems] = useState(MOCK_STOCK_ITEMS);
@@ -112,7 +113,7 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.contentContainer}
+      contentContainerStyle={[styles.contentContainer, isMobile && styles.contentContainerMobile]}
       showsVerticalScrollIndicator={true}
     >
       {/* Top 4 KPI Cards */}
@@ -132,116 +133,215 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
       {/* Stock Information / Adjustments Table Card */}
       <View style={styles.cardContainer}>
         <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>Stock Information</Text>
+          <View>
+            <Text style={styles.cardTitle}>Stock Information</Text>
+            <Text style={styles.cardSubtitle}>
+              {stockItems.length} items in inventory {isMobile ? '• Tap Edit/Del to modify' : ''}
+            </Text>
+          </View>
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-          <View style={styles.tableWrapper}>
-            {/* Table Header */}
-            <View style={styles.tableHeader}>
-              <Text style={[styles.thCell, { width: 130 }]}>Medicine Name</Text>
-              <Text style={[styles.thCell, { width: 140 }]}>Brand Name</Text>
-              <Text style={[styles.thCell, { width: 140 }]}>Strength & Pack</Text>
-              <Text style={[styles.thCell, { width: 120 }]}>Manufacturer</Text>
-              <Text style={[styles.thCell, { width: 150 }]}>Supplier Name</Text>
-              <Text style={[styles.thCell, { width: 110 }]}>SKU</Text>
-              <Text style={[styles.thCell, { width: 95 }]}>Batch No.</Text>
-              <Text style={[styles.thCell, { width: 110, textAlign: 'center' }]}>
-                Qty Available
-              </Text>
-              <Text style={[styles.thCell, { width: 90, textAlign: 'right' }]}>MRP</Text>
-              {isMultiBranch && (
-                <Text style={[styles.thCell, { width: 90, textAlign: 'center' }]}>Branch ID</Text>
-              )}
-              <Text style={[styles.thCell, { width: 100, textAlign: 'center' }]}>Shelf Location</Text>
-              <Text style={[styles.thCell, { width: 95 }]}>Updated By</Text>
-              <Text style={[styles.thCell, { width: 105 }]}>Last Updated</Text>
-              <Text style={[styles.thCell, { width: 85, textAlign: 'center' }]}>Modify</Text>
-            </View>
+        {isMobile ? (
+          /* Mobile Card List View (No horizontal scrolling on phone screen) */
+          <View style={styles.mobileCardList}>
+            {stockItems.map((item) => (
+              <View key={item.id} style={styles.mobileStockCard}>
+                {/* Header: Brand, Generic Medicine & Status Badge */}
+                <View style={styles.mobileStockCardHeader}>
+                  <View style={styles.mobileStockTitleCol}>
+                    <Text style={styles.mobileBrandName}>{item.brandName}</Text>
+                    <Text style={styles.mobileMedName}>{item.medicineName || item.genericName}</Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.mobileStatusBadge,
+                      item.quantity < 50 ? styles.statusBadgeLow : styles.statusBadgeInStock,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.mobileStatusText,
+                        item.quantity < 50 ? styles.statusTextLow : styles.statusTextInStock,
+                      ]}
+                    >
+                      {item.quantity < 50 ? 'Low Stock' : 'In Stock'}
+                    </Text>
+                  </View>
+                </View>
 
-            {/* Table Rows */}
-            {stockItems.map((item, index) => (
-              <View
-                key={item.id}
-                style={[
-                  styles.tableRow,
-                  index % 2 === 1 && styles.tableRowAlt,
-                ]}
-              >
-                {/* Medicine Name */}
-                <Text style={[styles.tdCell, styles.medNameCell, { width: 130 }]} numberOfLines={1}>
-                  {item.medicineName || item.genericName}
-                </Text>
+                {/* 2-Column Details Grid */}
+                <View style={styles.mobileGrid}>
+                  <View style={styles.mobileGridItem}>
+                    <Text style={styles.mobileItemLabel}>SKU</Text>
+                    <Text style={styles.mobileItemValueBold}>{item.sku}</Text>
+                  </View>
+                  <View style={styles.mobileGridItem}>
+                    <Text style={styles.mobileItemLabel}>Batch No.</Text>
+                    <Text style={styles.mobileItemValueBold}>{item.batchNo}</Text>
+                  </View>
+                  <View style={styles.mobileGridItem}>
+                    <Text style={styles.mobileItemLabel}>Qty Available</Text>
+                    <Text style={[styles.mobileItemValueBold, { color: '#0F766E' }]}>
+                      {item.quantity} units
+                    </Text>
+                  </View>
+                  <View style={styles.mobileGridItem}>
+                    <Text style={styles.mobileItemLabel}>MRP Price</Text>
+                    <Text style={[styles.mobileItemValueBold, { color: '#0F172A' }]}>
+                      {item.amount}
+                    </Text>
+                  </View>
+                  <View style={styles.mobileGridItem}>
+                    <Text style={styles.mobileItemLabel}>Strength & Pack</Text>
+                    <Text style={styles.mobileItemValue} numberOfLines={1}>
+                      {item.strength ? `${item.strength} • ${item.packSize || ''}` : '500mg • 15 Tabs'}
+                    </Text>
+                  </View>
+                  <View style={styles.mobileGridItem}>
+                    <Text style={styles.mobileItemLabel}>Shelf Location</Text>
+                    <Text style={styles.mobileItemValue}>{item.shelfLocation || 'A1-S1'}</Text>
+                  </View>
+                  {isMultiBranch && (
+                    <View style={styles.mobileGridItem}>
+                      <Text style={styles.mobileItemLabel}>Branch ID</Text>
+                      <Text style={styles.mobileItemValue}>{item.branchId}</Text>
+                    </View>
+                  )}
+                  <View style={styles.mobileGridItem}>
+                    <Text style={styles.mobileItemLabel}>Supplier</Text>
+                    <Text style={styles.mobileItemValue} numberOfLines={1}>
+                      {item.supplierName || item.manufacturer || 'GSK'}
+                    </Text>
+                  </View>
+                </View>
 
-                {/* Brand Name */}
-                <Text style={[styles.tdCell, styles.brandNameCell, { width: 140 }]} numberOfLines={1}>
-                  {item.brandName}
-                </Text>
-
-                {/* Strength & Pack */}
-                <Text style={[styles.tdCell, styles.strengthCell, { width: 140 }]} numberOfLines={1}>
-                  {item.strength ? `${item.strength} • ${item.packSize || ''}` : '500mg • 15 Tabs'}
-                </Text>
-
-                {/* Manufacturer */}
-                <Text style={[styles.tdCell, styles.mfgCell, { width: 120 }]} numberOfLines={1}>
-                  {item.manufacturer || 'GSK'}
-                </Text>
-
-                {/* Supplier Name */}
-                <Text style={[styles.tdCell, styles.supplierCell, { width: 150 }]} numberOfLines={1}>
-                  {item.supplierName || `${item.manufacturer || 'GSK'} Distribution`}
-                </Text>
-
-                {/* SKU */}
-                <Text style={[styles.tdCell, styles.skuCell, { width: 110 }]}>{item.sku}</Text>
-
-                {/* Batch No */}
-                <Text style={[styles.tdCell, { width: 95 }]}>{item.batchNo}</Text>
-
-                {/* Quantity */}
-                <Text style={[styles.tdCell, { width: 110, textAlign: 'center', fontWeight: '700' }]}>
-                  {item.quantity}
-                </Text>
-
-                {/* Amount / MRP */}
-                <Text style={[styles.tdCell, styles.amountCell, { width: 90, textAlign: 'right' }]}>
-                  {item.amount}
-                </Text>
-
-                {/* Branch ID (Multi-Branch only) */}
-                {isMultiBranch && (
-                  <Text style={[styles.tdCell, { width: 90, textAlign: 'center' }]}>
-                    {item.branchId}
+                {/* Card Footer: Last Updated & Action Button */}
+                <View style={styles.mobileStockFooter}>
+                  <Text style={styles.mobileUpdatedText}>
+                    Updated: {item.lastUpdated} by {item.updatedBy || 'Manager'}
                   </Text>
-                )}
-
-                {/* Shelf Location */}
-                <Text style={[styles.tdCell, { width: 100, textAlign: 'center' }]}>
-                  {item.shelfLocation}
-                </Text>
-
-                {/* Updated By */}
-                <Text style={[styles.tdCell, { width: 95 }]}>{item.updatedBy}</Text>
-
-                {/* Last Updated */}
-                <Text style={[styles.tdCell, { width: 105 }]}>{item.lastUpdated}</Text>
-
-                {/* Modify Button Pill */}
-                <View style={[styles.modifyWrapper, { width: 85 }]}>
                   <Pressable
                     onPress={() => handleEditOrDelete(item)}
-                    style={styles.modifyButton}
+                    style={styles.mobileEditBtn}
                     accessibilityRole="button"
-                    accessibilityLabel="Edit or Delete adjustment"
+                    accessibilityLabel="Edit or adjust stock"
                   >
-                    <Text style={styles.modifyButtonText}>Edit/Del</Text>
+                    <Text style={styles.mobileEditBtnText}>Edit / Del</Text>
                   </Pressable>
                 </View>
               </View>
             ))}
           </View>
-        </ScrollView>
+        ) : (
+          /* Desktop Horizontal Scroll Data Table */
+          <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+            <View style={styles.tableWrapper}>
+              {/* Table Header */}
+              <View style={styles.tableHeader}>
+                <Text style={[styles.thCell, { width: 130 }]}>Medicine Name</Text>
+                <Text style={[styles.thCell, { width: 140 }]}>Brand Name</Text>
+                <Text style={[styles.thCell, { width: 140 }]}>Strength & Pack</Text>
+                <Text style={[styles.thCell, { width: 120 }]}>Manufacturer</Text>
+                <Text style={[styles.thCell, { width: 150 }]}>Supplier Name</Text>
+                <Text style={[styles.thCell, { width: 110 }]}>SKU</Text>
+                <Text style={[styles.thCell, { width: 95 }]}>Batch No.</Text>
+                <Text style={[styles.thCell, { width: 110, textAlign: 'center' }]}>
+                  Qty Available
+                </Text>
+                <Text style={[styles.thCell, { width: 90, textAlign: 'right' }]}>MRP</Text>
+                {isMultiBranch && (
+                  <Text style={[styles.thCell, { width: 90, textAlign: 'center' }]}>Branch ID</Text>
+                )}
+                <Text style={[styles.thCell, { width: 100, textAlign: 'center' }]}>Shelf Location</Text>
+                <Text style={[styles.thCell, { width: 95 }]}>Updated By</Text>
+                <Text style={[styles.thCell, { width: 105 }]}>Last Updated</Text>
+                <Text style={[styles.thCell, { width: 85, textAlign: 'center' }]}>Modify</Text>
+              </View>
+
+              {/* Table Rows */}
+              {stockItems.map((item, index) => (
+                <View
+                  key={item.id}
+                  style={[
+                    styles.tableRow,
+                    index % 2 === 1 && styles.tableRowAlt,
+                  ]}
+                >
+                  {/* Medicine Name */}
+                  <Text style={[styles.tdCell, styles.medNameCell, { width: 130 }]} numberOfLines={1}>
+                    {item.medicineName || item.genericName}
+                  </Text>
+
+                  {/* Brand Name */}
+                  <Text style={[styles.tdCell, styles.brandNameCell, { width: 140 }]} numberOfLines={1}>
+                    {item.brandName}
+                  </Text>
+
+                  {/* Strength & Pack */}
+                  <Text style={[styles.tdCell, styles.strengthCell, { width: 140 }]} numberOfLines={1}>
+                    {item.strength ? `${item.strength} • ${item.packSize || ''}` : '500mg • 15 Tabs'}
+                  </Text>
+
+                  {/* Manufacturer */}
+                  <Text style={[styles.tdCell, styles.mfgCell, { width: 120 }]} numberOfLines={1}>
+                    {item.manufacturer || 'GSK'}
+                  </Text>
+
+                  {/* Supplier Name */}
+                  <Text style={[styles.tdCell, styles.supplierCell, { width: 150 }]} numberOfLines={1}>
+                    {item.supplierName || `${item.manufacturer || 'GSK'} Distribution`}
+                  </Text>
+
+                  {/* SKU */}
+                  <Text style={[styles.tdCell, styles.skuCell, { width: 110 }]}>{item.sku}</Text>
+
+                  {/* Batch No */}
+                  <Text style={[styles.tdCell, { width: 95 }]}>{item.batchNo}</Text>
+
+                  {/* Quantity */}
+                  <Text style={[styles.tdCell, { width: 110, textAlign: 'center', fontWeight: '700' }]}>
+                    {item.quantity}
+                  </Text>
+
+                  {/* Amount / MRP */}
+                  <Text style={[styles.tdCell, styles.amountCell, { width: 90, textAlign: 'right' }]}>
+                    {item.amount}
+                  </Text>
+
+                  {/* Branch ID (Multi-Branch only) */}
+                  {isMultiBranch && (
+                    <Text style={[styles.tdCell, { width: 90, textAlign: 'center' }]}>
+                      {item.branchId}
+                    </Text>
+                  )}
+
+                  {/* Shelf Location */}
+                  <Text style={[styles.tdCell, { width: 100, textAlign: 'center' }]}>
+                    {item.shelfLocation}
+                  </Text>
+
+                  {/* Updated By */}
+                  <Text style={[styles.tdCell, { width: 95 }]}>{item.updatedBy}</Text>
+
+                  {/* Last Updated */}
+                  <Text style={[styles.tdCell, { width: 105 }]}>{item.lastUpdated}</Text>
+
+                  {/* Modify Button Pill */}
+                  <View style={[styles.modifyWrapper, { width: 85 }]}>
+                    <Pressable
+                      onPress={() => handleEditOrDelete(item)}
+                      style={styles.modifyButton}
+                      accessibilityRole="button"
+                      accessibilityLabel="Edit or Delete adjustment"
+                    >
+                      <Text style={styles.modifyButtonText}>Edit/Del</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </ScrollView>
+        )}
       </View>
 
       {/* Add Medicine Entry Form Card */}
@@ -442,6 +542,12 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     gap: 24,
   },
+  contentContainerMobile: {
+    paddingHorizontal: 12,
+    paddingTop: 16,
+    paddingBottom: 32,
+    gap: 16,
+  },
   kpiRow: {
     flexDirection: 'row',
     gap: 16,
@@ -475,6 +581,132 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#0F172A',
+  },
+  cardSubtitle: {
+    fontSize: 12.5,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  /* Mobile Card List Styles */
+  mobileCardList: {
+    padding: 12,
+    gap: 12,
+  },
+  mobileStockCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 14,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
+      },
+      default: {
+        elevation: 1,
+      },
+    }),
+  },
+  mobileStockCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    gap: 8,
+  },
+  mobileStockTitleCol: {
+    flex: 1,
+  },
+  mobileBrandName: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  mobileMedName: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#0F766E',
+    marginTop: 2,
+  },
+  mobileStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  statusBadgeInStock: {
+    backgroundColor: '#DCFCE7',
+  },
+  statusBadgeLow: {
+    backgroundColor: '#FEF3C7',
+  },
+  mobileStatusText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  statusTextInStock: {
+    color: '#15803D',
+  },
+  statusTextLow: {
+    color: '#B45309',
+  },
+  mobileGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingVertical: 10,
+    gap: 10,
+  },
+  mobileGridItem: {
+    width: '47%',
+  },
+  mobileItemLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#94A3B8',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  mobileItemValue: {
+    fontSize: 12.5,
+    fontWeight: '500',
+    color: '#334155',
+    marginTop: 1,
+  },
+  mobileItemValueBold: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginTop: 1,
+  },
+  mobileStockFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    marginTop: 4,
+    gap: 8,
+  },
+  mobileUpdatedText: {
+    fontSize: 11,
+    color: '#94A3B8',
+    flex: 1,
+  },
+  mobileEditBtn: {
+    backgroundColor: '#E0F2FE',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    cursor: 'pointer',
+  },
+  mobileEditBtnText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#0369A1',
   },
   tableWrapper: {
     minWidth: 1520,
@@ -579,12 +811,12 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   formFieldHalf: {
-    width: '48%',
+    flex: 1,
     minWidth: 260,
   },
   formFieldThird: {
-    width: '31%',
-    minWidth: 200,
+    flex: 1,
+    minWidth: 180,
   },
   fieldLabel: {
     fontSize: 12.5,

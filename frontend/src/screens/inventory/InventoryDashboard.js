@@ -2,6 +2,7 @@ import React from 'react';
 import {
   View,
   Text,
+  Pressable,
   ScrollView,
   StyleSheet,
   useWindowDimensions,
@@ -21,16 +22,17 @@ import {
 export default function InventoryDashboard({ onNavigate, onShowToast }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
+  const isMobile = width < 768;
 
   const handleQuickAction = (id, label) => {
-    if (id === 'stock-adjustment') {
+    if (id === 'stock-adjustment' || id === 'view-stock') {
       if (onNavigate) onNavigate('stock-adjustments');
-    } else if (id === 'stock-transfer') {
-      if (onNavigate) onNavigate('stock-transfer');
+    } else if (id === 'add-customer') {
+      if (onNavigate) onNavigate('customers-patients');
     } else if (id === 'receive-stock') {
       if (onNavigate) onNavigate('goods-receiving');
-    } else if (id === 'create-stocktake') {
-      if (onNavigate) onNavigate('inventory-reports');
+    } else if (id === 'customer-ledger') {
+      if (onNavigate) onNavigate('customer-ledger');
     }
   };
 
@@ -70,15 +72,25 @@ export default function InventoryDashboard({ onNavigate, onShowToast }) {
   return (
     <ScrollView
       style={styles.scrollBody}
-      contentContainerStyle={styles.scrollContent}
+      contentContainerStyle={[styles.scrollContent, isMobile && styles.scrollContentMobile]}
       showsVerticalScrollIndicator={true}
     >
       {/* Page Title Section */}
-      <View style={styles.titleSection}>
-        <Text style={styles.pageTitle}>Inventory Overview</Text>
-        <Text style={styles.pageSubtitle}>
-          Monitor stock levels, expiry risks and recent inventory activity.
-        </Text>
+      <View style={[styles.titleSection, isMobile && styles.titleSectionMobile]}>
+        <View>
+          <Text style={styles.pageTitle}>Inventory Overview</Text>
+          <Text style={styles.pageSubtitle}>
+            Monitor stock levels, expiry risks and recent inventory activity.
+          </Text>
+        </View>
+        <Pressable
+          onPress={handleViewAllStock}
+          style={styles.viewStockHeaderBtn}
+          accessibilityRole="button"
+          accessibilityLabel="View Stock Inventory"
+        >
+          <Text style={styles.viewStockHeaderBtnText}>📦 View Stock Inventory →</Text>
+        </Pressable>
       </View>
 
       {/* Section 1: KPI Cards */}
@@ -147,8 +159,22 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     gap: 24,
   },
+  scrollContentMobile: {
+    paddingHorizontal: 12,
+    paddingTop: 16,
+    gap: 16,
+  },
   titleSection: {
     marginBottom: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  titleSectionMobile: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
   },
   pageTitle: {
     fontSize: 24,
@@ -162,6 +188,19 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 4,
   },
+  viewStockHeaderBtn: {
+    backgroundColor: '#0F766E',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewStockHeaderBtnText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
   kpiRow: {
     flexDirection: 'row',
     gap: 16,
@@ -172,11 +211,12 @@ const styles = StyleSheet.create({
   },
   gridRow: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: 24,
   },
   gridRowStacked: {
     flexDirection: 'column',
-    gap: 16,
+    gap: 32,
   },
   gridColLeft: {
     flex: 2,
