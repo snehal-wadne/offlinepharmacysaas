@@ -14,6 +14,7 @@ import {
   EXPIRY_REPORTS_KPIS,
   MOCK_EXPIRY_RISK_ITEMS,
 } from '../../data/reportsMockData';
+import { exportToCSV, exportToPDF } from '../../utils/exportUtils';
 
 const RISK_BADGES = {
   Critical: { bg: '#FEE2E2', text: '#B91C1C' },
@@ -40,8 +41,43 @@ export default function ExpiryReportsScreen({ onShowToast, onNavigate }) {
   });
 
   const handleExport = (type) => {
+    const headers = [
+      'Batch No.',
+      'Medicine Name',
+      'Supplier',
+      'Expiry Date',
+      'Days Remaining',
+      'Quantity',
+      'Cost Value',
+      'Risk Level',
+      'Recommended Action',
+    ];
+    const rows = filteredItems.map((item) => [
+      item.batchNo,
+      item.medicine,
+      item.supplier,
+      item.expiryDate,
+      item.daysRemaining,
+      item.quantity,
+      item.costValue,
+      item.riskLevel,
+      item.recommendedAction,
+    ]);
+
+    if (type === 'csv') {
+      exportToCSV(headers, rows, 'batch_expiry_risk_report.csv');
+    } else if (type === 'pdf') {
+      exportToPDF(
+        'Batch Expiry Risk & Exposure Report',
+        'Near-expiry batches requiring price markdowns, transfer velocity, or vendor write-off returns.',
+        headers,
+        rows,
+        'batch_expiry_risk_report.pdf'
+      );
+    }
+
     if (onShowToast) {
-      onShowToast(`✓ Exported Expiry Audit & Risk Report as ${type.toUpperCase()}!`);
+      onShowToast(`✓ Exported Batch Expiry Risk Report as ${type.toUpperCase()}!`);
     }
   };
 

@@ -14,15 +14,13 @@ const path = require("path");
 const { pool } = require("./connection");
 
 const runSchema = async () => {
-  const schemaPath = path.join(__dirname, "..", "db/schema.sql");
+  const schemaPath = path.join(__dirname, "schema.sql");
 
   try {
-    console.log("Reading database schema...");
-
+    console.log("Reading database schema from schema.sql...");
     const schemaSql = fs.readFileSync(schemaPath, "utf8");
 
-    console.log("Executing schema.sql...");
-
+    console.log("Executing schema.sql on PostgreSQL database...");
     await pool.query(schemaSql);
 
     console.log("Database schema created successfully.");
