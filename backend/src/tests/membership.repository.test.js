@@ -10,14 +10,24 @@
  * User 1 ──────┐
  *              ├── Organisation
  * User 2 ──────┘
- *                    |
- *                    +── Manager
- *                    +── Cashier
  *
  * Memberships:
  *
- * User 1 → Organisation → Manager
- * User 2 → Organisation → Cashier
+ * User 1 → Organisation
+ * User 2 → Organisation
+ *
+ * Important:
+ *
+ * An organisation membership only represents the relationship
+ * between a user and an organisation.
+ *
+ * The membership does NOT contain a role.
+ *
+ * Roles are assigned at the branch level through
+ * branch_assignments.
+ *
+ * This allows the same employee to work at multiple branches
+ * with different roles.
  */
 
 const {
@@ -26,7 +36,6 @@ const {
   getMembership,
   getUserMemberships,
   getOrganisationMembers,
-  updateMembershipRole,
   updateMembershipStatus,
   deleteMembership,
 } = require("../repositories/membership.repository");
@@ -38,8 +47,6 @@ const {
   deleteOrganisation,
 } = require("../repositories/organisation.repository");
 
-const { createRole, deleteRole } = require("../repositories/role.repository");
-
 const { pool } = require("../db/connection");
 
 const runTests = async () => {
@@ -48,11 +55,11 @@ const runTests = async () => {
 
   let organisationId;
 
-  let managerRoleId;
-  let cashierRoleId;
+  let secondOrganisationId;
 
   let firstMembershipId;
   let secondMembershipId;
+  let secondOrganisationMembershipId;
 
   const timestamp = Date.now();
 
@@ -97,14 +104,14 @@ const runTests = async () => {
 
     /*
      * ------------------------------------------------------
-     * 3. CREATE TEST ORGANISATION
+     * 3. CREATE FIRST TEST ORGANISATION
      * ------------------------------------------------------
      */
-    console.log("--- Creating test organisation ---");
+    console.log("--- Creating first test organisation ---");
 
     const organisation = await createOrganisation({
       ownerId: firstUserId,
-      name: "Membership Test Organisation",
+      name: `Membership Test Organisation ${timestamp}`,
     });
 
     organisationId = organisation.id;
@@ -113,53 +120,40 @@ const runTests = async () => {
 
     /*
      * ------------------------------------------------------
-     * 4. CREATE MANAGER ROLE
-     * ------------------------------------------------------
-     */
-    console.log("--- Creating Manager role ---");
-
-    const managerRole = await createRole({
-      organisationId,
-      name: "Manager",
-      description: "Test manager role",
-      isSystemRole: false,
-    });
-
-    managerRoleId = managerRole.id;
-
-    console.log(managerRole);
-
-    /*
-     * ------------------------------------------------------
-     * 5. CREATE CASHIER ROLE
-     * ------------------------------------------------------
-     */
-    console.log("--- Creating Cashier role ---");
-
-    const cashierRole = await createRole({
-      organisationId,
-      name: "Cashier",
-      description: "Test cashier role",
-      isSystemRole: false,
-    });
-
-    cashierRoleId = cashierRole.id;
-
-    console.log(cashierRole);
-
-    /*
-     * ------------------------------------------------------
-     * 6. CREATE FIRST MEMBERSHIP
+     * 4. CREATE SECOND TEST ORGANISATION
      * ------------------------------------------------------
      *
-     * Rahul becomes a Manager.
+     * This organisation is used to verify that the same
+     * user can belong to multiple organisations.
      */
-    console.log("--- Creating first membership ---");
+    console.log("--- Creating second test organisation ---");
+
+    const secondOrganisation = await createOrganisation({
+      ownerId: secondUserId,
+      name: `Second Membership Test Organisation ${timestamp}`,
+    });
+
+    secondOrganisationId = secondOrganisation.id;
+
+    console.log(secondOrganisation);
+
+    /*
+     * ------------------------------------------------------
+     * 5. CREATE FIRST MEMBERSHIP
+     * ------------------------------------------------------
+     *
+     * Rahul becomes a member of the first organisation.
+     *
+     * Notice that there is NO roleId here.
+     *
+     * The role will be assigned later through
+     * branch_assignments.
+     */
+    console.log("--- Creating Rahul membership ---");
 
     const firstMembership = await createMembership({
       organisationId,
       userId: firstUserId,
-      roleId: managerRoleId,
       status: "ACTIVE",
     });
 
@@ -169,17 +163,27 @@ const runTests = async () => {
 
     /*
      * ------------------------------------------------------
+     * 6. VERIFY MEMBERSHIP DOES NOT CONTAIN A ROLE
+     * ------------------------------------------------------
+     */
+    console.log("--- Verifying membership has no role ---");
+
+    console.log({
+      roleId: firstMembership.role_id,
+    });
+
+    /*
+     * ------------------------------------------------------
      * 7. CREATE SECOND MEMBERSHIP
      * ------------------------------------------------------
      *
-     * Amit becomes a Cashier.
+     * Amit becomes a member of the same organisation.
      */
-    console.log("--- Creating second membership ---");
+    console.log("--- Creating Amit membership ---");
 
     const secondMembership = await createMembership({
       organisationId,
       userId: secondUserId,
-      roleId: cashierRoleId,
       status: "ACTIVE",
     });
 
@@ -189,10 +193,71 @@ const runTests = async () => {
 
     /*
      * ------------------------------------------------------
-     * 8. GET MEMBERSHIP BY ID
+     * 8. TEST DUPLICATE MEMBERSHIP
+     * ------------------------------------------------------
+     *
+     * Rahul already belongs to this organisation.
+     *
+     * The database UNIQUE constraint on
+     * (organisation_id, user_id) should prevent
+     * another membership from being created.
+     */
+    console.log("--- Testing duplicate Rahul membership ---");
+
+    try {
+      await createMembership({
+        organisationId,
+        userId: firstUserId,
+        status: "ACTIVE",
+      });
+
+      throw new Error("Duplicate membership was unexpectedly created.");
+    } catch (error) {
+      if (error.message === "Duplicate membership was unexpectedly created.") {
+        throw error;
+      }
+
+      console.log("Duplicate membership correctly rejected.");
+
+      console.log({
+        postgresErrorCode: error.code,
+      });
+
+      if (error.code !== "23505") {
+        throw new Error(
+          `Expected PostgreSQL unique violation (23505), received ${error.code}.`,
+        );
+      }
+    }
+
+    /*
+     * ------------------------------------------------------
+     * 9. CREATE RAHUL MEMBERSHIP IN SECOND ORGANISATION
+     * ------------------------------------------------------
+     *
+     * The same user can belong to another organisation.
+     *
+     * This should succeed because the organisation_id
+     * is different.
+     */
+    console.log("--- Creating Rahul membership in second organisation ---");
+
+    const secondOrganisationMembership = await createMembership({
+      organisationId: secondOrganisationId,
+      userId: firstUserId,
+      status: "ACTIVE",
+    });
+
+    secondOrganisationMembershipId = secondOrganisationMembership.id;
+
+    console.log(secondOrganisationMembership);
+
+    /*
+     * ------------------------------------------------------
+     * 10. GET MEMBERSHIP BY ID
      * ------------------------------------------------------
      */
-    console.log("--- Getting first membership by ID ---");
+    console.log("--- Getting Rahul membership by ID ---");
 
     const membershipById = await getMembershipById(firstMembershipId);
 
@@ -200,7 +265,7 @@ const runTests = async () => {
 
     /*
      * ------------------------------------------------------
-     * 9. GET SPECIFIC USER MEMBERSHIP
+     * 11. GET SPECIFIC USER MEMBERSHIP
      * ------------------------------------------------------
      */
     console.log("--- Getting Rahul membership in organisation ---");
@@ -211,8 +276,10 @@ const runTests = async () => {
 
     /*
      * ------------------------------------------------------
-     * 10. GET ALL MEMBERSHIPS FOR RAHUL
+     * 12. GET ALL MEMBERSHIPS FOR RAHUL
      * ------------------------------------------------------
+     *
+     * Rahul now belongs to two organisations.
      */
     console.log("--- Getting Rahul organisation memberships ---");
 
@@ -222,7 +289,7 @@ const runTests = async () => {
 
     /*
      * ------------------------------------------------------
-     * 11. GET ALL ORGANISATION MEMBERS
+     * 13. GET ALL ORGANISATION MEMBERS
      * ------------------------------------------------------
      */
     console.log("--- Getting all organisation members ---");
@@ -233,24 +300,13 @@ const runTests = async () => {
 
     /*
      * ------------------------------------------------------
-     * 12. CHANGE RAHUL'S ROLE
+     * 14. UPDATE MEMBERSHIP STATUS
      * ------------------------------------------------------
      *
-     * Rahul changes from Manager to Cashier.
-     */
-    console.log("--- Changing Rahul role to Cashier ---");
-
-    const updatedRole = await updateMembershipRole(
-      firstMembershipId,
-      cashierRoleId,
-    );
-
-    console.log(updatedRole);
-
-    /*
-     * ------------------------------------------------------
-     * 13. UPDATE MEMBERSHIP STATUS
-     * ------------------------------------------------------
+     * Role is no longer updated through membership.
+     *
+     * Only membership-level information such as status
+     * is managed here.
      */
     console.log("--- Suspending Rahul membership ---");
 
@@ -263,7 +319,53 @@ const runTests = async () => {
 
     /*
      * ------------------------------------------------------
-     * 14. DELETE SECOND MEMBERSHIP
+     * 15. RESTORE RAHUL MEMBERSHIP
+     * ------------------------------------------------------
+     *
+     * Restore the membership before cleanup.
+     */
+    console.log("--- Restoring Rahul membership ---");
+
+    const restoredStatus = await updateMembershipStatus(
+      firstMembershipId,
+      "ACTIVE",
+    );
+
+    console.log(restoredStatus);
+
+    /*
+     * ------------------------------------------------------
+     * 16. DELETE SECOND ORGANISATION MEMBERSHIP
+     * ------------------------------------------------------
+     */
+    console.log("--- Deleting Rahul membership from second organisation ---");
+
+    const secondOrganisationMembershipDeleted = await deleteMembership(
+      secondOrganisationMembershipId,
+    );
+
+    console.log({
+      secondOrganisationMembershipDeleted,
+    });
+
+    /*
+     * ------------------------------------------------------
+     * 17. VERIFY SECOND ORGANISATION MEMBERSHIP DELETION
+     * ------------------------------------------------------
+     */
+    console.log(
+      "--- Verifying Rahul second organisation membership deletion ---",
+    );
+
+    const deletedSecondOrganisationMembership = await getMembershipById(
+      secondOrganisationMembershipId,
+    );
+
+    console.log(deletedSecondOrganisationMembership);
+
+    /*
+     * ------------------------------------------------------
+     * 18. DELETE SECOND MEMBERSHIP
      * ------------------------------------------------------
      *
      * Removing a membership does not delete the user.
@@ -278,7 +380,7 @@ const runTests = async () => {
 
     /*
      * ------------------------------------------------------
-     * 15. VERIFY SECOND MEMBERSHIP WAS DELETED
+     * 19. VERIFY SECOND MEMBERSHIP WAS DELETED
      * ------------------------------------------------------
      */
     console.log("--- Verifying Amit membership deletion ---");
@@ -289,7 +391,7 @@ const runTests = async () => {
 
     /*
      * ------------------------------------------------------
-     * 16. DELETE FIRST MEMBERSHIP
+     * 20. DELETE FIRST MEMBERSHIP
      * ------------------------------------------------------
      */
     console.log("--- Deleting Rahul membership ---");
@@ -302,26 +404,24 @@ const runTests = async () => {
 
     /*
      * ------------------------------------------------------
-     * 17. DELETE TEST ROLES
+     * 21. DELETE SECOND TEST ORGANISATION
      * ------------------------------------------------------
      */
-    console.log("--- Deleting test roles ---");
+    console.log("--- Deleting second test organisation ---");
 
-    const cashierDeleted = await deleteRole(cashierRoleId);
-
-    const managerDeleted = await deleteRole(managerRoleId);
+    const secondOrganisationDeleted =
+      await deleteOrganisation(secondOrganisationId);
 
     console.log({
-      cashierDeleted,
-      managerDeleted,
+      secondOrganisationDeleted,
     });
 
     /*
      * ------------------------------------------------------
-     * 18. DELETE TEST ORGANISATION
+     * 22. DELETE FIRST TEST ORGANISATION
      * ------------------------------------------------------
      */
-    console.log("--- Deleting test organisation ---");
+    console.log("--- Deleting first test organisation ---");
 
     const organisationDeleted = await deleteOrganisation(organisationId);
 
@@ -331,7 +431,7 @@ const runTests = async () => {
 
     /*
      * ------------------------------------------------------
-     * 19. DELETE TEST USERS
+     * 23. DELETE TEST USERS
      * ------------------------------------------------------
      */
     console.log("--- Deleting first test user ---");

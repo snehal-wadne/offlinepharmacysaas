@@ -136,7 +136,6 @@ CREATE TABLE IF NOT EXISTS organisation_memberships (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
     organisation_id UUID NOT NULL REFERENCES organisations (id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-    role_id UUID REFERENCES roles (id) ON DELETE SET NULL,
     status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
     joined_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -199,6 +198,7 @@ CREATE TABLE IF NOT EXISTS branches (
 CREATE TABLE IF NOT EXISTS branch_assignments (
     membership_id UUID NOT NULL REFERENCES organisation_memberships (id) ON DELETE CASCADE,
     branch_id UUID NOT NULL REFERENCES branches (id) ON DELETE CASCADE,
+    role_id UUID NOT NULL REFERENCES roles (id) ON DELETE RESTRICT,
     PRIMARY KEY (membership_id, branch_id)
 );
 
@@ -596,8 +596,6 @@ CREATE INDEX IF NOT EXISTS idx_roles_organisation_id ON roles (organisation_id);
 CREATE INDEX IF NOT EXISTS idx_memberships_user_id ON organisation_memberships (user_id);
 
 CREATE INDEX IF NOT EXISTS idx_memberships_organisation_id ON organisation_memberships (organisation_id);
-
-CREATE INDEX IF NOT EXISTS idx_memberships_role_id ON organisation_memberships (role_id);
 
 CREATE INDEX IF NOT EXISTS idx_branches_organisation_id ON branches (organisation_id);
 
