@@ -10,15 +10,15 @@ import {
 import { API_URL } from '../../config';
 
 const BRANCH_OPTIONS = [
-  'Main Branch',
-  'Downtown Branch',
-  'East Clinic',
-  'Northside Branch',
-  'Central Warehouse',
+  'All Branches',
+  'FIT Main Campus Hospital Pharmacy',
+  'FIT Pune City OPD Pharmacy',
+  'FIT Central Medical Warehouse',
+  'FIT Student Health Center Dispensary',
 ];
 
 export default function Header({
-  currentBranch = 'Main Branch',
+  currentBranch = 'All Branches',
   onBranchChange,
   isMultiBranch = true,
   onTogglePharmacyMode,
@@ -92,20 +92,58 @@ export default function Header({
         )}
 
         {isMultiBranch ? (
-          // MULTI-BRANCH MODE: Active Branch Switcher Dropdown
+          // MULTI-BRANCH MODE: Active Branch Switcher Dropdown (Anchored directly below button)
           <View style={styles.branchSelectorRow}>
             {!isMobile && <Text style={styles.branchLabel}>Branch</Text>}
-            <Pressable
-              onPress={() => setDropdownOpen(true)}
-              style={styles.branchButton}
-              accessibilityRole="button"
-              accessibilityLabel="Select Branch"
-            >
-              <Text style={styles.branchButtonText} numberOfLines={1}>
-                {currentBranch}
-              </Text>
-              <Text style={styles.chevron}>▾</Text>
-            </Pressable>
+            <View style={styles.branchAnchorContainer}>
+              <Pressable
+                onPress={() => setDropdownOpen(!dropdownOpen)}
+                style={styles.branchButton}
+                accessibilityRole="button"
+                accessibilityLabel="Select Branch"
+              >
+                <Text style={styles.branchButtonText} numberOfLines={1}>
+                  {currentBranch}
+                </Text>
+                <Text style={styles.chevron}>▾</Text>
+              </Pressable>
+
+              {/* Anchored Dropdown Menu */}
+              {dropdownOpen && (
+                <>
+                  <Pressable
+                    style={styles.floatingBackdrop}
+                    onPress={() => setDropdownOpen(false)}
+                  />
+                  <View style={styles.dropdownCardAnchored}>
+                    <Text style={styles.dropdownTitle}>Select Active Branch</Text>
+                    {BRANCH_OPTIONS.map((branch) => {
+                      const isSelected = branch === currentBranch;
+                      return (
+                        <Pressable
+                          key={branch}
+                          onPress={() => handleSelectBranch(branch)}
+                          style={[
+                            styles.dropdownItem,
+                            isSelected && styles.dropdownItemSelected,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.dropdownItemText,
+                              isSelected && styles.dropdownItemTextSelected,
+                            ]}
+                          >
+                            {branch}
+                          </Text>
+                          {isSelected && <Text style={styles.checkmark}>✓</Text>}
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </>
+              )}
+            </View>
           </View>
         ) : (
           // SINGLE-SHOP MODE: Clean Non-Clickable Store Label
@@ -115,20 +153,42 @@ export default function Header({
           </View>
         )}
 
-        {/* Quick Mode Toggle for Testing / Enterprise Tier Switching */}
+        {/* Quick Mode Toggle Switch */}
         {onTogglePharmacyMode && !isMobile && (
           <Pressable
             onPress={onTogglePharmacyMode}
-            style={styles.modeTogglePill}
-            accessibilityRole="button"
-            accessibilityLabel="Toggle Single/Multi Branch Mode"
+            style={styles.modeToggleSwitch}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: isMultiBranch }}
+            accessibilityLabel="Toggle Single-Shop / Multi-Branch Mode"
           >
+            <View
+              style={[
+                styles.toggleTrack,
+                isMultiBranch ? styles.toggleTrackMulti : styles.toggleTrackSingle,
+              ]}
+            >
+              <View
+                style={[
+                  styles.toggleThumb,
+                  isMultiBranch ? styles.toggleThumbMulti : styles.toggleThumbSingle,
+                ]}
+              />
+            </View>
             <Text style={styles.modeToggleText}>
-              Mode: {isMultiBranch ? 'Multi-Branch' : 'Single-Shop'} ⇄
+              {isMultiBranch ? 'Multi-Branch' : 'Single-Shop'}
             </Text>
           </Pressable>
         )}
       </View>
+
+      {/* Middle: Global Search Input */}
+      {!isMobile && (
+        <View style={styles.headerSearchWrapper}>
+          <Text style={styles.headerSearchIcon}>🔍</Text>
+          <Text style={styles.headerSearchPlaceholder}>Search (Ctrl+K)</Text>
+        </View>
+      )}
 
       {/* Right: Sync Status & User Profile */}
       <View style={styles.rightSection}>
@@ -145,9 +205,14 @@ export default function Header({
         {/* User Profile */}
         <View style={styles.profileContainer}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initials}</Text>
+            <Text style={styles.avatarText}>{initials || 'C'}</Text>
           </View>
-          {!isMobile && <Text style={styles.userRole}>{displayName}</Text>}
+          {!isMobile && (
+            <View style={styles.userInfoColumn}>
+              <Text style={styles.userNameText}>{displayName || 'Admin Owner'}</Text>
+              <Text style={styles.userRoleText}>{currentUser?.role || 'Super Admin'}</Text>
+            </View>
+          )}
           
           {onSignOut && (
             <Pressable
@@ -162,48 +227,6 @@ export default function Header({
         </View>
         </View>
       </View>
-
-      {/* Branch Dropdown Modal (Only relevant in Multi-Branch Mode) */}
-      {isMultiBranch && (
-        <Modal
-          visible={dropdownOpen}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setDropdownOpen(false)}
-        >
-          <Pressable
-            style={styles.modalOverlay}
-            onPress={() => setDropdownOpen(false)}
-          >
-            <View style={styles.dropdownCard}>
-              <Text style={styles.dropdownTitle}>Select Active Branch</Text>
-              {BRANCH_OPTIONS.map((branch) => {
-                const isSelected = branch === currentBranch;
-                return (
-                  <Pressable
-                    key={branch}
-                    onPress={() => handleSelectBranch(branch)}
-                    style={[
-                      styles.dropdownItem,
-                      isSelected && styles.dropdownItemSelected,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.dropdownItemText,
-                        isSelected && styles.dropdownItemTextSelected,
-                      ]}
-                    >
-                      {branch}
-                    </Text>
-                    {isSelected && <Text style={styles.checkmark}>✓</Text>}
-                  </Pressable>
-                );
-              })}
-            </View>
-          </Pressable>
-        </Modal>
-      )}
     </View>
   );
 }
@@ -299,19 +322,60 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#334155',
   },
-  modeTogglePill: {
-    backgroundColor: '#F1F5F9',
+  modeToggleSwitch: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 6,
+    borderColor: '#E2E8F0',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 20,
+    gap: 8,
     cursor: 'pointer',
+  },
+  toggleTrack: {
+    width: 34,
+    height: 18,
+    borderRadius: 9,
+    padding: 2,
+    justifyContent: 'center',
+    position: 'relative',
+    ...Platform.select({
+      web: {
+        transition: 'background-color 0.2s ease',
+      },
+    }),
+  },
+  toggleTrackMulti: {
+    backgroundColor: '#0F766E',
+  },
+  toggleTrackSingle: {
+    backgroundColor: '#CBD5E1',
+  },
+  toggleThumb: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#FFFFFF',
+    position: 'absolute',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 1px 2px rgba(0, 0, 0, 0.2)',
+        transition: 'left 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+      },
+    }),
+  },
+  toggleThumbMulti: {
+    left: 18,
+  },
+  toggleThumbSingle: {
+    left: 2,
   },
   modeToggleText: {
     fontSize: 11.5,
-    fontWeight: '600',
-    color: '#475569',
+    fontWeight: '700',
+    color: '#0F766E',
   },
   rightSection: {
     flexDirection: 'row',
@@ -364,6 +428,69 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#0F172A',
+  },
+  headerSearchWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    width: 240,
+    gap: 8,
+  },
+  headerSearchIcon: {
+    fontSize: 12,
+    color: '#94A3B8',
+  },
+  headerSearchPlaceholder: {
+    fontSize: 12.5,
+    color: '#94A3B8',
+  },
+  userInfoColumn: {
+    flexDirection: 'column',
+  },
+  userNameText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    lineHeight: 16,
+  },
+  userRoleText: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  branchAnchorContainer: {
+    position: 'relative',
+    zIndex: 9999,
+  },
+  floatingBackdrop: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 9998,
+  },
+  dropdownCardAnchored: {
+    position: 'absolute',
+    top: 38,
+    left: 0,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingVertical: 8,
+    minWidth: 260,
+    zIndex: 9999,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+      },
+    }),
   },
   modalOverlay: {
     flex: 1,

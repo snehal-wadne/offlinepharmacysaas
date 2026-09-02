@@ -27,10 +27,22 @@ const CUSTOMERS_SUBITEMS = [
   { title: 'Payment Receipts', key: 'customer-payments', icon: '💳' },
 ];
 
+const MANAGEMENT_SUBITEMS = [
+  { title: 'Branches', key: 'branches', icon: '🏛️' },
+  { title: 'Users', key: 'users', icon: '👥' },
+  { title: 'Roles', key: 'roles', icon: '🛡️' },
+  { title: 'Audit Log', key: 'audit-log', icon: '📋' },
+];
+
 const REPORTS_SUBITEMS = [
   { title: 'Inventory Reports', key: 'inventory-reports', icon: '📊' },
   { title: 'Purchase Reports', key: 'purchase-reports', icon: '📈' },
   { title: 'Expiry Reports', key: 'expiry-reports', icon: '⏳' },
+];
+
+const SETTINGS_SUBITEMS = [
+  { title: 'Tax / GST Settings', key: 'tax-settings', icon: '⚙️' },
+  { title: 'Page Permissions', key: 'page-permissions', icon: '🛡️' },
 ];
 
 export default function Sidebar({
@@ -47,13 +59,22 @@ export default function Sidebar({
   const isInventoryActive = inventorySubItems.some((item) => item.key === activeItem);
   const isPurchasesActive = PURCHASES_SUBITEMS.some((item) => item.key === activeItem);
   const isCustomersActive = CUSTOMERS_SUBITEMS.some((item) => item.key === activeItem);
+  const isManagementActive =
+    MANAGEMENT_SUBITEMS.some((item) => item.key === activeItem) ||
+    activeItem === 'roles' ||
+    activeItem === 'roles-permissions';
   const isReportsActive = REPORTS_SUBITEMS.some((item) => item.key === activeItem);
+  const isSettingsActive =
+    SETTINGS_SUBITEMS.some((item) => item.key === activeItem) ||
+    activeItem === 'page-permissions';
 
-  // Default all sections to expanded so Suppliers, Payments, etc. are always immediately visible
+  // Default all sections to expanded, EXCEPT Management which is collapsed by default
   const [inventoryExpanded, setInventoryExpanded] = useState(true);
   const [purchasesExpanded, setPurchasesExpanded] = useState(true);
   const [customersExpanded, setCustomersExpanded] = useState(true);
+  const [managementExpanded, setManagementExpanded] = useState(false);
   const [reportsExpanded, setReportsExpanded] = useState(true);
+  const [settingsExpanded, setSettingsExpanded] = useState(true);
 
   // Bottom-left clock
   const [currentTime, setCurrentTime] = useState('');
@@ -83,8 +104,16 @@ export default function Sidebar({
   }, [activeItem, isCustomersActive]);
 
   useEffect(() => {
+    if (isManagementActive) setManagementExpanded(true);
+  }, [activeItem, isManagementActive]);
+
+  useEffect(() => {
     if (isReportsActive) setReportsExpanded(true);
   }, [activeItem, isReportsActive]);
+
+  useEffect(() => {
+    if (isSettingsActive) setSettingsExpanded(true);
+  }, [activeItem, isSettingsActive]);
 
   const handleDashboardClick = () => {
     if (onNavigate) {
@@ -102,6 +131,10 @@ export default function Sidebar({
 
   const handleCustomersClick = () => {
     setCustomersExpanded(!customersExpanded);
+  };
+
+  const handleManagementClick = () => {
+    setManagementExpanded(!managementExpanded);
   };
 
   const handleReportsClick = () => {
@@ -342,7 +375,68 @@ export default function Sidebar({
           )}
         </View>
 
-        {/* 5. Reports Section (Expandable - 3 Items) */}
+        {/* 5. Management Section (Expandable - 4 Subitems, Collapsed by default) */}
+        <View style={styles.expandableSection}>
+          <Pressable
+            onPress={handleManagementClick}
+            style={[
+              styles.expandableHeader,
+              isManagementActive && styles.expandableHeaderSelected,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Management Menu"
+          >
+            <Text
+              style={[
+                styles.mainNavText,
+                isManagementActive && styles.expandableTextSelected,
+              ]}
+            >
+              Management
+            </Text>
+            <Text
+              style={[
+                styles.chevronText,
+                isManagementActive && styles.chevronSelected,
+              ]}
+            >
+              {managementExpanded ? '▴' : '▾'}
+            </Text>
+          </Pressable>
+
+          {/* Submenu: Branches, Users, Roles & Permissions, Audit Log */}
+          {managementExpanded && (
+            <View style={styles.submenuContainer}>
+              {MANAGEMENT_SUBITEMS.map((subItem) => {
+                const isActive = activeItem === subItem.key;
+                return (
+                  <Pressable
+                    key={subItem.key}
+                    onPress={() => handleSubItemClick(subItem.key)}
+                    style={[
+                      styles.subNavItem,
+                      isActive && styles.subNavItemActive,
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel={subItem.title}
+                  >
+                    {isActive && <View style={styles.subActiveIndicator} />}
+                    <Text
+                      style={[
+                        styles.subNavText,
+                        isActive && styles.subNavTextActive,
+                      ]}
+                    >
+                      {subItem.title}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+        </View>
+
+        {/* 6. Reports Section (Expandable - 3 Items) */}
         <View style={styles.expandableSection}>
           <Pressable
             onPress={handleReportsClick}
@@ -375,6 +469,67 @@ export default function Sidebar({
           {reportsExpanded && (
             <View style={styles.submenuContainer}>
               {REPORTS_SUBITEMS.map((subItem) => {
+                const isActive = activeItem === subItem.key;
+                return (
+                  <Pressable
+                    key={subItem.key}
+                    onPress={() => handleSubItemClick(subItem.key)}
+                    style={[
+                      styles.subNavItem,
+                      isActive && styles.subNavItemActive,
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel={subItem.title}
+                  >
+                    {isActive && <View style={styles.subActiveIndicator} />}
+                    <Text
+                      style={[
+                        styles.subNavText,
+                        isActive && styles.subNavTextActive,
+                      ]}
+                    >
+                      {subItem.title}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+        </View>
+
+        {/* 7. Settings Section */}
+        <View style={styles.expandableSection}>
+          <Pressable
+            onPress={() => setSettingsExpanded(!settingsExpanded)}
+            style={[
+              styles.expandableHeader,
+              isSettingsActive && styles.expandableHeaderSelected,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Settings Menu"
+          >
+            <Text
+              style={[
+                styles.mainNavText,
+                isSettingsActive && styles.expandableTextSelected,
+              ]}
+            >
+              Settings
+            </Text>
+            <Text
+              style={[
+                styles.chevronText,
+                isSettingsActive && styles.chevronSelected,
+              ]}
+            >
+              {settingsExpanded ? '▴' : '▾'}
+            </Text>
+          </Pressable>
+
+          {/* Submenu: Tax / GST Settings, Page Permissions */}
+          {settingsExpanded && (
+            <View style={styles.submenuContainer}>
+              {SETTINGS_SUBITEMS.map((subItem) => {
                 const isActive = activeItem === subItem.key;
                 return (
                   <Pressable

@@ -8,22 +8,6 @@ import {
   TextInput,
   useWindowDimensions,
   View,
-} from "react-native";
-
-import {
-  Cloud,
-  Eye,
-  EyeOff,
-  Headphones,
-  LockKeyhole,
-  Package,
-  Pill,
-  ShieldCheck,
-  TrendingUp,
-  User,
-  Zap,
-} from "lucide-react-native";
-
 export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
