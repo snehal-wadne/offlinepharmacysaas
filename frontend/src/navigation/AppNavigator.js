@@ -43,6 +43,10 @@ import InventoryReportsScreen from '../screens/reports/InventoryReportsScreen';
 import PurchaseReportsScreen from '../screens/reports/PurchaseReportsScreen';
 import ExpiryReportsScreen from '../screens/reports/ExpiryReportsScreen';
 
+// 7. Settings & Compliance Screens (Tax / GST & SaaS Subscriptions with 18% GST)
+import TaxGstSettingsScreen from '../screens/settings/TaxGstSettingsScreen';
+import SubscriptionPlansScreen from '../screens/settings/SubscriptionPlansScreen';
+
 export default function AppNavigator() {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
@@ -263,6 +267,22 @@ export default function AppNavigator() {
             isMultiBranch={isMultiBranch}
           />
         );
+      case 'tax-settings':
+        return (
+          <TaxGstSettingsScreen
+            onNavigate={handleNavigate}
+            onShowToast={showToast}
+            isMultiBranch={isMultiBranch}
+          />
+        );
+      case 'subscription-plans':
+        return (
+          <SubscriptionPlansScreen
+            onNavigate={handleNavigate}
+            onShowToast={showToast}
+            isMultiBranch={isMultiBranch}
+          />
+        );
       default:
         return (
           <InventoryDashboard
@@ -355,6 +375,7 @@ export default function AppNavigator() {
           syncStatus="online"
           isMobile={isMobile}
           onToggleMobileMenu={() => setMobileMenuOpen(true)}
+          onNavigate={handleNavigate}
         />
 
         {/* Global Action Feedback Toast */}

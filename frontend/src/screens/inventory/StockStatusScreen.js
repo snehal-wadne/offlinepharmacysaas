@@ -5,6 +5,7 @@ import {
   TextInput,
   Pressable,
   ScrollView,
+  Modal,
   StyleSheet,
   useWindowDimensions,
   Platform,
@@ -67,38 +68,96 @@ export default function StockStatusScreen({ onNavigate, onShowToast, isMultiBran
   const [activeTab, setActiveTab] = useState('low-stock');
   const [searchQuery, setSearchQuery] = useState('');
 
+  // 3-Dots Action Menu & Backend Dev Guide Modal State
+  const [selectedItemForAction, setSelectedItemForAction] = useState(null);
+  const [actionItemType, setActionItemType] = useState('low-stock'); // 'low-stock' | 'expiry'
+  const [actionMenuModalOpen, setActionMenuModalOpen] = useState(false);
+  const [devGuideModalOpen, setDevGuideModalOpen] = useState(false);
+
+  // Quick Toggles
+  const [criticalOnly, setCriticalOnly] = useState(false);
+  const [autoReorderAutomation, setAutoReorderAutomation] = useState(false);
+
   const filteredLowStock = MOCK_LOW_STOCK_ITEMS.filter((item) => {
     const q = searchQuery.toLowerCase();
-    return (
+    const matchesSearch =
       (item.brandName && item.brandName.toLowerCase().includes(q)) ||
       (item.genericName && item.genericName.toLowerCase().includes(q)) ||
       (item.medicine && item.medicine.toLowerCase().includes(q)) ||
       (item.sku && item.sku.toLowerCase().includes(q)) ||
-      (item.supplier && item.supplier.toLowerCase().includes(q))
-    );
+      (item.supplier && item.supplier.toLowerCase().includes(q));
+
+    const matchesCritical = !criticalOnly || item.status === 'Critical' || item.status === 'Out of Stock';
+    return matchesSearch && matchesCritical;
   });
 
   const filteredExpiry = MOCK_EXPIRY_BATCHES.filter((item) => {
     const q = searchQuery.toLowerCase();
-    return (
+    const matchesSearch =
       (item.brandName && item.brandName.toLowerCase().includes(q)) ||
       (item.genericName && item.genericName.toLowerCase().includes(q)) ||
       (item.medicine && item.medicine.toLowerCase().includes(q)) ||
       (item.batchNo && item.batchNo.toLowerCase().includes(q)) ||
-      (item.supplier && item.supplier.toLowerCase().includes(q))
-    );
+      (item.supplier && item.supplier.toLowerCase().includes(q));
+
+    const matchesCritical = !criticalOnly || item.status === 'Expired' || item.status === 'Expiring Soon';
+    return matchesSearch && matchesCritical;
   });
 
-  const handleReorder = (item) => {
-    if (onShowToast) {
-      onShowToast(`+ Triggered purchase reorder for ${item.brandName || item.medicine} (${item.sku})`);
+  const handleOpenActionMenu = (item, type) => {
+    setSelectedItemForAction(item);
+    setActionItemType(type);
+    setActionMenuModalOpen(true);
+  };
+
+  const handleExecuteAction = (actionKey) => {
+    const item = selectedItemForAction;
+    setActionMenuModalOpen(false);
+    if (!item) return;
+
+    if (actionKey === 'dev-guide') {
+      setDevGuideModalOpen(true);
+      return;
+    }
+
+    if (actionKey === 'reorder') {
+      if (onShowToast) {
+        onShowToast(`[POST /api/purchase-orders] Created PO for ${item.brandName || item.medicine} (Qty: ${item.reorderLevel * 2 || 100})`);
+      }
+      return;
+    }
+
+    if (actionKey === 'write-off') {
+      if (onShowToast) {
+        onShowToast(`[POST /api/inventory/write-off] Batch ${item.batchNo || item.sku} flagged for quarantine / destruction.`);
+      }
+      return;
+    }
+
+    if (actionKey === 'transfer') {
+      if (onShowToast) {
+        onShowToast(`Redirecting to Stock Transfer for ${item.brandName || item.medicine}`);
+      }
+      if (onNavigate) {
+        onNavigate('stock-transfer', { sku: item.sku, batchNo: item.batchNo });
+      }
+      return;
+    }
+
+    if (actionKey === 'notify-supplier') {
+      if (onShowToast) {
+        onShowToast(`📧 Supplier notification email dispatched to ${item.supplier}`);
+      }
+      return;
     }
   };
 
+  const handleReorder = (item) => {
+    handleOpenActionMenu(item, 'low-stock');
+  };
+
   const handleWriteOff = (item) => {
-    if (onShowToast) {
-      onShowToast(`Initiated batch audit for ${item.brandName || item.medicine} (Batch: ${item.batchNo})`);
-    }
+    handleOpenActionMenu(item, 'expiry');
   };
 
   return (
@@ -154,7 +213,7 @@ export default function StockStatusScreen({ onNavigate, onShowToast, isMultiBran
           </Pressable>
         </View>
 
-        {/* Search Bar */}
+        {/* Search Bar & Filter Controls */}
         <View style={styles.searchBarContainer}>
           <View style={styles.searchBox}>
             <TextInput
@@ -173,6 +232,72 @@ export default function StockStatusScreen({ onNavigate, onShowToast, isMultiBran
                 <Text style={styles.clearBtnText}>✕</Text>
               </Pressable>
             ) : null}
+          </View>
+
+          {/* Quick Filter Toggles & Backend Guide Button */}
+          <View style={styles.filterTogglesGroup}>
+            {/* Toggle 1: Critical / Expired Only */}
+            <Pressable
+              onPress={() => setCriticalOnly(!criticalOnly)}
+              style={[
+                styles.filterTogglePill,
+                criticalOnly && styles.filterTogglePillActive,
+              ]}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: criticalOnly }}
+            >
+              <View style={[styles.filterToggleDot, criticalOnly && styles.filterToggleDotActive]} />
+              <Text style={[styles.filterToggleText, criticalOnly && styles.filterToggleTextActive]}>
+                Critical / Expired Only
+              </Text>
+            </Pressable>
+
+            {/* Toggle 2: Auto-Reorder Automation */}
+            <Pressable
+              onPress={() => {
+                const nextVal = !autoReorderAutomation;
+                setAutoReorderAutomation(nextVal);
+                if (onShowToast) {
+                  onShowToast(
+                    `[PATCH /api/inventory/auto-reorder] Auto-PO Generation: ${
+                      nextVal ? 'ENABLED (Threshold-based PO generation)' : 'DISABLED'
+                    }`
+                  );
+                }
+              }}
+              style={[
+                styles.filterTogglePill,
+                autoReorderAutomation && styles.filterTogglePillActive,
+              ]}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: autoReorderAutomation }}
+            >
+              <View
+                style={[
+                  styles.filterToggleDot,
+                  autoReorderAutomation && styles.filterToggleDotActive,
+                ]}
+              />
+              <Text
+                style={[
+                  styles.filterToggleText,
+                  autoReorderAutomation && styles.filterToggleTextActive,
+                ]}
+              >
+                Auto-Reorder Engine
+              </Text>
+            </Pressable>
+
+            {/* Backend & DB Guide Button */}
+            <Pressable
+              onPress={() => setDevGuideModalOpen(true)}
+              style={styles.devGuideTopBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Backend & DB Guide"
+            >
+              <Text style={styles.devGuideTopBtnIcon}>🔌</Text>
+              <Text style={styles.devGuideTopBtnText}>Backend & DB Guide</Text>
+            </Pressable>
           </View>
         </View>
 
@@ -227,11 +352,12 @@ export default function StockStatusScreen({ onNavigate, onShowToast, isMultiBran
 
                     <View style={styles.mobileActionFooter}>
                       <Pressable
-                        onPress={() => handleReorder(item)}
-                        style={styles.mobileReorderBtn}
+                        onPress={() => handleOpenActionMenu(item, 'low-stock')}
+                        style={styles.mobileActionDotsBtn}
                         accessibilityRole="button"
+                        accessibilityLabel="Stock Actions"
                       >
-                        <Text style={styles.mobileReorderBtnText}>+ Purchase Reorder</Text>
+                        <Text style={styles.mobileActionDotsText}>⋮ Actions</Text>
                       </Pressable>
                     </View>
                   </View>
@@ -314,13 +440,15 @@ export default function StockStatusScreen({ onNavigate, onShowToast, isMultiBran
                         </View>
                       </View>
 
-                      {/* Reorder Action */}
+                      {/* 3-Dots Action Button */}
                       <View style={[styles.actionWrapper, { width: 95 }]}>
                         <Pressable
-                          onPress={() => handleReorder(item)}
-                          style={styles.reorderBtn}
+                          onPress={() => handleOpenActionMenu(item, 'low-stock')}
+                          style={styles.actionDotsButton}
+                          accessibilityRole="button"
+                          accessibilityLabel="Actions"
                         >
-                          <Text style={styles.reorderBtnText}>+ Reorder</Text>
+                          <Text style={styles.actionDotsButtonText}>⋮</Text>
                         </Pressable>
                       </View>
                     </View>
@@ -380,20 +508,12 @@ export default function StockStatusScreen({ onNavigate, onShowToast, isMultiBran
 
                     <View style={styles.mobileActionFooter}>
                       <Pressable
-                        onPress={() => handleWriteOff(item)}
-                        style={[
-                          styles.mobileWriteOffBtn,
-                          isExpired && styles.mobileWriteOffBtnExpired,
-                        ]}
+                        onPress={() => handleOpenActionMenu(item, 'expiry')}
+                        style={styles.mobileActionDotsBtn}
+                        accessibilityRole="button"
+                        accessibilityLabel="Batch Actions"
                       >
-                        <Text
-                          style={[
-                            styles.mobileWriteOffText,
-                            isExpired && styles.mobileWriteOffTextExpired,
-                          ]}
-                        >
-                          {isExpired ? 'Write-Off Loss' : 'Audit / Inspect'}
-                        </Text>
+                        <Text style={styles.mobileActionDotsText}>⋮ Actions</Text>
                       </Pressable>
                     </View>
                   </View>
@@ -470,23 +590,15 @@ export default function StockStatusScreen({ onNavigate, onShowToast, isMultiBran
                         </View>
                       </View>
 
-                      {/* Action */}
+                      {/* 3-Dots Action Button */}
                       <View style={[styles.actionWrapper, { width: 95 }]}>
                         <Pressable
-                          onPress={() => handleWriteOff(item)}
-                          style={[
-                            styles.writeOffBtn,
-                            isExpired && styles.writeOffBtnExpired,
-                          ]}
+                          onPress={() => handleOpenActionMenu(item, 'expiry')}
+                          style={styles.actionDotsButton}
+                          accessibilityRole="button"
+                          accessibilityLabel="Actions"
                         >
-                          <Text
-                            style={[
-                              styles.writeOffBtnText,
-                              isExpired && styles.writeOffTextExpired,
-                            ]}
-                          >
-                            {isExpired ? 'Write-Off' : 'Inspect'}
-                          </Text>
+                          <Text style={styles.actionDotsButtonText}>⋮</Text>
                         </Pressable>
                       </View>
                     </View>
@@ -497,6 +609,212 @@ export default function StockStatusScreen({ onNavigate, onShowToast, isMultiBran
           )
         )}
       </View>
+
+      {/* 1. 3-DOTS ACTION MENU MODAL */}
+      <Modal
+        visible={actionMenuModalOpen}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setActionMenuModalOpen(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.actionMenuCard}>
+            <View style={styles.actionMenuHeader}>
+              <View>
+                <Text style={styles.actionMenuTitle}>
+                  {selectedItemForAction?.brandName || selectedItemForAction?.medicine}
+                </Text>
+                <Text style={styles.actionMenuSub}>
+                  {actionItemType === 'low-stock'
+                    ? `SKU: ${selectedItemForAction?.sku} • Stock: ${selectedItemForAction?.currentStock} / Min: ${selectedItemForAction?.minimumStock}`
+                    : `Batch: ${selectedItemForAction?.batchNo} • Expiry: ${selectedItemForAction?.expiryDate} • Qty: ${selectedItemForAction?.quantity}`}
+                </Text>
+              </View>
+              <Pressable onPress={() => setActionMenuModalOpen(false)} style={styles.closeActionBtn}>
+                <Text style={styles.closeActionText}>✕</Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.actionList}>
+              <Pressable
+                onPress={() => handleExecuteAction('reorder')}
+                style={styles.actionOptionRow}
+              >
+                <Text style={styles.actionOptionIcon}>🛒</Text>
+                <View style={styles.actionOptionTextCol}>
+                  <Text style={styles.actionOptionTitle}>Generate Purchase Reorder (PO)</Text>
+                  <Text style={styles.actionOptionDesc}>Issue purchase order to supplier ({selectedItemForAction?.supplier})</Text>
+                </View>
+              </Pressable>
+
+              <Pressable
+                onPress={() => handleExecuteAction('write-off')}
+                style={[styles.actionOptionRow, styles.actionOptionRowDanger]}
+              >
+                <Text style={styles.actionOptionIcon}>🗑️</Text>
+                <View style={styles.actionOptionTextCol}>
+                  <Text style={[styles.actionOptionTitle, { color: '#DC2626' }]}>
+                    {actionItemType === 'expiry' ? 'Write-Off Expired Batch' : 'Quarantine / Damaged Loss'}
+                  </Text>
+                  <Text style={styles.actionOptionDesc}>Deduct inventory with financial write-off loss reason</Text>
+                </View>
+              </Pressable>
+
+              <Pressable
+                onPress={() => handleExecuteAction('transfer')}
+                style={styles.actionOptionRow}
+              >
+                <Text style={styles.actionOptionIcon}>🔄</Text>
+                <View style={styles.actionOptionTextCol}>
+                  <Text style={styles.actionOptionTitle}>Transfer from Another Branch</Text>
+                  <Text style={styles.actionOptionDesc}>Request surplus stock from nearby pharmacy branch</Text>
+                </View>
+              </Pressable>
+
+              <Pressable
+                onPress={() => handleExecuteAction('notify-supplier')}
+                style={styles.actionOptionRow}
+              >
+                <Text style={styles.actionOptionIcon}>📧</Text>
+                <View style={styles.actionOptionTextCol}>
+                  <Text style={styles.actionOptionTitle}>Notify Supplier / Rep</Text>
+                  <Text style={styles.actionOptionDesc}>Send priority replenishment notice to medical rep</Text>
+                </View>
+              </Pressable>
+
+              <Pressable
+                onPress={() => handleExecuteAction('dev-guide')}
+                style={[styles.actionOptionRow, styles.actionOptionRowDev]}
+              >
+                <Text style={styles.actionOptionIcon}>🔌</Text>
+                <View style={styles.actionOptionTextCol}>
+                  <Text style={[styles.actionOptionTitle, { color: '#0F766E' }]}>
+                    Backend & Database Guide (For Developers)
+                  </Text>
+                  <Text style={styles.actionOptionDesc}>
+                    View API endpoints, JSON payloads, and DB schemas for stock alerts
+                  </Text>
+                </View>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 2. BACKEND & DATABASE DEVELOPER GUIDE MODAL */}
+      <Modal
+        visible={devGuideModalOpen}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setDevGuideModalOpen(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.devGuideModalCard, isMobile && styles.devGuideModalCardMobile]}>
+            <View style={styles.devGuideModalHeader}>
+              <View style={styles.devGuideTitleRow}>
+                <View style={styles.devGuideIconBadge}>
+                  <Text style={styles.devGuideIconText}>🔌</Text>
+                </View>
+                <View>
+                  <Text style={styles.devGuideModalTitle}>Stock Alerts & Expiry Backend / DB Guide</Text>
+                  <Text style={styles.devGuideModalSubtitle}>
+                    Specification for automated PO generation and expiry write-off audit
+                  </Text>
+                </View>
+              </View>
+              <Pressable onPress={() => setDevGuideModalOpen(false)} style={styles.closeActionBtn}>
+                <Text style={styles.closeActionText}>✕</Text>
+              </Pressable>
+            </View>
+
+            <ScrollView style={styles.devGuideModalBody} showsVerticalScrollIndicator={true}>
+              <View style={styles.guideSec}>
+                <Text style={styles.guideSecTitle}>1. Required REST API Endpoints</Text>
+
+                <View style={styles.endpointCard}>
+                  <View style={styles.endpointHeader}>
+                    <View style={styles.methodPost}><Text style={styles.methodText}>POST</Text></View>
+                    <Text style={styles.endpointRoute}>/api/purchase-orders</Text>
+                  </View>
+                  <Text style={styles.endpointDesc}>
+                    Triggered by "+ Reorder" or Auto-Reorder Engine when stock drops below reorder_level.
+                  </Text>
+                  <View style={styles.codeSnippet}>
+                    <Text style={styles.codeSnippetText}>
+{`// Payload: POST /api/purchase-orders
+{
+  "supplier_name": "Cipla Ltd",
+  "branch_id": "FIT Main Campus",
+  "items": [
+    { "item_id": "stk-101", "reorder_qty": 200, "unit_cost": 4.20 }
+  ],
+  "status": "Submitted"
+}`}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.endpointCard}>
+                  <View style={styles.endpointHeader}>
+                    <View style={styles.methodPost}><Text style={styles.methodText}>POST</Text></View>
+                    <Text style={styles.endpointRoute}>/api/inventory/write-off</Text>
+                  </View>
+                  <Text style={styles.endpointDesc}>
+                    Deducts quantity for expired or damaged medicines with accounting loss reason.
+                  </Text>
+                  <View style={styles.codeSnippet}>
+                    <Text style={styles.codeSnippetText}>
+{`// Payload: POST /api/inventory/write-off
+{
+  "batch_id": "BCH-8921",
+  "reason": "EXPIRED_BATCH",
+  "quantity": 15,
+  "approved_by": "USR-102"
+}`}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.guideSec}>
+                <Text style={styles.guideSecTitle}>2. PostgreSQL Schema & Cron Query</Text>
+                <View style={styles.codeSnippet}>
+                  <Text style={styles.codeSnippetText}>
+{`-- Low stock detection query for automated reorder notification:
+SELECT 
+  i.id, i.sku, i.brand_name,
+  COALESCE(SUM(b.quantity), 0) AS current_stock,
+  i.minimum_stock, i.reorder_level
+FROM inventory_items i
+LEFT JOIN inventory_batches b ON i.id = b.item_id
+GROUP BY i.id, i.sku, i.brand_name, i.minimum_stock, i.reorder_level
+HAVING COALESCE(SUM(b.quantity), 0) <= i.reorder_level;
+
+-- Write-off audit log table:
+CREATE TABLE IF NOT EXISTS stock_writeoffs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  batch_id UUID REFERENCES inventory_batches(id),
+  quantity INT NOT NULL,
+  reason VARCHAR(100) NOT NULL,
+  loss_amount NUMERIC(10,2),
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);`}
+                  </Text>
+                </View>
+              </View>
+            </ScrollView>
+
+            <View style={styles.devGuideModalFooter}>
+              <Pressable
+                onPress={() => setDevGuideModalOpen(false)}
+                style={styles.closeDevGuideModalBtn}
+              >
+                <Text style={styles.closeDevGuideModalBtnText}>Close Developer Guide</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -808,5 +1126,308 @@ const styles = StyleSheet.create({
   },
   writeOffTextExpired: {
     color: '#DC2626',
+  },
+  filterTogglesGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+    marginTop: 8,
+  },
+  filterTogglePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F8FAFC',
+    cursor: 'pointer',
+  },
+  filterTogglePillActive: {
+    backgroundColor: '#F0FDFA',
+    borderColor: '#0F766E',
+  },
+  filterToggleDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#94A3B8',
+  },
+  filterToggleDotActive: {
+    backgroundColor: '#0F766E',
+  },
+  filterToggleText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  filterToggleTextActive: {
+    color: '#0F766E',
+    fontWeight: '700',
+  },
+  devGuideTopBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    cursor: 'pointer',
+  },
+  devGuideTopBtnIcon: {
+    fontSize: 12,
+  },
+  devGuideTopBtnText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  mobileActionDotsBtn: {
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderRadius: 6,
+    alignItems: 'center',
+    cursor: 'pointer',
+  },
+  mobileActionDotsText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  actionDotsButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    cursor: 'pointer',
+  },
+  actionDotsButtonText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#334155',
+    lineHeight: 18,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  actionMenuCard: {
+    width: '100%',
+    maxWidth: 480,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    overflow: 'hidden',
+  },
+  actionMenuHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  actionMenuTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  actionMenuSub: {
+    fontSize: 11.5,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  closeActionBtn: {
+    padding: 6,
+    cursor: 'pointer',
+  },
+  closeActionText: {
+    fontSize: 18,
+    color: '#64748B',
+    fontWeight: '700',
+  },
+  actionList: {
+    padding: 10,
+    gap: 4,
+  },
+  actionOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    cursor: 'pointer',
+  },
+  actionOptionRowDanger: {
+    backgroundColor: '#FEF2F2',
+  },
+  actionOptionRowDev: {
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+    marginTop: 4,
+  },
+  actionOptionIcon: {
+    fontSize: 20,
+  },
+  actionOptionTextCol: {
+    flex: 1,
+  },
+  actionOptionTitle: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  actionOptionDesc: {
+    fontSize: 11.5,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  devGuideModalCard: {
+    width: '100%',
+    maxWidth: 780,
+    maxHeight: '90%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  devGuideModalCardMobile: {
+    maxHeight: '95%',
+  },
+  devGuideModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  devGuideTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  devGuideIconBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: '#0F766E',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  devGuideIconText: {
+    fontSize: 18,
+  },
+  devGuideModalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  devGuideModalSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  devGuideModalBody: {
+    padding: 20,
+  },
+  guideSec: {
+    marginBottom: 20,
+  },
+  guideSecTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F766E',
+    marginBottom: 6,
+  },
+  guideSecDesc: {
+    fontSize: 12,
+    color: '#475569',
+    marginBottom: 8,
+  },
+  codeSnippet: {
+    backgroundColor: '#0F172A',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 6,
+  },
+  codeSnippetText: {
+    color: '#38BDF8',
+    fontSize: 11.5,
+    fontFamily: Platform.select({ web: 'Consolas, Monaco, monospace', default: 'System' }),
+    lineHeight: 17,
+  },
+  endpointCard: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 10,
+  },
+  endpointHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  methodPost: {
+    backgroundColor: '#16A34A',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  methodText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  endpointRoute: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    fontFamily: Platform.select({ web: 'monospace', default: 'System' }),
+  },
+  endpointDesc: {
+    fontSize: 12,
+    color: '#475569',
+  },
+  devGuideModalFooter: {
+    padding: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+    alignItems: 'flex-end',
+  },
+  closeDevGuideModalBtn: {
+    backgroundColor: '#0F766E',
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+    borderRadius: 8,
+    cursor: 'pointer',
+  },
+  closeDevGuideModalBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12.5,
+    fontWeight: '700',
   },
 });

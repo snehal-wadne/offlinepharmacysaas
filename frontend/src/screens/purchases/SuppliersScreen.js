@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -11,154 +11,118 @@ import {
   Platform,
 } from 'react-native';
 import InventoryStatCard from '../../components/inventory/InventoryStatCard';
-import { MOCK_SUPPLIERS_LIST } from '../../data/suppliersMockData';
 import {
-  fetchSuppliers,
-  createSupplier,
-  updateSupplierStatus,
-} from '../../api/purchaseApi';
-
-const SUPPLIER_STATUS_FILTER = ['All Statuses', 'Active', 'Pending', 'Inactive'];
-
-const SUPPLIER_STATUS_BADGES = {
-  Active: { bg: '#DCFCE7', text: '#15803D', dot: '#16A34A' },
-  Pending: { bg: '#FEF3C7', text: '#B45309', dot: '#F59E0B' },
-  Inactive: { bg: '#F1F5F9', text: '#64748B', dot: '#94A3B8' },
-};
+  SUPPLIERS_KPIS,
+  MOCK_SUPPLIERS_LIST,
+  SUPPLIER_CATEGORY_FILTER,
+} from '../../data/suppliersMockData';
 
 export default function SuppliersScreen({ onShowToast, onNavigate }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
+  const isMobile = width < 768;
 
+  // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState('All Statuses');
+  const [selectedCategory, setSelectedCategory] = useState('All Categories');
+  const [toggleActiveOnly, setToggleActiveOnly] = useState(false);
+  const [toggleGstinOnly, setToggleGstinOnly] = useState(false);
+
+  // 3-Dots Action Menu State
+  const [actionMenuModalOpen, setActionMenuModalOpen] = useState(false);
+  const [selectedSupplierForAction, setSelectedSupplierForAction] = useState(null);
+
+  // Developer Backend & DB Guide Modal State
+  const [devGuideModalOpen, setDevGuideModalOpen] = useState(false);
+
+  // Suppliers List State
   const [suppliers, setSuppliers] = useState(MOCK_SUPPLIERS_LIST);
-  const [activeMenuId, setActiveMenuId] = useState(null);
 
-  useEffect(() => {
-    let isMounted = true;
-    async function loadSuppliers() {
-      try {
-        const res = await fetchSuppliers();
-        if (isMounted && res && res.data && res.data.length > 0) {
-          const formatted = res.data.map((sup, idx) => ({
-            realId: sup.id,
-            id: `SUP-${String(idx + 1).padStart(3, '0')}`,
-            name: sup.name,
-            contactPerson: sup.contact_person || sup.contactPerson || 'N/A',
-            phone: sup.phone || '+91 98XXX XXXXX',
-            email: sup.email || 'orders@vendor.com',
-            city: sup.city || 'Mumbai, MH',
-            gstin: sup.gstin || '27AAACB0000A1Z5',
-            paymentTerms: 'Net 30',
-            balance: '₹0.00',
-            status:
-              sup.status === 'ACTIVE'
-                ? 'Active'
-                : sup.status === 'PENDING'
-                ? 'Pending'
-                : 'Inactive',
-            category: 'Medicines & Injections',
-          }));
-          setSuppliers(formatted);
-        }
-      } catch (err) {
-        console.log('[SuppliersScreen] Backend offline or using default mock data');
-      }
-    }
-    loadSuppliers();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
+  // Add Supplier Modal State
   const [modalVisible, setModalVisible] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
+    category: 'Branded Formulations',
     contactPerson: '',
     phone: '',
     email: '',
-    city: '',
+    city: 'Mumbai',
     gstin: '',
-    paymentTerms: 'Net 30',
-    category: 'Medicines & Injections',
   });
   const [formErrors, setFormErrors] = useState({});
 
-  // Dynamic KPI calculations
-  const totalVendors = suppliers.length;
-  const activeVendors = suppliers.filter((s) => s.status === 'Active').length;
-  const pendingVendors = suppliers.filter((s) => s.status === 'Pending').length;
+  // Toggle supplier status
+  const handleToggleSupplierStatus = (supId) => {
+    setSuppliers((prev) =>
+      prev.map((s) => {
+        if (s.id === supId) {
+          const nextStatus = s.status === 'Active' ? 'Inactive' : 'Active';
+          if (onShowToast) {
+            onShowToast(`Supplier "${s.name}" marked ${nextStatus}`);
+          }
+          return { ...s, status: nextStatus };
+        }
+        return s;
+      })
+    );
+  };
 
-  const dynamicKpis = [
-    {
-      id: 'total',
-      label: 'TOTAL VENDORS',
-      value: String(totalVendors),
-      subtext: 'Active directory',
-      variant: 'teal',
-      filterKey: 'All Statuses',
-    },
-    {
-      id: 'active',
-      label: 'ACTIVE SUPPLIERS',
-      value: String(activeVendors),
-      subtext: 'Verified suppliers',
-      variant: 'emerald',
-      filterKey: 'Active',
-    },
-    {
-      id: 'pending',
-      label: 'PENDING APPROVALS',
-      value: String(pendingVendors),
-      subtext: 'Awaiting documentation',
-      variant: 'amber',
-      filterKey: 'Pending',
-    },
-    {
-      id: 'outstanding',
-      label: 'TOTAL OUTSTANDING',
-      value: '₹1,42,850',
-      subtext: 'Payable balance',
-      variant: 'rose',
-      filterKey: 'All Statuses',
-    },
-  ];
+  const handleToggleActiveFilter = () => {
+    const nextVal = !toggleActiveOnly;
+    setToggleActiveOnly(nextVal);
+    if (onShowToast) {
+      onShowToast(nextVal ? 'Filter enabled: Active Suppliers Only' : 'Filter cleared: Showing All Suppliers');
+    }
+  };
 
+  const handleToggleGstinFilter = () => {
+    const nextVal = !toggleGstinOnly;
+    setToggleGstinOnly(nextVal);
+    if (onShowToast) {
+      onShowToast(nextVal ? 'Filter enabled: Verified GSTIN Only' : 'Filter cleared: Showing All');
+    }
+  };
+
+  const handleOpenActionMenu = (sup) => {
+    setSelectedSupplierForAction(sup);
+    setActionMenuModalOpen(true);
+  };
+
+  // Filtered Suppliers
   const filteredSuppliers = suppliers.filter((sup) => {
-    const query = searchQuery.toLowerCase();
     const matchesSearch =
-      sup.name.toLowerCase().includes(query) ||
-      sup.contactPerson.toLowerCase().includes(query) ||
-      sup.city.toLowerCase().includes(query) ||
-      sup.gstin.toLowerCase().includes(query) ||
-      sup.category.toLowerCase().includes(query);
+      sup.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      sup.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      sup.contactPerson.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      sup.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      sup.gstin.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesStatus =
-      selectedStatus === 'All Statuses' || sup.status === selectedStatus;
+    const matchesCategory =
+      selectedCategory === 'All Categories' || sup.category === selectedCategory;
 
-    return matchesSearch && matchesStatus;
+    const matchesActive = !toggleActiveOnly || sup.status === 'Active';
+    const matchesGstin = !toggleGstinOnly || (sup.gstin && sup.gstin.length >= 15);
+
+    return matchesSearch && matchesCategory && matchesActive && matchesGstin;
   });
 
   const handleOpenModal = () => {
     setFormData({
       name: '',
+      category: 'Branded Formulations',
       contactPerson: '',
       phone: '',
       email: '',
-      city: '',
+      city: 'Mumbai',
       gstin: '',
-      paymentTerms: 'Net 30',
-      category: 'Medicines & Injections',
     });
     setFormErrors({});
     setModalVisible(true);
   };
 
-  const handleAddSupplier = async () => {
+  const handleSaveSupplier = () => {
     const errors = {};
-    if (!formData.name.trim()) errors.name = 'Supplier Name is required';
-    if (!formData.contactPerson.trim()) errors.contactPerson = 'Contact person is required';
+    if (!formData.name.trim()) errors.name = 'Supplier name is required';
     if (!formData.phone.trim()) errors.phone = 'Phone number is required';
 
     if (Object.keys(errors).length > 0) {
@@ -166,65 +130,24 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
       return;
     }
 
-    const tempId = `SUP-${String(suppliers.length + 1).padStart(3, '0')}`;
     const newSup = {
-      realId: tempId,
-      id: tempId,
+      id: `SUP-10${10 + suppliers.length}`,
       name: formData.name,
-      contactPerson: formData.contactPerson,
+      category: formData.category || 'Pharmaceuticals',
+      contactPerson: formData.contactPerson || 'Account Executive',
       phone: formData.phone,
-      email: formData.email || 'info@supplier.com',
-      city: formData.city || 'Mumbai, MH',
-      gstin: formData.gstin || '27AAACB0000A1Z5',
-      paymentTerms: formData.paymentTerms || 'Net 30',
+      email: formData.email || 'orders@pharma.in',
+      city: formData.city || 'Mumbai',
+      gstin: formData.gstin || '27AABCT1234F1Z0',
       balance: '₹0.00',
       status: 'Active',
-      category: formData.category || 'Medicines & Injections',
     };
-
-    try {
-      const res = await createSupplier({
-        name: formData.name,
-        contactPerson: formData.contactPerson,
-        phone: formData.phone,
-        email: formData.email,
-        city: formData.city,
-        gstin: formData.gstin,
-        status: 'ACTIVE',
-      });
-      if (res && res.data && res.data.id) {
-        newSup.realId = res.data.id;
-      }
-    } catch (err) {
-      console.warn('[SuppliersScreen] Backend save failed, updated local state:', err.message);
-    }
 
     setSuppliers((prev) => [newSup, ...prev]);
     setModalVisible(false);
 
     if (onShowToast) {
-      onShowToast(`✓ Added vendor "${newSup.name}" to directory!`);
-    }
-  };
-
-  const handleStatusChange = async (supItem, newStatus) => {
-    setActiveMenuId(null);
-    const targetId = supItem.realId || supItem.name;
-
-    try {
-      await updateSupplierStatus(targetId, newStatus);
-    } catch (err) {
-      console.warn('[SuppliersScreen] Backend status update failed, updated local state:', err.message);
-    }
-
-    setSuppliers((prev) =>
-      prev.map((item) =>
-        item.id === supItem.id ? { ...item, status: newStatus } : item
-      )
-    );
-
-    if (onShowToast) {
-      onShowToast(`✓ Updated vendor "${supItem.name}" status to ${newStatus}`);
+      onShowToast(`✓ Added ${newSup.name} to Vendor Directory!`);
     }
   };
 
@@ -233,57 +156,69 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
       onNavigate('purchases');
     }
     if (onShowToast) {
-      onShowToast(`Create PO for ${sup.name}`);
+      onShowToast(`Created draft PO with ${sup.name}`);
     }
   };
 
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.contentContainer}
+      contentContainerStyle={[styles.contentContainer, isMobile && styles.contentContainerMobile]}
       showsVerticalScrollIndicator={true}
     >
-      {/* Header */}
-      <View style={styles.headerRow}>
+      {/* Header Row */}
+      <View style={[styles.headerRow, isMobile && styles.headerRowMobile]}>
         <View>
           <Text style={styles.pageTitle}>Suppliers Directory</Text>
           <Text style={styles.pageSubtitle}>
-            Manage pharmaceutical manufacturers, distributors, GSTIN tax records, and vendor terms.
+            Maintain pharmaceutical manufacturers, verified distributors, credit terms and GST records.
           </Text>
         </View>
-        <Pressable
-          onPress={handleOpenModal}
-          style={styles.newSupButton}
-          accessibilityRole="button"
-          accessibilityLabel="+ Add Supplier"
-        >
-          <Text style={styles.newSupIcon}>+</Text>
-          <Text style={styles.newSupText}>Add Supplier</Text>
-        </Pressable>
+        <View style={styles.headerRightActions}>
+          <Pressable
+            onPress={() => setDevGuideModalOpen(true)}
+            style={styles.devGuideTopBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Backend and Database Guide"
+          >
+            <Text style={styles.devGuideTopBtnIcon}>🔌</Text>
+            <Text style={styles.devGuideTopBtnText}>Backend & DB Guide</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={handleOpenModal}
+            style={styles.newSupButton}
+            accessibilityRole="button"
+            accessibilityLabel="Add New Supplier"
+          >
+            <Text style={styles.btnIcon}>+</Text>
+            <Text style={styles.btnText}>Add Supplier</Text>
+          </Pressable>
+        </View>
       </View>
 
       {/* Top 4 KPI Cards */}
       <View style={[styles.kpiRow, isCompact && styles.kpiRowCompact]}>
-        {dynamicKpis.map((kpi) => (
+        {SUPPLIERS_KPIS.map((kpi) => (
           <InventoryStatCard
             key={kpi.id}
             label={kpi.label}
             value={kpi.value}
             subtext={kpi.subtext}
             variant={kpi.variant}
-            onPress={() => setSelectedStatus(kpi.filterKey)}
+            onPress={() => onShowToast && onShowToast(`Filter: ${kpi.label}`)}
           />
         ))}
       </View>
 
-      {/* Suppliers Table Card */}
+      {/* Main Table Card */}
       <View style={styles.cardContainer}>
-        {/* Filters Bar */}
+        {/* Search & Filter Header */}
         <View style={[styles.filtersBar, isCompact && styles.filtersBarCompact]}>
           <View style={styles.searchBox}>
             <TextInput
               style={styles.searchInput}
-              placeholder="Search supplier name, contact person, city or GSTIN..."
+              placeholder="Search supplier, contact, city or GSTIN..."
               placeholderTextColor="#94A3B8"
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -295,192 +230,255 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
             ) : null}
           </View>
 
-          {/* Status Filter Chips */}
+          {/* Quick Filter Toggles */}
+          <View style={styles.filterTogglesGroup}>
+            <Pressable
+              onPress={handleToggleActiveFilter}
+              style={[
+                styles.filterTogglePill,
+                toggleActiveOnly && styles.filterTogglePillActive,
+              ]}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: toggleActiveOnly }}
+            >
+              <View
+                style={[
+                  styles.filterToggleDot,
+                  toggleActiveOnly && styles.filterToggleDotActive,
+                ]}
+              />
+              <Text
+                style={[
+                  styles.filterToggleText,
+                  toggleActiveOnly && styles.filterToggleTextActive,
+                ]}
+              >
+                Active Only
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={handleToggleGstinFilter}
+              style={[
+                styles.filterTogglePill,
+                toggleGstinOnly && styles.filterTogglePillActive,
+              ]}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: toggleGstinOnly }}
+            >
+              <View
+                style={[
+                  styles.filterToggleDot,
+                  toggleGstinOnly && styles.filterToggleDotActive,
+                ]}
+              />
+              <Text
+                style={[
+                  styles.filterToggleText,
+                  toggleGstinOnly && styles.filterToggleTextActive,
+                ]}
+              >
+                Verified GSTIN (15 Digits)
+              </Text>
+            </Pressable>
+          </View>
+
+          {/* Category Filter Chips */}
           <View style={styles.filterChipRow}>
-            {SUPPLIER_STATUS_FILTER.map((st) => (
+            {(SUPPLIER_CATEGORY_FILTER || ['All Categories']).map((cat) => (
               <Pressable
-                key={st}
-                onPress={() => setSelectedStatus(st)}
+                key={cat}
+                onPress={() => setSelectedCategory(cat)}
                 style={[
                   styles.filterChip,
-                  selectedStatus === st && styles.filterChipActive,
+                  selectedCategory === cat && styles.filterChipActive,
                 ]}
               >
                 <Text
                   style={[
                     styles.filterChipText,
-                    selectedStatus === st && styles.filterChipTextActive,
+                    selectedCategory === cat && styles.filterChipTextActive,
                   ]}
                 >
-                  {st}
+                  {cat}
                 </Text>
               </Pressable>
             ))}
           </View>
         </View>
 
-        {/* Directory Table */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-          <View style={styles.tableWrapper}>
-            {/* Header */}
-            <View style={styles.tableHeader}>
-              <Text style={[styles.thCell, { width: 90 }]}>VENDOR ID</Text>
-              <Text style={[styles.thCell, { width: 180 }]}>SUPPLIER NAME</Text>
-              <Text style={[styles.thCell, { width: 130 }]}>CONTACT PERSON</Text>
-              <Text style={[styles.thCell, { width: 120 }]}>PHONE</Text>
-              <Text style={[styles.thCell, { width: 170 }]}>EMAIL</Text>
-              <Text style={[styles.thCell, { width: 120 }]}>CITY</Text>
-              <Text style={[styles.thCell, { width: 150 }]}>GSTIN</Text>
-              <Text style={[styles.thCell, { width: 110, textAlign: 'right' }]}>OUTSTANDING</Text>
-              <Text style={[styles.thCell, { width: 110, textAlign: 'center' }]}>STATUS</Text>
-              <Text style={[styles.thCell, { width: 60, textAlign: 'center' }]}>ACTION</Text>
-              <Text style={[styles.thCell, { width: 90, textAlign: 'center' }]}>ORDER</Text>
-            </View>
-
-            {/* Rows */}
+        {isMobile ? (
+          /* Mobile Supplier Cards */
+          <View style={styles.mobileCardList}>
             {filteredSuppliers.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyTitle}>No suppliers found</Text>
-                <Text style={styles.emptySubtitle}>Try changing your search terms or status filter.</Text>
+                <Text style={styles.emptySubtitle}>Try changing your search terms.</Text>
               </View>
             ) : (
-              filteredSuppliers.map((sup, index) => {
-                const badge =
-                  SUPPLIER_STATUS_BADGES[sup.status] || SUPPLIER_STATUS_BADGES.Active;
-                const isMenuOpen = activeMenuId === sup.id;
+              filteredSuppliers.map((sup) => (
+                <View key={sup.id} style={styles.mobileSupplierCard}>
+                  <View style={styles.mobileSupHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.mobileSupName}>{sup.name}</Text>
+                      <Text style={styles.mobileCategoryText}>{sup.category} • {sup.id}</Text>
+                    </View>
+                    <View style={styles.statusBadgeActive}>
+                      <Text style={styles.statusBadgeTextActive}>{sup.status}</Text>
+                    </View>
+                  </View>
 
-                return (
+                  <View style={styles.mobileGrid}>
+                    <View style={styles.mobileGridCol}>
+                      <Text style={styles.mobileLabel}>Contact Person</Text>
+                      <Text style={styles.mobileValBold}>{sup.contactPerson}</Text>
+                    </View>
+                    <View style={styles.mobileGridCol}>
+                      <Text style={styles.mobileLabel}>Phone</Text>
+                      <Text style={styles.mobileValBold}>{sup.phone}</Text>
+                    </View>
+                    <View style={styles.mobileGridCol}>
+                      <Text style={styles.mobileLabel}>Email</Text>
+                      <Text style={styles.mobileVal} numberOfLines={1}>{sup.email}</Text>
+                    </View>
+                    <View style={styles.mobileGridCol}>
+                      <Text style={styles.mobileLabel}>City</Text>
+                      <Text style={styles.mobileVal}>{sup.city}</Text>
+                    </View>
+                    <View style={styles.mobileGridCol}>
+                      <Text style={styles.mobileLabel}>GSTIN</Text>
+                      <Text style={styles.mobileVal}>{sup.gstin}</Text>
+                    </View>
+                    <View style={styles.mobileGridCol}>
+                      <Text style={styles.mobileLabel}>Balance Dues</Text>
+                      <Text style={[styles.mobileValBold, { color: '#DC2626' }]}>{sup.balance}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.mobileSupFooter}>
+                    <Pressable
+                      onPress={() => handleToggleSupplierStatus(sup.id)}
+                      style={[
+                        styles.mobileStatusToggleBtn,
+                        sup.status === 'Active' ? styles.mobileStatusToggleActive : styles.mobileStatusToggleInactive,
+                      ]}
+                      accessibilityRole="switch"
+                      accessibilityState={{ checked: sup.status === 'Active' }}
+                    >
+                      <Text style={styles.mobileStatusToggleText}>
+                        {sup.status === 'Active' ? '● Active' : '○ Inactive'}
+                      </Text>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => handleOpenActionMenu(sup)}
+                      style={styles.mobileDotsActionBtn}
+                      accessibilityRole="button"
+                      accessibilityLabel="Supplier Actions"
+                    >
+                      <Text style={styles.mobileDotsActionText}>⋮ Actions</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ))
+            )}
+          </View>
+        ) : (
+          /* Desktop Suppliers Table */
+          <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+            <View style={styles.tableWrapper}>
+              {/* Header */}
+              <View style={styles.tableHeader}>
+                <Text style={[styles.thCell, { width: 100 }]}>SUPPLIER ID</Text>
+                <Text style={[styles.thCell, { width: 190 }]}>COMPANY NAME</Text>
+                <Text style={[styles.thCell, { width: 140 }]}>CONTACT PERSON</Text>
+                <Text style={[styles.thCell, { width: 130 }]}>PHONE</Text>
+                <Text style={[styles.thCell, { width: 180 }]}>EMAIL</Text>
+                <Text style={[styles.thCell, { width: 130 }]}>CITY</Text>
+                <Text style={[styles.thCell, { width: 160 }]}>GSTIN</Text>
+                <Text style={[styles.thCell, { width: 120, textAlign: 'right' }]}>BALANCE DUE</Text>
+                <Text style={[styles.thCell, { width: 105, textAlign: 'center' }]}>STATUS TOGGLE</Text>
+                <Text style={[styles.thCell, { width: 90, textAlign: 'center' }]}>ACTIONS</Text>
+              </View>
+
+              {/* Rows */}
+              {filteredSuppliers.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyTitle}>No suppliers found</Text>
+                  <Text style={styles.emptySubtitle}>Try changing your search terms.</Text>
+                </View>
+              ) : (
+                filteredSuppliers.map((sup, index) => (
                   <View
                     key={sup.id}
                     style={[
                       styles.tableRow,
                       index % 2 === 1 && styles.tableRowAlt,
-                      { zIndex: isMenuOpen ? 999 : 1 },
                     ]}
                   >
-                    <Text style={[styles.tdCell, styles.supId, { width: 90 }]}>{sup.id}</Text>
-                    <View style={[{ width: 180 }]}>
+                    <Text style={[styles.tdCell, styles.supId, { width: 100 }]}>{sup.id}</Text>
+                    <View style={[{ width: 190 }]}>
                       <Text style={[styles.tdCell, styles.supName]} numberOfLines={1}>
                         {sup.name}
                       </Text>
                       <Text style={styles.categorySubtext}>{sup.category}</Text>
                     </View>
-                    <Text style={[styles.tdCell, { width: 130 }]}>{sup.contactPerson}</Text>
-                    <Text style={[styles.tdCell, { width: 120 }]}>{sup.phone}</Text>
-                    <Text style={[styles.tdCell, styles.emailText, { width: 170 }]} numberOfLines={1}>
+                    <Text style={[styles.tdCell, { width: 140 }]}>{sup.contactPerson}</Text>
+                    <Text style={[styles.tdCell, { width: 130 }]}>{sup.phone}</Text>
+                    <Text style={[styles.tdCell, styles.emailText, { width: 180 }]} numberOfLines={1}>
                       {sup.email}
                     </Text>
-                    <Text style={[styles.tdCell, { width: 120 }]}>{sup.city}</Text>
-                    <Text style={[styles.tdCell, styles.gstinText, { width: 150 }]}>{sup.gstin}</Text>
-                    <Text style={[styles.tdCell, styles.balanceText, { width: 110, textAlign: 'right' }]}>
+                    <Text style={[styles.tdCell, { width: 130 }]}>{sup.city}</Text>
+                    <Text style={[styles.tdCell, styles.gstinText, { width: 160 }]}>{sup.gstin}</Text>
+                    <Text style={[styles.tdCell, styles.balanceText, { width: 120, textAlign: 'right' }]}>
                       {sup.balance}
                     </Text>
 
-                    {/* Status Badge */}
-                    <View style={[styles.statusWrapper, { width: 110 }]}>
-                      <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
-                        <Text style={[styles.statusBadgeText, { color: badge.text }]}>
-                          {sup.status}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* 3-Dots Action Column */}
-                    <View style={[styles.actionWrapper, { width: 60 }]}>
+                    {/* Status Toggle Switch */}
+                    <View style={[styles.statusWrapper, { width: 105 }]}>
                       <Pressable
-                        onPress={() =>
-                          setActiveMenuId((prev) => (prev === sup.id ? null : sup.id))
-                        }
-                        style={styles.threeDotsBtn}
-                        accessibilityRole="button"
-                        accessibilityLabel="Action menu"
+                        onPress={() => handleToggleSupplierStatus(sup.id)}
+                        style={[
+                          styles.tableToggleTrack,
+                          sup.status === 'Active' ? styles.tableToggleActive : styles.tableToggleInactive,
+                        ]}
+                        accessibilityRole="switch"
+                        accessibilityState={{ checked: sup.status === 'Active' }}
                       >
-                        <Text style={styles.threeDotsText}>⋮</Text>
+                        <View
+                          style={[
+                            styles.tableToggleThumb,
+                            sup.status === 'Active' ? styles.tableToggleThumbActive : styles.tableToggleThumbInactive,
+                          ]}
+                        />
                       </Pressable>
-
-                      {/* Dropdown Menu */}
-                      {isMenuOpen && (
-                        <View style={styles.menuPopover}>
-                          <Text style={styles.menuHeaderTitle}>Update Status</Text>
-
-                          <Pressable
-                            style={styles.menuItem}
-                            onPress={() => handleStatusChange(sup, 'Active')}
-                          >
-                            <View
-                              style={[
-                                styles.menuDot,
-                                { backgroundColor: SUPPLIER_STATUS_BADGES['Active'].dot },
-                              ]}
-                            />
-                            <Text
-                              style={[
-                                styles.menuItemText,
-                                sup.status === 'Active' && styles.menuItemTextActive,
-                              ]}
-                            >
-                              Active
-                            </Text>
-                          </Pressable>
-
-                          <Pressable
-                            style={styles.menuItem}
-                            onPress={() => handleStatusChange(sup, 'Pending')}
-                          >
-                            <View
-                              style={[
-                                styles.menuDot,
-                                { backgroundColor: SUPPLIER_STATUS_BADGES['Pending'].dot },
-                              ]}
-                            />
-                            <Text
-                              style={[
-                                styles.menuItemText,
-                                sup.status === 'Pending' && styles.menuItemTextActive,
-                              ]}
-                            >
-                              Pending
-                            </Text>
-                          </Pressable>
-
-                          <Pressable
-                            style={styles.menuItem}
-                            onPress={() => handleStatusChange(sup, 'Inactive')}
-                          >
-                            <View
-                              style={[
-                                styles.menuDot,
-                                { backgroundColor: SUPPLIER_STATUS_BADGES['Inactive'].dot },
-                              ]}
-                            />
-                            <Text
-                              style={[
-                                styles.menuItemText,
-                                sup.status === 'Inactive' && styles.menuItemTextActive,
-                              ]}
-                            >
-                              Inactive
-                            </Text>
-                          </Pressable>
-                        </View>
-                      )}
+                      <Text
+                        style={[
+                          styles.statusLabelText,
+                          sup.status === 'Active' ? styles.statusActiveText : styles.statusInactiveText,
+                        ]}
+                      >
+                        {sup.status}
+                      </Text>
                     </View>
 
-                    {/* Create PO Order Button */}
+                    {/* Action: 3-Dots Button */}
                     <View style={[styles.actionWrapper, { width: 90 }]}>
                       <Pressable
-                        onPress={() => handleCreatePOWithSupplier(sup)}
-                        style={styles.orderBtn}
+                        onPress={() => handleOpenActionMenu(sup)}
+                        style={styles.actionDotsButton}
+                        accessibilityRole="button"
+                        accessibilityLabel="Supplier Actions"
                       >
-                        <Text style={styles.orderBtnText}>+ Order</Text>
+                        <Text style={styles.actionDotsButtonText}>⋮</Text>
                       </Pressable>
                     </View>
                   </View>
-                );
-              })
-            )}
-          </View>
-        </ScrollView>
+                ))
+              )}
+            </View>
+          </ScrollView>
+        )}
       </View>
 
       {/* Add Supplier Modal */}
@@ -619,7 +617,7 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </Pressable>
               <Pressable
-                onPress={handleAddSupplier}
+                onPress={handleSaveSupplier}
                 style={styles.submitModalButton}
               >
                 <Text style={styles.submitModalButtonText}>Save Supplier</Text>
@@ -627,6 +625,192 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
             </View>
           </Pressable>
         </Pressable>
+      </Modal>
+
+      {/* Supplier 3-Dots Action Menu Modal */}
+      <Modal
+        visible={actionMenuModalOpen}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setActionMenuModalOpen(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.actionMenuCard}>
+            <View style={styles.actionMenuHeader}>
+              <View>
+                <Text style={styles.actionMenuTitle}>{selectedSupplierForAction?.name}</Text>
+                <Text style={styles.actionMenuSub}>
+                  ID: {selectedSupplierForAction?.id} • GSTIN: {selectedSupplierForAction?.gstin}
+                </Text>
+              </View>
+              <Pressable onPress={() => setActionMenuModalOpen(false)} style={styles.closeActionBtn}>
+                <Text style={styles.closeActionText}>✕</Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.actionList}>
+              <Pressable
+                onPress={() => {
+                  setActionMenuModalOpen(false);
+                  handleCreatePOWithSupplier(selectedSupplierForAction);
+                }}
+                style={styles.actionOptionRow}
+              >
+                <Text style={styles.actionOptionIcon}>🛒</Text>
+                <View style={styles.actionOptionTextCol}>
+                  <Text style={styles.actionOptionTitle}>Create Purchase Order</Text>
+                  <Text style={styles.actionOptionDesc}>Draft new stock reorder for this supplier</Text>
+                </View>
+              </Pressable>
+
+              <Pressable
+                onPress={() => {
+                  setActionMenuModalOpen(false);
+                  handleToggleSupplierStatus(selectedSupplierForAction?.id);
+                }}
+                style={styles.actionOptionRow}
+              >
+                <Text style={styles.actionOptionIcon}>🔄</Text>
+                <View style={styles.actionOptionTextCol}>
+                  <Text style={styles.actionOptionTitle}>
+                    Toggle Status ({selectedSupplierForAction?.status === 'Active' ? 'Deactivate' : 'Activate'})
+                  </Text>
+                  <Text style={styles.actionOptionDesc}>
+                    Current status is {selectedSupplierForAction?.status}
+                  </Text>
+                </View>
+              </Pressable>
+
+              <Pressable
+                onPress={() => {
+                  setActionMenuModalOpen(false);
+                  if (onShowToast) {
+                    onShowToast(`📑 Supplier ledger opened for ${selectedSupplierForAction?.name}`);
+                  }
+                }}
+                style={styles.actionOptionRow}
+              >
+                <Text style={styles.actionOptionIcon}>📋</Text>
+                <View style={styles.actionOptionTextCol}>
+                  <Text style={styles.actionOptionTitle}>View Vendor Ledger & Balance</Text>
+                  <Text style={styles.actionOptionDesc}>
+                    Balance due: {selectedSupplierForAction?.balance}
+                  </Text>
+                </View>
+              </Pressable>
+
+              <Pressable
+                onPress={() => {
+                  setActionMenuModalOpen(false);
+                  setDevGuideModalOpen(true);
+                }}
+                style={[styles.actionOptionRow, styles.actionOptionRowDev]}
+              >
+                <Text style={styles.actionOptionIcon}>🔌</Text>
+                <View style={styles.actionOptionTextCol}>
+                  <Text style={[styles.actionOptionTitle, { color: '#0F766E' }]}>
+                    Backend & Database Guide (For Developers)
+                  </Text>
+                  <Text style={styles.actionOptionDesc}>
+                    Supplier REST API endpoints and PostgreSQL DDL schema
+                  </Text>
+                </View>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Developer Backend & DB Guide Modal */}
+      <Modal
+        visible={devGuideModalOpen}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setDevGuideModalOpen(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.devGuideModalCard, isMobile && styles.devGuideModalCardMobile]}>
+            <View style={styles.devGuideModalHeader}>
+              <View style={styles.devGuideTitleRow}>
+                <View style={styles.devGuideIconBadge}>
+                  <Text style={styles.devGuideIconText}>🔌</Text>
+                </View>
+                <View>
+                  <Text style={styles.devGuideModalTitle}>Suppliers Directory Backend Guide</Text>
+                  <Text style={styles.devGuideModalSubtitle}>
+                    Specification for Backend Engineers & DB Integrators
+                  </Text>
+                </View>
+              </View>
+              <Pressable onPress={() => setDevGuideModalOpen(false)} style={styles.closeActionBtn}>
+                <Text style={styles.closeActionText}>✕</Text>
+              </Pressable>
+            </View>
+
+            <ScrollView style={styles.devGuideModalBody}>
+              {/* Section 1 */}
+              <View style={styles.guideSec}>
+                <Text style={styles.guideSecTitle}>1. REST API Endpoints</Text>
+                <View style={styles.endpointCard}>
+                  <View style={styles.endpointHeader}>
+                    <View style={styles.methodPost}>
+                      <Text style={styles.methodText}>GET</Text>
+                    </View>
+                    <Text style={styles.endpointRoute}>/api/suppliers</Text>
+                  </View>
+                  <Text style={styles.endpointDesc}>
+                    Lists all verified pharmaceutical suppliers with GSTIN, credit balances, and active state.
+                  </Text>
+                </View>
+
+                <View style={styles.endpointCard}>
+                  <View style={styles.endpointHeader}>
+                    <View style={[styles.methodPost, { backgroundColor: '#D97706' }]}>
+                      <Text style={styles.methodText}>PATCH</Text>
+                    </View>
+                    <Text style={styles.endpointRoute}>/api/suppliers/:id/status</Text>
+                  </View>
+                  <Text style={styles.endpointDesc}>
+                    Toggles supplier Active vs Inactive state in database.
+                  </Text>
+                </View>
+              </View>
+
+              {/* Section 2 */}
+              <View style={styles.guideSec}>
+                <Text style={styles.guideSecTitle}>2. PostgreSQL Database Schema</Text>
+                <Text style={styles.guideSecDesc}>Suppliers table definition:</Text>
+                <View style={styles.codeSnippet}>
+                  <Text style={styles.codeSnippetText}>
+{`CREATE TABLE suppliers (
+  id VARCHAR(50) PRIMARY KEY, -- e.g. 'SUP-101'
+  organization_id UUID REFERENCES organizations(id),
+  company_name TEXT NOT NULL,
+  category VARCHAR(100),
+  contact_person TEXT,
+  phone VARCHAR(20) NOT NULL,
+  email TEXT,
+  city VARCHAR(100),
+  gstin VARCHAR(15), -- 15-digit GSTIN
+  balance_due NUMERIC(10,2) DEFAULT 0.00,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);`}
+                  </Text>
+                </View>
+              </View>
+            </ScrollView>
+
+            <View style={styles.devGuideModalFooter}>
+              <Pressable
+                onPress={() => setDevGuideModalOpen(false)}
+                style={styles.closeDevGuideModalBtn}
+              >
+                <Text style={styles.closeDevGuideModalBtnText}>Done / Close Guide</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
       </Modal>
     </ScrollView>
   );
@@ -642,12 +826,23 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     gap: 24,
   },
+  contentContainerMobile: {
+    paddingHorizontal: 12,
+    paddingTop: 16,
+    paddingBottom: 32,
+    gap: 16,
+  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     flexWrap: 'wrap',
     gap: 16,
+  },
+  headerRowMobile: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: 12,
   },
   pageTitle: {
     fontSize: 24,
@@ -670,11 +865,25 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     cursor: 'pointer',
   },
+  newSupButtonHovered: {
+    backgroundColor: '#0D9488',
+  },
   newSupIcon: {
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '700',
     marginRight: 6,
+  },
+  btnIcon: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
+    marginRight: 6,
+  },
+  btnText: {
+    color: '#FFFFFF',
+    fontSize: 13.5,
+    fontWeight: '700',
   },
   newSupText: {
     color: '#FFFFFF',
@@ -694,7 +903,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    overflow: 'visible',
+    overflow: 'hidden',
     ...Platform.select({
       web: {
         boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)',
@@ -704,10 +913,83 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  filtersBar: {
+  /* Mobile Supplier Card Styles */
+  mobileCardList: {
+    padding: 12,
+    gap: 12,
+  },
+  mobileSupplierCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 14,
+  },
+  mobileSupHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    gap: 8,
+  },
+  mobileSupName: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  mobileCategoryText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#0F766E',
+    marginTop: 2,
+  },
+  mobileGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingVertical: 10,
+    gap: 10,
+  },
+  mobileGridCol: {
+    width: '47%',
+  },
+  mobileLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#94A3B8',
+    textTransform: 'uppercase',
+  },
+  mobileVal: {
+    fontSize: 12.5,
+    color: '#334155',
+    marginTop: 1,
+  },
+  mobileValBold: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginTop: 1,
+  },
+  mobileSupFooter: {
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  mobileOrderBtn: {
+    backgroundColor: '#0F766E',
+    paddingVertical: 7,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    alignItems: 'center',
+    cursor: 'pointer',
+  },
+  mobileOrderBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  filtersBar: {
     paddingHorizontal: 20,
     paddingVertical: 12,
     backgroundColor: '#FAFAFA',
@@ -717,35 +999,12 @@ const styles = StyleSheet.create({
   },
   filtersBarCompact: {
     flexDirection: 'column',
-    alignItems: 'stretch',
-  },
-  searchBox: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    height: 38,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 13,
-    color: '#0F172A',
-    outlineStyle: 'none',
-  },
-  clearBtn: {
-    padding: 4,
-  },
-  clearBtnText: {
-    fontSize: 12,
-    color: '#94A3B8',
   },
   filterChipRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
+    marginTop: 8,
   },
   filterChip: {
     paddingHorizontal: 12,
@@ -769,8 +1028,31 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
   },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    height: 38,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 13,
+    color: '#0F172A',
+    outlineStyle: 'none',
+  },
+  clearBtn: {
+    padding: 4,
+  },
+  clearBtnText: {
+    fontSize: 12,
+    color: '#94A3B8',
+  },
   tableWrapper: {
-    minWidth: 1280,
+    minWidth: 1250,
     paddingHorizontal: 8,
   },
   tableHeader: {
@@ -796,7 +1078,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
-    position: 'relative',
   },
   tableRowAlt: {
     backgroundColor: '#F8FAFC',
@@ -835,81 +1116,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  statusBadge: {
+  statusBadgeActive: {
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
+    backgroundColor: '#DCFCE7',
   },
-  statusBadgeText: {
+  statusBadgeTextActive: {
     fontSize: 11.5,
     fontWeight: '700',
+    color: '#15803D',
   },
   actionWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative',
-  },
-  threeDotsBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    cursor: 'pointer',
-  },
-  threeDotsText: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#64748B',
-  },
-  menuPopover: {
-    position: 'absolute',
-    right: 0,
-    top: 36,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    zIndex: 1000,
-    width: 150,
-    paddingVertical: 6,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
-      },
-      default: {
-        elevation: 8,
-      },
-    }),
-  },
-  menuHeaderTitle: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#94A3B8',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    gap: 8,
-    cursor: 'pointer',
-  },
-  menuDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  menuItemText: {
-    fontSize: 12.5,
-    fontWeight: '500',
-    color: '#334155',
-  },
-  menuItemTextActive: {
-    fontWeight: '700',
-    color: '#0F172A',
   },
   orderBtn: {
     paddingVertical: 4,
@@ -1054,5 +1274,363 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
   },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flexWrap: 'wrap',
+  },
+  devGuideTopBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    cursor: 'pointer',
+  },
+  devGuideTopBtnIcon: {
+    fontSize: 13,
+  },
+  devGuideTopBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  filterTogglesGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+    marginTop: 8,
+  },
+  filterTogglePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F8FAFC',
+    cursor: 'pointer',
+  },
+  filterTogglePillActive: {
+    backgroundColor: '#F0FDFA',
+    borderColor: '#0F766E',
+  },
+  filterToggleDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#94A3B8',
+  },
+  filterToggleDotActive: {
+    backgroundColor: '#0F766E',
+  },
+  filterToggleText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  filterToggleTextActive: {
+    color: '#0F766E',
+    fontWeight: '700',
+  },
+  tableToggleTrack: {
+    width: 36,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#CBD5E1',
+    padding: 2,
+    justifyContent: 'center',
+    cursor: 'pointer',
+  },
+  tableToggleActive: {
+    backgroundColor: '#0F766E',
+  },
+  tableToggleInactive: {
+    backgroundColor: '#CBD5E1',
+  },
+  tableToggleThumb: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+  },
+  tableToggleThumbActive: {
+    alignSelf: 'flex-end',
+  },
+  tableToggleThumbInactive: {
+    alignSelf: 'flex-start',
+  },
+  statusLabelText: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  statusActiveText: {
+    color: '#0F766E',
+  },
+  statusInactiveText: {
+    color: '#64748B',
+  },
+  mobileStatusToggleBtn: {
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    cursor: 'pointer',
+  },
+  mobileStatusToggleActive: {
+    backgroundColor: '#DCFCE7',
+    borderColor: '#86EFAC',
+  },
+  mobileStatusToggleInactive: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#CBD5E1',
+  },
+  mobileStatusToggleText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#15803D',
+  },
+  mobileDotsActionBtn: {
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderRadius: 6,
+    alignItems: 'center',
+    cursor: 'pointer',
+  },
+  mobileDotsActionText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  actionDotsButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    cursor: 'pointer',
+  },
+  actionDotsButtonText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#334155',
+    lineHeight: 18,
+  },
+  actionMenuCard: {
+    width: '100%',
+    maxWidth: 480,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    overflow: 'hidden',
+  },
+  actionMenuHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  actionMenuTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  actionMenuSub: {
+    fontSize: 11.5,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  closeActionBtn: {
+    padding: 6,
+    cursor: 'pointer',
+  },
+  closeActionText: {
+    fontSize: 18,
+    color: '#64748B',
+    fontWeight: '700',
+  },
+  actionList: {
+    padding: 10,
+    gap: 4,
+  },
+  actionOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    cursor: 'pointer',
+  },
+  actionOptionRowDev: {
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+    marginTop: 4,
+  },
+  actionOptionIcon: {
+    fontSize: 20,
+  },
+  actionOptionTextCol: {
+    flex: 1,
+  },
+  actionOptionTitle: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  actionOptionDesc: {
+    fontSize: 11.5,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  devGuideModalCard: {
+    width: '100%',
+    maxWidth: 780,
+    maxHeight: '90%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  devGuideModalCardMobile: {
+    maxHeight: '95%',
+  },
+  devGuideModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  devGuideTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  devGuideIconBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: '#0F766E',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  devGuideIconText: {
+    fontSize: 18,
+  },
+  devGuideModalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  devGuideModalSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  devGuideModalBody: {
+    padding: 20,
+  },
+  guideSec: {
+    marginBottom: 20,
+  },
+  guideSecTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F766E',
+    marginBottom: 6,
+  },
+  guideSecDesc: {
+    fontSize: 12,
+    color: '#475569',
+    marginBottom: 8,
+  },
+  codeSnippet: {
+    backgroundColor: '#0F172A',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 6,
+  },
+  codeSnippetText: {
+    color: '#38BDF8',
+    fontSize: 11.5,
+    fontFamily: Platform.select({ web: 'Consolas, Monaco, monospace', default: 'System' }),
+    lineHeight: 17,
+  },
+  endpointCard: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 10,
+  },
+  endpointHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  methodPost: {
+    backgroundColor: '#16A34A',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  methodText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  endpointRoute: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    fontFamily: Platform.select({ web: 'monospace', default: 'System' }),
+  },
+  endpointDesc: {
+    fontSize: 12,
+    color: '#475569',
+  },
+  devGuideModalFooter: {
+    padding: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+    alignItems: 'flex-end',
+  },
+  closeDevGuideModalBtn: {
+    backgroundColor: '#0F766E',
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+    borderRadius: 8,
+    cursor: 'pointer',
+  },
+  closeDevGuideModalBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12.5,
+    fontWeight: '700',
+  },
 });
-

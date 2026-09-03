@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -16,12 +16,6 @@ import {
   MOCK_PURCHASE_ORDERS_LIST,
   PO_STATUS_FILTER,
 } from '../../data/purchasesMockData';
-import {
-  fetchPurchases,
-  createPurchaseOrder,
-  receivePurchaseStock,
-  updatePurchaseStatus,
-} from '../../api/purchaseApi';
 
 const PO_STATUS_BADGES = {
   Pending: { bg: '#FEF3C7', text: '#B45309' },
@@ -34,73 +28,23 @@ const PO_STATUS_BADGES = {
 export default function PurchasesScreen({ onShowToast, onNavigate }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
+  const isMobile = width < 768;
 
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('All Statuses');
+  const [togglePendingOnly, setTogglePendingOnly] = useState(false);
+  const [toggleAutoMatchGst, setToggleAutoMatchGst] = useState(true);
+
+  // 3-Dots Action Menu State
+  const [actionMenuModalOpen, setActionMenuModalOpen] = useState(false);
+  const [selectedPoForAction, setSelectedPoForAction] = useState(null);
+
+  // Developer Backend & DB Guide Modal State
+  const [devGuideModalOpen, setDevGuideModalOpen] = useState(false);
 
   // Purchase Orders List
   const [orders, setOrders] = useState(MOCK_PURCHASE_ORDERS_LIST);
-  const [loading, setLoading] = useState(false);
-
-  // Fetch orders from backend on mount or filter change
-  const loadData = async (isMounted = true) => {
-    try {
-      setLoading(true);
-      const response = await fetchPurchases({ status: selectedStatus, search: searchQuery });
-      if (isMounted && response && response.data && response.data.length > 0) {
-        const formatted = response.data.map((po) => {
-          const rawStatus = po.status || 'PENDING';
-          let statusText = 'Pending';
-          if (rawStatus === 'APPROVED') statusText = 'Approved';
-          else if (rawStatus === 'RECEIVED') statusText = 'Received';
-          else if (rawStatus === 'PARTIALLY_RECEIVED') statusText = 'Partially Received';
-          else if (rawStatus === 'CANCELLED') statusText = 'Cancelled';
-
-          const formattedOrderDate = po.order_date
-            ? new Date(po.order_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-            : po.orderDate || '29 Aug 2026';
-
-          const formattedExpDate = po.expected_date
-            ? (po.expected_date.includes('T')
-                ? new Date(po.expected_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-                : po.expected_date)
-            : po.expectedDate || '05 Sep 2026';
-
-          const totalAmt = po.total_amount != null
-            ? `₹${Number(po.total_amount).toLocaleString('en-IN')}`
-            : po.totalAmount
-            ? `₹${Number(po.totalAmount).toLocaleString('en-IN')}`
-            : po.amount || '₹12,450.00';
-
-          return {
-            id: po.purchase_number || po.purchaseNumber || po.id,
-            rawId: po.id,
-            supplier: po.supplier_name || po.supplierName || po.supplier || 'Sun Pharma Care',
-            orderDate: formattedOrderDate,
-            expectedDate: formattedExpDate,
-            amount: totalAmt,
-            itemsCount: po.items_count != null ? po.items_count : (po.itemsCount || 1),
-            status: statusText,
-            branch: po.branch_name || po.branchName || po.branch || 'Main Branch',
-          };
-        });
-        setOrders(formatted);
-      }
-    } catch (err) {
-      console.log('[PurchasesScreen] Backend offline or using fallback mock list');
-    } finally {
-      if (isMounted) setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    let isMounted = true;
-    loadData(isMounted);
-    return () => {
-      isMounted = false;
-    };
-  }, [selectedStatus]);
 
   // New PO Modal State
   const [modalVisible, setModalVisible] = useState(false);
@@ -125,7 +69,9 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
     const matchesStatus =
       selectedStatus === 'All Statuses' || po.status === selectedStatus;
 
-    return matchesSearch && matchesStatus;
+    const matchesTogglePending = !togglePendingOnly || po.status === 'Pending';
+
+    return matchesSearch && matchesStatus && matchesTogglePending;
   });
 
   const handleOpenModal = () => {
@@ -142,7 +88,7 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
     setModalVisible(true);
   };
 
-  const handleCreatePO = async () => {
+  const handleCreatePO = () => {
     const errors = {};
     if (!formData.supplier.trim()) errors.supplier = 'Supplier is required';
     if (!formData.medicine.trim()) errors.medicine = 'Medicine/Product is required';
@@ -168,110 +114,106 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
       createdBy: 'Manager',
     };
 
-    try {
-      await createPurchaseOrder({
-        supplierName: formData.supplier,
-        branchName: formData.branch,
-        purchaseNumber: newPO.id,
-        orderDate: new Date().toISOString().split('T')[0],
-        expectedDate: formData.expectedDate,
-        notes: formData.notes,
-        items: [
-          {
-            productName: formData.medicine,
-            orderedQuantity: Number(formData.quantity),
-            unitCost: Number(formData.unitPrice || 100),
-          },
-        ],
-      });
-      // Re-fetch fresh data from backend
-      await loadData();
-    } catch (err) {
-      console.warn('[PurchasesScreen] Backend save failed, updated UI locally:', err.message);
-      setOrders((prev) => [newPO, ...prev]);
-    }
-
+    setOrders((prev) => [newPO, ...prev]);
     setModalVisible(false);
 
     if (onShowToast) {
-      onShowToast(`✓ Created Purchase Order ${newPO.id} for ${formData.supplier}!`);
+      onShowToast(`✓ Created Purchase Order ${newPO.id} for ${newPO.supplier}!`);
     }
   };
 
-  const handleStatusChange = async (po, newStatus) => {
-    try {
-      const backendId = po.rawId || po.id;
-      const backendStatus =
-        newStatus === 'Approved'
-          ? 'APPROVED'
-          : newStatus === 'Cancelled'
-          ? 'CANCELLED'
-          : newStatus === 'Pending'
-          ? 'PENDING'
-          : newStatus.toUpperCase();
-
-      await updatePurchaseStatus(backendId, backendStatus);
-    } catch (err) {
-      console.warn('[PurchasesScreen] Backend status update:', err.message);
+  const handleReceiveStockShortcut = (po) => {
+    if (onNavigate) {
+      onNavigate('goods-receiving');
     }
-
-    setOrders((prev) =>
-      prev.map((item) =>
-        item.id === po.id ? { ...item, status: newStatus } : item
-      )
-    );
-
     if (onShowToast) {
-      onShowToast(`✓ Purchase Order ${po.id} status updated to ${newStatus}!`);
+      onShowToast(`Switched to Goods Receiving for ${po.id}`);
     }
   };
 
-  const handleReceiveStockShortcut = async (po) => {
-    try {
-      const backendId = po.rawId || po.id;
-      await receivePurchaseStock(backendId, {
-        receivedDate: new Date().toISOString().split('T')[0],
-        notes: `Received from Purchases screen action button for ${po.id}`,
-      });
-    } catch (err) {
-      console.warn('[PurchasesScreen] Backend receive call:', err.message);
-    }
-
-    // Update PO status to Received in local state
-    setOrders((prev) =>
-      prev.map((item) =>
-        item.id === po.id ? { ...item, status: 'Received' } : item
-      )
-    );
-
+  const handleTogglePending = () => {
+    const nextVal = !togglePendingOnly;
+    setTogglePendingOnly(nextVal);
     if (onShowToast) {
-      onShowToast(`✓ Received stock for ${po.id}! Status updated to Received.`);
+      onShowToast(nextVal ? 'Filter enabled: Showing Pending Orders Only' : 'Filter cleared: Showing All Orders');
+    }
+  };
+
+  const handleToggleAutoMatch = () => {
+    const nextVal = !toggleAutoMatchGst;
+    setToggleAutoMatchGst(nextVal);
+    if (onShowToast) {
+      onShowToast(nextVal ? '✓ Auto-Match GST (18%) Invoices Activated' : 'Auto-Match GST Invoices Paused');
+    }
+  };
+
+  const handleOpenActionMenu = (po) => {
+    setSelectedPoForAction(po);
+    setActionMenuModalOpen(true);
+  };
+
+  const handleExecutePoAction = (actionKey) => {
+    setActionMenuModalOpen(false);
+    const po = selectedPoForAction;
+    if (!po) return;
+
+    if (actionKey === 'receive') {
+      handleReceiveStockShortcut(po);
+    } else if (actionKey === 'approve') {
+      setOrders((prev) =>
+        prev.map((item) => (item.id === po.id ? { ...item, status: 'Approved' } : item))
+      );
+      if (onShowToast) {
+        onShowToast(`✓ Purchase Order ${po.id} approved successfully!`);
+      }
+    } else if (actionKey === 'print') {
+      if (onShowToast) {
+        onShowToast(`🖨️ Generating Gate Pass & Print Sheet for ${po.id}...`);
+      }
+    } else if (actionKey === 'invoice') {
+      if (onShowToast) {
+        onShowToast(`📄 GST Invoice downloaded for ${po.id} (Supplier: ${po.supplier})`);
+      }
+    } else if (actionKey === 'devGuide') {
+      setDevGuideModalOpen(true);
     }
   };
 
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.contentContainer}
+      contentContainerStyle={[styles.contentContainer, isMobile && styles.contentContainerMobile]}
       showsVerticalScrollIndicator={true}
     >
       {/* Header Row */}
-      <View style={styles.headerRow}>
+      <View style={[styles.headerRow, isMobile && styles.headerRowMobile]}>
         <View>
           <Text style={styles.pageTitle}>Purchases</Text>
           <Text style={styles.pageSubtitle}>
             Create, track and manage vendor purchase orders and incoming supply lines.
           </Text>
         </View>
-        <Pressable
-          onPress={handleOpenModal}
-          style={styles.newPOButton}
-          accessibilityRole="button"
-          accessibilityLabel="New Purchase Order"
-        >
-          <Text style={styles.newPOIcon}>+</Text>
-          <Text style={styles.newPOText}>New Purchase Order</Text>
-        </Pressable>
+        <View style={styles.headerRightActions}>
+          <Pressable
+            onPress={() => setDevGuideModalOpen(true)}
+            style={styles.devGuideTopBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Backend and Database Guide"
+          >
+            <Text style={styles.devGuideTopBtnIcon}>🔌</Text>
+            <Text style={styles.devGuideTopBtnText}>Backend & DB Guide</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={handleOpenModal}
+            style={styles.newPOButton}
+            accessibilityRole="button"
+            accessibilityLabel="New Purchase Order"
+          >
+            <Text style={styles.newPOIcon}>+</Text>
+            <Text style={styles.newPOText}>New Purchase Order</Text>
+          </Pressable>
+        </View>
       </View>
 
       {/* Top 4 KPI Cards */}
@@ -307,6 +249,59 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
             ) : null}
           </View>
 
+          {/* Quick Filter Toggles */}
+          <View style={styles.filterTogglesGroup}>
+            <Pressable
+              onPress={handleTogglePending}
+              style={[
+                styles.filterTogglePill,
+                togglePendingOnly && styles.filterTogglePillActive,
+              ]}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: togglePendingOnly }}
+            >
+              <View
+                style={[
+                  styles.filterToggleDot,
+                  togglePendingOnly && styles.filterToggleDotActive,
+                ]}
+              />
+              <Text
+                style={[
+                  styles.filterToggleText,
+                  togglePendingOnly && styles.filterToggleTextActive,
+                ]}
+              >
+                Pending Only
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={handleToggleAutoMatch}
+              style={[
+                styles.filterTogglePill,
+                toggleAutoMatchGst && styles.filterTogglePillActive,
+              ]}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: toggleAutoMatchGst }}
+            >
+              <View
+                style={[
+                  styles.filterToggleDot,
+                  toggleAutoMatchGst && styles.filterToggleDotActive,
+                ]}
+              />
+              <Text
+                style={[
+                  styles.filterToggleText,
+                  toggleAutoMatchGst && styles.filterToggleTextActive,
+                ]}
+              >
+                Auto-Match Invoices (18% GST)
+              </Text>
+            </Pressable>
+          </View>
+
           {/* Status Filter Chips */}
           <View style={styles.filterChipRow}>
             {PO_STATUS_FILTER.map((st) => (
@@ -331,55 +326,25 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
           </View>
         </View>
 
-        {/* Purchase Orders Table */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-          <View style={styles.tableWrapper}>
-            {/* Header */}
-            <View style={styles.tableHeader}>
-              <Text style={[styles.thCell, { width: 110 }]}>PO NUMBER</Text>
-              <Text style={[styles.thCell, { width: 180 }]}>SUPPLIER</Text>
-              <Text style={[styles.thCell, { width: 120 }]}>ORDER DATE</Text>
-              <Text style={[styles.thCell, { width: 120 }]}>EXPECTED</Text>
-              <Text style={[styles.thCell, { width: 120, textAlign: 'right' }]}>AMOUNT</Text>
-              <Text style={[styles.thCell, { width: 80, textAlign: 'center' }]}>ITEMS</Text>
-              <Text style={[styles.thCell, { width: 130 }]}>BRANCH</Text>
-              <Text style={[styles.thCell, { width: 130, textAlign: 'center' }]}>STATUS</Text>
-              <Text style={[styles.thCell, { width: 170, textAlign: 'center' }]}>ACTION</Text>
-            </View>
-
-            {/* Rows */}
+        {isMobile ? (
+          /* Mobile Purchase Order Cards (No horizontal scroll) */
+          <View style={styles.mobileCardList}>
             {filteredOrders.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyTitle}>No purchase orders found</Text>
                 <Text style={styles.emptySubtitle}>Try changing your search keywords.</Text>
               </View>
             ) : (
-              filteredOrders.map((po, index) => {
+              filteredOrders.map((po) => {
                 const badge = PO_STATUS_BADGES[po.status] || PO_STATUS_BADGES.Pending;
                 return (
-                  <View
-                    key={po.id}
-                    style={[
-                      styles.tableRow,
-                      index % 2 === 1 && styles.tableRowAlt,
-                    ]}
-                  >
-                    <Text style={[styles.tdCell, styles.poId, { width: 110 }]}>{po.id}</Text>
-                    <Text style={[styles.tdCell, styles.supplierName, { width: 180 }]} numberOfLines={1}>
-                      {po.supplier}
-                    </Text>
-                    <Text style={[styles.tdCell, { width: 120 }]}>{po.orderDate}</Text>
-                    <Text style={[styles.tdCell, { width: 120 }]}>{po.expectedDate}</Text>
-                    <Text style={[styles.tdCell, styles.amountText, { width: 120, textAlign: 'right' }]}>
-                      {po.amount}
-                    </Text>
-                    <Text style={[styles.tdCell, { width: 80, textAlign: 'center', fontWeight: '600' }]}>
-                      {po.itemsCount}
-                    </Text>
-                    <Text style={[styles.tdCell, { width: 130 }]}>{po.branch}</Text>
-
-                    {/* Status Badge */}
-                    <View style={[styles.statusWrapper, { width: 130 }]}>
+                  <View key={po.id} style={styles.mobilePOCard}>
+                    {/* Header: PO ID & Status Badge */}
+                    <View style={styles.mobilePOHeader}>
+                      <View>
+                        <Text style={styles.mobilePOId}>{po.id}</Text>
+                        <Text style={styles.mobilePOSupplier}>{po.supplier}</Text>
+                      </View>
                       <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
                         <Text style={[styles.statusBadgeText, { color: badge.text }]}>
                           {po.status}
@@ -387,50 +352,121 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
                       </View>
                     </View>
 
-                    {/* Action Buttons based on PO Status */}
-                    <View style={[styles.actionCell, { width: 170 }]}>
-                      {po.status === 'Pending' ? (
-                        <View style={{ flexDirection: 'row', gap: 6, justifyContent: 'center' }}>
-                          <Pressable
-                            onPress={() => handleStatusChange(po, 'Approved')}
-                            style={[styles.actionBtn, styles.approveBtn]}
-                          >
-                            <Text style={styles.actionBtnText}>Approve</Text>
-                          </Pressable>
-                          <Pressable
-                            onPress={() => handleStatusChange(po, 'Cancelled')}
-                            style={[styles.actionBtn, styles.rejectBtn]}
-                          >
-                            <Text style={styles.rejectBtnText}>Reject</Text>
-                          </Pressable>
-                        </View>
-                      ) : po.status === 'Approved' ? (
-                        <View style={{ flexDirection: 'row', gap: 6, justifyContent: 'center' }}>
-                          <Pressable
-                            onPress={() => handleReceiveStockShortcut(po)}
-                            style={[styles.actionBtn, styles.receiveBtn]}
-                          >
-                            <Text style={styles.actionBtnText}>Receive</Text>
-                          </Pressable>
-                          <Pressable
-                            onPress={() => handleStatusChange(po, 'Cancelled')}
-                            style={[styles.actionBtn, styles.rejectBtn]}
-                          >
-                            <Text style={styles.rejectBtnText}>Cancel</Text>
-                          </Pressable>
-                        </View>
-                      ) : (
-                        <View style={{ alignItems: 'center' }}>
-                          <Text style={styles.actionDoneText}>{po.status}</Text>
-                        </View>
-                      )}
+                    {/* PO Details Grid */}
+                    <View style={styles.mobileGrid}>
+                      <View style={styles.mobileGridCol}>
+                        <Text style={styles.mobileLabel}>Order Date</Text>
+                        <Text style={styles.mobileVal}>{po.orderDate}</Text>
+                      </View>
+                      <View style={styles.mobileGridCol}>
+                        <Text style={styles.mobileLabel}>Expected Delivery</Text>
+                        <Text style={styles.mobileVal}>{po.expectedDate}</Text>
+                      </View>
+                      <View style={styles.mobileGridCol}>
+                        <Text style={styles.mobileLabel}>Total Amount</Text>
+                        <Text style={[styles.mobileValBold, { color: '#0F172A' }]}>{po.amount}</Text>
+                      </View>
+                      <View style={styles.mobileGridCol}>
+                        <Text style={styles.mobileLabel}>Items Count</Text>
+                        <Text style={styles.mobileValBold}>{po.itemsCount} units</Text>
+                      </View>
+                      <View style={styles.mobileGridColFull}>
+                        <Text style={styles.mobileLabel}>Destination Branch</Text>
+                        <Text style={styles.mobileVal}>{po.branch}</Text>
+                      </View>
+                    </View>
+
+                    {/* Action */}
+                    <View style={styles.mobilePOFooter}>
+                      <Pressable
+                        onPress={() => handleOpenActionMenu(po)}
+                        style={styles.mobileDotsActionBtn}
+                        accessibilityRole="button"
+                        accessibilityLabel="Order Actions"
+                      >
+                        <Text style={styles.mobileDotsActionText}>⋮ Actions</Text>
+                      </Pressable>
                     </View>
                   </View>
                 );
               })
             )}
           </View>
-        </ScrollView>
+        ) : (
+          /* Desktop Table View */
+          <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+            <View style={styles.tableWrapper}>
+              {/* Header */}
+              <View style={styles.tableHeader}>
+                <Text style={[styles.thCell, { width: 110 }]}>PO NUMBER</Text>
+                <Text style={[styles.thCell, { width: 180 }]}>SUPPLIER</Text>
+                <Text style={[styles.thCell, { width: 120 }]}>ORDER DATE</Text>
+                <Text style={[styles.thCell, { width: 120 }]}>EXPECTED</Text>
+                <Text style={[styles.thCell, { width: 120, textAlign: 'right' }]}>AMOUNT</Text>
+                <Text style={[styles.thCell, { width: 80, textAlign: 'center' }]}>ITEMS</Text>
+                <Text style={[styles.thCell, { width: 130 }]}>BRANCH</Text>
+                <Text style={[styles.thCell, { width: 130, textAlign: 'center' }]}>STATUS</Text>
+                <Text style={[styles.thCell, { width: 110, textAlign: 'center' }]}>ACTION</Text>
+              </View>
+
+              {/* Rows */}
+              {filteredOrders.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyTitle}>No purchase orders found</Text>
+                  <Text style={styles.emptySubtitle}>Try changing your search keywords.</Text>
+                </View>
+              ) : (
+                filteredOrders.map((po, index) => {
+                  const badge = PO_STATUS_BADGES[po.status] || PO_STATUS_BADGES.Pending;
+                  return (
+                    <View
+                      key={po.id}
+                      style={[
+                        styles.tableRow,
+                        index % 2 === 1 && styles.tableRowAlt,
+                      ]}
+                    >
+                      <Text style={[styles.tdCell, styles.poId, { width: 110 }]}>{po.id}</Text>
+                      <Text style={[styles.tdCell, styles.supplierName, { width: 180 }]} numberOfLines={1}>
+                        {po.supplier}
+                      </Text>
+                      <Text style={[styles.tdCell, { width: 120 }]}>{po.orderDate}</Text>
+                      <Text style={[styles.tdCell, { width: 120 }]}>{po.expectedDate}</Text>
+                      <Text style={[styles.tdCell, styles.amountText, { width: 120, textAlign: 'right' }]}>
+                        {po.amount}
+                      </Text>
+                      <Text style={[styles.tdCell, { width: 80, textAlign: 'center', fontWeight: '600' }]}>
+                        {po.itemsCount}
+                      </Text>
+                      <Text style={[styles.tdCell, { width: 130 }]}>{po.branch}</Text>
+
+                      {/* Status Badge */}
+                      <View style={[styles.statusWrapper, { width: 130 }]}>
+                        <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
+                          <Text style={[styles.statusBadgeText, { color: badge.text }]}>
+                            {po.status}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Action Button: 3 Dots (⋮) */}
+                      <View style={[styles.actionCell, { width: 110 }]}>
+                        <Pressable
+                          onPress={() => handleOpenActionMenu(po)}
+                          style={styles.actionDotsButton}
+                          accessibilityRole="button"
+                          accessibilityLabel="Order Actions"
+                        >
+                          <Text style={styles.actionDotsButtonText}>⋮</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  );
+                })
+              )}
+            </View>
+          </ScrollView>
+        )}
       </View>
 
       {/* New Purchase Order Modal */}
@@ -558,6 +594,189 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* 3-Dots Action Menu Modal */}
+      <Modal
+        visible={actionMenuModalOpen}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setActionMenuModalOpen(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.actionMenuCard}>
+            <View style={styles.actionMenuHeader}>
+              <View>
+                <Text style={styles.actionMenuTitle}>{selectedPoForAction?.id}</Text>
+                <Text style={styles.actionMenuSub}>
+                  Supplier: {selectedPoForAction?.supplier} • {selectedPoForAction?.amount}
+                </Text>
+              </View>
+              <Pressable onPress={() => setActionMenuModalOpen(false)} style={styles.closeActionBtn}>
+                <Text style={styles.closeActionText}>✕</Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.actionList}>
+              <Pressable
+                onPress={() => handleExecutePoAction('receive')}
+                style={styles.actionOptionRow}
+              >
+                <Text style={styles.actionOptionIcon}>📦</Text>
+                <View style={styles.actionOptionTextCol}>
+                  <Text style={styles.actionOptionTitle}>Receive Shipment & Inspect</Text>
+                  <Text style={styles.actionOptionDesc}>Proceed to Goods Receiving (GRN) inspection checklist</Text>
+                </View>
+              </Pressable>
+
+              <Pressable
+                onPress={() => handleExecutePoAction('approve')}
+                style={styles.actionOptionRow}
+              >
+                <Text style={styles.actionOptionIcon}>✅</Text>
+                <View style={styles.actionOptionTextCol}>
+                  <Text style={styles.actionOptionTitle}>Approve Purchase Order</Text>
+                  <Text style={styles.actionOptionDesc}>Confirm procurement authorization and notify vendor</Text>
+                </View>
+              </Pressable>
+
+              <Pressable
+                onPress={() => handleExecutePoAction('print')}
+                style={styles.actionOptionRow}
+              >
+                <Text style={styles.actionOptionIcon}>🖨️</Text>
+                <View style={styles.actionOptionTextCol}>
+                  <Text style={styles.actionOptionTitle}>Print PO Gate Pass</Text>
+                  <Text style={styles.actionOptionDesc}>Generate printable PO slip for warehouse receiving dock</Text>
+                </View>
+              </Pressable>
+
+              <Pressable
+                onPress={() => handleExecutePoAction('invoice')}
+                style={styles.actionOptionRow}
+              >
+                <Text style={styles.actionOptionIcon}>📄</Text>
+                <View style={styles.actionOptionTextCol}>
+                  <Text style={styles.actionOptionTitle}>Download Tax Invoice</Text>
+                  <Text style={styles.actionOptionDesc}>Input Tax Credit (ITC) compliant invoice (18% / 12% GST)</Text>
+                </View>
+              </Pressable>
+
+              <Pressable
+                onPress={() => handleExecutePoAction('devGuide')}
+                style={[styles.actionOptionRow, styles.actionOptionRowDev]}
+              >
+                <Text style={styles.actionOptionIcon}>🔌</Text>
+                <View style={styles.actionOptionTextCol}>
+                  <Text style={[styles.actionOptionTitle, { color: '#0F766E' }]}>
+                    Backend & Database Guide (For Developers)
+                  </Text>
+                  <Text style={styles.actionOptionDesc}>
+                    View REST APIs, database schemas, and queries for backend engineers
+                  </Text>
+                </View>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Developer Backend & DB Guide Modal */}
+      <Modal
+        visible={devGuideModalOpen}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setDevGuideModalOpen(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.devGuideModalCard, isMobile && styles.devGuideModalCardMobile]}>
+            <View style={styles.devGuideModalHeader}>
+              <View style={styles.devGuideTitleRow}>
+                <View style={styles.devGuideIconBadge}>
+                  <Text style={styles.devGuideIconText}>🔌</Text>
+                </View>
+                <View>
+                  <Text style={styles.devGuideModalTitle}>Purchase Orders & Vendor Backend Guide</Text>
+                  <Text style={styles.devGuideModalSubtitle}>
+                    Specification for Backend Engineers & DB Integrators
+                  </Text>
+                </View>
+              </View>
+              <Pressable onPress={() => setDevGuideModalOpen(false)} style={styles.closeActionBtn}>
+                <Text style={styles.closeActionText}>✕</Text>
+              </Pressable>
+            </View>
+
+            <ScrollView style={styles.devGuideModalBody}>
+              {/* Section 1 */}
+              <View style={styles.guideSec}>
+                <Text style={styles.guideSecTitle}>1. REST API Endpoints</Text>
+                <View style={styles.endpointCard}>
+                  <View style={styles.endpointHeader}>
+                    <View style={styles.methodPost}>
+                      <Text style={styles.methodText}>POST</Text>
+                    </View>
+                    <Text style={styles.endpointRoute}>/api/purchase-orders</Text>
+                  </View>
+                  <Text style={styles.endpointDesc}>
+                    Generates a new purchase order with line items, tax computations (GST 12%/18%), and supplier details.
+                  </Text>
+                </View>
+
+                <View style={styles.endpointCard}>
+                  <View style={styles.endpointHeader}>
+                    <View style={[styles.methodPost, { backgroundColor: '#D97706' }]}>
+                      <Text style={styles.methodText}>PATCH</Text>
+                    </View>
+                    <Text style={styles.endpointRoute}>/api/purchase-orders/:id/status</Text>
+                  </View>
+                  <Text style={styles.endpointDesc}>
+                    Updates status to 'Approved', 'Partially Received', or 'Received'.
+                  </Text>
+                </View>
+              </View>
+
+              {/* Section 2 */}
+              <View style={styles.guideSec}>
+                <Text style={styles.guideSecTitle}>2. PostgreSQL Database Schema</Text>
+                <Text style={styles.guideSecDesc}>Tables connecting purchase orders to suppliers and inventory:</Text>
+                <View style={styles.codeSnippet}>
+                  <Text style={styles.codeSnippetText}>
+{`CREATE TABLE purchase_orders (
+  id VARCHAR(50) PRIMARY KEY, -- e.g. 'PO-1024'
+  supplier_id UUID REFERENCES suppliers(id),
+  branch_id UUID REFERENCES branches(id),
+  expected_date DATE NOT NULL,
+  total_amount NUMERIC(10,2) NOT NULL,
+  gst_amount NUMERIC(10,2) NOT NULL,
+  status VARCHAR(30) DEFAULT 'Pending',
+  created_by VARCHAR(50),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE purchase_order_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  po_id VARCHAR(50) REFERENCES purchase_orders(id) ON DELETE CASCADE,
+  medicine_id UUID REFERENCES inventory_items(id),
+  quantity INT NOT NULL,
+  unit_price NUMERIC(10,2) NOT NULL,
+  gst_rate NUMERIC(5,2) DEFAULT 12.00
+);`}
+                  </Text>
+                </View>
+              </View>
+            </ScrollView>
+
+            <View style={styles.devGuideModalFooter}>
+              <Pressable
+                onPress={() => setDevGuideModalOpen(false)}
+                style={styles.closeDevGuideModalBtn}
+              >
+                <Text style={styles.closeDevGuideModalBtnText}>Done / Close Guide</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -572,12 +791,23 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     gap: 24,
   },
+  contentContainerMobile: {
+    paddingHorizontal: 12,
+    paddingTop: 16,
+    paddingBottom: 32,
+    gap: 16,
+  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     flexWrap: 'wrap',
     gap: 16,
+  },
+  headerRowMobile: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: 12,
   },
   pageTitle: {
     fontSize: 24,
@@ -636,6 +866,92 @@ const styles = StyleSheet.create({
         elevation: 1,
       },
     }),
+  },
+  /* Mobile Purchase Order Card Styles */
+  mobileCardList: {
+    padding: 12,
+    gap: 12,
+  },
+  mobilePOCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 14,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
+      },
+    }),
+  },
+  mobilePOHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    gap: 8,
+  },
+  mobilePOId: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F766E',
+  },
+  mobilePOSupplier: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0F172A',
+    marginTop: 2,
+  },
+  mobileGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingVertical: 10,
+    gap: 10,
+  },
+  mobileGridCol: {
+    width: '47%',
+  },
+  mobileGridColFull: {
+    width: '100%',
+  },
+  mobileLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#94A3B8',
+    textTransform: 'uppercase',
+  },
+  mobileVal: {
+    fontSize: 12.5,
+    color: '#334155',
+    marginTop: 1,
+  },
+  mobileValBold: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginTop: 1,
+  },
+  mobilePOFooter: {
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    alignItems: 'flex-end',
+  },
+  mobileReceiveBtn: {
+    backgroundColor: '#2563EB',
+    paddingVertical: 7,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    cursor: 'pointer',
+    width: '100%',
+    alignItems: 'center',
+  },
+  mobileReceiveBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   filtersBar: {
     flexDirection: 'row',
@@ -768,39 +1084,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  actionBtn: {
-    paddingVertical: 5,
-    paddingHorizontal: 9,
-    borderRadius: 6,
-    cursor: 'pointer',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  approveBtn: {
-    backgroundColor: '#16A34A',
-  },
-  rejectBtn: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#DC2626',
-  },
   receiveBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 6,
     backgroundColor: '#2563EB',
+    cursor: 'pointer',
   },
-  actionBtnText: {
+  receiveBtnText: {
     fontSize: 11.5,
     fontWeight: '700',
     color: '#FFFFFF',
-  },
-  rejectBtnText: {
-    fontSize: 11.5,
-    fontWeight: '700',
-    color: '#DC2626',
-  },
-  actionDoneText: {
-    fontSize: 12,
-    color: '#64748B',
-    fontWeight: '500',
   },
   emptyState: {
     alignItems: 'center',
@@ -936,5 +1230,304 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flexWrap: 'wrap',
+  },
+  devGuideTopBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    cursor: 'pointer',
+  },
+  devGuideTopBtnIcon: {
+    fontSize: 13,
+  },
+  devGuideTopBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  filterTogglesGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+    marginTop: 8,
+  },
+  filterTogglePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F8FAFC',
+    cursor: 'pointer',
+  },
+  filterTogglePillActive: {
+    backgroundColor: '#F0FDFA',
+    borderColor: '#0F766E',
+  },
+  filterToggleDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#94A3B8',
+  },
+  filterToggleDotActive: {
+    backgroundColor: '#0F766E',
+  },
+  filterToggleText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  filterToggleTextActive: {
+    color: '#0F766E',
+    fontWeight: '700',
+  },
+  mobileDotsActionBtn: {
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderRadius: 6,
+    alignItems: 'center',
+    cursor: 'pointer',
+  },
+  mobileDotsActionText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  actionDotsButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    cursor: 'pointer',
+  },
+  actionDotsButtonText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#334155',
+    lineHeight: 18,
+  },
+  actionMenuCard: {
+    width: '100%',
+    maxWidth: 480,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    overflow: 'hidden',
+  },
+  actionMenuHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  actionMenuTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  actionMenuSub: {
+    fontSize: 11.5,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  closeActionBtn: {
+    padding: 6,
+    cursor: 'pointer',
+  },
+  closeActionText: {
+    fontSize: 18,
+    color: '#64748B',
+    fontWeight: '700',
+  },
+  actionList: {
+    padding: 10,
+    gap: 4,
+  },
+  actionOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    cursor: 'pointer',
+  },
+  actionOptionRowDev: {
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+    marginTop: 4,
+  },
+  actionOptionIcon: {
+    fontSize: 20,
+  },
+  actionOptionTextCol: {
+    flex: 1,
+  },
+  actionOptionTitle: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  actionOptionDesc: {
+    fontSize: 11.5,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  devGuideModalCard: {
+    width: '100%',
+    maxWidth: 780,
+    maxHeight: '90%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  devGuideModalCardMobile: {
+    maxHeight: '95%',
+  },
+  devGuideModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  devGuideTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  devGuideIconBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: '#0F766E',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  devGuideIconText: {
+    fontSize: 18,
+  },
+  devGuideModalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  devGuideModalSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  devGuideModalBody: {
+    padding: 20,
+  },
+  guideSec: {
+    marginBottom: 20,
+  },
+  guideSecTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F766E',
+    marginBottom: 6,
+  },
+  guideSecDesc: {
+    fontSize: 12,
+    color: '#475569',
+    marginBottom: 8,
+  },
+  codeSnippet: {
+    backgroundColor: '#0F172A',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 6,
+  },
+  codeSnippetText: {
+    color: '#38BDF8',
+    fontSize: 11.5,
+    fontFamily: Platform.select({ web: 'Consolas, Monaco, monospace', default: 'System' }),
+    lineHeight: 17,
+  },
+  endpointCard: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 10,
+  },
+  endpointHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  methodPost: {
+    backgroundColor: '#16A34A',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  methodText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  endpointRoute: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    fontFamily: Platform.select({ web: 'monospace', default: 'System' }),
+  },
+  endpointDesc: {
+    fontSize: 12,
+    color: '#475569',
+  },
+  devGuideModalFooter: {
+    padding: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+    alignItems: 'flex-end',
+  },
+  closeDevGuideModalBtn: {
+    backgroundColor: '#0F766E',
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+    borderRadius: 8,
+    cursor: 'pointer',
+  },
+  closeDevGuideModalBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12.5,
+    fontWeight: '700',
   },
 });

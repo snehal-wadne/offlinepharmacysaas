@@ -27,6 +27,7 @@ export default function Header({
   syncStatus = 'online',
   isMobile = false,
   onToggleMobileMenu,
+  onNavigate,
 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
@@ -192,6 +193,22 @@ export default function Header({
 
       {/* Right: Sync Status & User Profile */}
       <View style={styles.rightSection}>
+        {/* Subscription Plan Quick Badge */}
+        {!isMobile && (
+          <Pressable
+            onPress={() => onNavigate && onNavigate('subscription-plans')}
+            style={styles.headerPlanBadge}
+            accessibilityRole="button"
+            accessibilityLabel="View SaaS Subscription"
+          >
+            <Text style={styles.headerPlanIcon}>💳</Text>
+            <View>
+              <Text style={styles.headerPlanTitle}>Growth ERP (18% GST)</Text>
+              <Text style={styles.headerPlanSubtitle}>Active License</Text>
+            </View>
+          </Pressable>
+        )}
+
         {/* Sync Status Badge */}
         {!isMobile && (
           <View style={[styles.syncBadge, !isOnline && styles.syncBadgeOffline]}>
@@ -224,7 +241,6 @@ export default function Header({
               <Text style={styles.signOutText}>Sign Out</Text>
             </Pressable>
           )}
-        </View>
         </View>
       </View>
     </View>
@@ -571,5 +587,31 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     fontWeight: '600',
     color: '#64748B',
+  },
+  headerPlanBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F5F3FF',
+    borderWidth: 1,
+    borderColor: '#DDD6FE',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    cursor: 'pointer',
+  },
+  headerPlanIcon: {
+    fontSize: 14,
+  },
+  headerPlanTitle: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#6D28D9',
+    lineHeight: 14,
+  },
+  headerPlanSubtitle: {
+    fontSize: 9.5,
+    color: '#8B5CF6',
+    fontWeight: '600',
   },
 });

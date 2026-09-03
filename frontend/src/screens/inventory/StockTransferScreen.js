@@ -37,6 +37,15 @@ export default function StockTransferScreen({ onShowToast }) {
   // Transfers List State
   const [transfers, setTransfers] = useState(MOCK_TRANSFERS);
 
+  // 3-Dots Action Menu & Backend Dev Guide Modal State
+  const [selectedTransferForAction, setSelectedTransferForAction] = useState(null);
+  const [actionMenuOpen, setActionMenuOpen] = useState(false);
+  const [devGuideOpen, setDevGuideOpen] = useState(false);
+
+  // Quick Toggle Buttons
+  const [autoApproveTransfers, setAutoApproveTransfers] = useState(false);
+  const [pendingOnly, setPendingOnly] = useState(false);
+
   // New Transfer Modal State
   const [modalVisible, setModalVisible] = useState(false);
   const [formData, setFormData] = useState({
@@ -67,8 +76,63 @@ export default function StockTransferScreen({ onShowToast }) {
     const matchesTo =
       toBranch === 'All Branches' || tr.toBranch === toBranch;
 
-    return matchesSearch && matchesStatus && matchesFrom && matchesTo;
+    const matchesPending = !pendingOnly || tr.status === 'Draft' || tr.status === 'In Transit';
+
+    return matchesSearch && matchesStatus && matchesFrom && matchesTo && matchesPending;
   });
+
+  const handleOpenActionMenu = (tr) => {
+    setSelectedTransferForAction(tr);
+    setActionMenuOpen(true);
+  };
+
+  const handleExecuteTransferAction = (actionKey) => {
+    const tr = selectedTransferForAction;
+    setActionMenuOpen(false);
+    if (!tr) return;
+
+    if (actionKey === 'dev-guide') {
+      setDevGuideOpen(true);
+      return;
+    }
+
+    if (actionKey === 'in-transit') {
+      setTransfers((prev) =>
+        prev.map((item) => (item.id === tr.id ? { ...item, status: 'In Transit' } : item))
+      );
+      if (onShowToast) {
+        onShowToast(`[PATCH /api/transfers/${tr.id}/status] Transfer ${tr.id} is now IN TRANSIT.`);
+      }
+      return;
+    }
+
+    if (actionKey === 'complete') {
+      setTransfers((prev) =>
+        prev.map((item) => (item.id === tr.id ? { ...item, status: 'Completed' } : item))
+      );
+      if (onShowToast) {
+        onShowToast(`[POST /api/transfers/${tr.id}/receive] Transfer ${tr.id} marked as COMPLETED.`);
+      }
+      return;
+    }
+
+    if (actionKey === 'cancel') {
+      setTransfers((prev) =>
+        prev.map((item) => (item.id === tr.id ? { ...item, status: 'Cancelled' } : item))
+      );
+      if (onShowToast) {
+        onShowToast(`[POST /api/transfers/${tr.id}/cancel] Transfer ${tr.id} has been CANCELLED.`);
+      }
+      return;
+    }
+
+    if (actionKey === 'waybill') {
+      if (onShowToast) {
+        onShowToast(`🖨️ Generated Inter-Branch Stock Transit Waybill / Gate Pass for ${tr.id}`);
+      }
+      return;
+    }
+  };
 
   const handleOpenModal = () => {
     setFormData({
@@ -140,15 +204,27 @@ export default function StockTransferScreen({ onShowToast }) {
             Transfer stock between pharmacy branches and distribution nodes.
           </Text>
         </View>
-        <Pressable
-          onPress={handleOpenModal}
-          style={styles.newTransferButton}
-          accessibilityRole="button"
-          accessibilityLabel="+ New Transfer"
-        >
-          <Text style={styles.newTransferIcon}>+</Text>
-          <Text style={styles.newTransferText}>New Transfer</Text>
-        </Pressable>
+        <View style={styles.headerRightActions}>
+          <Pressable
+            onPress={() => setDevGuideOpen(true)}
+            style={styles.devGuideBtnTop}
+            accessibilityRole="button"
+            accessibilityLabel="Backend & Database Guide"
+          >
+            <Text style={styles.devGuideBtnTopIcon}>🔌</Text>
+            <Text style={styles.devGuideBtnTopText}>Backend & DB Guide</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={handleOpenModal}
+            style={styles.newTransferButton}
+            accessibilityRole="button"
+            accessibilityLabel="+ New Transfer"
+          >
+            <Text style={styles.newTransferIcon}>+</Text>
+            <Text style={styles.newTransferText}>New Transfer</Text>
+          </Pressable>
+        </View>
       </View>
 
       {/* Main Table Card (Screenshot 3 style) */}
@@ -168,6 +244,59 @@ export default function StockTransferScreen({ onShowToast }) {
                 <Text style={styles.clearBtnText}>✕</Text>
               </Pressable>
             ) : null}
+          </View>
+
+          {/* Quick Toggle Switches */}
+          <View style={styles.filterTogglesGroup}>
+            <Pressable
+              onPress={() => setPendingOnly(!pendingOnly)}
+              style={[
+                styles.filterTogglePill,
+                pendingOnly && styles.filterTogglePillActive,
+              ]}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: pendingOnly }}
+            >
+              <View style={[styles.filterToggleDot, pendingOnly && styles.filterToggleDotActive]} />
+              <Text style={[styles.filterToggleText, pendingOnly && styles.filterToggleTextActive]}>
+                Pending / In-Transit Only
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => {
+                const nextVal = !autoApproveTransfers;
+                setAutoApproveTransfers(nextVal);
+                if (onShowToast) {
+                  onShowToast(
+                    `[PATCH /api/settings/transfers] Auto-Approve: ${
+                      nextVal ? 'ENABLED (Instant branch deduction)' : 'DISABLED (Requires receiving check)'
+                    }`
+                  );
+                }
+              }}
+              style={[
+                styles.filterTogglePill,
+                autoApproveTransfers && styles.filterTogglePillActive,
+              ]}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: autoApproveTransfers }}
+            >
+              <View
+                style={[
+                  styles.filterToggleDot,
+                  autoApproveTransfers && styles.filterToggleDotActive,
+                ]}
+              />
+              <Text
+                style={[
+                  styles.filterToggleText,
+                  autoApproveTransfers && styles.filterToggleTextActive,
+                ]}
+              >
+                Auto-Approve
+              </Text>
+            </Pressable>
           </View>
 
           {/* Filter Status & Branch Chips */}
@@ -215,10 +344,20 @@ export default function StockTransferScreen({ onShowToast }) {
                   <View key={tr.id} style={styles.mobileTransferCard}>
                     <View style={styles.mobileTrHeader}>
                       <Text style={styles.mobileTrId}>{tr.id}</Text>
-                      <View style={[styles.statusPill, { backgroundColor: pill.bg }]}>
-                        <Text style={[styles.statusPillText, { color: pill.text }]}>
-                          {tr.status}
-                        </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <View style={[styles.statusPill, { backgroundColor: pill.bg }]}>
+                          <Text style={[styles.statusPillText, { color: pill.text }]}>
+                            {tr.status}
+                          </Text>
+                        </View>
+                        <Pressable
+                          onPress={() => handleOpenActionMenu(tr)}
+                          style={styles.mobileTrDotsBtn}
+                          accessibilityRole="button"
+                          accessibilityLabel="Transfer Actions"
+                        >
+                          <Text style={styles.mobileTrDotsText}>⋮ Actions</Text>
+                        </Pressable>
                       </View>
                     </View>
 
@@ -311,7 +450,7 @@ export default function StockTransferScreen({ onShowToast }) {
 
                       {/* Actions Menu */}
                       <Pressable
-                        onPress={() => onShowToast && onShowToast(`Options for ${tr.id}`)}
+                        onPress={() => handleOpenActionMenu(tr)}
                         style={[styles.actionDotsBtn, { width: 80 }]}
                         accessibilityRole="button"
                         accessibilityLabel="Transfer Actions"
@@ -484,6 +623,208 @@ export default function StockTransferScreen({ onShowToast }) {
             </View>
           </Pressable>
         </Pressable>
+      </Modal>
+
+      {/* 2. TRANSFER 3-DOTS ACTION MENU MODAL */}
+      <Modal
+        visible={actionMenuOpen}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setActionMenuOpen(false)}
+      >
+        <View style={styles.modalOverlayAction}>
+          <View style={styles.actionMenuCard}>
+            <View style={styles.actionMenuHeader}>
+              <View>
+                <Text style={styles.actionMenuTitle}>Transfer {selectedTransferForAction?.id}</Text>
+                <Text style={styles.actionMenuRoute}>
+                  {selectedTransferForAction?.fromBranch} ➔ {selectedTransferForAction?.toBranch}
+                </Text>
+              </View>
+              <Pressable onPress={() => setActionMenuOpen(false)} style={styles.closeActionBtn}>
+                <Text style={styles.closeActionText}>✕</Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.actionList}>
+              <Pressable
+                onPress={() => handleExecuteTransferAction('in-transit')}
+                style={styles.actionItem}
+              >
+                <Text style={styles.actionItemIcon}>🚚</Text>
+                <View style={styles.actionItemTextCol}>
+                  <Text style={styles.actionItemTitle}>Mark as In-Transit</Text>
+                  <Text style={styles.actionItemSubtitle}>Dispatched with courier / van for delivery</Text>
+                </View>
+              </Pressable>
+
+              <Pressable
+                onPress={() => handleExecuteTransferAction('complete')}
+                style={styles.actionItem}
+              >
+                <Text style={styles.actionItemIcon}>✅</Text>
+                <View style={styles.actionItemTextCol}>
+                  <Text style={styles.actionItemTitle}>Receive & Complete</Text>
+                  <Text style={styles.actionItemSubtitle}>Accept incoming stock at destination pharmacy</Text>
+                </View>
+              </Pressable>
+
+              <Pressable
+                onPress={() => handleExecuteTransferAction('waybill')}
+                style={styles.actionItem}
+              >
+                <Text style={styles.actionItemIcon}>🖨️</Text>
+                <View style={styles.actionItemTextCol}>
+                  <Text style={styles.actionItemTitle}>Print Transfer Gate Pass</Text>
+                  <Text style={styles.actionItemSubtitle}>Official pharmacy transit manifesto</Text>
+                </View>
+              </Pressable>
+
+              <Pressable
+                onPress={() => handleExecuteTransferAction('cancel')}
+                style={[styles.actionItem, styles.actionItemDanger]}
+              >
+                <Text style={styles.actionItemIcon}>❌</Text>
+                <View style={styles.actionItemTextCol}>
+                  <Text style={[styles.actionItemTitle, { color: '#DC2626' }]}>Cancel Transfer</Text>
+                  <Text style={styles.actionItemSubtitle}>Release locked stock back to source branch</Text>
+                </View>
+              </Pressable>
+
+              <Pressable
+                onPress={() => handleExecuteTransferAction('dev-guide')}
+                style={[styles.actionItem, styles.actionItemDev]}
+              >
+                <Text style={styles.actionItemIcon}>🔌</Text>
+                <View style={styles.actionItemTextCol}>
+                  <Text style={[styles.actionItemTitle, { color: '#0F766E' }]}>
+                    Backend & Database Guide (For Developers)
+                  </Text>
+                  <Text style={styles.actionItemSubtitle}>
+                    View API route, request JSON, and PostgreSQL tables for transfers
+                  </Text>
+                </View>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 3. STOCK TRANSFER BACKEND & DB DEVELOPER GUIDE MODAL */}
+      <Modal
+        visible={devGuideOpen}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setDevGuideOpen(false)}
+      >
+        <View style={styles.modalOverlayAction}>
+          <View style={[styles.devGuideModalCard, isMobile && styles.devGuideModalCardMobile]}>
+            <View style={styles.devGuideModalHeader}>
+              <View style={styles.devGuideTitleRow}>
+                <View style={styles.devGuideIconBadge}>
+                  <Text style={styles.devGuideIconText}>🔌</Text>
+                </View>
+                <View>
+                  <Text style={styles.devGuideModalTitle}>Stock Transfer Backend & Database Guide</Text>
+                  <Text style={styles.devGuideModalSubtitle}>
+                    Complete specification for multi-branch transit API & DB wiring
+                  </Text>
+                </View>
+              </View>
+              <Pressable onPress={() => setDevGuideOpen(false)} style={styles.closeActionBtn}>
+                <Text style={styles.closeActionText}>✕</Text>
+              </Pressable>
+            </View>
+
+            <ScrollView style={styles.devGuideModalBody} showsVerticalScrollIndicator={true}>
+              {/* Endpoints */}
+              <View style={styles.guideSec}>
+                <Text style={styles.guideSecTitle}>1. Transfer Lifecycle API Endpoints</Text>
+
+                <View style={styles.endpointCard}>
+                  <View style={styles.endpointHeader}>
+                    <View style={styles.methodPost}><Text style={styles.methodText}>POST</Text></View>
+                    <Text style={styles.endpointRoute}>/api/transfers</Text>
+                  </View>
+                  <Text style={styles.endpointDesc}>
+                    Creates transfer record, decrements stock from source branch, and sets status to 'Draft' or 'In Transit'.
+                  </Text>
+                  <View style={styles.codeSnippet}>
+                    <Text style={styles.codeSnippetText}>
+{`// Payload: POST /api/transfers
+{
+  "from_branch_id": "FIT Main Campus Hospital Pharmacy",
+  "to_branch_id": "FIT Pune City OPD Pharmacy",
+  "item_id": "stk-101",
+  "batch_no": "BCH-8921",
+  "quantity": 50,
+  "created_by": "USR-102",
+  "notes": "Emergency restock for OPD"
+}`}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.endpointCard}>
+                  <View style={styles.endpointHeader}>
+                    <View style={styles.methodPatch}><Text style={styles.methodText}>PATCH</Text></View>
+                    <Text style={styles.endpointRoute}>/api/transfers/:id/status</Text>
+                  </View>
+                  <Text style={styles.endpointDesc}>
+                    Updates status between 'In Transit', 'Completed', or 'Cancelled'.
+                  </Text>
+                </View>
+
+                <View style={styles.endpointCard}>
+                  <View style={styles.endpointHeader}>
+                    <View style={styles.methodPost}><Text style={styles.methodText}>POST</Text></View>
+                    <Text style={styles.endpointRoute}>/api/transfers/:id/receive</Text>
+                  </View>
+                  <Text style={styles.endpointDesc}>
+                    Destination branch accepts delivery, atomic increment to destination branch stock.
+                  </Text>
+                </View>
+              </View>
+
+              {/* Database Schema */}
+              <View style={styles.guideSec}>
+                <Text style={styles.guideSecTitle}>2. PostgreSQL Database Schema</Text>
+                <View style={styles.codeSnippet}>
+                  <Text style={styles.codeSnippetText}>
+{`CREATE TABLE IF NOT EXISTS stock_transfers (
+  id VARCHAR(50) PRIMARY KEY, -- 'TRF-2024-001'
+  organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+  from_branch_id UUID REFERENCES branches(id),
+  to_branch_id UUID REFERENCES branches(id),
+  status VARCHAR(20) NOT NULL DEFAULT 'Draft', -- 'Draft' | 'In Transit' | 'Completed' | 'Cancelled'
+  total_quantity INT NOT NULL,
+  total_items INT NOT NULL DEFAULT 1,
+  created_by UUID REFERENCES users(id),
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  received_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS stock_transfer_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  transfer_id VARCHAR(50) REFERENCES stock_transfers(id) ON DELETE CASCADE,
+  batch_id UUID REFERENCES inventory_batches(id),
+  quantity INT NOT NULL
+);`}
+                  </Text>
+                </View>
+              </View>
+            </ScrollView>
+
+            <View style={styles.devGuideModalFooter}>
+              <Pressable
+                onPress={() => setDevGuideOpen(false)}
+                style={styles.closeDevGuideModalBtn}
+              >
+                <Text style={styles.closeDevGuideModalBtnText}>Close Developer Guide</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
       </Modal>
     </ScrollView>
   );
@@ -998,5 +1339,301 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flexWrap: 'wrap',
+  },
+  devGuideBtnTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    cursor: 'pointer',
+  },
+  devGuideBtnTopIcon: {
+    fontSize: 13,
+  },
+  devGuideBtnTopText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  filterTogglesGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  filterTogglePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+    cursor: 'pointer',
+  },
+  filterTogglePillActive: {
+    backgroundColor: '#F0FDFA',
+    borderColor: '#0F766E',
+  },
+  filterToggleDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#94A3B8',
+  },
+  filterToggleDotActive: {
+    backgroundColor: '#0F766E',
+  },
+  filterToggleText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  filterToggleTextActive: {
+    color: '#0F766E',
+    fontWeight: '700',
+  },
+  mobileTrDotsBtn: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 6,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    cursor: 'pointer',
+  },
+  mobileTrDotsText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  modalOverlayAction: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  actionMenuCard: {
+    width: '100%',
+    maxWidth: 480,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    overflow: 'hidden',
+  },
+  actionMenuHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  actionMenuTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  actionMenuRoute: {
+    fontSize: 11.5,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  closeActionBtn: {
+    padding: 6,
+    cursor: 'pointer',
+  },
+  closeActionText: {
+    fontSize: 18,
+    color: '#64748B',
+    fontWeight: '700',
+  },
+  actionList: {
+    padding: 10,
+    gap: 4,
+  },
+  actionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    cursor: 'pointer',
+  },
+  actionItemDanger: {
+    backgroundColor: '#FEF2F2',
+  },
+  actionItemDev: {
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+    marginTop: 4,
+  },
+  actionItemIcon: {
+    fontSize: 18,
+  },
+  actionItemTextCol: {
+    flex: 1,
+  },
+  actionItemTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  actionItemSubtitle: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  devGuideModalCard: {
+    width: '100%',
+    maxWidth: 780,
+    maxHeight: '90%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  devGuideModalCardMobile: {
+    maxHeight: '95%',
+  },
+  devGuideModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  devGuideTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  devGuideIconBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: '#0F766E',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  devGuideIconText: {
+    fontSize: 18,
+  },
+  devGuideModalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  devGuideModalSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  devGuideModalBody: {
+    padding: 20,
+  },
+  guideSec: {
+    marginBottom: 20,
+  },
+  guideSecTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F766E',
+    marginBottom: 6,
+  },
+  guideSecDesc: {
+    fontSize: 12,
+    color: '#475569',
+    marginBottom: 8,
+  },
+  codeSnippet: {
+    backgroundColor: '#0F172A',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 6,
+  },
+  codeSnippetText: {
+    color: '#38BDF8',
+    fontSize: 11.5,
+    fontFamily: Platform.select({ web: 'Consolas, Monaco, monospace', default: 'System' }),
+    lineHeight: 17,
+  },
+  endpointCard: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 10,
+  },
+  endpointHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  methodPatch: {
+    backgroundColor: '#8B5CF6',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  methodPost: {
+    backgroundColor: '#16A34A',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  methodText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  endpointRoute: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    fontFamily: Platform.select({ web: 'monospace', default: 'System' }),
+  },
+  endpointDesc: {
+    fontSize: 12,
+    color: '#475569',
+  },
+  devGuideModalFooter: {
+    padding: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+    alignItems: 'flex-end',
+  },
+  closeDevGuideModalBtn: {
+    backgroundColor: '#0F766E',
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+    borderRadius: 8,
+    cursor: 'pointer',
+  },
+  closeDevGuideModalBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12.5,
+    fontWeight: '700',
   },
 });

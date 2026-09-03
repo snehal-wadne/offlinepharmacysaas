@@ -42,6 +42,7 @@ const REPORTS_SUBITEMS = [
 
 const SETTINGS_SUBITEMS = [
   { title: 'Tax / GST Settings', key: 'tax-settings', icon: '⚙️' },
+  { title: 'Subscription & Plans', key: 'subscription-plans', icon: '💳' },
   { title: 'Page Permissions', key: 'page-permissions', icon: '🛡️' },
 ];
 
