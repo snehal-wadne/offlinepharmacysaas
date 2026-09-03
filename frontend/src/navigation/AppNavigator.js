@@ -31,7 +31,14 @@ import CustomerDetailsScreen from '../screens/customers/CustomerDetailsScreen';
 import CustomerLedgerScreen from '../screens/customers/CustomerLedgerScreen';
 import CustomerPaymentsScreen from '../screens/customers/CustomerPaymentsScreen';
 
-// 5. Reports Screens (3 Pages: Inventory Reports, Purchase Reports, Expiry Reports)
+// 5. Management Screens (4 Pages: Branches, Users, Roles, Audit Log) + Settings (Page Permissions)
+import BranchesScreen from '../screens/management/BranchesScreen';
+import UsersScreen from '../screens/management/UsersScreen';
+import RolesScreen from '../screens/management/RolesScreen';
+import RolesPermissionsScreen from '../screens/management/RolesPermissionsScreen';
+import AuditLogScreen from '../screens/management/AuditLogScreen';
+
+// 6. Reports Screens (3 Pages: Inventory Reports, Purchase Reports, Expiry Reports)
 import InventoryReportsScreen from '../screens/reports/InventoryReportsScreen';
 import PurchaseReportsScreen from '../screens/reports/PurchaseReportsScreen';
 import ExpiryReportsScreen from '../screens/reports/ExpiryReportsScreen';
@@ -47,8 +54,15 @@ export default function AppNavigator() {
   const [toastMessage, setToastMessage] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Authenticated User State
-  const [currentUser, setCurrentUser] = useState(null);
+  // Authenticated User State (Default mock logged in as Administrator)
+  const [currentUser, setCurrentUser] = useState({
+    id: 'USR-102',
+    display_name: 'Pooja Deshmukh',
+    name: 'Pooja Deshmukh',
+    role: 'Administrator',
+    email: 'pooja.d@flora.edu.in',
+    branch: 'FIT Main Campus Hospital Pharmacy',
+  });
 
   // Pharmacy Architecture Mode: Multi-Branch (true) vs Single-Shop (false)
   const [isMultiBranch, setIsMultiBranch] = useState(true);
@@ -179,6 +193,47 @@ export default function AppNavigator() {
       case 'customer-payments':
         return (
           <CustomerPaymentsScreen
+            onNavigate={handleNavigate}
+            onShowToast={showToast}
+            isMultiBranch={isMultiBranch}
+          />
+        );
+      case 'branches':
+        return (
+          <BranchesScreen
+            onNavigate={handleNavigate}
+            onShowToast={showToast}
+            isMultiBranch={isMultiBranch}
+          />
+        );
+      case 'users':
+        return (
+          <UsersScreen
+            onNavigate={handleNavigate}
+            onShowToast={showToast}
+            isMultiBranch={isMultiBranch}
+          />
+        );
+      case 'roles':
+        return (
+          <RolesScreen
+            onNavigate={handleNavigate}
+            onShowToast={showToast}
+            isMultiBranch={isMultiBranch}
+          />
+        );
+      case 'roles-permissions':
+      case 'page-permissions':
+        return (
+          <RolesPermissionsScreen
+            onNavigate={handleNavigate}
+            onShowToast={showToast}
+            isMultiBranch={isMultiBranch}
+          />
+        );
+      case 'audit-log':
+        return (
+          <AuditLogScreen
             onNavigate={handleNavigate}
             onShowToast={showToast}
             isMultiBranch={isMultiBranch}
