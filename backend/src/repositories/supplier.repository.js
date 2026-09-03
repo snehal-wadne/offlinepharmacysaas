@@ -4,25 +4,23 @@
  * Purpose:
  * Handles all direct database operations related to suppliers.
  *
- * The repository is responsible only for communicating with
- * PostgreSQL. It does not handle HTTP requests, authentication,
- * authorization, or business rules.
+ * The repository communicates with PostgreSQL and uses Redis
+ * only as a short-lived read cache.
  *
- * Application flow:
- *
- * Controller
- *     ↓
- * Service
- *     ↓
- * Supplier Repository
- *     ↓
- * PostgreSQL
+ * PostgreSQL remains the source of truth.
  *
  * Supplier records are organisation-scoped because this is a
  * multi-tenant SaaS application.
  */
 
 const { pool } = require("../db/connection");
+
+const { getCache, setCache, deleteCache } = require("../cache/cache");
+
+const SUPPLIER_CACHE_TTL = 60;
+
+const buildSupplierCacheKey = (organisationId, supplierId) =>
+  `organisation:${organisationId}:supplier:${supplierId}`;
 
 /**
  * Create a new supplier.
@@ -97,11 +95,11 @@ const createSupplier = async ({
 /**
  * Find a supplier by ID within a specific organisation.
  *
- * Both supplier ID and organisation ID are included in the
- * WHERE clause to maintain tenant isolation.
+ * Redis is checked first. On a cache miss, PostgreSQL is queried
+ * and the result is stored in Redis for a short period.
  *
- * This prevents an organisation from accessing another
- * organisation's supplier record simply by knowing its UUID.
+ * Both supplier ID and organisation ID are part of the cache key
+ * and database query to maintain tenant isolation.
  *
  * @param {string} organisationId
  * @param {string} supplierId
@@ -109,6 +107,22 @@ const createSupplier = async ({
  * @returns {Object|null} Supplier if found, otherwise null
  */
 const getSupplierById = async (organisationId, supplierId) => {
+  const cacheKey = buildSupplierCacheKey(organisationId, supplierId);
+
+  /*
+   * Redis is an optimisation only. If Redis is unavailable,
+   * continue with PostgreSQL.
+   */
+  try {
+    const cachedSupplier = await getCache(cacheKey);
+
+    if (cachedSupplier !== null) {
+      return cachedSupplier;
+    }
+  } catch (error) {
+    console.error("Supplier cache read failed:", error.message);
+  }
+
   const query = `
         SELECT
             id,
@@ -131,7 +145,21 @@ const getSupplierById = async (organisationId, supplierId) => {
 
   const result = await pool.query(query, values);
 
-  return result.rows[0] || null;
+  const supplier = result.rows[0] || null;
+
+  /*
+   * Do not cache missing suppliers. A deleted record should not
+   * remain represented by a cached null value.
+   */
+  if (supplier !== null) {
+    try {
+      await setCache(cacheKey, supplier, SUPPLIER_CACHE_TTL);
+    } catch (error) {
+      console.error("Supplier cache write failed:", error.message);
+    }
+  }
+
+  return supplier;
 };
 
 /**
@@ -139,6 +167,10 @@ const getSupplierById = async (organisationId, supplierId) => {
  *
  * Pagination is included so that the API does not need to load
  * an unlimited number of supplier records into memory.
+ *
+ * This query intentionally remains uncached for now because
+ * supplier creation, updates and deletes can affect multiple
+ * pages of the result.
  *
  * @param {string} organisationId
  * @param {number} limit
@@ -191,8 +223,8 @@ const getSuppliersByOrganisation = async (
  * - city
  * - GSTIN
  *
- * organisation_id remains part of the query to prevent
- * cross-organisation data access.
+ * This query intentionally remains uncached because the result
+ * can change whenever supplier data changes.
  *
  * @param {string} organisationId
  * @param {string} searchTerm
@@ -250,7 +282,8 @@ const searchSuppliers = async (
  * The supplier is identified using both supplierId and
  * organisationId to maintain tenant isolation.
  *
- * updated_at is refreshed whenever the supplier is modified.
+ * After the database update succeeds, the supplier's cached
+ * record is invalidated so the next read gets fresh data.
  *
  * @param {string} organisationId
  * @param {string} supplierId
@@ -312,7 +345,21 @@ const updateSupplier = async (
 
   const result = await pool.query(query, values);
 
-  return result.rows[0] || null;
+  const supplier = result.rows[0] || null;
+
+  if (supplier !== null) {
+    /*
+     * PostgreSQL has the latest data. Remove the old Redis
+     * value so the next read fetches the updated supplier.
+     */
+    try {
+      await deleteCache(buildSupplierCacheKey(organisationId, supplierId));
+    } catch (error) {
+      console.error("Supplier cache invalidation failed:", error.message);
+    }
+  }
+
+  return supplier;
 };
 
 /**
@@ -320,10 +367,11 @@ const updateSupplier = async (
  *
  * The repository performs a hard delete when requested.
  *
+ * After successful deletion, the supplier's cached record is
+ * removed so a later lookup cannot return stale data.
+ *
  * Whether a supplier is actually allowed to be deleted should
- * be decided by the service layer. For example, a supplier that
- * already has purchase history may need to be marked inactive
- * instead of being physically deleted.
+ * be decided by the service layer.
  *
  * @param {string} organisationId
  * @param {string} supplierId
@@ -342,14 +390,25 @@ const deleteSupplier = async (organisationId, supplierId) => {
 
   const result = await pool.query(query, values);
 
-  return result.rowCount > 0;
+  if (result.rowCount > 0) {
+    /*
+     * Invalidate the ID cache only after the database delete
+     * succeeds.
+     */
+    try {
+      await deleteCache(buildSupplierCacheKey(organisationId, supplierId));
+    } catch (error) {
+      console.error("Supplier cache invalidation failed:", error.message);
+    }
+
+    return true;
+  }
+
+  return false;
 };
 
 /**
  * Export supplier repository functions.
- *
- * Services can use these functions without needing to know
- * how the underlying SQL queries are implemented.
  */
 module.exports = {
   createSupplier,

@@ -11,18 +11,9 @@
  *          ↓
  *     purchase_items
  *
- * The purchase table stores the purchase/order information,
- * while purchase_items stores the individual products ordered.
- *
- * Example:
- *
- *     Purchase PO-0001
- *          │
- *          ├── Paracetamol 650mg × 100
- *          ├── Amoxicillin 500mg × 50
- *          └── Cetirizine 10mg × 75
- *
- * The repository is responsible for database persistence.
+ * PostgreSQL remains the source of truth.
+ * Redis is used only as a short-lived cache for individual
+ * purchase lookups.
  *
  * Business rules such as:
  *
@@ -38,6 +29,13 @@
 
 const { pool } = require("../db/connection");
 
+const { getCache, setCache, deleteCache } = require("../cache/cache");
+
+const PURCHASE_CACHE_TTL = 60;
+
+const buildPurchaseCacheKey = (organisationId, purchaseId) =>
+  `organisation:${organisationId}:purchase:${purchaseId}`;
+
 /**
  * Create a purchase together with its purchase items.
  *
@@ -45,10 +43,6 @@ const { pool } = require("../db/connection");
  * inside a single PostgreSQL transaction.
  *
  * This prevents partially-created purchases.
- *
- * For example, if the purchase has three items and the third
- * item fails to insert, the purchase and the first two items
- * are rolled back as well.
  *
  * IMPORTANT:
  * Creating a purchase does NOT modify inventory.
@@ -75,7 +69,7 @@ const createPurchase = async ({
   branchId,
   orderDate,
   expectedDate = null,
-  status = "DRAFT",
+  status = "PENDING",
   notes = null,
   createdBy = null,
   items,
@@ -86,36 +80,36 @@ const createPurchase = async ({
     await client.query("BEGIN");
 
     /*
-     * Create the purchase header.
+     * Create the purchase header first.
      */
     const purchaseResult = await client.query(
       `
-            INSERT INTO purchases (
-                organisation_id,
-                purchase_number,
-                supplier_id,
-                branch_id,
-                order_date,
-                expected_date,
-                status,
-                notes,
-                created_by
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            RETURNING
-                id,
-                organisation_id,
-                purchase_number,
-                supplier_id,
-                branch_id,
-                order_date,
-                expected_date,
-                status,
-                notes,
-                created_by,
-                created_at,
-                updated_at;
-            `,
+        INSERT INTO purchases (
+            organisation_id,
+            purchase_number,
+            supplier_id,
+            branch_id,
+            order_date,
+            expected_date,
+            status,
+            notes,
+            created_by
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        RETURNING
+            id,
+            organisation_id,
+            purchase_number,
+            supplier_id,
+            branch_id,
+            order_date,
+            expected_date,
+            status,
+            notes,
+            created_by,
+            created_at,
+            updated_at;
+      `,
       [
         organisationId,
         purchaseNumber,
@@ -132,33 +126,34 @@ const createPurchase = async ({
     const purchase = purchaseResult.rows[0];
 
     /*
-     * Insert each product ordered in this purchase.
+     * Insert each product ordered in this purchase into the
+     * separate purchase_items table.
      */
     const createdItems = [];
 
     for (const item of items) {
       const itemResult = await client.query(
         `
-                INSERT INTO purchase_items (
-                    purchase_id,
-                    product_id,
-                    ordered_quantity,
-                    unit_cost,
-                    tax_amount,
-                    discount_amount
-                )
-                VALUES ($1, $2, $3, $4, $5, $6)
-                RETURNING
-                    id,
-                    purchase_id,
-                    product_id,
-                    ordered_quantity,
-                    unit_cost,
-                    tax_amount,
-                    discount_amount,
-                    created_at,
-                    updated_at;
-                `,
+          INSERT INTO purchase_items (
+              purchase_id,
+              product_id,
+              ordered_quantity,
+              unit_cost,
+              tax_amount,
+              discount_amount
+          )
+          VALUES ($1, $2, $3, $4, $5, $6)
+          RETURNING
+              id,
+              purchase_id,
+              product_id,
+              ordered_quantity,
+              unit_cost,
+              tax_amount,
+              discount_amount,
+              created_at,
+              updated_at;
+        `,
         [
           purchase.id,
           item.productId,
@@ -187,9 +182,6 @@ const createPurchase = async ({
 
     throw error;
   } finally {
-    /*
-     * Return the database connection to the pool.
-     */
     client.release();
   }
 };
@@ -197,11 +189,11 @@ const createPurchase = async ({
 /**
  * Get a purchase by ID.
  *
- * organisation_id is included to maintain tenant isolation.
+ * Redis is checked first. On a cache miss, PostgreSQL is
+ * queried and the result is stored in Redis for a short period.
  *
- * Supplier, branch and creator information are included so
- * callers can display useful purchase information without
- * making additional queries.
+ * Both purchase ID and organisation ID are used for tenant
+ * isolation in the database query and cache key.
  *
  * @param {string} organisationId
  * @param {string} purchaseId
@@ -209,37 +201,66 @@ const createPurchase = async ({
  * @returns {Object|null} Purchase or null if not found
  */
 const getPurchaseById = async (organisationId, purchaseId) => {
+  const cacheKey = buildPurchaseCacheKey(organisationId, purchaseId);
+
+  /*
+   * Redis is an optimisation only. If Redis is unavailable,
+   * continue with PostgreSQL.
+   */
+  try {
+    const cachedPurchase = await getCache(cacheKey);
+
+    if (cachedPurchase !== null) {
+      return cachedPurchase;
+    }
+  } catch (error) {
+    console.error("Purchase cache read failed:", error.message);
+  }
+
   const query = `
-        SELECT
-            p.id,
-            p.organisation_id,
-            p.purchase_number,
-            p.supplier_id,
-            s.name AS supplier_name,
-            p.branch_id,
-            b.name AS branch_name,
-            p.order_date,
-            p.expected_date,
-            p.status,
-            p.notes,
-            p.created_by,
-            u.name AS created_by_name,
-            p.created_at,
-            p.updated_at
-        FROM purchases p
-        INNER JOIN suppliers s
-            ON s.id = p.supplier_id
-        INNER JOIN branches b
-            ON b.id = p.branch_id
-        LEFT JOIN users u
-            ON u.id = p.created_by
-        WHERE p.id = $1
-          AND p.organisation_id = $2;
-    `;
+    SELECT
+        p.id,
+        p.organisation_id,
+        p.purchase_number,
+        p.supplier_id,
+        s.name AS supplier_name,
+        p.branch_id,
+        b.name AS branch_name,
+        p.order_date,
+        p.expected_date,
+        p.status,
+        p.notes,
+        p.created_by,
+        u.name AS created_by_name,
+        p.created_at,
+        p.updated_at
+    FROM purchases p
+    INNER JOIN suppliers s
+        ON s.id = p.supplier_id
+    INNER JOIN branches b
+        ON b.id = p.branch_id
+    LEFT JOIN users u
+        ON u.id = p.created_by
+    WHERE p.id = $1
+      AND p.organisation_id = $2;
+  `;
 
   const result = await pool.query(query, [purchaseId, organisationId]);
 
-  return result.rows[0] || null;
+  const purchase = result.rows[0] || null;
+
+  /*
+   * Do not cache missing purchases.
+   */
+  if (purchase !== null) {
+    try {
+      await setCache(cacheKey, purchase, PURCHASE_CACHE_TTL);
+    } catch (error) {
+      console.error("Purchase cache write failed:", error.message);
+    }
+  }
+
+  return purchase;
 };
 
 /**
@@ -255,31 +276,31 @@ const getPurchaseById = async (organisationId, purchaseId) => {
  */
 const getPurchaseItems = async (organisationId, purchaseId) => {
   const query = `
-        SELECT
-            pi.id,
-            pi.purchase_id,
-            pi.product_id,
-            p.medicine_name,
-            p.brand_name,
-            p.strength,
-            p.pack_size,
-            p.manufacturer,
-            p.sku,
-            pi.ordered_quantity,
-            pi.unit_cost,
-            pi.tax_amount,
-            pi.discount_amount,
-            pi.created_at,
-            pi.updated_at
-        FROM purchase_items pi
-        INNER JOIN purchases purchase
-            ON purchase.id = pi.purchase_id
-        INNER JOIN products p
-            ON p.id = pi.product_id
-        WHERE pi.purchase_id = $1
-          AND purchase.organisation_id = $2
-        ORDER BY p.medicine_name ASC, pi.id ASC;
-    `;
+    SELECT
+        pi.id,
+        pi.purchase_id,
+        pi.product_id,
+        p.medicine_name,
+        p.brand_name,
+        p.strength,
+        p.pack_size,
+        p.manufacturer,
+        p.sku,
+        pi.ordered_quantity,
+        pi.unit_cost,
+        pi.tax_amount,
+        pi.discount_amount,
+        pi.created_at,
+        pi.updated_at
+    FROM purchase_items pi
+    INNER JOIN purchases purchase
+        ON purchase.id = pi.purchase_id
+    INNER JOIN products p
+        ON p.id = pi.product_id
+    WHERE pi.purchase_id = $1
+      AND purchase.organisation_id = $2
+    ORDER BY p.medicine_name ASC, pi.id ASC;
+  `;
 
   const result = await pool.query(query, [purchaseId, organisationId]);
 
@@ -289,7 +310,9 @@ const getPurchaseItems = async (organisationId, purchaseId) => {
 /**
  * Get purchases belonging to an organisation.
  *
- * This is useful for the main purchase listing screen.
+ * Pagination is intentionally kept database-backed because
+ * purchase creation, updates and deletes can affect different
+ * pages of the result.
  *
  * @param {string} organisationId
  * @param {number} limit
@@ -303,34 +326,34 @@ const getPurchasesByOrganisation = async (
   offset = 0,
 ) => {
   const query = `
-        SELECT
-            p.id,
-            p.organisation_id,
-            p.purchase_number,
-            p.supplier_id,
-            s.name AS supplier_name,
-            p.branch_id,
-            b.name AS branch_name,
-            p.order_date,
-            p.expected_date,
-            p.status,
-            p.notes,
-            p.created_by,
-            u.name AS created_by_name,
-            p.created_at,
-            p.updated_at
-        FROM purchases p
-        INNER JOIN suppliers s
-            ON s.id = p.supplier_id
-        INNER JOIN branches b
-            ON b.id = p.branch_id
-        LEFT JOIN users u
-            ON u.id = p.created_by
-        WHERE p.organisation_id = $1
-        ORDER BY p.order_date DESC, p.created_at DESC
-        LIMIT $2
-        OFFSET $3;
-    `;
+    SELECT
+        p.id,
+        p.organisation_id,
+        p.purchase_number,
+        p.supplier_id,
+        s.name AS supplier_name,
+        p.branch_id,
+        b.name AS branch_name,
+        p.order_date,
+        p.expected_date,
+        p.status,
+        p.notes,
+        p.created_by,
+        u.name AS created_by_name,
+        p.created_at,
+        p.updated_at
+    FROM purchases p
+    INNER JOIN suppliers s
+        ON s.id = p.supplier_id
+    INNER JOIN branches b
+        ON b.id = p.branch_id
+    LEFT JOIN users u
+        ON u.id = p.created_by
+    WHERE p.organisation_id = $1
+    ORDER BY p.order_date DESC, p.created_at DESC
+    LIMIT $2
+    OFFSET $3;
+  `;
 
   const result = await pool.query(query, [organisationId, limit, offset]);
 
@@ -354,35 +377,35 @@ const getPurchasesByBranch = async (
   offset = 0,
 ) => {
   const query = `
-        SELECT
-            p.id,
-            p.organisation_id,
-            p.purchase_number,
-            p.supplier_id,
-            s.name AS supplier_name,
-            p.branch_id,
-            b.name AS branch_name,
-            p.order_date,
-            p.expected_date,
-            p.status,
-            p.notes,
-            p.created_by,
-            u.name AS created_by_name,
-            p.created_at,
-            p.updated_at
-        FROM purchases p
-        INNER JOIN suppliers s
-            ON s.id = p.supplier_id
-        INNER JOIN branches b
-            ON b.id = p.branch_id
-        LEFT JOIN users u
-            ON u.id = p.created_by
-        WHERE p.organisation_id = $1
-          AND p.branch_id = $2
-        ORDER BY p.order_date DESC, p.created_at DESC
-        LIMIT $3
-        OFFSET $4;
-    `;
+    SELECT
+        p.id,
+        p.organisation_id,
+        p.purchase_number,
+        p.supplier_id,
+        s.name AS supplier_name,
+        p.branch_id,
+        b.name AS branch_name,
+        p.order_date,
+        p.expected_date,
+        p.status,
+        p.notes,
+        p.created_by,
+        u.name AS created_by_name,
+        p.created_at,
+        p.updated_at
+    FROM purchases p
+    INNER JOIN suppliers s
+        ON s.id = p.supplier_id
+    INNER JOIN branches b
+        ON b.id = p.branch_id
+    LEFT JOIN users u
+        ON u.id = p.created_by
+    WHERE p.organisation_id = $1
+      AND p.branch_id = $2
+    ORDER BY p.order_date DESC, p.created_at DESC
+    LIMIT $3
+    OFFSET $4;
+  `;
 
   const result = await pool.query(query, [
     organisationId,
@@ -396,8 +419,6 @@ const getPurchasesByBranch = async (
 
 /**
  * Get purchases from a particular supplier.
- *
- * This is useful when viewing a supplier's purchase history.
  *
  * @param {string} organisationId
  * @param {string} supplierId
@@ -413,35 +434,35 @@ const getPurchasesBySupplier = async (
   offset = 0,
 ) => {
   const query = `
-        SELECT
-            p.id,
-            p.organisation_id,
-            p.purchase_number,
-            p.supplier_id,
-            s.name AS supplier_name,
-            p.branch_id,
-            b.name AS branch_name,
-            p.order_date,
-            p.expected_date,
-            p.status,
-            p.notes,
-            p.created_by,
-            u.name AS created_by_name,
-            p.created_at,
-            p.updated_at
-        FROM purchases p
-        INNER JOIN suppliers s
-            ON s.id = p.supplier_id
-        INNER JOIN branches b
-            ON b.id = p.branch_id
-        LEFT JOIN users u
-            ON u.id = p.created_by
-        WHERE p.organisation_id = $1
-          AND p.supplier_id = $2
-        ORDER BY p.order_date DESC, p.created_at DESC
-        LIMIT $3
-        OFFSET $4;
-    `;
+    SELECT
+        p.id,
+        p.organisation_id,
+        p.purchase_number,
+        p.supplier_id,
+        s.name AS supplier_name,
+        p.branch_id,
+        b.name AS branch_name,
+        p.order_date,
+        p.expected_date,
+        p.status,
+        p.notes,
+        p.created_by,
+        u.name AS created_by_name,
+        p.created_at,
+        p.updated_at
+    FROM purchases p
+    INNER JOIN suppliers s
+        ON s.id = p.supplier_id
+    INNER JOIN branches b
+        ON b.id = p.branch_id
+    LEFT JOIN users u
+        ON u.id = p.created_by
+    WHERE p.organisation_id = $1
+      AND p.supplier_id = $2
+    ORDER BY p.order_date DESC, p.created_at DESC
+    LIMIT $3
+    OFFSET $4;
+  `;
 
   const result = await pool.query(query, [
     organisationId,
@@ -476,39 +497,39 @@ const searchPurchases = async (
   offset = 0,
 ) => {
   const query = `
-        SELECT
-            p.id,
-            p.organisation_id,
-            p.purchase_number,
-            p.supplier_id,
-            s.name AS supplier_name,
-            p.branch_id,
-            b.name AS branch_name,
-            p.order_date,
-            p.expected_date,
-            p.status,
-            p.notes,
-            p.created_by,
-            u.name AS created_by_name,
-            p.created_at,
-            p.updated_at
-        FROM purchases p
-        INNER JOIN suppliers s
-            ON s.id = p.supplier_id
-        INNER JOIN branches b
-            ON b.id = p.branch_id
-        LEFT JOIN users u
-            ON u.id = p.created_by
-        WHERE p.organisation_id = $1
-          AND (
-                p.purchase_number ILIKE $2
-                OR s.name ILIKE $2
-                OR b.name ILIKE $2
-          )
-        ORDER BY p.order_date DESC, p.created_at DESC
-        LIMIT $3
-        OFFSET $4;
-    `;
+    SELECT
+        p.id,
+        p.organisation_id,
+        p.purchase_number,
+        p.supplier_id,
+        s.name AS supplier_name,
+        p.branch_id,
+        b.name AS branch_name,
+        p.order_date,
+        p.expected_date,
+        p.status,
+        p.notes,
+        p.created_by,
+        u.name AS created_by_name,
+        p.created_at,
+        p.updated_at
+    FROM purchases p
+    INNER JOIN suppliers s
+        ON s.id = p.supplier_id
+    INNER JOIN branches b
+        ON b.id = p.branch_id
+    LEFT JOIN users u
+        ON u.id = p.created_by
+    WHERE p.organisation_id = $1
+      AND (
+            p.purchase_number ILIKE $2
+            OR s.name ILIKE $2
+            OR b.name ILIKE $2
+      )
+    ORDER BY p.order_date DESC, p.created_at DESC
+    LIMIT $3
+    OFFSET $4;
+  `;
 
   const searchPattern = `%${searchTerm}%`;
 
@@ -528,13 +549,17 @@ const searchPurchases = async (
  * The service layer should determine whether the requested
  * status transition is valid.
  *
- * Example:
+ * Valid statuses are defined by the database schema:
  *
- *     DRAFT → ORDERED
- *     ORDERED → PARTIALLY_RECEIVED
- *     PARTIALLY_RECEIVED → RECEIVED
+ *     DRAFT
+ *     PENDING
+ *     APPROVED
+ *     PARTIALLY_RECEIVED
+ *     RECEIVED
+ *     CANCELLED
  *
- * The repository only persists the requested status.
+ * PostgreSQL is updated first. The individual purchase cache
+ * is invalidated only after the update succeeds.
  *
  * @param {string} organisationId
  * @param {string} purchaseId
@@ -544,30 +569,40 @@ const searchPurchases = async (
  */
 const updatePurchaseStatus = async (organisationId, purchaseId, status) => {
   const query = `
-        UPDATE purchases
-        SET
-            status = $1,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = $2
-          AND organisation_id = $3
-        RETURNING
-            id,
-            organisation_id,
-            purchase_number,
-            supplier_id,
-            branch_id,
-            order_date,
-            expected_date,
-            status,
-            notes,
-            created_by,
-            created_at,
-            updated_at;
-    `;
+    UPDATE purchases
+    SET
+        status = $1,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = $2
+      AND organisation_id = $3
+    RETURNING
+        id,
+        organisation_id,
+        purchase_number,
+        supplier_id,
+        branch_id,
+        order_date,
+        expected_date,
+        status,
+        notes,
+        created_by,
+        created_at,
+        updated_at;
+  `;
 
   const result = await pool.query(query, [status, purchaseId, organisationId]);
 
-  return result.rows[0] || null;
+  const updatedPurchase = result.rows[0] || null;
+
+  if (updatedPurchase !== null) {
+    try {
+      await deleteCache(buildPurchaseCacheKey(organisationId, purchaseId));
+    } catch (error) {
+      console.error("Purchase cache invalidation failed:", error.message);
+    }
+  }
+
+  return updatedPurchase;
 };
 
 /**
@@ -576,11 +611,8 @@ const updatePurchaseStatus = async (organisationId, purchaseId, status) => {
  * purchase_items references purchases with ON DELETE CASCADE,
  * so deleting a purchase also removes its purchase items.
  *
- * Whether deletion is allowed should be decided by the
- * service layer.
- *
- * For example, a purchase that has already been received should
- * normally not be physically deleted.
+ * The purchase cache is invalidated only after the database
+ * delete succeeds.
  *
  * @param {string} organisationId
  * @param {string} purchaseId
@@ -589,88 +621,150 @@ const updatePurchaseStatus = async (organisationId, purchaseId, status) => {
  */
 const deletePurchase = async (organisationId, purchaseId) => {
   const query = `
-        DELETE FROM purchases
-        WHERE id = $1
-          AND organisation_id = $2
-        RETURNING id;
-    `;
+    DELETE FROM purchases
+    WHERE id = $1
+      AND organisation_id = $2
+    RETURNING id;
+  `;
 
   const result = await pool.query(query, [purchaseId, organisationId]);
 
-  return result.rowCount > 0;
+  const deleted = result.rowCount > 0;
+
+  if (deleted) {
+    try {
+      await deleteCache(buildPurchaseCacheKey(organisationId, purchaseId));
+    } catch (error) {
+      console.error("Purchase cache invalidation failed:", error.message);
+    }
+  }
+
+  return deleted;
 };
 
+/**
+ * Get purchases with optional filters.
+ *
+ * This remains database-backed because every combination of
+ * filters, pagination and sorting can produce a different result.
+ *
+ * @param {string} organisationId
+ * @param {Object} filters
+ * @returns {Object[]} Matching purchases
+ */
 const getPurchasesWithFilters = async (
   organisationId,
-  { status = null, search = null, branchId = null, supplierId = null, limit = 50, offset = 0 } = {}
+  {
+    status = null,
+    search = null,
+    branchId = null,
+    supplierId = null,
+    limit = 50,
+    offset = 0,
+  } = {},
 ) => {
   const params = [organisationId];
   let paramCount = 1;
 
   let query = `
-        SELECT
-            p.id,
-            p.organisation_id,
-            p.purchase_number,
-            p.supplier_id,
-            s.name AS supplier_name,
-            p.branch_id,
-            b.name AS branch_name,
-            p.order_date,
-            p.expected_date,
-            p.status,
-            p.notes,
-            p.created_by,
-            u.name AS created_by_name,
-            p.created_at,
-            p.updated_at,
-            COALESCE(SUM(pi.ordered_quantity * pi.unit_cost + pi.tax_amount - pi.discount_amount), 0) AS total_amount,
-            COUNT(pi.id)::INT AS items_count
-        FROM purchases p
-        INNER JOIN suppliers s ON s.id = p.supplier_id
-        INNER JOIN branches b ON b.id = p.branch_id
-        LEFT JOIN users u ON u.id = p.created_by
-        LEFT JOIN purchase_items pi ON pi.purchase_id = p.id
-        WHERE p.organisation_id = $1
+    SELECT
+        p.id,
+        p.organisation_id,
+        p.purchase_number,
+        p.supplier_id,
+        s.name AS supplier_name,
+        p.branch_id,
+        b.name AS branch_name,
+        p.order_date,
+        p.expected_date,
+        p.status,
+        p.notes,
+        p.created_by,
+        u.name AS created_by_name,
+        p.created_at,
+        p.updated_at,
+        COALESCE(
+          SUM(
+            pi.ordered_quantity * pi.unit_cost
+            + pi.tax_amount
+            - pi.discount_amount
+          ),
+          0
+        ) AS total_amount,
+        COUNT(pi.id)::INT AS items_count
+    FROM purchases p
+    INNER JOIN suppliers s
+        ON s.id = p.supplier_id
+    INNER JOIN branches b
+        ON b.id = p.branch_id
+    LEFT JOIN users u
+        ON u.id = p.created_by
+    LEFT JOIN purchase_items pi
+        ON pi.purchase_id = p.id
+    WHERE p.organisation_id = $1
+  `;
+
+  if (status && status !== "All Statuses") {
+    paramCount++;
+
+    query += `
+      AND UPPER(p.status) = UPPER($${paramCount})
     `;
 
-  if (status && status !== 'All Statuses') {
-    paramCount++;
-    query += ` AND UPPER(p.status) = UPPER($${paramCount})`;
     params.push(status);
   }
 
   if (branchId) {
     paramCount++;
-    query += ` AND p.branch_id = $${paramCount}`;
+
+    query += `
+      AND p.branch_id = $${paramCount}
+    `;
+
     params.push(branchId);
   }
 
   if (supplierId) {
     paramCount++;
-    query += ` AND p.supplier_id = $${paramCount}`;
+
+    query += `
+      AND p.supplier_id = $${paramCount}
+    `;
+
     params.push(supplierId);
   }
 
   if (search && search.trim()) {
     paramCount++;
-    query += ` AND (
-      p.purchase_number ILIKE $${paramCount}
-      OR s.name ILIKE $${paramCount}
-      OR b.name ILIKE $${paramCount}
-    )`;
+
+    query += `
+      AND (
+        p.purchase_number ILIKE $${paramCount}
+        OR s.name ILIKE $${paramCount}
+        OR b.name ILIKE $${paramCount}
+      )
+    `;
+
     params.push(`%${search.trim()}%`);
   }
 
   query += `
-        GROUP BY p.id, s.name, b.name, u.name
-        ORDER BY p.order_date DESC, p.created_at DESC
-        LIMIT $${paramCount + 1} OFFSET $${paramCount + 2};
+    GROUP BY
+        p.id,
+        s.name,
+        b.name,
+        u.name
+    ORDER BY
+        p.order_date DESC,
+        p.created_at DESC
+    LIMIT $${paramCount + 1}
+    OFFSET $${paramCount + 2};
   `;
 
   params.push(limit, offset);
 
   const result = await pool.query(query, params);
+
   return result.rows;
 };
 
@@ -689,4 +783,3 @@ module.exports = {
   deletePurchase,
   getPurchasesWithFilters,
 };
-

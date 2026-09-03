@@ -30,6 +30,25 @@
 
 const { pool } = require("../db/connection");
 
+const { getCache, setCache, deleteCache } = require("../cache/cache");
+
+const STOCK_TRANSFER_CACHE_TTL = 60;
+
+/**
+ * Build the Redis key for a stock transfer.
+ *
+ * The organisation ID is part of the key so that the same
+ * transfer ID can never accidentally resolve to another
+ * organisation's cached data.
+ *
+ * @param {string} organisationId
+ * @param {string} transferId
+ *
+ * @returns {string} Redis cache key
+ */
+const buildStockTransferCacheKey = (organisationId, transferId) =>
+  `organisation:${organisationId}:stock-transfer:${transferId}`;
+
 /**
  * Create a stock transfer together with all of its items.
  *
@@ -79,30 +98,30 @@ const createStockTransfer = async ({
      */
     const transferResult = await client.query(
       `
-            INSERT INTO stock_transfers (
-                organisation_id,
-                from_branch_id,
-                to_branch_id,
-                transfer_date,
-                status,
-                transfer_number,
-                notes,
-                created_by
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            RETURNING
-                id,
-                organisation_id,
-                from_branch_id,
-                to_branch_id,
-                transfer_date,
-                status,
-                transfer_number,
-                notes,
-                created_by,
-                created_at,
-                updated_at;
-            `,
+        INSERT INTO stock_transfers (
+            organisation_id,
+            from_branch_id,
+            to_branch_id,
+            transfer_date,
+            status,
+            transfer_number,
+            notes,
+            created_by
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING
+            id,
+            organisation_id,
+            from_branch_id,
+            to_branch_id,
+            transfer_date,
+            status,
+            transfer_number,
+            notes,
+            created_by,
+            created_at,
+            updated_at;
+      `,
       [
         organisationId,
         fromBranchId,
@@ -125,19 +144,19 @@ const createStockTransfer = async ({
     for (const item of items) {
       const itemResult = await client.query(
         `
-                INSERT INTO stock_transfer_items (
-                    transfer_id,
-                    inventory_batch_id,
-                    quantity
-                )
-                VALUES ($1, $2, $3)
-                RETURNING
-                    id,
-                    transfer_id,
-                    inventory_batch_id,
-                    quantity,
-                    created_at;
-                `,
+          INSERT INTO stock_transfer_items (
+              transfer_id,
+              inventory_batch_id,
+              quantity
+          )
+          VALUES ($1, $2, $3)
+          RETURNING
+              id,
+              transfer_id,
+              inventory_batch_id,
+              quantity,
+              created_at;
+        `,
         [transfer.id, item.inventoryBatchId, item.quantity],
       );
 
@@ -169,7 +188,12 @@ const createStockTransfer = async ({
 /**
  * Get a stock transfer by ID.
  *
- * The organisation ID is included to maintain tenant isolation.
+ * Redis is checked first. PostgreSQL remains the source of
+ * truth and is queried when the cache does not contain the
+ * requested transfer.
+ *
+ * The organisation ID is included in both the database query
+ * and Redis key to maintain tenant isolation.
  *
  * @param {string} organisationId
  * @param {string} transferId
@@ -177,36 +201,72 @@ const createStockTransfer = async ({
  * @returns {Object|null} Transfer or null if not found
  */
 const getStockTransferById = async (organisationId, transferId) => {
+  const cacheKey = buildStockTransferCacheKey(organisationId, transferId);
+
+  /*
+   * Redis is an optimization only.
+   * If Redis is unavailable, continue with PostgreSQL.
+   */
+  try {
+    const cachedTransfer = await getCache(cacheKey);
+
+    if (cachedTransfer !== null) {
+      return cachedTransfer;
+    }
+  } catch (cacheError) {
+    console.error(
+      "Cache read failed for getStockTransferById:",
+      cacheError.message,
+    );
+  }
+
   const query = `
-        SELECT
-            st.id,
-            st.organisation_id,
-            st.from_branch_id,
-            fb.name AS from_branch_name,
-            st.to_branch_id,
-            tb.name AS to_branch_name,
-            st.transfer_date,
-            st.status,
-            st.transfer_number,
-            st.notes,
-            st.created_by,
-            u.name AS created_by_name,
-            st.created_at,
-            st.updated_at
-        FROM stock_transfers st
-        INNER JOIN branches fb
-            ON fb.id = st.from_branch_id
-        INNER JOIN branches tb
-            ON tb.id = st.to_branch_id
-        LEFT JOIN users u
-            ON u.id = st.created_by
-        WHERE st.id = $1
-          AND st.organisation_id = $2;
-    `;
+    SELECT
+        st.id,
+        st.organisation_id,
+        st.from_branch_id,
+        fb.name AS from_branch_name,
+        st.to_branch_id,
+        tb.name AS to_branch_name,
+        st.transfer_date,
+        st.status,
+        st.transfer_number,
+        st.notes,
+        st.created_by,
+        u.name AS created_by_name,
+        st.created_at,
+        st.updated_at
+    FROM stock_transfers st
+    INNER JOIN branches fb
+        ON fb.id = st.from_branch_id
+    INNER JOIN branches tb
+        ON tb.id = st.to_branch_id
+    LEFT JOIN users u
+        ON u.id = st.created_by
+    WHERE st.id = $1
+      AND st.organisation_id = $2;
+  `;
 
   const result = await pool.query(query, [transferId, organisationId]);
 
-  return result.rows[0] || null;
+  const transfer = result.rows[0] || null;
+
+  /*
+   * Only cache transfers that actually exist.
+   * Redis failures must never make the repository operation fail.
+   */
+  if (transfer) {
+    try {
+      await setCache(cacheKey, transfer, STOCK_TRANSFER_CACHE_TTL);
+    } catch (cacheError) {
+      console.error(
+        "Cache write failed for getStockTransferById:",
+        cacheError.message,
+      );
+    }
+  }
+
+  return transfer;
 };
 
 /**
@@ -223,33 +283,33 @@ const getStockTransferById = async (organisationId, transferId) => {
  */
 const getStockTransferItems = async (organisationId, transferId) => {
   const query = `
-        SELECT
-            sti.id,
-            sti.transfer_id,
-            sti.inventory_batch_id,
-            p.id AS product_id,
-            p.medicine_name,
-            p.brand_name,
-            p.strength,
-            p.pack_size,
-            ib.batch_number,
-            s.id AS supplier_id,
-            s.name AS supplier_name,
-            sti.quantity,
-            sti.created_at
-        FROM stock_transfer_items sti
-        INNER JOIN stock_transfers st
-            ON st.id = sti.transfer_id
-        INNER JOIN inventory_batches ib
-            ON ib.id = sti.inventory_batch_id
-        INNER JOIN products p
-            ON p.id = ib.product_id
-        INNER JOIN suppliers s
-            ON s.id = ib.supplier_id
-        WHERE sti.transfer_id = $1
-          AND st.organisation_id = $2
-        ORDER BY p.medicine_name ASC, sti.id ASC;
-    `;
+    SELECT
+        sti.id,
+        sti.transfer_id,
+        sti.inventory_batch_id,
+        p.id AS product_id,
+        p.medicine_name,
+        p.brand_name,
+        p.strength,
+        p.pack_size,
+        ib.batch_number,
+        s.id AS supplier_id,
+        s.name AS supplier_name,
+        sti.quantity,
+        sti.created_at
+    FROM stock_transfer_items sti
+    INNER JOIN stock_transfers st
+        ON st.id = sti.transfer_id
+    INNER JOIN inventory_batches ib
+        ON ib.id = sti.inventory_batch_id
+    INNER JOIN products p
+        ON p.id = ib.product_id
+    INNER JOIN suppliers s
+        ON s.id = ib.supplier_id
+    WHERE sti.transfer_id = $1
+      AND st.organisation_id = $2
+    ORDER BY p.medicine_name ASC, sti.id ASC;
+  `;
 
   const result = await pool.query(query, [transferId, organisationId]);
 
@@ -261,6 +321,10 @@ const getStockTransferItems = async (organisationId, transferId) => {
  *
  * A transfer is relevant to a branch when the branch is either
  * the source or destination.
+ *
+ * This method intentionally remains database-backed rather than
+ * cached because branch transfer lists are more difficult to
+ * invalidate correctly after every transfer change.
  *
  * @param {string} organisationId
  * @param {string} branchId
@@ -276,37 +340,37 @@ const getStockTransfersByBranch = async (
   offset = 0,
 ) => {
   const query = `
-        SELECT
-            st.id,
-            st.organisation_id,
-            st.from_branch_id,
-            fb.name AS from_branch_name,
-            st.to_branch_id,
-            tb.name AS to_branch_name,
-            st.transfer_date,
-            st.status,
-            st.transfer_number,
-            st.notes,
-            st.created_by,
-            u.name AS created_by_name,
-            st.created_at,
-            st.updated_at
-        FROM stock_transfers st
-        INNER JOIN branches fb
-            ON fb.id = st.from_branch_id
-        INNER JOIN branches tb
-            ON tb.id = st.to_branch_id
-        LEFT JOIN users u
-            ON u.id = st.created_by
-        WHERE st.organisation_id = $1
-          AND (
-                st.from_branch_id = $2
-                OR st.to_branch_id = $2
-          )
-        ORDER BY st.transfer_date DESC, st.created_at DESC
-        LIMIT $3
-        OFFSET $4;
-    `;
+    SELECT
+        st.id,
+        st.organisation_id,
+        st.from_branch_id,
+        fb.name AS from_branch_name,
+        st.to_branch_id,
+        tb.name AS to_branch_name,
+        st.transfer_date,
+        st.status,
+        st.transfer_number,
+        st.notes,
+        st.created_by,
+        u.name AS created_by_name,
+        st.created_at,
+        st.updated_at
+    FROM stock_transfers st
+    INNER JOIN branches fb
+        ON fb.id = st.from_branch_id
+    INNER JOIN branches tb
+        ON tb.id = st.to_branch_id
+    LEFT JOIN users u
+        ON u.id = st.created_by
+    WHERE st.organisation_id = $1
+      AND (
+            st.from_branch_id = $2
+            OR st.to_branch_id = $2
+      )
+    ORDER BY st.transfer_date DESC, st.created_at DESC
+    LIMIT $3
+    OFFSET $4;
+  `;
 
   const result = await pool.query(query, [
     organisationId,
@@ -331,6 +395,10 @@ const getStockTransfersByBranch = async (
  *
  * The repository simply persists the new status.
  *
+ * After PostgreSQL is successfully updated, the individual
+ * Redis cache entry is invalidated so the next read gets the
+ * fresh status from PostgreSQL.
+ *
  * @param {string} organisationId
  * @param {string} transferId
  * @param {string} status
@@ -343,29 +411,48 @@ const updateStockTransferStatus = async (
   status,
 ) => {
   const query = `
-        UPDATE stock_transfers
-        SET
-            status = $1,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = $2
-          AND organisation_id = $3
-        RETURNING
-            id,
-            organisation_id,
-            from_branch_id,
-            to_branch_id,
-            transfer_date,
-            status,
-            transfer_number,
-            notes,
-            created_by,
-            created_at,
-            updated_at;
-    `;
+    UPDATE stock_transfers
+    SET
+        status = $1,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = $2
+      AND organisation_id = $3
+    RETURNING
+        id,
+        organisation_id,
+        from_branch_id,
+        to_branch_id,
+        transfer_date,
+        status,
+        transfer_number,
+        notes,
+        created_by,
+        created_at,
+        updated_at;
+  `;
 
   const result = await pool.query(query, [status, transferId, organisationId]);
 
-  return result.rows[0] || null;
+  const updatedTransfer = result.rows[0] || null;
+
+  /*
+   * PostgreSQL has already been updated.
+   * Remove the old cached representation.
+   */
+  if (updatedTransfer) {
+    const cacheKey = buildStockTransferCacheKey(organisationId, transferId);
+
+    try {
+      await deleteCache(cacheKey);
+    } catch (cacheError) {
+      console.error(
+        "Cache invalidation failed for updateStockTransferStatus:",
+        cacheError.message,
+      );
+    }
+  }
+
+  return updatedTransfer;
 };
 
 /**
@@ -375,8 +462,7 @@ const updateStockTransferStatus = async (
  * ON DELETE CASCADE, deleting the transfer also deletes its
  * associated items.
  *
- * Whether deletion is permitted should be decided by the
- * service layer.
+ * After successful deletion, the Redis cache entry is removed.
  *
  * @param {string} organisationId
  * @param {string} transferId
@@ -385,15 +471,34 @@ const updateStockTransferStatus = async (
  */
 const deleteStockTransfer = async (organisationId, transferId) => {
   const query = `
-        DELETE FROM stock_transfers
-        WHERE id = $1
-          AND organisation_id = $2
-        RETURNING id;
-    `;
+    DELETE FROM stock_transfers
+    WHERE id = $1
+      AND organisation_id = $2
+    RETURNING id;
+  `;
 
   const result = await pool.query(query, [transferId, organisationId]);
 
-  return result.rowCount > 0;
+  const deleted = result.rowCount > 0;
+
+  /*
+   * Invalidate the cache only when PostgreSQL actually deleted
+   * the transfer.
+   */
+  if (deleted) {
+    const cacheKey = buildStockTransferCacheKey(organisationId, transferId);
+
+    try {
+      await deleteCache(cacheKey);
+    } catch (cacheError) {
+      console.error(
+        "Cache invalidation failed for deleteStockTransfer:",
+        cacheError.message,
+      );
+    }
+  }
+
+  return deleted;
 };
 
 /**
