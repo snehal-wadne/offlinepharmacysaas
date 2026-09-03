@@ -1,21 +1,21 @@
 /**
- * Organisation Repository Test
+ * Organisation Repository Integration Tests
  *
- * Purpose:
- * Verifies organisation repository operations against the
- * real PostgreSQL development database.
+ * Tests the Organisation Repository against the real
+ * PostgreSQL database and local Redis instance.
  *
- * Test flow:
- *
- * 1. Create a temporary owner user.
- * 2. Create an organisation for that user.
- * 3. Retrieve the organisation by ID.
- * 4. Retrieve organisations by owner.
- * 5. Update the organisation.
- * 6. Delete the organisation.
- * 7. Verify that the organisation no longer exists.
- * 8. Delete the temporary owner user.
+ * The tests verify:
+ * - Organisation creation
+ * - Redis cache miss and hit
+ * - Owner organisation list caching
+ * - Cache invalidation after creation
+ * - Cache invalidation after update
+ * - Cache invalidation after deletion
  */
+
+require("dotenv").config();
+
+const assert = require("assert");
 
 const {
   createOrganisation,
@@ -25,181 +25,304 @@ const {
   deleteOrganisation,
 } = require("../repositories/organisation.repository");
 
-const {
-  createUser,
-  getUserById,
-  deleteUser,
-} = require("../repositories/user.repository");
-
 const { pool } = require("../db/connection");
 
+const {
+  redisClient,
+  connectRedis,
+  disconnectRedis,
+} = require("../cache/redis");
+
+const { getCache, deleteCache } = require("../cache/cache");
+
+const uniqueValue = (prefix) =>
+  `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+const buildOrganisationCacheKey = (organisationId) =>
+  `organisation:${organisationId}`;
+
+const buildOwnerOrganisationsCacheKey = (ownerId) =>
+  `organisation:owner:${ownerId}`;
+
 const runTests = async () => {
-  let ownerUserId;
-  let organisationId;
+  let ownerId = null;
+  let organisationId = null;
 
-  /*
-   * Use a unique email so the test can be executed repeatedly
-   * without conflicting with previous development data.
-   */
-  const timestamp = Date.now();
-
-  const testEmail = `test-org-owner-${timestamp}@example.com`;
+  const ownerEmail = `${uniqueValue("organisation-owner")}@test.local`;
 
   try {
-    /*
-     * ------------------------------------------------------
-     * 1. CREATE TEMPORARY OWNER USER
-     * ------------------------------------------------------
-     *
-     * organisations.owner_id references users.id.
-     * Therefore, a valid user must exist before we can
-     * create the organisation.
-     */
-    console.log("--- Creating temporary owner user ---");
+    await pool.query("SELECT 1");
+    await connectRedis();
 
-    const ownerUser = await createUser({
-      email: testEmail,
-      passwordHash: "$2b$10$organisation-test-password",
-      googleSub: null,
-      name: "Organisation Test Owner",
-      status: "ACTIVE",
-    });
+    console.log("\nRunning Organisation Repository tests...\n");
 
-    ownerUserId = ownerUser.id;
+    // ---------------------------------------------------------
+    // Create test owner
+    // ---------------------------------------------------------
 
-    console.log(ownerUser);
+    const userResult = await pool.query(
+      `
+        INSERT INTO users (
+          email,
+          password_hash,
+          name,
+          status
+        )
+        VALUES ($1, $2, $3, $4)
+        RETURNING id;
+      `,
+      [
+        ownerEmail,
+        "organisation-test-password",
+        "Organisation Test Owner",
+        "ACTIVE",
+      ],
+    );
 
-    /*
-     * ------------------------------------------------------
-     * 2. VERIFY OWNER USER EXISTS
-     * ------------------------------------------------------
-     */
-    console.log("--- Verifying owner user ---");
+    ownerId = userResult.rows[0].id;
 
-    const verifiedOwner = await getUserById(ownerUserId);
+    console.log("✓ 1. Create test owner");
 
-    console.log(verifiedOwner);
+    // ---------------------------------------------------------
+    // Ensure owner list cache starts clean
+    // ---------------------------------------------------------
 
-    /*
-     * ------------------------------------------------------
-     * 3. CREATE ORGANISATION
-     * ------------------------------------------------------
-     */
-    console.log("--- Creating organisation ---");
+    await deleteCache(buildOwnerOrganisationsCacheKey(ownerId));
+
+    // ---------------------------------------------------------
+    // Create organisation
+    // ---------------------------------------------------------
 
     const organisation = await createOrganisation({
-      ownerId: ownerUserId,
-      name: "Test Pharmacy Organisation",
+      ownerId,
+      name: "Redis Test Pharmacy",
     });
 
     organisationId = organisation.id;
 
-    console.log(organisation);
+    assert.ok(organisation);
+    assert.ok(organisation.id);
+    assert.strictEqual(organisation.owner_id, ownerId);
+    assert.strictEqual(organisation.name, "Redis Test Pharmacy");
 
-    /*
-     * ------------------------------------------------------
-     * 4. GET ORGANISATION BY ID
-     * ------------------------------------------------------
-     */
-    console.log("--- Getting organisation by ID ---");
+    console.log("✓ 2. Create organisation");
 
-    const organisationById = await getOrganisationById(organisationId);
+    // ---------------------------------------------------------
+    // Get organisation by ID
+    // ---------------------------------------------------------
 
-    console.log(organisationById);
+    const firstOrganisation = await getOrganisationById(organisationId);
 
-    /*
-     * ------------------------------------------------------
-     * 5. GET ORGANISATIONS BY OWNER
-     * ------------------------------------------------------
-     */
-    console.log("--- Getting organisations by owner ---");
+    assert.ok(firstOrganisation);
+    assert.strictEqual(firstOrganisation.id, organisationId);
 
-    const organisationsByOwner = await getOrganisationsByOwnerId(ownerUserId);
+    const cachedOrganisation = await getCache(
+      buildOrganisationCacheKey(organisationId),
+    );
 
-    console.log(organisationsByOwner);
+    assert.ok(cachedOrganisation);
+    assert.strictEqual(cachedOrganisation.id, organisationId);
 
-    /*
-     * ------------------------------------------------------
-     * 6. UPDATE ORGANISATION
-     * ------------------------------------------------------
-     */
-    console.log("--- Updating organisation ---");
+    console.log("✓ 3. Organisation ID cache miss populates Redis");
+
+    // ---------------------------------------------------------
+    // Verify ID cache hit
+    // ---------------------------------------------------------
+
+    await pool.query(
+      `
+        UPDATE organisations
+        SET name = $1
+        WHERE id = $2;
+      `,
+      ["Database Organisation Name", organisationId],
+    );
+
+    const organisationCacheHit = await getOrganisationById(organisationId);
+
+    assert.strictEqual(organisationCacheHit.name, "Redis Test Pharmacy");
+
+    await pool.query(
+      `
+        UPDATE organisations
+        SET name = $1
+        WHERE id = $2;
+      `,
+      ["Redis Test Pharmacy", organisationId],
+    );
+
+    console.log("✓ 4. Organisation ID lookup uses Redis cache");
+
+    // ---------------------------------------------------------
+    // Owner organisations list
+    // ---------------------------------------------------------
+
+    await deleteCache(buildOwnerOrganisationsCacheKey(ownerId));
+
+    const firstOwnerList = await getOrganisationsByOwnerId(ownerId);
+
+    assert.ok(Array.isArray(firstOwnerList));
+
+    const createdOrganisation = firstOwnerList.find(
+      (item) => item.id === organisationId,
+    );
+
+    assert.ok(createdOrganisation);
+
+    const cachedOwnerList = await getCache(
+      buildOwnerOrganisationsCacheKey(ownerId),
+    );
+
+    assert.ok(Array.isArray(cachedOwnerList));
+
+    console.log("✓ 5. Owner organisation list populates Redis");
+
+    // ---------------------------------------------------------
+    // Verify owner list cache hit
+    // ---------------------------------------------------------
+
+    await pool.query(
+      `
+        UPDATE organisations
+        SET name = $1
+        WHERE id = $2;
+      `,
+      ["Database Owner List Name", organisationId],
+    );
+
+    const ownerListCacheHit = await getOrganisationsByOwnerId(ownerId);
+
+    const cachedItem = ownerListCacheHit.find(
+      (item) => item.id === organisationId,
+    );
+
+    assert.strictEqual(cachedItem.name, "Redis Test Pharmacy");
+
+    await pool.query(
+      `
+        UPDATE organisations
+        SET name = $1
+        WHERE id = $2;
+      `,
+      ["Redis Test Pharmacy", organisationId],
+    );
+
+    console.log("✓ 6. Owner organisation list uses Redis cache");
+
+    // ---------------------------------------------------------
+    // Recreate caches before update test
+    // ---------------------------------------------------------
+
+    await getOrganisationById(organisationId);
+    await getOrganisationsByOwnerId(ownerId);
+
+    assert.ok(await getCache(buildOrganisationCacheKey(organisationId)));
+
+    assert.ok(await getCache(buildOwnerOrganisationsCacheKey(ownerId)));
+
+    // ---------------------------------------------------------
+    // Update organisation
+    // ---------------------------------------------------------
 
     const updatedOrganisation = await updateOrganisation(
       organisationId,
-      "Updated Test Pharmacy Organisation",
+      "Updated Redis Pharmacy",
     );
 
-    console.log(updatedOrganisation);
+    assert.ok(updatedOrganisation);
+    assert.strictEqual(updatedOrganisation.name, "Updated Redis Pharmacy");
 
-    /*
-     * ------------------------------------------------------
-     * 7. GET UPDATED ORGANISATION
-     * ------------------------------------------------------
-     */
-    console.log("--- Getting updated organisation ---");
+    assert.strictEqual(
+      await getCache(buildOrganisationCacheKey(organisationId)),
+      null,
+    );
 
-    const updatedOrganisationCheck = await getOrganisationById(organisationId);
+    assert.strictEqual(
+      await getCache(buildOwnerOrganisationsCacheKey(ownerId)),
+      null,
+    );
 
-    console.log(updatedOrganisationCheck);
+    console.log("✓ 7. Organisation update invalidates both caches");
 
-    /*
-     * ------------------------------------------------------
-     * 8. DELETE ORGANISATION
-     * ------------------------------------------------------
-     */
-    console.log("--- Deleting organisation ---");
+    // ---------------------------------------------------------
+    // Verify fresh values after invalidation
+    // ---------------------------------------------------------
 
-    const organisationDeleted = await deleteOrganisation(organisationId);
+    const freshOrganisation = await getOrganisationById(organisationId);
 
-    console.log({
-      organisationDeleted,
-    });
+    assert.strictEqual(freshOrganisation.name, "Updated Redis Pharmacy");
 
-    /*
-     * ------------------------------------------------------
-     * 9. VERIFY ORGANISATION WAS DELETED
-     * ------------------------------------------------------
-     */
-    console.log("--- Verifying organisation deletion ---");
+    const freshOwnerList = await getOrganisationsByOwnerId(ownerId);
+
+    const freshListItem = freshOwnerList.find(
+      (item) => item.id === organisationId,
+    );
+
+    assert.strictEqual(freshListItem.name, "Updated Redis Pharmacy");
+
+    console.log("✓ 8. Fresh database values are returned after invalidation");
+
+    // ---------------------------------------------------------
+    // Delete organisation
+    // ---------------------------------------------------------
+
+    const deleted = await deleteOrganisation(organisationId);
+
+    assert.strictEqual(deleted, true);
+
+    assert.strictEqual(
+      await getCache(buildOrganisationCacheKey(organisationId)),
+      null,
+    );
+
+    assert.strictEqual(
+      await getCache(buildOwnerOrganisationsCacheKey(ownerId)),
+      null,
+    );
 
     const deletedOrganisation = await getOrganisationById(organisationId);
 
-    console.log(deletedOrganisation);
+    assert.strictEqual(deletedOrganisation, null);
 
-    /*
-     * ------------------------------------------------------
-     * 10. DELETE TEMPORARY OWNER USER
-     * ------------------------------------------------------
-     */
-    console.log("--- Deleting temporary owner user ---");
+    console.log("✓ 9. Organisation deletion removes database and cache data");
 
-    const ownerDeleted = await deleteUser(ownerUserId);
-
-    console.log({
-      ownerDeleted,
-    });
-
-    /*
-     * ------------------------------------------------------
-     * FINAL RESULT
-     * ------------------------------------------------------
-     */
-    console.log("");
-    console.log("Organisation repository tests completed successfully.");
+    console.log("\n✓ All Organisation Repository tests passed.\n");
   } catch (error) {
-    console.error("Organisation repository test failed.");
-
+    console.error("\n✗ Organisation Repository test failed.");
     console.error(error);
 
-    process.exitCode = 1;
+    throw error;
   } finally {
-    /*
-     * Close the PostgreSQL connection pool so the Node.js
-     * process can terminate cleanly.
-     */
+    if (organisationId) {
+      try {
+        await pool.query("DELETE FROM organisations WHERE id = $1;", [
+          organisationId,
+        ]);
+      } catch (error) {
+        console.error("Organisation cleanup failed:", error);
+      }
+    }
+
+    if (ownerId) {
+      try {
+        await pool.query("DELETE FROM users WHERE id = $1;", [ownerId]);
+      } catch (error) {
+        console.error("Owner cleanup failed:", error);
+      }
+    }
+
+    try {
+      if (redisClient.isOpen) {
+        await disconnectRedis();
+      }
+    } catch (error) {
+      console.error("Redis disconnect failed:", error);
+    }
+
     await pool.end();
   }
 };
 
-runTests();
+runTests().catch(() => {
+  process.exit(1);
+});

@@ -5,22 +5,31 @@
  * Handles direct database operations for organisations.
  *
  * In our SaaS architecture, an organisation represents a tenant.
- * Products, suppliers, branches, purchases, inventory, and other
- * organisation-owned data are associated with an organisation.
  *
- * The repository is responsible only for database access.
+ * The repository is responsible for database access and
+ * organisation-level caching only.
  * Tenant authorization and business rules belong to the service layer.
+ *
+ * PostgreSQL remains the source of truth.
+ * Redis is used only as a short-lived read cache.
  */
 
 const { pool } = require("../db/connection");
+const { getCache, setCache, deleteCache } = require("../cache/cache");
+
+const ORGANISATION_CACHE_TTL = 60;
+
+/**
+ * Build Redis cache keys.
+ */
+const buildOrganisationCacheKey = (organisationId) =>
+  `organisation:${organisationId}`;
+
+const buildOwnerOrganisationsCacheKey = (ownerId) =>
+  `organisation:owner:${ownerId}`;
 
 /**
  * Create a new organisation.
- *
- * ownerId identifies the user who owns the organisation.
- *
- * The service layer should verify that the caller is allowed to
- * create an organisation before calling this function.
  *
  * @param {Object} data
  * @param {string} data.ownerId
@@ -44,8 +53,19 @@ const createOrganisation = async ({ ownerId, name }) => {
     `;
 
   const result = await pool.query(query, [ownerId, name]);
+  const organisation = result.rows[0];
 
-  return result.rows[0];
+  /**
+   * The organisation itself has no existing cache entry.
+   * Only the owner's organisation list needs invalidation.
+   */
+  try {
+    await deleteCache(buildOwnerOrganisationsCacheKey(ownerId));
+  } catch (error) {
+    console.error("Organisation owner cache invalidation failed:", error);
+  }
+
+  return organisation;
 };
 
 /**
@@ -56,6 +76,18 @@ const createOrganisation = async ({ ownerId, name }) => {
  * @returns {Object|null} Organisation or null if not found
  */
 const getOrganisationById = async (organisationId) => {
+  const cacheKey = buildOrganisationCacheKey(organisationId);
+
+  try {
+    const cachedOrganisation = await getCache(cacheKey);
+
+    if (cachedOrganisation !== null) {
+      return cachedOrganisation;
+    }
+  } catch (error) {
+    console.error("Organisation cache read failed:", error);
+  }
+
   const query = `
         SELECT
             id,
@@ -68,24 +100,39 @@ const getOrganisationById = async (organisationId) => {
     `;
 
   const result = await pool.query(query, [organisationId]);
+  const organisation = result.rows[0] || null;
 
-  return result.rows[0] || null;
+  if (organisation) {
+    try {
+      await setCache(cacheKey, organisation, ORGANISATION_CACHE_TTL);
+    } catch (error) {
+      console.error("Organisation cache write failed:", error);
+    }
+  }
+
+  return organisation;
 };
 
 /**
  * Get organisations owned by a specific user.
- *
- * This query intentionally returns all matching organisations
- * rather than assuming that a user can own only one organisation.
- *
- * If the product requirements later enforce one organisation
- * per owner, that rule can be enforced separately.
  *
  * @param {string} ownerId
  *
  * @returns {Array} Organisations owned by the user
  */
 const getOrganisationsByOwnerId = async (ownerId) => {
+  const cacheKey = buildOwnerOrganisationsCacheKey(ownerId);
+
+  try {
+    const cachedOrganisations = await getCache(cacheKey);
+
+    if (cachedOrganisations !== null) {
+      return cachedOrganisations;
+    }
+  } catch (error) {
+    console.error("Organisation owner cache read failed:", error);
+  }
+
   const query = `
         SELECT
             id,
@@ -99,15 +146,19 @@ const getOrganisationsByOwnerId = async (ownerId) => {
     `;
 
   const result = await pool.query(query, [ownerId]);
+  const organisations = result.rows;
 
-  return result.rows;
+  try {
+    await setCache(cacheKey, organisations, ORGANISATION_CACHE_TTL);
+  } catch (error) {
+    console.error("Organisation owner cache write failed:", error);
+  }
+
+  return organisations;
 };
 
 /**
  * Update an organisation's name.
- *
- * The service layer should verify that the requesting user
- * has permission to modify the organisation.
  *
  * @param {string} organisationId
  * @param {string} name
@@ -131,23 +182,36 @@ const updateOrganisation = async (organisationId, name) => {
 
   const result = await pool.query(query, [name, organisationId]);
 
-  return result.rows[0] || null;
+  const organisation = result.rows[0] || null;
+
+  if (organisation) {
+    try {
+      await Promise.all([
+        deleteCache(buildOrganisationCacheKey(organisation.id)),
+        deleteCache(buildOwnerOrganisationsCacheKey(organisation.owner_id)),
+      ]);
+    } catch (error) {
+      console.error("Organisation cache invalidation failed:", error);
+    }
+  }
+
+  return organisation;
 };
 
 /**
  * Delete an organisation.
  *
- * This operation should normally be protected by service-layer
- * authorization and business rules.
- *
- * The database foreign-key relationships determine what related
- * records can be deleted along with the organisation.
+ * The organisation is loaded before deletion so that the
+ * organisation and owner-list cache keys can be invalidated
+ * after the database deletion succeeds.
  *
  * @param {string} organisationId
  *
  * @returns {boolean} True if the organisation was deleted
  */
 const deleteOrganisation = async (organisationId) => {
+  const existingOrganisation = await getOrganisationById(organisationId);
+
   const query = `
         DELETE FROM organisations
         WHERE id = $1
@@ -155,6 +219,19 @@ const deleteOrganisation = async (organisationId) => {
     `;
 
   const result = await pool.query(query, [organisationId]);
+
+  if (result.rowCount > 0 && existingOrganisation) {
+    try {
+      await Promise.all([
+        deleteCache(buildOrganisationCacheKey(existingOrganisation.id)),
+        deleteCache(
+          buildOwnerOrganisationsCacheKey(existingOrganisation.owner_id),
+        ),
+      ]);
+    } catch (error) {
+      console.error("Organisation cache invalidation failed:", error);
+    }
+  }
 
   return result.rowCount > 0;
 };

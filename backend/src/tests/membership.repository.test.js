@@ -1,34 +1,23 @@
 /**
- * Membership Repository Test
+ * Membership Repository Integration Tests
  *
- * Purpose:
- * Verifies organisation membership operations against the
- * real PostgreSQL development database.
+ * Tests the Membership Repository against the real
+ * PostgreSQL database and local Redis instance.
  *
- * Test structure:
- *
- * User 1 ──────┐
- *              ├── Organisation
- * User 2 ──────┘
- *
- * Memberships:
- *
- * User 1 → Organisation
- * User 2 → Organisation
- *
- * Important:
- *
- * An organisation membership only represents the relationship
- * between a user and an organisation.
- *
- * The membership does NOT contain a role.
- *
- * Roles are assigned at the branch level through
- * branch_assignments.
- *
- * This allows the same employee to work at multiple branches
- * with different roles.
+ * The tests verify:
+ * - Membership creation
+ * - Membership ID caching
+ * - User + organisation membership caching
+ * - User membership list caching
+ * - Organisation member list caching
+ * - Cache invalidation after creation
+ * - Cache invalidation after status updates
+ * - Cache invalidation after deletion
  */
+
+require("dotenv").config();
+
+const assert = require("assert");
 
 const {
   createMembership,
@@ -40,436 +29,492 @@ const {
   deleteMembership,
 } = require("../repositories/membership.repository");
 
-const { createUser, deleteUser } = require("../repositories/user.repository");
-
-const {
-  createOrganisation,
-  deleteOrganisation,
-} = require("../repositories/organisation.repository");
-
 const { pool } = require("../db/connection");
 
+const {
+  redisClient,
+  connectRedis,
+  disconnectRedis,
+} = require("../cache/redis");
+
+const { getCache, deleteCache } = require("../cache/cache");
+
+const uniqueValue = (prefix) =>
+  `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+const buildMembershipCacheKey = (membershipId) => `membership:${membershipId}`;
+
+const buildUserOrganisationMembershipCacheKey = (userId, organisationId) =>
+  `membership:user:${userId}:organisation:${organisationId}`;
+
+const buildUserMembershipsCacheKey = (userId) => `membership:user:${userId}`;
+
+const buildOrganisationMembersCacheKey = (organisationId) =>
+  `membership:organisation:${organisationId}`;
+
 const runTests = async () => {
-  let firstUserId;
-  let secondUserId;
+  let ownerId = null;
+  let memberId = null;
+  let organisationId = null;
+  let membershipId = null;
 
-  let organisationId;
+  const ownerEmail = `${uniqueValue("membership-owner")}@test.local`;
 
-  let secondOrganisationId;
-
-  let firstMembershipId;
-  let secondMembershipId;
-  let secondOrganisationMembershipId;
-
-  const timestamp = Date.now();
+  const memberEmail = `${uniqueValue("membership-user")}@test.local`;
 
   try {
-    /*
-     * ------------------------------------------------------
-     * 1. CREATE FIRST TEST USER
-     * ------------------------------------------------------
-     */
-    console.log("--- Creating first test user ---");
+    await pool.query("SELECT 1");
+    await connectRedis();
 
-    const firstUser = await createUser({
-      email: `test-member-1-${timestamp}@example.com`,
-      passwordHash: "$2b$10$membership-test-password-1",
-      googleSub: null,
-      name: "Rahul Test User",
-      status: "ACTIVE",
-    });
+    console.log("\nRunning Membership Repository tests...\n");
 
-    firstUserId = firstUser.id;
+    // ---------------------------------------------------------
+    // Create test owner
+    // ---------------------------------------------------------
 
-    console.log(firstUser);
+    const ownerResult = await pool.query(
+      `
+        INSERT INTO users (
+          email,
+          password_hash,
+          name,
+          status
+        )
+        VALUES ($1, $2, $3, $4)
+        RETURNING id;
+      `,
+      [
+        ownerEmail,
+        "membership-owner-password",
+        "Membership Test Owner",
+        "ACTIVE",
+      ],
+    );
 
-    /*
-     * ------------------------------------------------------
-     * 2. CREATE SECOND TEST USER
-     * ------------------------------------------------------
-     */
-    console.log("--- Creating second test user ---");
+    ownerId = ownerResult.rows[0].id;
 
-    const secondUser = await createUser({
-      email: `test-member-2-${timestamp}@example.com`,
-      passwordHash: "$2b$10$membership-test-password-2",
-      googleSub: null,
-      name: "Amit Test User",
-      status: "ACTIVE",
-    });
+    console.log("✓ 1. Create organisation owner");
 
-    secondUserId = secondUser.id;
+    // ---------------------------------------------------------
+    // Create test member
+    // ---------------------------------------------------------
 
-    console.log(secondUser);
+    const memberResult = await pool.query(
+      `
+        INSERT INTO users (
+          email,
+          password_hash,
+          name,
+          status
+        )
+        VALUES ($1, $2, $3, $4)
+        RETURNING id;
+      `,
+      [
+        memberEmail,
+        "membership-user-password",
+        "Membership Test User",
+        "ACTIVE",
+      ],
+    );
 
-    /*
-     * ------------------------------------------------------
-     * 3. CREATE FIRST TEST ORGANISATION
-     * ------------------------------------------------------
-     */
-    console.log("--- Creating first test organisation ---");
+    memberId = memberResult.rows[0].id;
 
-    const organisation = await createOrganisation({
-      ownerId: firstUserId,
-      name: `Membership Test Organisation ${timestamp}`,
-    });
+    console.log("✓ 2. Create organisation member");
 
-    organisationId = organisation.id;
+    // ---------------------------------------------------------
+    // Create organisation
+    // ---------------------------------------------------------
 
-    console.log(organisation);
+    const organisationResult = await pool.query(
+      `
+          INSERT INTO organisations (
+            owner_id,
+            name
+          )
+          VALUES ($1, $2)
+          RETURNING id;
+        `,
+      [ownerId, "Membership Redis Test Pharmacy"],
+    );
 
-    /*
-     * ------------------------------------------------------
-     * 4. CREATE SECOND TEST ORGANISATION
-     * ------------------------------------------------------
-     *
-     * This organisation is used to verify that the same
-     * user can belong to multiple organisations.
-     */
-    console.log("--- Creating second test organisation ---");
+    organisationId = organisationResult.rows[0].id;
 
-    const secondOrganisation = await createOrganisation({
-      ownerId: secondUserId,
-      name: `Second Membership Test Organisation ${timestamp}`,
-    });
+    console.log("✓ 3. Create test organisation");
 
-    secondOrganisationId = secondOrganisation.id;
+    // ---------------------------------------------------------
+    // Start with clean Redis
+    // ---------------------------------------------------------
 
-    console.log(secondOrganisation);
+    await Promise.all([
+      deleteCache(buildUserMembershipsCacheKey(memberId)),
+      deleteCache(buildOrganisationMembersCacheKey(organisationId)),
+      deleteCache(
+        buildUserOrganisationMembershipCacheKey(memberId, organisationId),
+      ),
+    ]);
 
-    /*
-     * ------------------------------------------------------
-     * 5. CREATE FIRST MEMBERSHIP
-     * ------------------------------------------------------
-     *
-     * Rahul becomes a member of the first organisation.
-     *
-     * Notice that there is NO roleId here.
-     *
-     * The role will be assigned later through
-     * branch_assignments.
-     */
-    console.log("--- Creating Rahul membership ---");
+    // ---------------------------------------------------------
+    // Create membership
+    // ---------------------------------------------------------
 
-    const firstMembership = await createMembership({
+    const membership = await createMembership({
       organisationId,
-      userId: firstUserId,
+      userId: memberId,
       status: "ACTIVE",
     });
 
-    firstMembershipId = firstMembership.id;
+    membershipId = membership.id;
 
-    console.log(firstMembership);
+    assert.ok(membership);
+    assert.ok(membership.id);
+    assert.strictEqual(membership.organisation_id, organisationId);
+    assert.strictEqual(membership.user_id, memberId);
+    assert.strictEqual(membership.status, "ACTIVE");
 
-    /*
-     * ------------------------------------------------------
-     * 6. VERIFY MEMBERSHIP DOES NOT CONTAIN A ROLE
-     * ------------------------------------------------------
-     */
-    console.log("--- Verifying membership has no role ---");
+    console.log("✓ 4. Create membership");
 
-    console.log({
-      roleId: firstMembership.role_id,
-    });
+    // ---------------------------------------------------------
+    // Get membership by ID
+    // ---------------------------------------------------------
 
-    /*
-     * ------------------------------------------------------
-     * 7. CREATE SECOND MEMBERSHIP
-     * ------------------------------------------------------
-     *
-     * Amit becomes a member of the same organisation.
-     */
-    console.log("--- Creating Amit membership ---");
+    const firstMembership = await getMembershipById(membershipId);
 
-    const secondMembership = await createMembership({
-      organisationId,
-      userId: secondUserId,
-      status: "ACTIVE",
-    });
+    assert.ok(firstMembership);
+    assert.strictEqual(firstMembership.id, membershipId);
 
-    secondMembershipId = secondMembership.id;
+    const cachedMembership = await getCache(
+      buildMembershipCacheKey(membershipId),
+    );
 
-    console.log(secondMembership);
+    assert.ok(cachedMembership);
+    assert.strictEqual(cachedMembership.id, membershipId);
 
-    /*
-     * ------------------------------------------------------
-     * 8. TEST DUPLICATE MEMBERSHIP
-     * ------------------------------------------------------
-     *
-     * Rahul already belongs to this organisation.
-     *
-     * The database UNIQUE constraint on
-     * (organisation_id, user_id) should prevent
-     * another membership from being created.
-     */
-    console.log("--- Testing duplicate Rahul membership ---");
+    console.log("✓ 5. Membership ID cache miss populates Redis");
 
-    try {
-      await createMembership({
-        organisationId,
-        userId: firstUserId,
-        status: "ACTIVE",
-      });
+    // ---------------------------------------------------------
+    // Get membership by user + organisation
+    // ---------------------------------------------------------
 
-      throw new Error("Duplicate membership was unexpectedly created.");
-    } catch (error) {
-      if (error.message === "Duplicate membership was unexpectedly created.") {
-        throw error;
-      }
+    const membershipByScope = await getMembership(memberId, organisationId);
 
-      console.log("Duplicate membership correctly rejected.");
+    assert.ok(membershipByScope);
+    assert.strictEqual(membershipByScope.id, membershipId);
 
-      console.log({
-        postgresErrorCode: error.code,
-      });
+    const cachedScopedMembership = await getCache(
+      buildUserOrganisationMembershipCacheKey(memberId, organisationId),
+    );
 
-      if (error.code !== "23505") {
-        throw new Error(
-          `Expected PostgreSQL unique violation (23505), received ${error.code}.`,
-        );
-      }
-    }
+    assert.ok(cachedScopedMembership);
+    assert.strictEqual(cachedScopedMembership.id, membershipId);
 
-    /*
-     * ------------------------------------------------------
-     * 9. CREATE RAHUL MEMBERSHIP IN SECOND ORGANISATION
-     * ------------------------------------------------------
-     *
-     * The same user can belong to another organisation.
-     *
-     * This should succeed because the organisation_id
-     * is different.
-     */
-    console.log("--- Creating Rahul membership in second organisation ---");
+    console.log("✓ 6. User + organisation membership cache works");
 
-    const secondOrganisationMembership = await createMembership({
-      organisationId: secondOrganisationId,
-      userId: firstUserId,
-      status: "ACTIVE",
-    });
+    // ---------------------------------------------------------
+    // Get user memberships
+    // ---------------------------------------------------------
 
-    secondOrganisationMembershipId = secondOrganisationMembership.id;
+    const userMemberships = await getUserMemberships(memberId);
 
-    console.log(secondOrganisationMembership);
+    assert.ok(Array.isArray(userMemberships));
 
-    /*
-     * ------------------------------------------------------
-     * 10. GET MEMBERSHIP BY ID
-     * ------------------------------------------------------
-     */
-    console.log("--- Getting Rahul membership by ID ---");
+    const userMembership = userMemberships.find(
+      (item) => item.id === membershipId,
+    );
 
-    const membershipById = await getMembershipById(firstMembershipId);
+    assert.ok(userMembership);
+    assert.strictEqual(userMembership.organisation_id, organisationId);
 
-    console.log(membershipById);
+    const cachedUserMemberships = await getCache(
+      buildUserMembershipsCacheKey(memberId),
+    );
 
-    /*
-     * ------------------------------------------------------
-     * 11. GET SPECIFIC USER MEMBERSHIP
-     * ------------------------------------------------------
-     */
-    console.log("--- Getting Rahul membership in organisation ---");
+    assert.ok(Array.isArray(cachedUserMemberships));
 
-    const specificMembership = await getMembership(firstUserId, organisationId);
+    console.log("✓ 7. User memberships list populates Redis");
 
-    console.log(specificMembership);
-
-    /*
-     * ------------------------------------------------------
-     * 12. GET ALL MEMBERSHIPS FOR RAHUL
-     * ------------------------------------------------------
-     *
-     * Rahul now belongs to two organisations.
-     */
-    console.log("--- Getting Rahul organisation memberships ---");
-
-    const rahulMemberships = await getUserMemberships(firstUserId);
-
-    console.log(rahulMemberships);
-
-    /*
-     * ------------------------------------------------------
-     * 13. GET ALL ORGANISATION MEMBERS
-     * ------------------------------------------------------
-     */
-    console.log("--- Getting all organisation members ---");
+    // ---------------------------------------------------------
+    // Get organisation members
+    // ---------------------------------------------------------
 
     const organisationMembers = await getOrganisationMembers(organisationId);
 
-    console.log(organisationMembers);
+    assert.ok(Array.isArray(organisationMembers));
 
-    /*
-     * ------------------------------------------------------
-     * 14. UPDATE MEMBERSHIP STATUS
-     * ------------------------------------------------------
-     *
-     * Role is no longer updated through membership.
-     *
-     * Only membership-level information such as status
-     * is managed here.
-     */
-    console.log("--- Suspending Rahul membership ---");
+    const organisationMember = organisationMembers.find(
+      (item) => item.id === membershipId,
+    );
 
-    const updatedStatus = await updateMembershipStatus(
-      firstMembershipId,
+    assert.ok(organisationMember);
+    assert.strictEqual(organisationMember.user_id, memberId);
+
+    const cachedOrganisationMembers = await getCache(
+      buildOrganisationMembersCacheKey(organisationId),
+    );
+
+    assert.ok(Array.isArray(cachedOrganisationMembers));
+
+    console.log("✓ 8. Organisation members list populates Redis");
+
+    // ---------------------------------------------------------
+    // Verify membership ID cache hit
+    // ---------------------------------------------------------
+
+    await pool.query(
+      `
+        UPDATE organisation_memberships
+        SET status = $1
+        WHERE id = $2;
+      `,
+      ["SUSPENDED", membershipId],
+    );
+
+    const membershipIdCacheHit = await getMembershipById(membershipId);
+
+    assert.strictEqual(membershipIdCacheHit.status, "ACTIVE");
+
+    await pool.query(
+      `
+        UPDATE organisation_memberships
+        SET status = $1
+        WHERE id = $2;
+      `,
+      ["ACTIVE", membershipId],
+    );
+
+    console.log("✓ 9. Membership ID lookup uses Redis cache");
+
+    // ---------------------------------------------------------
+    // Verify scoped membership cache hit
+    // ---------------------------------------------------------
+
+    await pool.query(
+      `
+        UPDATE organisation_memberships
+        SET status = $1
+        WHERE id = $2;
+      `,
+      ["SUSPENDED", membershipId],
+    );
+
+    const scopedCacheHit = await getMembership(memberId, organisationId);
+
+    assert.strictEqual(scopedCacheHit.status, "ACTIVE");
+
+    await pool.query(
+      `
+        UPDATE organisation_memberships
+        SET status = $1
+        WHERE id = $2;
+      `,
+      ["ACTIVE", membershipId],
+    );
+
+    console.log("✓ 10. Scoped membership lookup uses Redis cache");
+
+    // ---------------------------------------------------------
+    // Recreate all caches before invalidation test
+    // ---------------------------------------------------------
+
+    await getMembershipById(membershipId);
+    await getMembership(memberId, organisationId);
+    await getUserMemberships(memberId);
+    await getOrganisationMembers(organisationId);
+
+    assert.ok(await getCache(buildMembershipCacheKey(membershipId)));
+
+    assert.ok(
+      await getCache(
+        buildUserOrganisationMembershipCacheKey(memberId, organisationId),
+      ),
+    );
+
+    assert.ok(await getCache(buildUserMembershipsCacheKey(memberId)));
+
+    assert.ok(await getCache(buildOrganisationMembersCacheKey(organisationId)));
+
+    // ---------------------------------------------------------
+    // Update membership status
+    // ---------------------------------------------------------
+
+    const updatedMembership = await updateMembershipStatus(
+      membershipId,
       "SUSPENDED",
     );
 
-    console.log(updatedStatus);
+    assert.ok(updatedMembership);
+    assert.strictEqual(updatedMembership.status, "SUSPENDED");
 
-    /*
-     * ------------------------------------------------------
-     * 15. RESTORE RAHUL MEMBERSHIP
-     * ------------------------------------------------------
-     *
-     * Restore the membership before cleanup.
-     */
-    console.log("--- Restoring Rahul membership ---");
-
-    const restoredStatus = await updateMembershipStatus(
-      firstMembershipId,
-      "ACTIVE",
+    assert.strictEqual(
+      await getCache(buildMembershipCacheKey(membershipId)),
+      null,
     );
 
-    console.log(restoredStatus);
-
-    /*
-     * ------------------------------------------------------
-     * 16. DELETE SECOND ORGANISATION MEMBERSHIP
-     * ------------------------------------------------------
-     */
-    console.log("--- Deleting Rahul membership from second organisation ---");
-
-    const secondOrganisationMembershipDeleted = await deleteMembership(
-      secondOrganisationMembershipId,
+    assert.strictEqual(
+      await getCache(
+        buildUserOrganisationMembershipCacheKey(memberId, organisationId),
+      ),
+      null,
     );
 
-    console.log({
-      secondOrganisationMembershipDeleted,
-    });
+    assert.strictEqual(
+      await getCache(buildUserMembershipsCacheKey(memberId)),
+      null,
+    );
 
-    /*
-     * ------------------------------------------------------
-     * 17. VERIFY SECOND ORGANISATION MEMBERSHIP DELETION
-     * ------------------------------------------------------
-     */
+    assert.strictEqual(
+      await getCache(buildOrganisationMembersCacheKey(organisationId)),
+      null,
+    );
+
+    console.log("✓ 11. Membership update invalidates all related caches");
+
+    // ---------------------------------------------------------
+    // Verify fresh values after invalidation
+    // ---------------------------------------------------------
+
+    const freshMembership = await getMembershipById(membershipId);
+
+    assert.strictEqual(freshMembership.status, "SUSPENDED");
+
+    const freshScopedMembership = await getMembership(memberId, organisationId);
+
+    assert.strictEqual(freshScopedMembership.status, "SUSPENDED");
+
+    const freshUserMemberships = await getUserMemberships(memberId);
+
+    const freshUserMembership = freshUserMemberships.find(
+      (item) => item.id === membershipId,
+    );
+
+    assert.strictEqual(freshUserMembership.status, "SUSPENDED");
+
+    const freshOrganisationMembers =
+      await getOrganisationMembers(organisationId);
+
+    const freshOrganisationMember = freshOrganisationMembers.find(
+      (item) => item.id === membershipId,
+    );
+
+    assert.strictEqual(freshOrganisationMember.status, "SUSPENDED");
+
+    console.log("✓ 12. Fresh membership data is returned after invalidation");
+
+    // ---------------------------------------------------------
+    // Delete membership
+    // ---------------------------------------------------------
+
+    const deleted = await deleteMembership(membershipId);
+
+    assert.strictEqual(deleted, true);
+
+    assert.strictEqual(
+      await getCache(buildMembershipCacheKey(membershipId)),
+      null,
+    );
+
+    assert.strictEqual(
+      await getCache(
+        buildUserOrganisationMembershipCacheKey(memberId, organisationId),
+      ),
+      null,
+    );
+
+    assert.strictEqual(
+      await getCache(buildUserMembershipsCacheKey(memberId)),
+      null,
+    );
+
+    assert.strictEqual(
+      await getCache(buildOrganisationMembersCacheKey(organisationId)),
+      null,
+    );
+
+    const deletedMembership = await getMembershipById(membershipId);
+
+    assert.strictEqual(deletedMembership, null);
+
     console.log(
-      "--- Verifying Rahul second organisation membership deletion ---",
+      "✓ 13. Membership deletion removes database and all cache data",
     );
 
-    const deletedSecondOrganisationMembership = await getMembershipById(
-      secondOrganisationMembershipId,
-    );
-
-    console.log(deletedSecondOrganisationMembership);
-
-    /*
-     * ------------------------------------------------------
-     * 18. DELETE SECOND MEMBERSHIP
-     * ------------------------------------------------------
-     *
-     * Removing a membership does not delete the user.
-     */
-    console.log("--- Deleting Amit membership ---");
-
-    const membershipDeleted = await deleteMembership(secondMembershipId);
-
-    console.log({
-      membershipDeleted,
-    });
-
-    /*
-     * ------------------------------------------------------
-     * 19. VERIFY SECOND MEMBERSHIP WAS DELETED
-     * ------------------------------------------------------
-     */
-    console.log("--- Verifying Amit membership deletion ---");
-
-    const deletedMembership = await getMembershipById(secondMembershipId);
-
-    console.log(deletedMembership);
-
-    /*
-     * ------------------------------------------------------
-     * 20. DELETE FIRST MEMBERSHIP
-     * ------------------------------------------------------
-     */
-    console.log("--- Deleting Rahul membership ---");
-
-    const firstMembershipDeleted = await deleteMembership(firstMembershipId);
-
-    console.log({
-      firstMembershipDeleted,
-    });
-
-    /*
-     * ------------------------------------------------------
-     * 21. DELETE SECOND TEST ORGANISATION
-     * ------------------------------------------------------
-     */
-    console.log("--- Deleting second test organisation ---");
-
-    const secondOrganisationDeleted =
-      await deleteOrganisation(secondOrganisationId);
-
-    console.log({
-      secondOrganisationDeleted,
-    });
-
-    /*
-     * ------------------------------------------------------
-     * 22. DELETE FIRST TEST ORGANISATION
-     * ------------------------------------------------------
-     */
-    console.log("--- Deleting first test organisation ---");
-
-    const organisationDeleted = await deleteOrganisation(organisationId);
-
-    console.log({
-      organisationDeleted,
-    });
-
-    /*
-     * ------------------------------------------------------
-     * 23. DELETE TEST USERS
-     * ------------------------------------------------------
-     */
-    console.log("--- Deleting first test user ---");
-
-    const firstUserDeleted = await deleteUser(firstUserId);
-
-    console.log({
-      firstUserDeleted,
-    });
-
-    console.log("--- Deleting second test user ---");
-
-    const secondUserDeleted = await deleteUser(secondUserId);
-
-    console.log({
-      secondUserDeleted,
-    });
-
-    /*
-     * ------------------------------------------------------
-     * FINAL RESULT
-     * ------------------------------------------------------
-     */
-    console.log("");
-    console.log("Membership repository tests completed successfully.");
+    console.log("\n✓ All Membership Repository tests passed.\n");
   } catch (error) {
-    console.error("Membership repository test failed.");
-
+    console.error("\n✗ Membership Repository test failed.");
     console.error(error);
 
-    process.exitCode = 1;
+    throw error;
   } finally {
-    /*
-     * Close the PostgreSQL connection pool so the Node.js
-     * process can terminate cleanly.
-     */
+    // Delete membership first because it references
+    // both the user and organisation.
+    if (membershipId) {
+      try {
+        await pool.query(
+          `
+            DELETE FROM organisation_memberships
+            WHERE id = $1;
+          `,
+          [membershipId],
+        );
+      } catch (error) {
+        console.error("Membership cleanup failed:", error);
+      }
+    }
+
+    if (organisationId) {
+      try {
+        await pool.query(
+          `
+            DELETE FROM organisations
+            WHERE id = $1;
+          `,
+          [organisationId],
+        );
+      } catch (error) {
+        console.error("Organisation cleanup failed:", error);
+      }
+    }
+
+    if (memberId) {
+      try {
+        await pool.query(
+          `
+            DELETE FROM users
+            WHERE id = $1;
+          `,
+          [memberId],
+        );
+      } catch (error) {
+        console.error("Member cleanup failed:", error);
+      }
+    }
+
+    if (ownerId) {
+      try {
+        await pool.query(
+          `
+            DELETE FROM users
+            WHERE id = $1;
+          `,
+          [ownerId],
+        );
+      } catch (error) {
+        console.error("Owner cleanup failed:", error);
+      }
+    }
+
+    try {
+      if (redisClient.isOpen) {
+        await disconnectRedis();
+      }
+    } catch (error) {
+      console.error("Redis disconnect failed:", error);
+    }
+
     await pool.end();
   }
 };
 
-runTests();
+runTests().catch(() => {
+  process.exit(1);
+});

@@ -9,30 +9,48 @@
  * The membership itself does not determine the user's role.
  * Roles are assigned at the branch level through branch_assignments.
  *
- * Example:
- *
- * User
- *   |
- *   +---- Falah Pharmacy
- *   |        |
- *   |        +---- Main Branch ---- Cashier
- *   |        |
- *   |        +---- City Branch ---- Accountant
- *   |
- *   +---- Apollo Pharmacy
- *            |
- *            +---- Central Branch ---- Manager
- *
- * The same user can therefore belong to multiple organisations,
- * work at multiple branches, and have different roles at
- * different branches.
- *
- * The repository handles database persistence only.
+ * The repository handles database persistence and membership caching.
  * Authentication, authorization, invitation rules, and other
  * business rules belong in the service layer.
+ *
+ * PostgreSQL remains the source of truth.
+ * Redis is used only as a short-lived read cache.
  */
 
 const { pool } = require("../db/connection");
+const { getCache, setCache, deleteCache } = require("../cache/cache");
+
+const MEMBERSHIP_CACHE_TTL = 60;
+
+/**
+ * Build Redis cache keys.
+ */
+const buildMembershipCacheKey = (membershipId) => `membership:${membershipId}`;
+
+const buildUserOrganisationMembershipCacheKey = (userId, organisationId) =>
+  `membership:user:${userId}:organisation:${organisationId}`;
+
+const buildUserMembershipsCacheKey = (userId) => `membership:user:${userId}`;
+
+const buildOrganisationMembersCacheKey = (organisationId) =>
+  `membership:organisation:${organisationId}`;
+
+/**
+ * Invalidate every cache entry affected by a membership.
+ */
+const invalidateMembershipCache = async (membership) => {
+  await Promise.all([
+    deleteCache(buildMembershipCacheKey(membership.id)),
+    deleteCache(
+      buildUserOrganisationMembershipCacheKey(
+        membership.user_id,
+        membership.organisation_id,
+      ),
+    ),
+    deleteCache(buildUserMembershipsCacheKey(membership.user_id)),
+    deleteCache(buildOrganisationMembersCacheKey(membership.organisation_id)),
+  ]);
+};
 
 /**
  * Create a membership.
@@ -40,7 +58,6 @@ const { pool } = require("../db/connection");
  * @param {Object} data
  * @param {string} data.organisationId
  * @param {string} data.userId
- * @param {string|null} data.roleId
  * @param {string} data.status
  *
  * @returns {Object} Created membership
@@ -75,7 +92,25 @@ const createMembership = async ({
 
   const result = await pool.query(query, [organisationId, userId, status]);
 
-  return result.rows[0];
+  const membership = result.rows[0];
+
+  /**
+   * There is no existing individual membership cache,
+   * but both membership lists are now stale.
+   */
+  try {
+    await Promise.all([
+      deleteCache(
+        buildUserOrganisationMembershipCacheKey(userId, organisationId),
+      ),
+      deleteCache(buildUserMembershipsCacheKey(userId)),
+      deleteCache(buildOrganisationMembersCacheKey(organisationId)),
+    ]);
+  } catch (error) {
+    console.error("Membership cache invalidation failed:", error);
+  }
+
+  return membership;
 };
 
 /**
@@ -86,6 +121,18 @@ const createMembership = async ({
  * @returns {Object|null} Membership or null if not found
  */
 const getMembershipById = async (membershipId) => {
+  const cacheKey = buildMembershipCacheKey(membershipId);
+
+  try {
+    const cachedMembership = await getCache(cacheKey);
+
+    if (cachedMembership !== null) {
+      return cachedMembership;
+    }
+  } catch (error) {
+    console.error("Membership cache read failed:", error);
+  }
+
   const query = `
         SELECT
             id,
@@ -100,19 +147,21 @@ const getMembershipById = async (membershipId) => {
     `;
 
   const result = await pool.query(query, [membershipId]);
+  const membership = result.rows[0] || null;
 
-  return result.rows[0] || null;
+  if (membership) {
+    try {
+      await setCache(cacheKey, membership, MEMBERSHIP_CACHE_TTL);
+    } catch (error) {
+      console.error("Membership cache write failed:", error);
+    }
+  }
+
+  return membership;
 };
 
 /**
  * Get a specific user's membership in a specific organisation.
- *
- * This is one of the most important membership queries.
- *
- * It answers:
- *
- * "Does this user belong to this organisation, and if so,
- * what is their role and membership status?"
  *
  * @param {string} userId
  * @param {string} organisationId
@@ -120,6 +169,21 @@ const getMembershipById = async (membershipId) => {
  * @returns {Object|null} Membership or null if not found
  */
 const getMembership = async (userId, organisationId) => {
+  const cacheKey = buildUserOrganisationMembershipCacheKey(
+    userId,
+    organisationId,
+  );
+
+  try {
+    const cachedMembership = await getCache(cacheKey);
+
+    if (cachedMembership !== null) {
+      return cachedMembership;
+    }
+  } catch (error) {
+    console.error("User organisation membership cache read failed:", error);
+  }
+
   const query = `
         SELECT
             id,
@@ -136,21 +200,39 @@ const getMembership = async (userId, organisationId) => {
 
   const result = await pool.query(query, [userId, organisationId]);
 
-  return result.rows[0] || null;
+  const membership = result.rows[0] || null;
+
+  if (membership) {
+    try {
+      await setCache(cacheKey, membership, MEMBERSHIP_CACHE_TTL);
+    } catch (error) {
+      console.error("User organisation membership cache write failed:", error);
+    }
+  }
+
+  return membership;
 };
 
 /**
  * Get all organisations to which a user belongs.
- *
- * The result includes organisation and role information because
- * this is commonly needed when a user logs into the application
- * and needs to select an organisation.
  *
  * @param {string} userId
  *
  * @returns {Array} User memberships
  */
 const getUserMemberships = async (userId) => {
+  const cacheKey = buildUserMembershipsCacheKey(userId);
+
+  try {
+    const cachedMemberships = await getCache(cacheKey);
+
+    if (cachedMemberships !== null) {
+      return cachedMemberships;
+    }
+  } catch (error) {
+    console.error("User memberships cache read failed:", error);
+  }
+
   const query = `
         SELECT
             om.id,
@@ -169,21 +251,37 @@ const getUserMemberships = async (userId) => {
     `;
 
   const result = await pool.query(query, [userId]);
-  return result.rows;
+  const memberships = result.rows;
+
+  try {
+    await setCache(cacheKey, memberships, MEMBERSHIP_CACHE_TTL);
+  } catch (error) {
+    console.error("User memberships cache write failed:", error);
+  }
+
+  return memberships;
 };
 
 /**
  * Get all members of an organisation.
- *
- * The result includes user and role information because this
- * is what an organisation's employee/member management screen
- * generally needs.
  *
  * @param {string} organisationId
  *
  * @returns {Array} Organisation members
  */
 const getOrganisationMembers = async (organisationId) => {
+  const cacheKey = buildOrganisationMembersCacheKey(organisationId);
+
+  try {
+    const cachedMembers = await getCache(cacheKey);
+
+    if (cachedMembers !== null) {
+      return cachedMembers;
+    }
+  } catch (error) {
+    console.error("Organisation members cache read failed:", error);
+  }
+
   const query = `
         SELECT
             om.id,
@@ -203,21 +301,20 @@ const getOrganisationMembers = async (organisationId) => {
     `;
 
   const result = await pool.query(query, [organisationId]);
-  return result.rows;
+
+  const members = result.rows;
+
+  try {
+    await setCache(cacheKey, members, MEMBERSHIP_CACHE_TTL);
+  } catch (error) {
+    console.error("Organisation members cache write failed:", error);
+  }
+
+  return members;
 };
 
 /**
  * Update the status of a membership.
- *
- * Examples:
- *
- * ACTIVE
- * INVITED
- * SUSPENDED
- * REMOVED
- *
- * The service layer should decide which status transitions
- * are allowed.
  *
  * @param {string} membershipId
  * @param {string} status
@@ -243,23 +340,32 @@ const updateMembershipStatus = async (membershipId, status) => {
 
   const result = await pool.query(query, [status, membershipId]);
 
-  return result.rows[0] || null;
+  const membership = result.rows[0] || null;
+
+  if (membership) {
+    try {
+      await invalidateMembershipCache(membership);
+    } catch (error) {
+      console.error("Membership cache invalidation failed:", error);
+    }
+  }
+
+  return membership;
 };
 
 /**
  * Delete a membership.
  *
- * Deleting a membership removes the user's relationship with
- * the organisation. It does not delete the user account itself.
- *
- * The service layer should determine whether a membership can
- * actually be removed.
+ * The membership is loaded before deletion so all affected
+ * cache keys can be invalidated after the database deletion.
  *
  * @param {string} membershipId
  *
  * @returns {boolean} True if the membership was deleted
  */
 const deleteMembership = async (membershipId) => {
+  const existingMembership = await getMembershipById(membershipId);
+
   const query = `
         DELETE FROM organisation_memberships
         WHERE id = $1
@@ -267,6 +373,14 @@ const deleteMembership = async (membershipId) => {
     `;
 
   const result = await pool.query(query, [membershipId]);
+
+  if (result.rowCount > 0 && existingMembership) {
+    try {
+      await invalidateMembershipCache(existingMembership);
+    } catch (error) {
+      console.error("Membership cache invalidation failed:", error);
+    }
+  }
 
   return result.rowCount > 0;
 };

@@ -1,24 +1,23 @@
 /**
- * User Repository Test
+ * User Repository Integration Tests
  *
- * Purpose:
- * Verifies the user repository against the real PostgreSQL
- * development database.
+ * Tests the User Repository against the real PostgreSQL database
+ * and local Redis instance.
  *
- * Authentication scenarios tested:
- *
- * 1. Local-only user
- * 2. Google-only user
- * 3. Local + Google user
- * 4. Google account linking
- * 5. Google account unlinking
- * 6. Email verification
- * 7. Last-login update
- * 8. Profile update
- * 9. Password hash update
- * 10. User status update
- * 11. User deletion
+ * The tests verify:
+ * - User creation
+ * - Redis cache miss and hit by ID
+ * - Redis cache hit by email
+ * - Redis cache hit by Google subject
+ * - Cache invalidation after updates
+ * - Cache invalidation after authentication changes
+ * - Cache invalidation after deletion
+ * - PostgreSQL remains the source of truth
  */
+
+require("dotenv").config();
+
+const assert = require("assert");
 
 const {
   createUser,
@@ -36,268 +35,367 @@ const {
 } = require("../repositories/user.repository");
 
 const { pool } = require("../db/connection");
+const {
+  redisClient,
+  connectRedis,
+  disconnectRedis,
+} = require("../cache/redis");
+
+const { getCache, deleteCache } = require("../cache/cache");
+
+const USER_ID_PREFIX = "user:";
+
+const uniqueValue = (prefix) =>
+  `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+const buildUserIdCacheKey = (userId) => `${USER_ID_PREFIX}${userId}`;
+
+const buildUserEmailCacheKey = (email) => `user:email:${email}`;
+
+const buildUserGoogleCacheKey = (googleSub) => `user:google:${googleSub}`;
 
 const runTests = async () => {
-  let localUserId;
-  let googleUserId;
-  let linkedUserId;
+  let user = null;
+  let userId = null;
 
-  /*
-   * Unique email addresses are used so the test can be
-   * executed repeatedly without conflicting with previous
-   * development data.
-   */
-  const timestamp = Date.now();
+  const email = `${uniqueValue("user")}@test.local`;
+  const googleSub = uniqueValue("google-sub");
 
-  const localEmail = `test-local-${timestamp}@example.com`;
-
-  const googleEmail = `test-google-${timestamp}@example.com`;
-
-  const linkedEmail = `test-linked-${timestamp}@example.com`;
+  const initialPasswordHash = "initial-password-hash";
+  const updatedPasswordHash = "updated-password-hash";
 
   try {
-    /*
-     * ------------------------------------------------------
-     * 1. CREATE LOCAL-ONLY USER
-     * ------------------------------------------------------
-     */
-    console.log("--- Creating local-only user ---");
+    await pool.query("SELECT 1");
+    await connectRedis();
 
-    const localUser = await createUser({
-      email: localEmail,
-      passwordHash: "$2b$10$test-local-password-hash",
-      googleSub: null,
-      name: "Local Test User",
+    console.log("\nRunning User Repository tests...\n");
+
+    // ---------------------------------------------------------
+    // Create user
+    // ---------------------------------------------------------
+
+    user = await createUser({
+      email,
+      passwordHash: initialPasswordHash,
+      googleSub,
+      name: "Redis Test User",
       status: "ACTIVE",
     });
 
-    localUserId = localUser.id;
+    userId = user.id;
 
-    console.log(localUser);
+    assert.ok(user);
+    assert.ok(user.id);
+    assert.strictEqual(user.email, email);
+    assert.strictEqual(user.password_hash, initialPasswordHash);
+    assert.strictEqual(user.google_sub, googleSub);
+    assert.strictEqual(user.name, "Redis Test User");
+    assert.strictEqual(user.status, "ACTIVE");
 
-    /*
-     * ------------------------------------------------------
-     * 2. GET USER BY ID
-     * ------------------------------------------------------
-     */
-    console.log("--- Getting user by ID ---");
+    console.log("✓ 1. Create user");
 
-    const userById = await getUserById(localUserId);
+    // ---------------------------------------------------------
+    // Ensure Redis starts clean
+    // ---------------------------------------------------------
 
-    console.log(userById);
+    await Promise.all([
+      deleteCache(buildUserIdCacheKey(userId)),
+      deleteCache(buildUserEmailCacheKey(email)),
+      deleteCache(buildUserGoogleCacheKey(googleSub)),
+    ]);
 
-    /*
-     * ------------------------------------------------------
-     * 3. GET USER BY EMAIL
-     * ------------------------------------------------------
-     */
-    console.log("--- Getting user by email ---");
+    // ---------------------------------------------------------
+    // Get by ID - first call should be PostgreSQL
+    // ---------------------------------------------------------
 
-    const userByEmail = await getUserByEmail(localEmail);
+    const userByIdFirst = await getUserById(userId);
 
-    console.log(userByEmail);
+    assert.ok(userByIdFirst);
+    assert.strictEqual(userByIdFirst.id, userId);
+    assert.strictEqual(userByIdFirst.email, email);
 
-    /*
-     * ------------------------------------------------------
-     * 4. UPDATE PROFILE
-     * ------------------------------------------------------
-     */
-    console.log("--- Updating user profile ---");
+    const cachedById = await getCache(buildUserIdCacheKey(userId));
 
-    const updatedUser = await updateUser(localUserId, {
-      name: "Updated Local User",
-    });
+    assert.ok(cachedById);
+    assert.strictEqual(cachedById.id, userId);
+    assert.strictEqual(cachedById.email, email);
 
-    console.log(updatedUser);
+    console.log("✓ 2. User ID cache miss populates Redis");
 
-    /*
-     * ------------------------------------------------------
-     * 5. UPDATE PASSWORD HASH
-     * ------------------------------------------------------
-     */
-    console.log("--- Updating password hash ---");
+    // ---------------------------------------------------------
+    // Get by ID - second call should use Redis
+    // ---------------------------------------------------------
 
-    const passwordUpdated = await updatePasswordHash(
-      localUserId,
-      "$2b$10$updated-password-hash",
+    await pool.query(
+      `
+        UPDATE users
+        SET name = $1
+        WHERE id = $2;
+      `,
+      ["Database Name Change", userId],
     );
 
-    console.log(passwordUpdated);
+    const userByIdCacheHit = await getUserById(userId);
 
-    /*
-     * ------------------------------------------------------
-     * 6. MARK EMAIL AS VERIFIED
-     * ------------------------------------------------------
-     */
-    console.log("--- Marking email as verified ---");
+    assert.strictEqual(userByIdCacheHit.name, "Redis Test User");
 
-    const verifiedUser = await markEmailAsVerified(localUserId);
+    console.log("✓ 3. User ID cache hit returns cached data");
 
-    console.log(verifiedUser);
-
-    /*
-     * ------------------------------------------------------
-     * 7. UPDATE LAST LOGIN
-     * ------------------------------------------------------
-     */
-    console.log("--- Updating last login ---");
-
-    const loginUpdated = await updateLastLogin(localUserId);
-
-    console.log(loginUpdated);
-
-    /*
-     * ------------------------------------------------------
-     * 8. UPDATE USER STATUS
-     * ------------------------------------------------------
-     */
-    console.log("--- Updating user status ---");
-
-    const statusUpdated = await updateUserStatus(localUserId, "SUSPENDED");
-
-    console.log(statusUpdated);
-
-    /*
-     * ------------------------------------------------------
-     * 9. CREATE GOOGLE-ONLY USER
-     * ------------------------------------------------------
-     */
-    console.log("--- Creating Google-only user ---");
-
-    const googleUser = await createUser({
-      email: googleEmail,
-      passwordHash: null,
-      googleSub: `google-test-${timestamp}`,
-      name: "Google Test User",
-      status: "ACTIVE",
-    });
-
-    googleUserId = googleUser.id;
-
-    console.log(googleUser);
-
-    /*
-     * ------------------------------------------------------
-     * 10. GET USER BY GOOGLE SUBJECT
-     * ------------------------------------------------------
-     */
-    console.log("--- Getting user by Google subject ---");
-
-    const userByGoogle = await getUserByGoogleSub(`google-test-${timestamp}`);
-
-    console.log(userByGoogle);
-
-    /*
-     * ------------------------------------------------------
-     * 11. CREATE LOCAL USER FOR ACCOUNT LINKING
-     * ------------------------------------------------------
-     */
-    console.log("--- Creating user for Google linking ---");
-
-    const linkedUser = await createUser({
-      email: linkedEmail,
-      passwordHash: "$2b$10$link-test-password-hash",
-      googleSub: null,
-      name: "Link Test User",
-      status: "ACTIVE",
-    });
-
-    linkedUserId = linkedUser.id;
-
-    console.log(linkedUser);
-
-    /*
-     * ------------------------------------------------------
-     * 12. LINK GOOGLE ACCOUNT
-     * ------------------------------------------------------
-     */
-    console.log("--- Linking Google account ---");
-
-    const linkedGoogleUser = await linkGoogleAccount(
-      linkedUserId,
-      `google-linked-${timestamp}`,
+    // Restore database value before continuing.
+    await pool.query(
+      `
+        UPDATE users
+        SET name = $1
+        WHERE id = $2;
+      `,
+      ["Redis Test User", userId],
     );
 
-    console.log(linkedGoogleUser);
+    // ---------------------------------------------------------
+    // Get by email
+    // ---------------------------------------------------------
 
-    /*
-     * ------------------------------------------------------
-     * 13. VERIFY GOOGLE ACCOUNT CAN BE FOUND
-     * ------------------------------------------------------
-     */
-    console.log("--- Finding linked Google account ---");
+    await deleteCache(buildUserEmailCacheKey(email));
 
-    const linkedGoogleAccount = await getUserByGoogleSub(
-      `google-linked-${timestamp}`,
+    const userByEmail = await getUserByEmail(email);
+
+    assert.ok(userByEmail);
+    assert.strictEqual(userByEmail.id, userId);
+
+    const cachedByEmail = await getCache(buildUserEmailCacheKey(email));
+
+    assert.ok(cachedByEmail);
+    assert.strictEqual(cachedByEmail.id, userId);
+
+    console.log("✓ 4. Email lookup populates Redis");
+
+    // ---------------------------------------------------------
+    // Verify email cache hit
+    // ---------------------------------------------------------
+
+    await pool.query(
+      `
+        UPDATE users
+        SET name = $1
+        WHERE id = $2;
+      `,
+      ["Database Email Name Change", userId],
     );
 
-    console.log(linkedGoogleAccount);
+    const emailCacheHit = await getUserByEmail(email);
 
-    /*
-     * ------------------------------------------------------
-     * 14. UNLINK GOOGLE ACCOUNT
-     * ------------------------------------------------------
-     */
-    console.log("--- Unlinking Google account ---");
+    assert.strictEqual(emailCacheHit.name, "Redis Test User");
 
-    const unlinkedUser = await unlinkGoogleAccount(linkedUserId);
+    await pool.query(
+      `
+        UPDATE users
+        SET name = $1
+        WHERE id = $2;
+      `,
+      ["Redis Test User", userId],
+    );
 
-    console.log(unlinkedUser);
+    console.log("✓ 5. Email lookup uses Redis cache");
 
-    /*
-     * ------------------------------------------------------
-     * 15. DELETE LOCAL USER
-     * ------------------------------------------------------
-     */
-    console.log("--- Deleting local-only user ---");
+    // ---------------------------------------------------------
+    // Get by Google subject
+    // ---------------------------------------------------------
 
-    const localDeleted = await deleteUser(localUserId);
+    await deleteCache(buildUserGoogleCacheKey(googleSub));
 
-    console.log({
-      localDeleted,
+    const userByGoogle = await getUserByGoogleSub(googleSub);
+
+    assert.ok(userByGoogle);
+    assert.strictEqual(userByGoogle.id, userId);
+
+    const cachedByGoogle = await getCache(buildUserGoogleCacheKey(googleSub));
+
+    assert.ok(cachedByGoogle);
+    assert.strictEqual(cachedByGoogle.id, userId);
+
+    console.log("✓ 6. Google lookup populates Redis");
+
+    // ---------------------------------------------------------
+    // Update basic profile
+    // ---------------------------------------------------------
+
+    const updatedUser = await updateUser(userId, {
+      name: "Updated Redis User",
     });
 
-    /*
-     * ------------------------------------------------------
-     * 16. DELETE GOOGLE USER
-     * ------------------------------------------------------
-     */
-    console.log("--- Deleting Google-only user ---");
+    assert.ok(updatedUser);
+    assert.strictEqual(updatedUser.name, "Updated Redis User");
 
-    const googleDeleted = await deleteUser(googleUserId);
+    assert.strictEqual(await getCache(buildUserIdCacheKey(userId)), null);
 
-    console.log({
-      googleDeleted,
-    });
+    assert.strictEqual(await getCache(buildUserEmailCacheKey(email)), null);
 
-    /*
-     * ------------------------------------------------------
-     * 17. DELETE LINKED USER
-     * ------------------------------------------------------
-     */
-    console.log("--- Deleting linked user ---");
+    assert.strictEqual(
+      await getCache(buildUserGoogleCacheKey(googleSub)),
+      null,
+    );
 
-    const linkedDeleted = await deleteUser(linkedUserId);
+    console.log("✓ 7. Profile update invalidates user caches");
 
-    console.log({
-      linkedDeleted,
-    });
+    // ---------------------------------------------------------
+    // Repopulate caches
+    // ---------------------------------------------------------
 
-    console.log("");
-    console.log("User repository tests completed successfully.");
+    await getUserById(userId);
+    await getUserByEmail(email);
+    await getUserByGoogleSub(googleSub);
+
+    assert.ok(await getCache(buildUserIdCacheKey(userId)));
+
+    assert.ok(await getCache(buildUserEmailCacheKey(email)));
+
+    assert.ok(await getCache(buildUserGoogleCacheKey(googleSub)));
+
+    console.log("✓ 8. Updated user is cached again");
+
+    // ---------------------------------------------------------
+    // Update password
+    // ---------------------------------------------------------
+
+    const passwordUpdatedUser = await updatePasswordHash(
+      userId,
+      updatedPasswordHash,
+    );
+
+    assert.strictEqual(passwordUpdatedUser.password_hash, updatedPasswordHash);
+
+    assert.strictEqual(await getCache(buildUserIdCacheKey(userId)), null);
+
+    console.log("✓ 9. Password update invalidates cache");
+
+    // ---------------------------------------------------------
+    // Link Google account
+    // ---------------------------------------------------------
+
+    const newGoogleSub = uniqueValue("new-google-sub");
+
+    const linkedUser = await linkGoogleAccount(userId, newGoogleSub);
+
+    assert.strictEqual(linkedUser.google_sub, newGoogleSub);
+
+    assert.strictEqual(await getCache(buildUserIdCacheKey(userId)), null);
+
+    assert.strictEqual(await getCache(buildUserEmailCacheKey(email)), null);
+
+    assert.ok((await getCache(buildUserGoogleCacheKey(newGoogleSub))) === null);
+
+    console.log("✓ 10. Google account linking invalidates current caches");
+
+    // ---------------------------------------------------------
+    // Unlink Google account
+    // ---------------------------------------------------------
+
+    const unlinkedUser = await unlinkGoogleAccount(userId);
+
+    assert.strictEqual(unlinkedUser.google_sub, null);
+
+    assert.strictEqual(await getCache(buildUserIdCacheKey(userId)), null);
+
+    assert.strictEqual(await getCache(buildUserEmailCacheKey(email)), null);
+
+    console.log("✓ 11. Google account unlink invalidates cache");
+
+    // ---------------------------------------------------------
+    // Mark email verified
+    // ---------------------------------------------------------
+
+    const verifiedUser = await markEmailAsVerified(userId);
+
+    assert.ok(verifiedUser.email_verified_at);
+
+    assert.strictEqual(await getCache(buildUserIdCacheKey(userId)), null);
+
+    console.log("✓ 12. Email verification invalidates cache");
+
+    // ---------------------------------------------------------
+    // Update last login
+    // ---------------------------------------------------------
+
+    const loginUpdatedUser = await updateLastLogin(userId);
+
+    assert.ok(loginUpdatedUser.last_login_at);
+
+    assert.strictEqual(await getCache(buildUserIdCacheKey(userId)), null);
+
+    console.log("✓ 13. Last login update invalidates cache");
+
+    // ---------------------------------------------------------
+    // Update status
+    // ---------------------------------------------------------
+
+    const statusUpdatedUser = await updateUserStatus(userId, "SUSPENDED");
+
+    assert.strictEqual(statusUpdatedUser.status, "SUSPENDED");
+
+    assert.strictEqual(await getCache(buildUserIdCacheKey(userId)), null);
+
+    console.log("✓ 14. Status update invalidates cache");
+
+    // ---------------------------------------------------------
+    // Repopulate before delete
+    // ---------------------------------------------------------
+
+    const currentUser = await getUserById(userId);
+
+    assert.strictEqual(currentUser.status, "SUSPENDED");
+
+    assert.ok(await getCache(buildUserIdCacheKey(userId)));
+
+    // ---------------------------------------------------------
+    // Delete user
+    // ---------------------------------------------------------
+
+    const deleted = await deleteUser(userId);
+
+    assert.strictEqual(deleted, true);
+
+    assert.strictEqual(await getCache(buildUserIdCacheKey(userId)), null);
+
+    assert.strictEqual(await getCache(buildUserEmailCacheKey(email)), null);
+
+    assert.strictEqual(
+      await getCache(buildUserGoogleCacheKey(newGoogleSub)),
+      null,
+    );
+
+    const deletedUser = await getUserById(userId);
+
+    assert.strictEqual(deletedUser, null);
+
+    console.log("✓ 15. User deletion removes database and cache data");
+
+    console.log("\n✓ All User Repository tests passed.\n");
   } catch (error) {
-    console.error("User repository test failed.");
-
+    console.error("\n✗ User Repository test failed.");
     console.error(error);
 
-    process.exitCode = 1;
+    throw error;
   } finally {
-    /*
-     * Close the PostgreSQL connection pool so the Node.js
-     * process can terminate cleanly.
-     */
+    if (userId) {
+      try {
+        await pool.query("DELETE FROM users WHERE id = $1;", [userId]);
+      } catch (error) {
+        console.error("User test cleanup failed:", error);
+      }
+    }
+
+    try {
+      if (redisClient.isOpen) {
+        await disconnectRedis();
+      }
+    } catch (error) {
+      console.error("Redis disconnect failed:", error);
+    }
+
     await pool.end();
   }
 };
 
-runTests();
+runTests().catch(() => {
+  process.exit(1);
+});
