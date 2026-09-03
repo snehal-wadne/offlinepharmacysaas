@@ -125,9 +125,59 @@ const updateSupplierStatus = async (req, res) => {
   }
 };
 
+const updateSupplier = async (req, res) => {
+  try {
+    const organisationId = await getOrgId(req);
+    const { id } = req.params;
+
+    const updatedSupplier = await supplierService.updateSupplier(organisationId, id, req.body);
+
+    res.status(200).json({
+      success: true,
+      message: 'Supplier updated successfully',
+      data: updatedSupplier,
+    });
+  } catch (error) {
+    console.error(`Error updating supplier ${req.params.id}:`, error);
+    res.status(error.statusCode || 500).json({
+      success: false,
+      error: error.message || 'Failed to update supplier',
+    });
+  }
+};
+
+const deleteSupplier = async (req, res) => {
+  try {
+    const organisationId = await getOrgId(req);
+    const { id } = req.params;
+
+    const deleted = await supplierService.deleteSupplier(organisationId, id);
+
+    if (!deleted) {
+      return res.status(404).json({
+        success: false,
+        error: `Supplier ${id} not found`,
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Supplier deleted successfully',
+    });
+  } catch (error) {
+    console.error(`Error deleting supplier ${req.params.id}:`, error);
+    res.status(error.statusCode || 500).json({
+      success: false,
+      error: error.message || 'Failed to delete supplier',
+    });
+  }
+};
+
 module.exports = {
   getSuppliers,
   getSupplierById,
   createSupplier,
   updateSupplierStatus,
+  updateSupplier,
+  deleteSupplier,
 };

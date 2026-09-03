@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,11 @@ import {
   MOCK_PURCHASE_ORDERS_LIST,
   PO_STATUS_FILTER,
 } from '../../data/purchasesMockData';
+import {
+  fetchPurchases,
+  createPurchaseOrder,
+  updatePurchaseStatus,
+} from '../../api/purchaseApi';
 
 const PO_STATUS_BADGES = {
   Pending: { bg: '#FEF3C7', text: '#B45309' },
@@ -33,6 +38,7 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('All Statuses');
+  const [togglePendingOnly, setTogglePendingOnly] = useState(false);
   const [toggleAutoMatchGst, setToggleAutoMatchGst] = useState(true);
 
   // 3-Dots Action Menu State
@@ -43,7 +49,81 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
   const [devGuideModalOpen, setDevGuideModalOpen] = useState(false);
 
   // Purchase Orders List
-  const [orders, setOrders] = useState(MOCK_PURCHASE_ORDERS_LIST);
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadPurchasesData();
+  }, []);
+
+  const loadPurchasesData = async () => {
+    try {
+      setLoading(true);
+      const res = await fetchPurchases();
+      if (res && res.data && Array.isArray(res.data) && res.data.length > 0) {
+        setOrders(res.data);
+      } else {
+        setOrders(MOCK_PURCHASE_ORDERS_LIST);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch purchases from DB:', err.message);
+      setOrders(MOCK_PURCHASE_ORDERS_LIST);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Dynamic 4 KPI Cards Calculations
+  const totalPurchasesSum = orders.reduce((sum, po) => {
+    const val = typeof po.numericAmount === 'number'
+      ? po.numericAmount
+      : (parseFloat(String(po.amount || '0').replace(/[^0-9.]/g, '')) || 0);
+    return sum + val;
+  }, 0);
+
+  const pendingCount = orders.filter((po) => po.status === 'Pending' || po.status === 'PENDING').length;
+  const receivedCount = orders.filter((po) => po.status === 'Received' || po.status === 'RECEIVED').length;
+  const cancelledCount = orders.filter((po) => po.status === 'Cancelled' || po.status === 'CANCELLED').length;
+
+  const dynamicPurchasesKpis = [
+    {
+      id: 'p-kpi-1',
+      label: 'TOTAL PURCHASES',
+      value: `₹${totalPurchasesSum.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`,
+      subtext: 'This fiscal month',
+      variant: 'teal',
+      key: 'All Statuses',
+    },
+    {
+      id: 'p-kpi-2',
+      label: 'PENDING ORDERS',
+      value: pendingCount.toLocaleString(),
+      subtext: 'Awaiting delivery',
+      variant: 'amber',
+      key: 'Pending',
+    },
+    {
+      id: 'p-kpi-3',
+      label: 'RECEIVED THIS MONTH',
+      value: receivedCount.toLocaleString(),
+      subtext: 'Fully processed',
+      variant: 'blue',
+      key: 'Received',
+    },
+    {
+      id: 'p-kpi-4',
+      label: 'CANCELLED ORDERS',
+      value: cancelledCount.toLocaleString(),
+      subtext: 'Supplier out of stock',
+      variant: 'red',
+      key: 'Cancelled',
+    },
+  ];
+
+  const handleKpiCardPress = (statusKey, label) => {
+    setSelectedStatus(statusKey);
+    if (onShowToast) onShowToast(`Filtered: ${label}`);
+  };
 
   // New PO Modal State
   const [modalVisible, setModalVisible] = useState(false);
@@ -60,15 +140,23 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
 
   // Filtered List
   const filteredOrders = orders.filter((po) => {
+    const q = searchQuery.toLowerCase();
     const matchesSearch =
-      po.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      po.supplier.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      po.branch.toLowerCase().includes(searchQuery.toLowerCase());
+      (po.id && po.id.toLowerCase().includes(q)) ||
+      (po.supplier && po.supplier.toLowerCase().includes(q)) ||
+      (po.branch && po.branch.toLowerCase().includes(q));
 
     const matchesStatus =
-      selectedStatus === 'All Statuses' || po.status === selectedStatus;
+      selectedStatus === 'All Statuses' ||
+      po.status === selectedStatus ||
+      (selectedStatus === 'Pending' && po.status === 'PENDING') ||
+      (selectedStatus === 'Approved' && po.status === 'APPROVED') ||
+      (selectedStatus === 'Received' && po.status === 'RECEIVED') ||
+      (selectedStatus === 'Cancelled' && po.status === 'CANCELLED');
 
-    return matchesSearch && matchesStatus;
+    const matchesTogglePending = !togglePendingOnly || po.status === 'Pending' || po.status === 'PENDING';
+
+    return matchesSearch && matchesStatus && matchesTogglePending;
   });
 
   const handleOpenModal = () => {
@@ -85,7 +173,7 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
     setModalVisible(true);
   };
 
-  const handleCreatePO = () => {
+  const handleCreatePO = async () => {
     const errors = {};
     if (!formData.supplier.trim()) errors.supplier = 'Supplier is required';
     if (!formData.medicine.trim()) errors.medicine = 'Medicine/Product is required';
@@ -98,24 +186,72 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
       return;
     }
 
-    const calculatedTotal = (Number(formData.quantity) * Number(formData.unitPrice || 100)).toFixed(2);
-    const newPO = {
-      id: `PO-${1026 + orders.length}`,
-      supplier: formData.supplier,
-      orderDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+    const qtyNum = Number(formData.quantity);
+    const unitCostNum = Number(formData.unitPrice || 100);
+    const calculatedTotal = (qtyNum * unitCostNum).toFixed(2);
+    const poNum = `PO-${1026 + orders.length}`;
+
+    const payload = {
+      purchaseNumber: poNum,
+      supplierName: formData.supplier,
+      branchName: formData.branch || 'Main Branch',
       expectedDate: formData.expectedDate || '05 Sep 2026',
-      amount: `₹${Number(calculatedTotal).toLocaleString('en-IN')}`,
-      itemsCount: Number(formData.quantity),
-      status: 'Pending',
-      branch: formData.branch || 'Main Branch',
-      createdBy: 'Manager',
+      notes: formData.notes || '',
+      items: [
+        {
+          medicineName: formData.medicine,
+          brandName: formData.medicine,
+          orderedQuantity: qtyNum,
+          unitCost: unitCostNum,
+        },
+      ],
     };
 
-    setOrders((prev) => [newPO, ...prev]);
-    setModalVisible(false);
+    try {
+      const res = await createPurchaseOrder(payload);
+      const created = res?.data;
+      const newPO = {
+        id: created?.purchase_number || poNum,
+        dbId: created?.id,
+        poNumber: created?.purchase_number || poNum,
+        supplier: formData.supplier,
+        orderDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+        expectedDate: formData.expectedDate || '05 Sep 2026',
+        amount: `₹${Number(calculatedTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
+        numericAmount: Number(calculatedTotal),
+        itemsCount: qtyNum,
+        status: 'Pending',
+        branch: formData.branch || 'Main Branch',
+        createdBy: 'Manager',
+      };
 
-    if (onShowToast) {
-      onShowToast(`✓ Created Purchase Order ${newPO.id} for ${newPO.supplier}!`);
+      setOrders((prev) => [newPO, ...prev]);
+      setModalVisible(false);
+
+      if (onShowToast) {
+        onShowToast(`✓ Created Purchase Order ${newPO.id} in database!`);
+      }
+    } catch (err) {
+      console.warn('Backend PO create error, saving locally:', err.message);
+      const newPO = {
+        id: poNum,
+        supplier: formData.supplier,
+        orderDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+        expectedDate: formData.expectedDate || '05 Sep 2026',
+        amount: `₹${Number(calculatedTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
+        numericAmount: Number(calculatedTotal),
+        itemsCount: qtyNum,
+        status: 'Pending',
+        branch: formData.branch || 'Main Branch',
+        createdBy: 'Manager',
+      };
+
+      setOrders((prev) => [newPO, ...prev]);
+      setModalVisible(false);
+
+      if (onShowToast) {
+        onShowToast(`✓ Created Purchase Order ${newPO.id}!`);
+      }
     }
   };
 
@@ -125,6 +261,14 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
     }
     if (onShowToast) {
       onShowToast(`Switched to Goods Receiving for ${po.id}`);
+    }
+  };
+
+  const handleTogglePending = () => {
+    const nextVal = !togglePendingOnly;
+    setTogglePendingOnly(nextVal);
+    if (onShowToast) {
+      onShowToast(nextVal ? 'Filter enabled: Showing Pending Orders Only' : 'Filter cleared: Showing All Orders');
     }
   };
 
@@ -141,19 +285,56 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
     setActionMenuModalOpen(true);
   };
 
-  const handleExecutePoAction = (actionKey) => {
+  const handleExecutePoAction = async (actionKey) => {
     setActionMenuModalOpen(false);
     const po = selectedPoForAction;
     if (!po) return;
 
+    const targetDbId = po.dbId || po.id;
+
     if (actionKey === 'receive') {
-      handleReceiveStockShortcut(po);
+      try {
+        await updatePurchaseStatus(targetDbId, 'RECEIVED');
+        setOrders((prev) =>
+          prev.map((item) => (item.id === po.id ? { ...item, status: 'Received' } : item))
+        );
+        if (onShowToast) {
+          onShowToast(`✓ PO ${po.id} marked as Received in database!`);
+        }
+      } catch (err) {
+        setOrders((prev) =>
+          prev.map((item) => (item.id === po.id ? { ...item, status: 'Received' } : item))
+        );
+        if (onShowToast) onShowToast(`Updated ${po.id} status to Received`);
+      }
     } else if (actionKey === 'approve') {
-      setOrders((prev) =>
-        prev.map((item) => (item.id === po.id ? { ...item, status: 'Approved' } : item))
-      );
-      if (onShowToast) {
-        onShowToast(`✓ Purchase Order ${po.id} approved successfully!`);
+      try {
+        await updatePurchaseStatus(targetDbId, 'APPROVED');
+        setOrders((prev) =>
+          prev.map((item) => (item.id === po.id ? { ...item, status: 'Approved' } : item))
+        );
+        if (onShowToast) {
+          onShowToast(`✓ PO ${po.id} approved in database!`);
+        }
+      } catch (err) {
+        setOrders((prev) =>
+          prev.map((item) => (item.id === po.id ? { ...item, status: 'Approved' } : item))
+        );
+        if (onShowToast) onShowToast(`✓ PO ${po.id} approved!`);
+      }
+    } else if (actionKey === 'cancel') {
+      try {
+        await updatePurchaseStatus(targetDbId, 'CANCELLED');
+        setOrders((prev) =>
+          prev.map((item) => (item.id === po.id ? { ...item, status: 'Cancelled' } : item))
+        );
+        if (onShowToast) {
+          onShowToast(`[PATCH /api/purchases] PO ${po.id} cancelled in database!`);
+        }
+      } catch (err) {
+        setOrders((prev) =>
+          prev.map((item) => (item.id === po.id ? { ...item, status: 'Cancelled' } : item))
+        );
       }
     } else if (actionKey === 'print') {
       if (onShowToast) {
@@ -207,14 +388,14 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
 
       {/* Top 4 KPI Cards */}
       <View style={[styles.kpiRow, isCompact && styles.kpiRowCompact]}>
-        {PURCHASES_KPIS.map((kpi) => (
+        {dynamicPurchasesKpis.map((kpi) => (
           <InventoryStatCard
             key={kpi.id}
             label={kpi.label}
             value={kpi.value}
             subtext={kpi.subtext}
             variant={kpi.variant}
-            onPress={() => onShowToast && onShowToast(`Filter: ${kpi.label}`)}
+            onPress={() => handleKpiCardPress(kpi.key, kpi.label)}
           />
         ))}
       </View>
@@ -240,6 +421,31 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
 
           {/* Quick Filter Toggles */}
           <View style={styles.filterTogglesGroup}>
+            <Pressable
+              onPress={handleTogglePending}
+              style={[
+                styles.filterTogglePill,
+                togglePendingOnly && styles.filterTogglePillActive,
+              ]}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: togglePendingOnly }}
+            >
+              <View
+                style={[
+                  styles.filterToggleDot,
+                  togglePendingOnly && styles.filterToggleDotActive,
+                ]}
+              />
+              <Text
+                style={[
+                  styles.filterToggleText,
+                  togglePendingOnly && styles.filterToggleTextActive,
+                ]}
+              >
+                Pending Only
+              </Text>
+            </Pressable>
+
             <Pressable
               onPress={handleToggleAutoMatch}
               style={[

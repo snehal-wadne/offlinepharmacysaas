@@ -14,11 +14,19 @@ const redisClient = createClient({
   socket: {
     host: process.env.REDIS_HOST || "localhost",
     port: Number(process.env.REDIS_PORT) || 6379,
+    reconnectStrategy: (retries) => {
+      if (retries >= 3) {
+        return false;
+      }
+      return 500;
+    },
   },
 });
 
 redisClient.on("error", (error) => {
-  console.error("Redis Client Error:", error);
+  if (redisClient.isOpen && error) {
+    console.error("Redis Client Error:", error.message || error);
+  }
 });
 
 const connectRedis = async () => {
@@ -26,9 +34,12 @@ const connectRedis = async () => {
     return;
   }
 
-  await redisClient.connect();
-
-  console.log("Redis connected successfully.");
+  try {
+    await redisClient.connect();
+    console.log("Redis connected successfully.");
+  } catch (error) {
+    console.warn("⚠️ Redis server is offline. Running backend without cache (PostgreSQL primary).");
+  }
 };
 
 const disconnectRedis = async () => {
@@ -36,9 +47,12 @@ const disconnectRedis = async () => {
     return;
   }
 
-  await redisClient.quit();
-
-  console.log("Redis disconnected.");
+  try {
+    await redisClient.quit();
+    console.log("Redis disconnected.");
+  } catch (error) {
+    // Ignore error on disconnect
+  }
 };
 
 module.exports = {

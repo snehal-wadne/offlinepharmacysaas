@@ -23,13 +23,22 @@ const { redisClient } = require("./redis");
  * Returns null when the key does not exist.
  */
 const getCache = async (key) => {
-  const cachedValue = await redisClient.get(key);
-
-  if (cachedValue === null) {
+  if (!redisClient.isOpen) {
     return null;
   }
 
-  return JSON.parse(cachedValue);
+  try {
+    const cachedValue = await redisClient.get(key);
+
+    if (cachedValue === null) {
+      return null;
+    }
+
+    return JSON.parse(cachedValue);
+  } catch (error) {
+    console.error(`Cache read error [${key}]:`, error.message);
+    return null;
+  }
 };
 
 /**
@@ -42,9 +51,17 @@ const getCache = async (key) => {
  * A TTL is applied so cached data does not remain indefinitely.
  */
 const setCache = async (key, value, ttlSeconds = 60) => {
-  await redisClient.set(key, JSON.stringify(value), {
-    EX: ttlSeconds,
-  });
+  if (!redisClient.isOpen) {
+    return;
+  }
+
+  try {
+    await redisClient.set(key, JSON.stringify(value), {
+      EX: ttlSeconds,
+    });
+  } catch (error) {
+    console.error(`Cache write error [${key}]:`, error.message);
+  }
 };
 
 /**
@@ -58,7 +75,15 @@ const setCache = async (key, value, ttlSeconds = 60) => {
  * deleting data that has a corresponding cache entry.
  */
 const deleteCache = async (key) => {
-  await redisClient.del(key);
+  if (!redisClient.isOpen) {
+    return;
+  }
+
+  try {
+    await redisClient.del(key);
+  } catch (error) {
+    console.error(`Cache delete error [${key}]:`, error.message);
+  }
 };
 
 module.exports = {

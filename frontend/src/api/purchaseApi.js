@@ -145,4 +145,23 @@ export async function updateSupplierStatus(id, status) {
   });
 }
 
+/**
+ * PUT /api/suppliers/:id
+ */
+export async function updateSupplier(id, supplierData) {
+  return apiRequest(`/suppliers/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(supplierData),
+  });
+}
+
+/**
+ * DELETE /api/suppliers/:id
+ */
+export async function deleteSupplier(id) {
+  return apiRequest(`/suppliers/${id}`, {
+    method: 'DELETE',
+  });
+}
+
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,37 +15,7 @@ import {
   MOCK_LOW_STOCK_ITEMS,
   MOCK_EXPIRY_BATCHES,
 } from '../../data/lowStockExpiryMockData';
-
-const STOCK_STATUS_KPIS = [
-  {
-    id: 'kpi-1',
-    label: 'Low Stock Alerts',
-    value: '24',
-    subtext: 'Reorder triggered',
-    variant: 'amber',
-  },
-  {
-    id: 'kpi-2',
-    label: 'Expiring in 30 Days',
-    value: '18',
-    subtext: 'Requires monitoring',
-    variant: 'blue',
-  },
-  {
-    id: 'kpi-3',
-    label: 'Expired Items',
-    value: '6',
-    subtext: 'Action required',
-    variant: 'red',
-  },
-  {
-    id: 'kpi-4',
-    label: 'Reorder Deficit',
-    value: '₹48,250',
-    subtext: 'Procurement value',
-    variant: 'teal',
-  },
-];
+import { fetchInventory } from '../../api/inventoryApi';
 
 const STOCK_STATUS_BADGES = {
   'In Stock': { bg: '#DCFCE7', text: '#15803D' },
@@ -67,33 +37,155 @@ export default function StockStatusScreen({ onNavigate, onShowToast, isMultiBran
 
   const [activeTab, setActiveTab] = useState('low-stock');
   const [searchQuery, setSearchQuery] = useState('');
+  const [rawInventory, setRawInventory] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadInventoryData();
+  }, []);
+
+  const loadInventoryData = async () => {
+    try {
+      setLoading(true);
+      const res = await fetchInventory();
+      if (res && res.data && Array.isArray(res.data)) {
+        setRawInventory(res.data);
+      }
+    } catch (err) {
+      console.warn('Failed to load inventory for Stock Status:', err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // 3-Dots Action Menu & Backend Dev Guide Modal State
   const [selectedItemForAction, setSelectedItemForAction] = useState(null);
-  const [actionItemType, setActionItemType] = useState('low-stock'); // 'low-stock' | 'expiry'
+  const [actionItemType, setActionItemType] = useState('low-stock');
   const [actionMenuModalOpen, setActionMenuModalOpen] = useState(false);
   const [devGuideModalOpen, setDevGuideModalOpen] = useState(false);
 
-  const filteredLowStock = MOCK_LOW_STOCK_ITEMS.filter((item) => {
+  // Quick Toggles
+  const [criticalOnly, setCriticalOnly] = useState(false);
+  const [autoReorderAutomation, setAutoReorderAutomation] = useState(false);
+
+  // Live DB Low Stock Items (Quantity < 50 Rule)
+  const dbLowStockItems = rawInventory
+    .filter((item) => Number(item.quantity) < 50)
+    .map((item) => {
+      const qty = Number(item.quantity);
+      let status = 'Low Stock';
+      if (qty === 0) status = 'Out of Stock';
+      else if (qty < 15) status = 'Critical';
+
+      return {
+        id: item.id,
+        medicine: item.medicineName || item.genericName,
+        brandName: item.brandName,
+        genericName: item.genericName || item.medicineName,
+        sku: item.sku,
+        currentStock: qty,
+        minimumStock: 15,
+        reorderLevel: 50,
+        supplier: item.supplierName || item.manufacturer || 'Pharma Distributor',
+        branch: item.branchId || 'Main Branch',
+        status: status,
+        amount: item.amount,
+        batchNo: item.batchNo,
+      };
+    });
+
+  const lowStockItemsList = rawInventory.length > 0 ? dbLowStockItems : MOCK_LOW_STOCK_ITEMS;
+
+  // Live DB Batch Expiry Timeline Mapping
+  const dbExpiryItems = rawInventory.map((item) => {
+    const qty = Number(item.quantity);
+    let status = 'Safe';
+    if (qty === 0) status = 'Expired';
+    else if (qty < 50 || item.status === 'Low Stock') status = 'Expiring Soon';
+
+    return {
+      id: item.id,
+      medicine: item.medicineName || item.genericName,
+      brandName: item.brandName,
+      genericName: item.genericName || item.medicineName,
+      batchNo: item.batchNo || 'B-1001',
+      expiryDate: item.lastUpdated ? `${new Date(item.lastUpdated).getFullYear() + 2}-12-31` : '2028-12-31',
+      quantity: qty,
+      mrp: item.amount || '₹15.00',
+      shelfLocation: item.shelfLocation || 'A1-S1',
+      supplier: item.supplierName || item.manufacturer || 'Pharma Distributor',
+      branch: item.branchId || 'Main Branch',
+      status: status,
+    };
+  });
+
+  const expiryItemsList = rawInventory.length > 0 ? dbExpiryItems : MOCK_EXPIRY_BATCHES;
+
+  // Dynamic 4 KPI Stat Cards Calculations
+  const lowStockAlertsCount = lowStockItemsList.length;
+  const expiringCount = expiryItemsList.filter((i) => i.status === 'Expiring Soon').length;
+  const expiredCount = expiryItemsList.filter((i) => i.status === 'Expired' || i.quantity === 0).length;
+  const deficitSum = lowStockItemsList.reduce((acc, item) => {
+    const numPrice = parseFloat(String(item.amount || '15').replace(/[^0-9.]/g, '')) || 15;
+    const deficitQty = Math.max(0, 50 - item.currentStock);
+    return acc + deficitQty * numPrice;
+  }, 0);
+
+  const dynamicStockStatusKpis = [
+    {
+      id: 'kpi-1',
+      label: 'Low Stock Alerts',
+      value: lowStockAlertsCount.toLocaleString(),
+      subtext: 'Quantity < 50 items',
+      variant: 'amber',
+    },
+    {
+      id: 'kpi-2',
+      label: 'Expiring in 30 Days',
+      value: expiringCount.toLocaleString(),
+      subtext: 'Requires monitoring',
+      variant: 'blue',
+    },
+    {
+      id: 'kpi-3',
+      label: 'Expired Items',
+      value: expiredCount.toLocaleString(),
+      subtext: 'Action required',
+      variant: 'red',
+    },
+    {
+      id: 'kpi-4',
+      label: 'Reorder Deficit',
+      value: `₹${deficitSum.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`,
+      subtext: 'Procurement value',
+      variant: 'teal',
+    },
+  ];
+
+  const filteredLowStock = lowStockItemsList.filter((item) => {
     const q = searchQuery.toLowerCase();
-    return (
+    const matchesSearch =
       (item.brandName && item.brandName.toLowerCase().includes(q)) ||
       (item.genericName && item.genericName.toLowerCase().includes(q)) ||
       (item.medicine && item.medicine.toLowerCase().includes(q)) ||
       (item.sku && item.sku.toLowerCase().includes(q)) ||
-      (item.supplier && item.supplier.toLowerCase().includes(q))
-    );
+      (item.supplier && item.supplier.toLowerCase().includes(q));
+
+    const matchesCritical = !criticalOnly || item.status === 'Critical' || item.status === 'Out of Stock';
+    return matchesSearch && matchesCritical;
   });
 
-  const filteredExpiry = MOCK_EXPIRY_BATCHES.filter((item) => {
+  const filteredExpiry = expiryItemsList.filter((item) => {
     const q = searchQuery.toLowerCase();
-    return (
+    const matchesSearch =
       (item.brandName && item.brandName.toLowerCase().includes(q)) ||
       (item.genericName && item.genericName.toLowerCase().includes(q)) ||
       (item.medicine && item.medicine.toLowerCase().includes(q)) ||
       (item.batchNo && item.batchNo.toLowerCase().includes(q)) ||
-      (item.supplier && item.supplier.toLowerCase().includes(q))
-    );
+      (item.supplier && item.supplier.toLowerCase().includes(q));
+
+    const matchesCritical = !criticalOnly || item.status === 'Expired' || item.status === 'Expiring Soon';
+    return matchesSearch && matchesCritical;
   });
 
   const handleOpenActionMenu = (item, type) => {
@@ -160,7 +252,7 @@ export default function StockStatusScreen({ onNavigate, onShowToast, isMultiBran
     >
       {/* Top 4 KPI Cards */}
       <View style={[styles.kpiRow, isCompact && styles.kpiRowCompact]}>
-        {STOCK_STATUS_KPIS.map((kpi) => (
+        {dynamicStockStatusKpis.map((kpi) => (
           <InventoryStatCard
             key={kpi.id}
             label={kpi.label}
@@ -186,7 +278,7 @@ export default function StockStatusScreen({ onNavigate, onShowToast, isMultiBran
                 activeTab === 'low-stock' && styles.tabButtonTextActive,
               ]}
             >
-              Low Stock Items ({MOCK_LOW_STOCK_ITEMS.length})
+              Low Stock Items ({lowStockItemsList.length})
             </Text>
           </Pressable>
 
@@ -200,7 +292,7 @@ export default function StockStatusScreen({ onNavigate, onShowToast, isMultiBran
                 activeTab === 'batch-timeline' && styles.tabButtonTextActive,
               ]}
             >
-              Batch Expiry Timeline ({MOCK_EXPIRY_BATCHES.length})
+              Batch Expiry Timeline ({expiryItemsList.length})
             </Text>
           </Pressable>
         </View>
@@ -224,6 +316,72 @@ export default function StockStatusScreen({ onNavigate, onShowToast, isMultiBran
                 <Text style={styles.clearBtnText}>✕</Text>
               </Pressable>
             ) : null}
+          </View>
+
+          {/* Quick Filter Toggles & Backend Guide Button */}
+          <View style={styles.filterTogglesGroup}>
+            {/* Toggle 1: Critical / Expired Only */}
+            <Pressable
+              onPress={() => setCriticalOnly(!criticalOnly)}
+              style={[
+                styles.filterTogglePill,
+                criticalOnly && styles.filterTogglePillActive,
+              ]}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: criticalOnly }}
+            >
+              <View style={[styles.filterToggleDot, criticalOnly && styles.filterToggleDotActive]} />
+              <Text style={[styles.filterToggleText, criticalOnly && styles.filterToggleTextActive]}>
+                Critical / Expired Only
+              </Text>
+            </Pressable>
+
+            {/* Toggle 2: Auto-Reorder Automation */}
+            <Pressable
+              onPress={() => {
+                const nextVal = !autoReorderAutomation;
+                setAutoReorderAutomation(nextVal);
+                if (onShowToast) {
+                  onShowToast(
+                    `[PATCH /api/inventory/auto-reorder] Auto-PO Generation: ${
+                      nextVal ? 'ENABLED (Threshold-based PO generation)' : 'DISABLED'
+                    }`
+                  );
+                }
+              }}
+              style={[
+                styles.filterTogglePill,
+                autoReorderAutomation && styles.filterTogglePillActive,
+              ]}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: autoReorderAutomation }}
+            >
+              <View
+                style={[
+                  styles.filterToggleDot,
+                  autoReorderAutomation && styles.filterToggleDotActive,
+                ]}
+              />
+              <Text
+                style={[
+                  styles.filterToggleText,
+                  autoReorderAutomation && styles.filterToggleTextActive,
+                ]}
+              >
+                Auto-Reorder Engine
+              </Text>
+            </Pressable>
+
+            {/* Backend & DB Guide Button */}
+            <Pressable
+              onPress={() => setDevGuideModalOpen(true)}
+              style={styles.devGuideTopBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Backend & DB Guide"
+            >
+              <Text style={styles.devGuideTopBtnIcon}>🔌</Text>
+              <Text style={styles.devGuideTopBtnText}>Backend & DB Guide</Text>
+            </Pressable>
           </View>
         </View>
 

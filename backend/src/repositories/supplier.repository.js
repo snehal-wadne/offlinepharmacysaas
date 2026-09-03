@@ -59,9 +59,10 @@ const createSupplier = async ({
             email,
             city,
             gstin,
-            status
+            status,
+            category
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING
             id,
             organisation_id,
@@ -72,6 +73,7 @@ const createSupplier = async ({
             city,
             gstin,
             status,
+            category,
             created_at,
             updated_at;
     `;
@@ -85,6 +87,7 @@ const createSupplier = async ({
     city,
     gstin,
     status,
+    category || "Medicines & Injections",
   ];
 
   const result = await pool.query(query, values);
@@ -194,6 +197,7 @@ const getSuppliersByOrganisation = async (
             city,
             gstin,
             status,
+            category,
             created_at,
             updated_at
         FROM suppliers
@@ -250,6 +254,7 @@ const searchSuppliers = async (
             city,
             gstin,
             status,
+            category,
             created_at,
             updated_at
         FROM suppliers
@@ -261,6 +266,7 @@ const searchSuppliers = async (
                 OR email ILIKE $2
                 OR city ILIKE $2
                 OR gstin ILIKE $2
+                OR category ILIKE $2
           )
         ORDER BY name ASC, id ASC
         LIMIT $3

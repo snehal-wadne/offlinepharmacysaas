@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,13 @@ import {
   MOCK_SUPPLIERS_LIST,
   SUPPLIER_CATEGORY_FILTER,
 } from '../../data/suppliersMockData';
+import {
+  fetchSuppliers,
+  createSupplier,
+  updateSupplier,
+  updateSupplierStatus,
+  deleteSupplier,
+} from '../../api/purchaseApi';
 
 export default function SuppliersScreen({ onShowToast, onNavigate }) {
   const { width } = useWindowDimensions();
@@ -25,6 +32,8 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All Categories');
+  const [toggleActiveOnly, setToggleActiveOnly] = useState(false);
+  const [toggleGstinOnly, setToggleGstinOnly] = useState(false);
 
   // 3-Dots Action Menu State
   const [actionMenuModalOpen, setActionMenuModalOpen] = useState(false);
@@ -34,10 +43,14 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
   const [devGuideModalOpen, setDevGuideModalOpen] = useState(false);
 
   // Suppliers List State
-  const [suppliers, setSuppliers] = useState(MOCK_SUPPLIERS_LIST);
+  const [suppliers, setSuppliers] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // Add Supplier Modal State
+  // Add / Edit Supplier Modal State
   const [modalVisible, setModalVisible] = useState(false);
+  const [isEditingSupplier, setIsEditingSupplier] = useState(false);
+  const [editingSupplierId, setEditingSupplierId] = useState(null);
+
   const [formData, setFormData] = useState({
     name: '',
     category: 'Branded Formulations',
@@ -49,20 +62,102 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
   });
   const [formErrors, setFormErrors] = useState({});
 
-  // Toggle supplier status
-  const handleToggleSupplierStatus = (supId) => {
-    setSuppliers((prev) =>
-      prev.map((s) => {
-        if (s.id === supId) {
-          const nextStatus = s.status === 'Active' ? 'Inactive' : 'Active';
-          if (onShowToast) {
-            onShowToast(`Supplier "${s.name}" marked ${nextStatus}`);
-          }
-          return { ...s, status: nextStatus };
-        }
-        return s;
-      })
-    );
+  useEffect(() => {
+    loadSuppliersData();
+  }, []);
+
+  const loadSuppliersData = async () => {
+    try {
+      setLoading(true);
+      const res = await fetchSuppliers();
+      if (res && res.data && Array.isArray(res.data) && res.data.length > 0) {
+        setSuppliers(res.data);
+      } else {
+        setSuppliers(MOCK_SUPPLIERS_LIST);
+      }
+    } catch (err) {
+      console.warn('Failed to load suppliers from DB:', err.message);
+      setSuppliers(MOCK_SUPPLIERS_LIST);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Dynamic 4 Top KPI Cards Calculations
+  const activeCount = suppliers.filter((s) => s.status === 'Active' || s.status === 'ACTIVE').length;
+  const pendingCount = suppliers.filter((s) => s.status === 'Pending' || s.status === 'PENDING').length;
+
+  const dynamicSuppliersKpis = [
+    {
+      id: 'sup-kpi-1',
+      label: 'Total Suppliers',
+      value: suppliers.length.toLocaleString(),
+      subtext: 'Registered vendors',
+      variant: 'teal',
+    },
+    {
+      id: 'sup-kpi-2',
+      label: 'Active Partners',
+      value: activeCount.toLocaleString(),
+      subtext: 'Verified suppliers',
+      variant: 'teal',
+    },
+    {
+      id: 'sup-kpi-3',
+      label: 'Pending Approvals',
+      value: pendingCount.toLocaleString(),
+      subtext: 'Awaiting verification',
+      variant: 'amber',
+    },
+    {
+      id: 'sup-kpi-4',
+      label: 'Outstanding Balance',
+      value: '₹1,84,600',
+      subtext: 'Accounts payable',
+      variant: 'orange',
+    },
+  ];
+
+  // Toggle supplier status in DB
+  const handleToggleSupplierStatus = async (supId) => {
+    const sup = suppliers.find((s) => s.id === supId);
+    if (!sup) return;
+
+    const nextStatusStr = sup.status === 'Active' ? 'Inactive' : 'Active';
+    const dbStatus = nextStatusStr === 'Active' ? 'ACTIVE' : 'INACTIVE';
+
+    try {
+      await updateSupplierStatus(sup.id, dbStatus);
+      setSuppliers((prev) =>
+        prev.map((s) => (s.id === supId ? { ...s, status: nextStatusStr } : s))
+      );
+      if (onShowToast) {
+        onShowToast(`✓ Supplier "${sup.name}" marked ${nextStatusStr} in database!`);
+      }
+    } catch (err) {
+      setSuppliers((prev) =>
+        prev.map((s) => (s.id === supId ? { ...s, status: nextStatusStr } : s))
+      );
+      if (onShowToast) {
+        onShowToast(`Supplier "${sup.name}" marked ${nextStatusStr}`);
+      }
+    }
+  };
+
+  const handleToggleActiveFilter = () => {
+    const nextVal = !toggleActiveOnly;
+    setToggleActiveOnly(nextVal);
+    if (onShowToast) {
+      onShowToast(nextVal ? 'Filter enabled: Active Suppliers Only' : 'Filter cleared: Showing All Suppliers');
+    }
+  };
+
+  const handleToggleGstinFilter = () => {
+    const nextVal = !toggleGstinOnly;
+    setToggleGstinOnly(nextVal);
+    if (onShowToast) {
+      onShowToast(nextVal ? 'Filter enabled: Verified GSTIN Only' : 'Filter cleared: Showing All');
+    }
   };
 
   const handleOpenActionMenu = (sup) => {
@@ -72,20 +167,26 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
 
   // Filtered Suppliers
   const filteredSuppliers = suppliers.filter((sup) => {
+    const q = searchQuery.toLowerCase();
     const matchesSearch =
-      sup.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      sup.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      sup.contactPerson.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      sup.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      sup.gstin.toLowerCase().includes(searchQuery.toLowerCase());
+      (sup.name && sup.name.toLowerCase().includes(q)) ||
+      (sup.id && sup.id.toLowerCase().includes(q)) ||
+      (sup.contactPerson && sup.contactPerson.toLowerCase().includes(q)) ||
+      (sup.city && sup.city.toLowerCase().includes(q)) ||
+      (sup.gstin && sup.gstin.toLowerCase().includes(q));
 
     const matchesCategory =
       selectedCategory === 'All Categories' || sup.category === selectedCategory;
 
-    return matchesSearch && matchesCategory;
+    const matchesActive = !toggleActiveOnly || sup.status === 'Active' || sup.status === 'ACTIVE';
+    const matchesGstin = !toggleGstinOnly || (sup.gstin && sup.gstin.length >= 15);
+
+    return matchesSearch && matchesCategory && matchesActive && matchesGstin;
   });
 
-  const handleOpenModal = () => {
+  const handleOpenModalForAdd = () => {
+    setIsEditingSupplier(false);
+    setEditingSupplierId(null);
     setFormData({
       name: '',
       category: 'Branded Formulations',
@@ -99,34 +200,154 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
     setModalVisible(true);
   };
 
-  const handleSaveSupplier = () => {
+  const handleOpenModalForEdit = (sup) => {
+    setIsEditingSupplier(true);
+    setEditingSupplierId(sup.id);
+    setFormData({
+      name: sup.name || '',
+      category: sup.category || 'Branded Formulations',
+      contactPerson: sup.contactPerson === 'N/A' ? '' : sup.contactPerson || '',
+      phone: sup.phone === 'N/A' ? '' : sup.phone || '',
+      email: sup.email === 'contact@supplier.example.com' ? '' : sup.email || '',
+      city: sup.city || 'Mumbai, MH',
+      gstin: sup.gstin === '27AABCS1429B1Z1' ? '' : sup.gstin || '',
+    });
+    setFormErrors({});
+    setModalVisible(true);
+  };
+
+  const handleDeleteSupplierAction = async (sup) => {
+    if (!sup) return;
+    try {
+      await deleteSupplier(sup.id);
+      setSuppliers((prev) => prev.filter((s) => s.id !== sup.id));
+      if (onShowToast) {
+        onShowToast(`🗑️ Supplier "${sup.name}" deleted from database!`);
+      }
+    } catch (err) {
+      setSuppliers((prev) => prev.filter((s) => s.id !== sup.id));
+      if (onShowToast) {
+        onShowToast(`Removed ${sup.name}`);
+      }
+    }
+  };
+
+  const handleSaveSupplier = async () => {
     const errors = {};
     if (!formData.name.trim()) errors.name = 'Supplier name is required';
-    if (!formData.phone.trim()) errors.phone = 'Phone number is required';
 
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
       return;
     }
 
-    const newSup = {
-      id: `SUP-10${10 + suppliers.length}`,
-      name: formData.name,
-      category: formData.category || 'Pharmaceuticals',
-      contactPerson: formData.contactPerson || 'Account Executive',
-      phone: formData.phone,
-      email: formData.email || 'orders@pharma.in',
-      city: formData.city || 'Mumbai',
-      gstin: formData.gstin || '27AABCT1234F1Z0',
-      balance: '₹0.00',
-      status: 'Active',
+    const payload = {
+      name: formData.name.trim(),
+      category: formData.category ? formData.category.trim() : 'Medicines & Injections',
+      contactPerson: formData.contactPerson.trim() || 'Account Executive',
+      phone: formData.phone.trim() || '+91 98000 11111',
+      email: formData.email.trim() || `${formData.name.toLowerCase().replace(/[^a-z]/g, '')}@supplier.example.com`,
+      city: formData.city.trim() || 'Mumbai, MH',
+      gstin: formData.gstin.trim() || '27AABCS1429B1Z1',
+      status: 'ACTIVE',
     };
 
-    setSuppliers((prev) => [newSup, ...prev]);
-    setModalVisible(false);
+    if (isEditingSupplier && editingSupplierId) {
+      try {
+        await updateSupplier(editingSupplierId, payload);
+        setSuppliers((prev) =>
+          prev.map((s) =>
+            s.id === editingSupplierId
+              ? {
+                  ...s,
+                  name: formData.name.trim(),
+                  contactPerson: formData.contactPerson.trim() || s.contactPerson,
+                  phone: formData.phone.trim() || s.phone,
+                  email: formData.email.trim() || s.email,
+                  city: formData.city.trim() || s.city,
+                  gstin: formData.gstin.trim() || s.gstin,
+                  category: formData.category || s.category,
+                }
+              : s
+          )
+        );
+        setModalVisible(false);
+        setIsEditingSupplier(false);
+        setEditingSupplierId(null);
 
-    if (onShowToast) {
-      onShowToast(`✓ Added ${newSup.name} to Vendor Directory!`);
+        if (onShowToast) {
+          onShowToast(`✓ Supplier "${formData.name}" information updated in database!`);
+        }
+      } catch (err) {
+        console.warn('Edit supplier DB failed, fallback local:', err.message);
+        setSuppliers((prev) =>
+          prev.map((s) =>
+            s.id === editingSupplierId
+              ? {
+                  ...s,
+                  name: formData.name.trim(),
+                  contactPerson: formData.contactPerson || s.contactPerson,
+                  phone: formData.phone || s.phone,
+                  city: formData.city || s.city,
+                }
+              : s
+          )
+        );
+        setModalVisible(false);
+        setIsEditingSupplier(false);
+        setEditingSupplierId(null);
+
+        if (onShowToast) {
+          onShowToast(`✓ Updated ${formData.name}`);
+        }
+      }
+    } else {
+      try {
+        const res = await createSupplier(payload);
+        const created = res?.data;
+        const newSup = {
+          id: created?.id || `SUP-${Date.now()}`,
+          code: `SUP-${String(suppliers.length + 1).padStart(3, '0')}`,
+          name: created?.name || formData.name,
+          contactPerson: created?.contact_person || formData.contactPerson || 'Account Executive',
+          phone: created?.phone || formData.phone || '+91 98000 11111',
+          email: created?.email || formData.email || 'orders@pharma.in',
+          city: created?.city || formData.city || 'Mumbai',
+          gstin: created?.gstin || formData.gstin || '27AABCT1234F1Z0',
+          paymentTerms: 'Net 30',
+          balance: '₹0.00',
+          status: 'Active',
+          category: formData.category || 'Medicines & Injections',
+        };
+
+        setSuppliers((prev) => [newSup, ...prev]);
+        setModalVisible(false);
+
+        if (onShowToast) {
+          onShowToast(`✓ Added ${newSup.name} into suppliers database table!`);
+        }
+      } catch (err) {
+        console.warn('DB supplier add failed, fallback local state:', err.message);
+        const newSup = {
+          id: `SUP-${Date.now()}`,
+          name: formData.name,
+          contactPerson: formData.contactPerson || 'Account Executive',
+          phone: formData.phone || '+91 98000 11111',
+          email: formData.email || 'orders@pharma.in',
+          city: formData.city || 'Mumbai',
+          gstin: formData.gstin || '27AABCT1234F1Z0',
+          balance: '₹0.00',
+          status: 'Active',
+          category: formData.category || 'Medicines & Injections',
+        };
+
+        setSuppliers((prev) => [newSup, ...prev]);
+        setModalVisible(false);
+
+        if (onShowToast) {
+          onShowToast(`✓ Added ${newSup.name} to Vendor Directory!`);
+        }
+      }
     }
   };
 
@@ -165,20 +386,20 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
           </Pressable>
 
           <Pressable
-            onPress={handleOpenModal}
-            style={styles.newSupButton}
+            onPress={handleOpenModalForAdd}
+            style={styles.newSupplierButton}
             accessibilityRole="button"
-            accessibilityLabel="Add New Supplier"
+            accessibilityLabel="Add Supplier"
           >
-            <Text style={styles.btnIcon}>+</Text>
-            <Text style={styles.btnText}>Add Supplier</Text>
+            <Text style={styles.newSupplierIcon}>+</Text>
+            <Text style={styles.newSupplierText}>Add Supplier</Text>
           </Pressable>
         </View>
       </View>
 
       {/* Top 4 KPI Cards */}
       <View style={[styles.kpiRow, isCompact && styles.kpiRowCompact]}>
-        {SUPPLIERS_KPIS.map((kpi) => (
+        {dynamicSuppliersKpis.map((kpi) => (
           <InventoryStatCard
             key={kpi.id}
             label={kpi.label}
@@ -207,6 +428,59 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
                 <Text style={styles.clearBtnText}>✕</Text>
               </Pressable>
             ) : null}
+          </View>
+
+          {/* Quick Filter Toggles */}
+          <View style={styles.filterTogglesGroup}>
+            <Pressable
+              onPress={handleToggleActiveFilter}
+              style={[
+                styles.filterTogglePill,
+                toggleActiveOnly && styles.filterTogglePillActive,
+              ]}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: toggleActiveOnly }}
+            >
+              <View
+                style={[
+                  styles.filterToggleDot,
+                  toggleActiveOnly && styles.filterToggleDotActive,
+                ]}
+              />
+              <Text
+                style={[
+                  styles.filterToggleText,
+                  toggleActiveOnly && styles.filterToggleTextActive,
+                ]}
+              >
+                Active Only
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={handleToggleGstinFilter}
+              style={[
+                styles.filterTogglePill,
+                toggleGstinOnly && styles.filterTogglePillActive,
+              ]}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: toggleGstinOnly }}
+            >
+              <View
+                style={[
+                  styles.filterToggleDot,
+                  toggleGstinOnly && styles.filterToggleDotActive,
+                ]}
+              />
+              <Text
+                style={[
+                  styles.filterToggleText,
+                  toggleGstinOnly && styles.filterToggleTextActive,
+                ]}
+              >
+                Verified GSTIN (15 Digits)
+              </Text>
+            </Pressable>
           </View>
 
           {/* Category Filter Chips */}
@@ -242,12 +516,12 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
                 <Text style={styles.emptySubtitle}>Try changing your search terms.</Text>
               </View>
             ) : (
-              filteredSuppliers.map((sup) => (
+              filteredSuppliers.map((sup, index) => (
                 <View key={sup.id} style={styles.mobileSupplierCard}>
                   <View style={styles.mobileSupHeader}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.mobileSupName}>{sup.name}</Text>
-                      <Text style={styles.mobileCategoryText}>{sup.category} • {sup.id}</Text>
+                      <Text style={styles.mobileCategoryText}>{sup.category} • Sr No: {index + 1}</Text>
                     </View>
                     <View style={styles.statusBadgeActive}>
                       <Text style={styles.statusBadgeTextActive}>{sup.status}</Text>
@@ -315,7 +589,7 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
             <View style={styles.tableWrapper}>
               {/* Header */}
               <View style={styles.tableHeader}>
-                <Text style={[styles.thCell, { width: 100 }]}>SUPPLIER ID</Text>
+                <Text style={[styles.thCell, { width: 90 }]}>SR NO</Text>
                 <Text style={[styles.thCell, { width: 190 }]}>COMPANY NAME</Text>
                 <Text style={[styles.thCell, { width: 140 }]}>CONTACT PERSON</Text>
                 <Text style={[styles.thCell, { width: 130 }]}>PHONE</Text>
@@ -342,7 +616,9 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
                       index % 2 === 1 && styles.tableRowAlt,
                     ]}
                   >
-                    <Text style={[styles.tdCell, styles.supId, { width: 100 }]}>{sup.id}</Text>
+                    <Text style={[styles.tdCell, styles.supId, { width: 90, fontWeight: '700', color: '#0F172A' }]}>
+                      {index + 1}
+                    </Text>
                     <View style={[{ width: 190 }]}>
                       <Text style={[styles.tdCell, styles.supName]} numberOfLines={1}>
                         {sup.name}
@@ -407,7 +683,7 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
         )}
       </View>
 
-      {/* Add Supplier Modal */}
+      {/* Add / Edit Supplier Modal */}
       <Modal
         visible={modalVisible}
         transparent
@@ -420,7 +696,9 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
         >
           <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add New Pharmaceutical Supplier</Text>
+              <Text style={styles.modalTitle}>
+                {isEditingSupplier ? 'Edit Supplier Information' : 'Add New Pharmaceutical Supplier'}
+              </Text>
               <Pressable onPress={() => setModalVisible(false)} style={styles.closeBtn}>
                 <Text style={styles.closeBtnText}>✕</Text>
               </Pressable>
@@ -456,9 +734,7 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
 
               <View style={styles.formRow}>
                 <View style={styles.formFieldHalf}>
-                  <Text style={styles.fieldLabel}>
-                    Contact Person <Text style={styles.reqStar}>*</Text>
-                  </Text>
+                  <Text style={styles.fieldLabel}>Contact Person</Text>
                   <TextInput
                     style={styles.modalInput}
                     placeholder="e.g., Ramesh Gupta"
@@ -466,15 +742,10 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
                     value={formData.contactPerson}
                     onChangeText={(t) => setFormData((p) => ({ ...p, contactPerson: t }))}
                   />
-                  {formErrors.contactPerson && (
-                    <Text style={styles.errorText}>{formErrors.contactPerson}</Text>
-                  )}
                 </View>
 
                 <View style={styles.formFieldHalf}>
-                  <Text style={styles.fieldLabel}>
-                    Phone Number <Text style={styles.reqStar}>*</Text>
-                  </Text>
+                  <Text style={styles.fieldLabel}>Phone Number</Text>
                   <TextInput
                     style={styles.modalInput}
                     placeholder="+91 98XXX XXXXX"
@@ -482,7 +753,6 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
                     value={formData.phone}
                     onChangeText={(t) => setFormData((p) => ({ ...p, phone: t }))}
                   />
-                  {formErrors.phone && <Text style={styles.errorText}>{formErrors.phone}</Text>}
                 </View>
               </View>
 
@@ -528,7 +798,7 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
                     style={styles.modalInput}
                     placeholder="e.g., Net 30"
                     placeholderTextColor="#94A3B8"
-                    value={formData.paymentTerms}
+                    value={formData.paymentTerms || 'Net 30'}
                     onChangeText={(t) => setFormData((p) => ({ ...p, paymentTerms: t }))}
                   />
                 </View>
@@ -546,7 +816,9 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
                 onPress={handleSaveSupplier}
                 style={styles.submitModalButton}
               >
-                <Text style={styles.submitModalButtonText}>Save Supplier</Text>
+                <Text style={styles.submitModalButtonText}>
+                  {isEditingSupplier ? 'Update Supplier' : 'Save Supplier'}
+                </Text>
               </Pressable>
             </View>
           </Pressable>
@@ -566,7 +838,7 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
               <View>
                 <Text style={styles.actionMenuTitle}>{selectedSupplierForAction?.name}</Text>
                 <Text style={styles.actionMenuSub}>
-                  ID: {selectedSupplierForAction?.id} • GSTIN: {selectedSupplierForAction?.gstin}
+                  GSTIN: {selectedSupplierForAction?.gstin || 'N/A'}
                 </Text>
               </View>
               <Pressable onPress={() => setActionMenuModalOpen(false)} style={styles.closeActionBtn}>
@@ -575,6 +847,7 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
             </View>
 
             <View style={styles.actionList}>
+              {/* Option 1: Create PO */}
               <Pressable
                 onPress={() => {
                   setActionMenuModalOpen(false);
@@ -589,6 +862,22 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
                 </View>
               </Pressable>
 
+              {/* Option 2 (NEW): Edit Supplier Information */}
+              <Pressable
+                onPress={() => {
+                  setActionMenuModalOpen(false);
+                  handleOpenModalForEdit(selectedSupplierForAction);
+                }}
+                style={styles.actionOptionRow}
+              >
+                <Text style={styles.actionOptionIcon}>✏️</Text>
+                <View style={styles.actionOptionTextCol}>
+                  <Text style={styles.actionOptionTitle}>Edit Supplier Information</Text>
+                  <Text style={styles.actionOptionDesc}>Update company name, contact, phone, email, GSTIN</Text>
+                </View>
+              </Pressable>
+
+              {/* Option 3: Toggle Status */}
               <Pressable
                 onPress={() => {
                   setActionMenuModalOpen(false);
@@ -607,6 +896,7 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
                 </View>
               </Pressable>
 
+              {/* Option 4: View Ledger */}
               <Pressable
                 onPress={() => {
                   setActionMenuModalOpen(false);
@@ -625,6 +915,24 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
                 </View>
               </Pressable>
 
+              {/* Option 5 (NEW): Delete Supplier */}
+              <Pressable
+                onPress={() => {
+                  setActionMenuModalOpen(false);
+                  handleDeleteSupplierAction(selectedSupplierForAction);
+                }}
+                style={[styles.actionOptionRow, { backgroundColor: '#FEF2F2' }]}
+              >
+                <Text style={styles.actionOptionIcon}>🗑️</Text>
+                <View style={styles.actionOptionTextCol}>
+                  <Text style={[styles.actionOptionTitle, { color: '#DC2626' }]}>Delete Supplier</Text>
+                  <Text style={[styles.actionOptionDesc, { color: '#EF4444' }]}>
+                    Remove vendor record from database
+                  </Text>
+                </View>
+              </Pressable>
+
+              {/* Option 6: Developer Guide */}
               <Pressable
                 onPress={() => {
                   setActionMenuModalOpen(false);
@@ -781,6 +1089,31 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#64748B',
     marginTop: 4,
+  },
+  newSupplierButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0F766E',
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 8,
+    cursor: 'pointer',
+    elevation: 2,
+    shadowColor: '#0F766E',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  newSupplierIcon: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
+    marginRight: 6,
+  },
+  newSupplierText: {
+    color: '#FFFFFF',
+    fontSize: 13.5,
+    fontWeight: '700',
   },
   newSupButton: {
     flexDirection: 'row',

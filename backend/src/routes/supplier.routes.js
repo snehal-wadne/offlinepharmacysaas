@@ -17,7 +17,13 @@ router.get('/:id', supplierController.getSupplierById);
 // POST /api/suppliers - Create supplier
 router.post('/', supplierController.createSupplier);
 
+// PUT /api/suppliers/:id - Update supplier details
+router.put('/:id', supplierController.updateSupplier);
+
 // PATCH /api/suppliers/:id/status - Update supplier status
 router.patch('/:id/status', supplierController.updateSupplierStatus);
+
+// DELETE /api/suppliers/:id - Delete supplier
+router.delete('/:id', supplierController.deleteSupplier);
 
 module.exports = router;

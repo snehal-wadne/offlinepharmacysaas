@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
   MOCK_LOW_STOCK_ITEMS,
   MOCK_EXPIRY_ITEMS,
 } from '../../data/lowStockExpiryMockData';
+import { fetchInventory } from '../../api/inventoryApi';
 
 const LOW_STOCK_BADGES = {
   'Low Stock': { bg: '#FEF3C7', text: '#B45309' },
@@ -33,9 +34,72 @@ export default function LowStockExpiryScreen({ onShowToast }) {
   // Active Tab: 'low-stock' or 'expiry'
   const [activeTab, setActiveTab] = useState('low-stock');
   const [searchQuery, setSearchQuery] = useState('');
+  const [rawInventory, setRawInventory] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadInventoryData();
+  }, []);
+
+  const loadInventoryData = async () => {
+    try {
+      setLoading(true);
+      const res = await fetchInventory();
+      if (res && res.data && Array.isArray(res.data)) {
+        setRawInventory(res.data);
+      }
+    } catch (err) {
+      console.warn('Failed to load inventory for Low Stock Expiry screen:', err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Live DB Low Stock Items (Quantity < 50 Rule)
+  const dbLowStockItems = rawInventory
+    .filter((item) => Number(item.quantity) < 50)
+    .map((item) => {
+      const qty = Number(item.quantity);
+      let status = 'Low Stock';
+      if (qty === 0) status = 'Out of Stock';
+      else if (qty < 15) status = 'Critical';
+
+      return {
+        id: item.id,
+        medicine: `${item.brandName || item.medicineName} (${item.medicineName || item.genericName})`,
+        sku: item.sku,
+        currentStock: qty,
+        minimumStock: 15,
+        reorderLevel: 50,
+        supplier: item.supplierName || item.manufacturer || 'Pharma Distributor',
+        status: status,
+      };
+    });
+
+  const lowStockItemsList = rawInventory.length > 0 ? dbLowStockItems : MOCK_LOW_STOCK_ITEMS;
+
+  // Live DB Expiry Items
+  const dbExpiryItems = rawInventory.map((item) => {
+    const qty = Number(item.quantity);
+    let status = 'Safe';
+    if (qty === 0) status = 'Expired';
+    else if (qty < 50) status = 'Expiring Soon';
+
+    return {
+      id: item.id,
+      medicine: `${item.brandName || item.medicineName} (${item.medicineName || item.genericName})`,
+      batchNo: item.batchNo || 'B-1001',
+      expiryDate: item.lastUpdated ? `${new Date(item.lastUpdated).getFullYear() + 2}-12-31` : '2028-12-31',
+      quantity: qty,
+      supplier: item.supplierName || item.manufacturer || 'Pharma Distributor',
+      status: status,
+    };
+  });
+
+  const expiryItemsList = rawInventory.length > 0 ? dbExpiryItems : MOCK_EXPIRY_ITEMS;
 
   // Low Stock Items filter
-  const filteredLowStock = MOCK_LOW_STOCK_ITEMS.filter(
+  const filteredLowStock = lowStockItemsList.filter(
     (item) =>
       item.medicine.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -43,7 +107,7 @@ export default function LowStockExpiryScreen({ onShowToast }) {
   );
 
   // Expiry Items filter
-  const filteredExpiry = MOCK_EXPIRY_ITEMS.filter(
+  const filteredExpiry = expiryItemsList.filter(
     (item) =>
       item.medicine.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.batchNo.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -61,6 +125,10 @@ export default function LowStockExpiryScreen({ onShowToast }) {
       onShowToast(`Disposal / write-off logged for batch ${item.batchNo} (${item.medicine})`);
     }
   };
+
+  const criticalCount = lowStockItemsList.filter((i) => i.currentStock < 15 || i.status === 'Critical').length;
+  const expiringCount = expiryItemsList.filter((i) => i.status === 'Expiring Soon').length;
+  const expiredCount = expiryItemsList.filter((i) => i.status === 'Expired' || i.quantity === 0).length;
 
   return (
     <ScrollView
@@ -80,22 +148,22 @@ export default function LowStockExpiryScreen({ onShowToast }) {
       <View style={styles.summaryStrip}>
         <View style={[styles.summaryCard, { borderLeftColor: '#D97706' }]}>
           <Text style={styles.summaryLabel}>LOW STOCK ITEMS</Text>
-          <Text style={[styles.summaryVal, { color: '#D97706' }]}>7</Text>
+          <Text style={[styles.summaryVal, { color: '#D97706' }]}>{lowStockItemsList.length}</Text>
           <Text style={styles.summarySub}>Needs reorder</Text>
         </View>
         <View style={[styles.summaryCard, { borderLeftColor: '#EA580C' }]}>
           <Text style={styles.summaryLabel}>CRITICAL DEFICIT</Text>
-          <Text style={[styles.summaryVal, { color: '#EA580C' }]}>3</Text>
-          <Text style={styles.summarySub}>Stock &lt; 10 units</Text>
+          <Text style={[styles.summaryVal, { color: '#EA580C' }]}>{criticalCount}</Text>
+          <Text style={styles.summarySub}>Stock &lt; 15 units</Text>
         </View>
         <View style={[styles.summaryCard, { borderLeftColor: '#F59E0B' }]}>
           <Text style={styles.summaryLabel}>EXPIRING SOON</Text>
-          <Text style={[styles.summaryVal, { color: '#D97706' }]}>3</Text>
+          <Text style={[styles.summaryVal, { color: '#D97706' }]}>{expiringCount}</Text>
           <Text style={styles.summarySub}>Within 90 days</Text>
         </View>
         <View style={[styles.summaryCard, { borderLeftColor: '#DC2626' }]}>
           <Text style={styles.summaryLabel}>EXPIRED BATCHES</Text>
-          <Text style={[styles.summaryVal, { color: '#DC2626' }]}>2</Text>
+          <Text style={[styles.summaryVal, { color: '#DC2626' }]}>{expiredCount}</Text>
           <Text style={styles.summarySub}>Immediate removal</Text>
         </View>
       </View>
