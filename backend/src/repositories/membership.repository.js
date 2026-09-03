@@ -4,19 +4,28 @@
  * Purpose:
  * Handles direct database operations for organisation memberships.
  *
- * A membership connects a user to an organisation and determines
- * the role that user has within that organisation.
+ * A membership connects a user to an organisation.
+ *
+ * The membership itself does not determine the user's role.
+ * Roles are assigned at the branch level through branch_assignments.
  *
  * Example:
  *
  * User
  *   |
- *   +---- Organisation A ---- Manager
+ *   +---- Falah Pharmacy
+ *   |        |
+ *   |        +---- Main Branch ---- Cashier
+ *   |        |
+ *   |        +---- City Branch ---- Accountant
  *   |
- *   +---- Organisation B ---- Cashier
+ *   +---- Apollo Pharmacy
+ *            |
+ *            +---- Central Branch ---- Manager
  *
- * The same user can therefore belong to multiple organisations
- * with different roles.
+ * The same user can therefore belong to multiple organisations,
+ * work at multiple branches, and have different roles at
+ * different branches.
  *
  * The repository handles database persistence only.
  * Authentication, authorization, invitation rules, and other
@@ -39,14 +48,12 @@ const { pool } = require("../db/connection");
 const createMembership = async ({
   organisationId,
   userId,
-  roleId = null,
   status = "ACTIVE",
 }) => {
   const query = `
         INSERT INTO organisation_memberships (
             organisation_id,
             user_id,
-            role_id,
             status,
             joined_at
         )
@@ -54,26 +61,19 @@ const createMembership = async ({
             $1,
             $2,
             $3,
-            $4,
             CURRENT_TIMESTAMP
         )
         RETURNING
             id,
             organisation_id,
             user_id,
-            role_id,
             status,
             joined_at,
             created_at,
             updated_at;
     `;
 
-  const result = await pool.query(query, [
-    organisationId,
-    userId,
-    roleId,
-    status,
-  ]);
+  const result = await pool.query(query, [organisationId, userId, status]);
 
   return result.rows[0];
 };
@@ -91,7 +91,6 @@ const getMembershipById = async (membershipId) => {
             id,
             organisation_id,
             user_id,
-            role_id,
             status,
             joined_at,
             created_at,
@@ -126,7 +125,6 @@ const getMembership = async (userId, organisationId) => {
             id,
             organisation_id,
             user_id,
-            role_id,
             status,
             joined_at,
             created_at,
@@ -159,8 +157,6 @@ const getUserMemberships = async (userId) => {
             om.organisation_id,
             o.name AS organisation_name,
             om.user_id,
-            om.role_id,
-            r.name AS role_name,
             om.status,
             om.joined_at,
             om.created_at,
@@ -168,14 +164,11 @@ const getUserMemberships = async (userId) => {
         FROM organisation_memberships om
         INNER JOIN organisations o
             ON o.id = om.organisation_id
-        LEFT JOIN roles r
-            ON r.id = om.role_id
         WHERE om.user_id = $1
         ORDER BY om.joined_at ASC;
     `;
 
   const result = await pool.query(query, [userId]);
-
   return result.rows;
 };
 
@@ -198,8 +191,6 @@ const getOrganisationMembers = async (organisationId) => {
             om.user_id,
             u.name AS user_name,
             u.email AS user_email,
-            om.role_id,
-            r.name AS role_name,
             om.status,
             om.joined_at,
             om.created_at,
@@ -207,46 +198,12 @@ const getOrganisationMembers = async (organisationId) => {
         FROM organisation_memberships om
         INNER JOIN users u
             ON u.id = om.user_id
-        LEFT JOIN roles r
-            ON r.id = om.role_id
         WHERE om.organisation_id = $1
         ORDER BY om.joined_at ASC;
     `;
 
   const result = await pool.query(query, [organisationId]);
-
   return result.rows;
-};
-
-/**
- * Change the role assigned to a membership.
- *
- * @param {string} membershipId
- * @param {string|null} roleId
- *
- * @returns {Object|null} Updated membership
- */
-const updateMembershipRole = async (membershipId, roleId) => {
-  const query = `
-        UPDATE organisation_memberships
-        SET
-            role_id = $1,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = $2
-        RETURNING
-            id,
-            organisation_id,
-            user_id,
-            role_id,
-            status,
-            joined_at,
-            created_at,
-            updated_at;
-    `;
-
-  const result = await pool.query(query, [roleId, membershipId]);
-
-  return result.rows[0] || null;
 };
 
 /**
@@ -278,7 +235,6 @@ const updateMembershipStatus = async (membershipId, status) => {
             id,
             organisation_id,
             user_id,
-            role_id,
             status,
             joined_at,
             created_at,
@@ -324,7 +280,6 @@ module.exports = {
   getMembership,
   getUserMemberships,
   getOrganisationMembers,
-  updateMembershipRole,
   updateMembershipStatus,
   deleteMembership,
 };

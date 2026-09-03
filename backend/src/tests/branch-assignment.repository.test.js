@@ -12,11 +12,33 @@
  *   +-- Main Branch
  *   +-- City Branch
  *
- * Rahul  -> Manager -> Main Branch + City Branch
- * Amit   -> Cashier -> Main Branch
+ * Rahul
+ *   |
+ *   +-- Falah Pharmacy membership
+ *          |
+ *          +-- Main Branch ---- Cashier
+ *          |
+ *          +-- City Branch ---- Accountant
  *
- * The test also verifies that assigning the same branch twice
- * does not create a duplicate relationship.
+ * Amit
+ *   |
+ *   +-- Falah Pharmacy membership
+ *          |
+ *          +-- Main Branch ---- Cashier
+ *
+ * Important:
+ *
+ * The organisation membership identifies which organisation
+ * the employee belongs to.
+ *
+ * The branch assignment identifies:
+ *
+ *   1. Which branch the employee can access.
+ *   2. Which role the employee has at that branch.
+ *
+ * Therefore, the same employee can have different roles
+ * at different branches without creating multiple
+ * organisation memberships.
  */
 
 const {
@@ -27,6 +49,7 @@ const {
   isBranchAssigned,
   removeBranchAssignment,
   removeAllBranchAssignments,
+  updateBranchAssignmentRole,
 } = require("../repositories/branch-assignment.repository");
 
 const { createUser, deleteUser } = require("../repositories/user.repository");
@@ -38,6 +61,11 @@ const {
 
 const { createRole, deleteRole } = require("../repositories/role.repository");
 
+const {
+  createMembership,
+  deleteMembership,
+} = require("../repositories/membership.repository");
+
 const { pool } = require("../db/connection");
 
 const runTests = async () => {
@@ -48,6 +76,7 @@ const runTests = async () => {
 
   let managerRoleId;
   let cashierRoleId;
+  let accountantRoleId;
 
   let firstMembershipId;
   let secondMembershipId;
@@ -114,36 +143,33 @@ const runTests = async () => {
 
     /*
      * ------------------------------------------------------
-     * 4. CREATE BRANCHES
+     * 4. CREATE MAIN BRANCH
      * ------------------------------------------------------
-     *
-     * Branches are created directly because this repository
-     * test focuses on branch assignments.
      */
     console.log("--- Creating Main Branch ---");
 
     const mainBranchResult = await pool.query(
       `
-            INSERT INTO branches (
-                organisation_id,
-                name,
-                address,
-                city,
-                state,
-                postal_code,
-                phone
-            )
-            VALUES (
-                $1,
-                'Main Branch',
-                '10 Main Road',
-                'Mumbai',
-                'Maharashtra',
-                '400001',
-                '9000000001'
-            )
-            RETURNING *;
-            `,
+        INSERT INTO branches (
+            organisation_id,
+            name,
+            address,
+            city,
+            state,
+            postal_code,
+            phone
+        )
+        VALUES (
+            $1,
+            'Main Branch',
+            '10 Main Road',
+            'Mumbai',
+            'Maharashtra',
+            '400001',
+            '9000000001'
+        )
+        RETURNING *;
+      `,
       [organisationId],
     );
 
@@ -151,30 +177,35 @@ const runTests = async () => {
 
     console.log(mainBranchResult.rows[0]);
 
+    /*
+     * ------------------------------------------------------
+     * 5. CREATE CITY BRANCH
+     * ------------------------------------------------------
+     */
     console.log("--- Creating City Branch ---");
 
     const cityBranchResult = await pool.query(
       `
-            INSERT INTO branches (
-                organisation_id,
-                name,
-                address,
-                city,
-                state,
-                postal_code,
-                phone
-            )
-            VALUES (
-                $1,
-                'City Branch',
-                '20 City Road',
-                'Mumbai',
-                'Maharashtra',
-                '400002',
-                '9000000002'
-            )
-            RETURNING *;
-            `,
+        INSERT INTO branches (
+            organisation_id,
+            name,
+            address,
+            city,
+            state,
+            postal_code,
+            phone
+        )
+        VALUES (
+            $1,
+            'City Branch',
+            '20 City Road',
+            'Mumbai',
+            'Maharashtra',
+            '400002',
+            '9000000002'
+        )
+        RETURNING *;
+      `,
       [organisationId],
     );
 
@@ -184,22 +215,9 @@ const runTests = async () => {
 
     /*
      * ------------------------------------------------------
-     * 5. CREATE ROLES
+     * 6. CREATE CASHIER ROLE
      * ------------------------------------------------------
      */
-    console.log("--- Creating Manager role ---");
-
-    const managerRole = await createRole({
-      organisationId,
-      name: "Manager",
-      description: "Branch assignment test manager",
-      isSystemRole: false,
-    });
-
-    managerRoleId = managerRole.id;
-
-    console.log(managerRole);
-
     console.log("--- Creating Cashier role ---");
 
     const cashierRole = await createRole({
@@ -215,108 +233,147 @@ const runTests = async () => {
 
     /*
      * ------------------------------------------------------
-     * 6. CREATE MEMBERSHIPS
+     * 7. CREATE ACCOUNTANT ROLE
      * ------------------------------------------------------
      */
-    console.log("--- Creating Rahul membership ---");
+    console.log("--- Creating Accountant role ---");
 
-    const firstMembershipResult = await pool.query(
-      `
-            INSERT INTO organisation_memberships (
-                organisation_id,
-                user_id,
-                role_id,
-                status,
-                joined_at
-            )
-            VALUES ($1, $2, $3, 'ACTIVE', CURRENT_TIMESTAMP)
-            RETURNING *;
-            `,
-      [organisationId, firstUserId, managerRoleId],
-    );
+    const accountantRole = await createRole({
+      organisationId,
+      name: "Accountant",
+      description: "Branch assignment test accountant",
+      isSystemRole: false,
+    });
 
-    firstMembershipId = firstMembershipResult.rows[0].id;
+    accountantRoleId = accountantRole.id;
 
-    console.log(firstMembershipResult.rows[0]);
-
-    console.log("--- Creating Amit membership ---");
-
-    const secondMembershipResult = await pool.query(
-      `
-            INSERT INTO organisation_memberships (
-                organisation_id,
-                user_id,
-                role_id,
-                status,
-                joined_at
-            )
-            VALUES ($1, $2, $3, 'ACTIVE', CURRENT_TIMESTAMP)
-            RETURNING *;
-            `,
-      [organisationId, secondUserId, cashierRoleId],
-    );
-
-    secondMembershipId = secondMembershipResult.rows[0].id;
-
-    console.log(secondMembershipResult.rows[0]);
+    console.log(accountantRole);
 
     /*
      * ------------------------------------------------------
-     * 7. ASSIGN RAHUL TO MAIN BRANCH
+     * 8. CREATE MANAGER ROLE
+     * ------------------------------------------------------
+     *
+     * This is used to verify that role information belongs
+     * to branch assignments rather than memberships.
+     */
+    console.log("--- Creating Manager role ---");
+
+    const managerRole = await createRole({
+      organisationId,
+      name: "Manager",
+      description: "Branch assignment test manager",
+      isSystemRole: false,
+    });
+
+    managerRoleId = managerRole.id;
+
+    console.log(managerRole);
+
+    /*
+     * ------------------------------------------------------
+     * 9. CREATE RAHUL MEMBERSHIP
+     * ------------------------------------------------------
+     *
+     * Rahul has ONE membership in Falah Pharmacy.
+     *
+     * No role is stored on the membership.
+     */
+    console.log("--- Creating Rahul membership ---");
+
+    const firstMembership = await createMembership({
+      organisationId,
+      userId: firstUserId,
+      status: "ACTIVE",
+    });
+
+    firstMembershipId = firstMembership.id;
+
+    console.log(firstMembership);
+
+    /*
+     * ------------------------------------------------------
+     * 10. CREATE AMIT MEMBERSHIP
      * ------------------------------------------------------
      */
-    console.log("--- Assigning Rahul to Main Branch ---");
+    console.log("--- Creating Amit membership ---");
+
+    const secondMembership = await createMembership({
+      organisationId,
+      userId: secondUserId,
+      status: "ACTIVE",
+    });
+
+    secondMembershipId = secondMembership.id;
+
+    console.log(secondMembership);
+
+    /*
+     * ------------------------------------------------------
+     * 11. ASSIGN RAHUL TO MAIN BRANCH AS CASHIER
+     * ------------------------------------------------------
+     */
+    console.log("--- Assigning Rahul to Main Branch as Cashier ---");
 
     const firstAssignment = await assignBranchToMembership(
       firstMembershipId,
       mainBranchId,
+      cashierRoleId,
     );
 
     console.log(firstAssignment);
 
     /*
      * ------------------------------------------------------
-     * 8. ASSIGN RAHUL TO CITY BRANCH
+     * 12. ASSIGN RAHUL TO CITY BRANCH AS ACCOUNTANT
      * ------------------------------------------------------
+     *
+     * This is the most important test in this repository.
+     *
+     * Rahul has the SAME organisation membership but a
+     * DIFFERENT role at a DIFFERENT branch.
      */
-    console.log("--- Assigning Rahul to City Branch ---");
+    console.log("--- Assigning Rahul to City Branch as Accountant ---");
 
     const secondAssignment = await assignBranchToMembership(
       firstMembershipId,
       cityBranchId,
+      accountantRoleId,
     );
 
     console.log(secondAssignment);
 
     /*
      * ------------------------------------------------------
-     * 9. ASSIGN AMIT TO MAIN BRANCH
+     * 13. ASSIGN AMIT TO MAIN BRANCH AS MANAGER
      * ------------------------------------------------------
      */
-    console.log("--- Assigning Amit to Main Branch ---");
+    console.log("--- Assigning Amit to Main Branch as Manager ---");
 
     const thirdAssignment = await assignBranchToMembership(
       secondMembershipId,
       mainBranchId,
+      managerRoleId,
     );
 
     console.log(thirdAssignment);
 
     /*
      * ------------------------------------------------------
-     * 10. TEST DUPLICATE ASSIGNMENT
+     * 14. TEST DUPLICATE BRANCH ASSIGNMENT
      * ------------------------------------------------------
      *
      * Rahul is already assigned to Main Branch.
      *
-     * The second assignment should therefore return null
-     * instead of creating another row.
+     * The same membership + branch combination cannot be
+     * inserted twice.
      */
     console.log("--- Testing duplicate branch assignment ---");
 
     const duplicateAssignment = await assignBranchToMembership(
       firstMembershipId,
       mainBranchId,
+      cashierRoleId,
     );
 
     console.log({
@@ -325,30 +382,85 @@ const runTests = async () => {
 
     /*
      * ------------------------------------------------------
-     * 11. GET ASSIGNMENT
+     * 15. GET RAHUL MAIN BRANCH ASSIGNMENT
      * ------------------------------------------------------
      */
     console.log("--- Getting Rahul Main Branch assignment ---");
 
-    const assignment = await getAssignment(firstMembershipId, mainBranchId);
+    const mainAssignment = await getAssignment(firstMembershipId, mainBranchId);
 
-    console.log(assignment);
+    console.log(mainAssignment);
 
     /*
      * ------------------------------------------------------
-     * 12. GET RAHUL'S BRANCHES
+     * 16. GET RAHUL CITY BRANCH ASSIGNMENT
      * ------------------------------------------------------
+     */
+    console.log("--- Getting Rahul City Branch assignment ---");
+
+    const cityAssignment = await getAssignment(firstMembershipId, cityBranchId);
+
+    console.log(cityAssignment);
+
+    /*
+     * ------------------------------------------------------
+     * 17. GET RAHUL'S BRANCH ASSIGNMENTS
+     * ------------------------------------------------------
+     *
+     * Rahul should have:
+     *
+     * Main Branch -> Cashier
+     * City Branch  -> Accountant
      */
     console.log("--- Getting Rahul assigned branches ---");
 
-    const rahulBranches = await getMembershipAssignments(firstMembershipId);
+    const rahulAssignments = await getMembershipAssignments(firstMembershipId);
 
-    console.log(rahulBranches);
+    console.log(rahulAssignments);
 
     /*
      * ------------------------------------------------------
-     * 13. GET MAIN BRANCH MEMBERS
+     * 18. CHANGE RAHUL'S CITY BRANCH ROLE
      * ------------------------------------------------------
+     *
+     * Rahul changes from Accountant to Manager at City Branch.
+     *
+     * His organisation membership does not change.
+     * His Main Branch role does not change.
+     */
+    console.log("--- Changing Rahul City Branch role to Manager ---");
+
+    const updatedCityRole = await updateBranchAssignmentRole(
+      firstMembershipId,
+      cityBranchId,
+      managerRoleId,
+    );
+
+    console.log(updatedCityRole);
+
+    /*
+     * ------------------------------------------------------
+     * 19. GET CITY ASSIGNMENT AFTER ROLE CHANGE
+     * ------------------------------------------------------
+     */
+    console.log("--- Verifying Rahul City Branch role change ---");
+
+    const updatedCityAssignment = await getAssignment(
+      firstMembershipId,
+      cityBranchId,
+    );
+
+    console.log(updatedCityAssignment);
+
+    /*
+     * ------------------------------------------------------
+     * 20. GET MAIN BRANCH MEMBERS
+     * ------------------------------------------------------
+     *
+     * Main Branch should contain:
+     *
+     * Rahul -> Cashier
+     * Amit  -> Manager
      */
     console.log("--- Getting Main Branch members ---");
 
@@ -358,7 +470,22 @@ const runTests = async () => {
 
     /*
      * ------------------------------------------------------
-     * 14. CHECK BRANCH ACCESS
+     * 21. GET CITY BRANCH MEMBERS
+     * ------------------------------------------------------
+     *
+     * City Branch should contain:
+     *
+     * Rahul -> Manager
+     */
+    console.log("--- Getting City Branch members ---");
+
+    const cityBranchMembers = await getBranchMembers(cityBranchId);
+
+    console.log(cityBranchMembers);
+
+    /*
+     * ------------------------------------------------------
+     * 22. CHECK RAHUL MAIN BRANCH ACCESS
      * ------------------------------------------------------
      */
     console.log("--- Checking Rahul Main Branch access ---");
@@ -372,6 +499,11 @@ const runTests = async () => {
       rahulMainAccess,
     });
 
+    /*
+     * ------------------------------------------------------
+     * 23. CHECK RAHUL CITY BRANCH ACCESS
+     * ------------------------------------------------------
+     */
     console.log("--- Checking Rahul City Branch access ---");
 
     const rahulCityAccess = await isBranchAssigned(
@@ -383,6 +515,13 @@ const runTests = async () => {
       rahulCityAccess,
     });
 
+    /*
+     * ------------------------------------------------------
+     * 24. CHECK AMIT CITY BRANCH ACCESS
+     * ------------------------------------------------------
+     *
+     * Amit was never assigned to City Branch.
+     */
     console.log("--- Checking Amit City Branch access ---");
 
     const amitCityAccess = await isBranchAssigned(
@@ -396,7 +535,7 @@ const runTests = async () => {
 
     /*
      * ------------------------------------------------------
-     * 15. REMOVE RAHUL'S CITY BRANCH ACCESS
+     * 25. REMOVE RAHUL CITY BRANCH ACCESS
      * ------------------------------------------------------
      */
     console.log("--- Removing Rahul City Branch assignment ---");
@@ -412,7 +551,7 @@ const runTests = async () => {
 
     /*
      * ------------------------------------------------------
-     * 16. VERIFY CITY BRANCH ACCESS WAS REMOVED
+     * 26. VERIFY CITY BRANCH ACCESS WAS REMOVED
      * ------------------------------------------------------
      */
     console.log("--- Verifying Rahul City Branch access removal ---");
@@ -428,7 +567,7 @@ const runTests = async () => {
 
     /*
      * ------------------------------------------------------
-     * 17. REMOVE ALL REMAINING RAHUL ASSIGNMENTS
+     * 27. REMOVE ALL REMAINING RAHUL ASSIGNMENTS
      * ------------------------------------------------------
      */
     console.log("--- Removing all Rahul branch assignments ---");
@@ -441,7 +580,7 @@ const runTests = async () => {
 
     /*
      * ------------------------------------------------------
-     * 18. VERIFY ALL RAHUL ASSIGNMENTS ARE REMOVED
+     * 28. VERIFY ALL RAHUL ASSIGNMENTS ARE REMOVED
      * ------------------------------------------------------
      */
     console.log("--- Verifying Rahul has no branch assignments ---");
@@ -453,7 +592,7 @@ const runTests = async () => {
 
     /*
      * ------------------------------------------------------
-     * 19. CLEAN UP AMIT'S ASSIGNMENT
+     * 29. REMOVE AMIT ASSIGNMENTS
      * ------------------------------------------------------
      */
     console.log("--- Removing Amit branch assignments ---");
@@ -462,53 +601,62 @@ const runTests = async () => {
 
     /*
      * ------------------------------------------------------
-     * 20. DELETE MEMBERSHIPS
+     * 30. DELETE MEMBERSHIPS
      * ------------------------------------------------------
      */
-    console.log("--- Deleting memberships ---");
+    console.log("--- Deleting Rahul membership ---");
 
-    await pool.query(
-      `
-            DELETE FROM organisation_memberships
-            WHERE id IN ($1, $2);
-            `,
-      [firstMembershipId, secondMembershipId],
-    );
+    const rahulMembershipDeleted = await deleteMembership(firstMembershipId);
+
+    console.log({
+      rahulMembershipDeleted,
+    });
+
+    console.log("--- Deleting Amit membership ---");
+
+    const amitMembershipDeleted = await deleteMembership(secondMembershipId);
+
+    console.log({
+      amitMembershipDeleted,
+    });
 
     /*
      * ------------------------------------------------------
-     * 21. DELETE TEST BRANCHES
+     * 31. DELETE TEST BRANCHES
      * ------------------------------------------------------
      */
     console.log("--- Deleting test branches ---");
 
     await pool.query(
       `
-            DELETE FROM branches
-            WHERE id IN ($1, $2);
-            `,
+        DELETE FROM branches
+        WHERE id IN ($1, $2);
+      `,
       [mainBranchId, cityBranchId],
     );
 
     /*
      * ------------------------------------------------------
-     * 22. DELETE TEST ROLES
+     * 32. DELETE TEST ROLES
      * ------------------------------------------------------
      */
     console.log("--- Deleting test roles ---");
 
     const cashierDeleted = await deleteRole(cashierRoleId);
 
+    const accountantDeleted = await deleteRole(accountantRoleId);
+
     const managerDeleted = await deleteRole(managerRoleId);
 
     console.log({
       cashierDeleted,
+      accountantDeleted,
       managerDeleted,
     });
 
     /*
      * ------------------------------------------------------
-     * 23. DELETE TEST ORGANISATION
+     * 33. DELETE TEST ORGANISATION
      * ------------------------------------------------------
      */
     console.log("--- Deleting test organisation ---");
@@ -521,7 +669,7 @@ const runTests = async () => {
 
     /*
      * ------------------------------------------------------
-     * 24. DELETE TEST USERS
+     * 34. DELETE TEST USERS
      * ------------------------------------------------------
      */
     console.log("--- Deleting first test user ---");
@@ -554,6 +702,10 @@ const runTests = async () => {
 
     process.exitCode = 1;
   } finally {
+    /*
+     * Close the PostgreSQL connection pool so the Node.js
+     * process can terminate cleanly.
+     */
     await pool.end();
   }
 };

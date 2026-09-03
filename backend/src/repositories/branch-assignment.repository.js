@@ -3,13 +3,15 @@
  *
  * Purpose:
  * Handles database operations for assigning organisation
- * memberships to branches.
+ * memberships to branches and defining the role they have
+ * at each assigned branch.
  *
- * A membership determines which organisation a user belongs to
- * and what role the user has in that organisation.
+ * An organisation membership determines which organisation
+ * the user belongs to.
  *
- * A branch assignment determines which branches that member
- * is allowed to access.
+ * A branch assignment determines:
+ *   1. Which branch the member can access.
+ *   2. Which role the member has at that branch.
  *
  * Example:
  *
@@ -17,14 +19,12 @@
  *   |
  *   +-- Falah Pharmacy
  *          |
- *          +-- Manager
+ *          +-- Main Branch ---- Cashier
  *          |
- *          +-- Main Branch
- *          +-- City Branch
+ *          +-- City Branch ---- Accountant
  *
- * This repository only manages the membership-to-branch
- * relationship. Permission and authorization decisions belong
- * in the service layer.
+ * This repository only manages branch assignment persistence.
+ * Permission and authorization decisions belong in the service layer.
  */
 
 const { pool } = require("../db/connection");
@@ -38,24 +38,27 @@ const { pool } = require("../db/connection");
  *
  * @param {string} membershipId
  * @param {string} branchId
+ * @param {string} roleId
  *
  * @returns {Object} Created branch assignment
  */
-const assignBranchToMembership = async (membershipId, branchId) => {
+const assignBranchToMembership = async (membershipId, branchId, roleId) => {
   const query = `
-        INSERT INTO branch_assignments (
-            membership_id,
-            branch_id
-        )
-        VALUES ($1, $2)
-        ON CONFLICT (membership_id, branch_id)
-        DO NOTHING
-        RETURNING
-            membership_id,
-            branch_id;
-    `;
+    INSERT INTO branch_assignments (
+        membership_id,
+        branch_id,
+        role_id
+    )
+    VALUES ($1, $2, $3)
+    ON CONFLICT (membership_id, branch_id)
+    DO NOTHING
+    RETURNING
+        membership_id,
+        branch_id,
+        role_id;
+`;
 
-  const result = await pool.query(query, [membershipId, branchId]);
+  const result = await pool.query(query, [membershipId, branchId, roleId]);
 
   return result.rows[0] || null;
 };
@@ -72,13 +75,40 @@ const getAssignment = async (membershipId, branchId) => {
   const query = `
         SELECT
             membership_id,
-            branch_id
+            branch_id,
+            role_id
         FROM branch_assignments
         WHERE membership_id = $1
           AND branch_id = $2;
     `;
 
   const result = await pool.query(query, [membershipId, branchId]);
+
+  return result.rows[0] || null;
+};
+
+/**
+ * Update the role for a branch assignment.
+ *
+ * @param {string} membershipId
+ * @param {string} branchId
+ * @param {string} roleId
+ *
+ * @returns {Object|null} Updated branch assignment or null if not found
+ */
+const updateBranchAssignmentRole = async (membershipId, branchId, roleId) => {
+  const query = `
+        UPDATE branch_assignments
+        SET role_id = $3
+        WHERE membership_id = $1
+          AND branch_id = $2
+        RETURNING
+            membership_id,
+            branch_id,
+            role_id;
+    `;
+
+  const result = await pool.query(query, [membershipId, branchId, roleId]);
 
   return result.rows[0] || null;
 };
@@ -98,6 +128,8 @@ const getMembershipAssignments = async (membershipId) => {
         SELECT
             ba.membership_id,
             ba.branch_id,
+            ba.role_id,
+            r.name AS role_name,
             b.organisation_id,
             b.name,
             b.address,
@@ -110,12 +142,13 @@ const getMembershipAssignments = async (membershipId) => {
         FROM branch_assignments ba
         INNER JOIN branches b
             ON b.id = ba.branch_id
+        INNER JOIN roles r
+            ON r.id = ba.role_id
         WHERE ba.membership_id = $1
         ORDER BY b.name ASC;
     `;
 
   const result = await pool.query(query, [membershipId]);
-
   return result.rows;
 };
 
@@ -136,12 +169,12 @@ const getBranchMembers = async (branchId) => {
         SELECT
             ba.membership_id,
             ba.branch_id,
+            ba.role_id,
+            r.name AS role_name,
             om.organisation_id,
             om.user_id,
             u.name AS user_name,
             u.email AS user_email,
-            om.role_id,
-            r.name AS role_name,
             om.status AS membership_status,
             om.joined_at
         FROM branch_assignments ba
@@ -149,14 +182,13 @@ const getBranchMembers = async (branchId) => {
             ON om.id = ba.membership_id
         INNER JOIN users u
             ON u.id = om.user_id
-        LEFT JOIN roles r
-            ON r.id = om.role_id
+        INNER JOIN roles r
+            ON r.id = ba.role_id
         WHERE ba.branch_id = $1
         ORDER BY u.name ASC;
     `;
 
   const result = await pool.query(query, [branchId]);
-
   return result.rows;
 };
 
@@ -239,6 +271,7 @@ module.exports = {
   getAssignment,
   getMembershipAssignments,
   getBranchMembers,
+  updateBranchAssignmentRole,
   isBranchAssigned,
   removeBranchAssignment,
   removeAllBranchAssignments,
