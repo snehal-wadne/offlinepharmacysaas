@@ -12,18 +12,19 @@ import {
 } from 'react-native';
 import InventoryStatCard from '../../components/inventory/InventoryStatCard';
 import { CURRENT_STOCK_KPIS, MOCK_STOCK_ITEMS } from '../../data/currentStockMockData';
+import { MOCK_SUPPLIERS_LIST } from '../../data/suppliersMockData';
+import { MOCK_BRANCHES_LIST } from '../../data/managementMockData';
 
-export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = true }) {
+export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = true, onNavigate }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
   const isMobile = width < 768;
 
-  // Stock Items State for Adjustments Table with isActive and rxRequired flags
+  // Stock Items State for Adjustments Table with isActive flag
   const [stockItems, setStockItems] = useState(() =>
-    MOCK_STOCK_ITEMS.map((item, idx) => ({
+    MOCK_STOCK_ITEMS.map((item) => ({
       ...item,
       isActive: item.isActive !== undefined ? item.isActive : true,
-      rxRequired: item.rxRequired !== undefined ? item.rxRequired : idx % 2 === 0,
     }))
   );
 
@@ -52,15 +53,19 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
     strength: '',
     packSize: '',
     manufacturer: '',
-    supplierName: '',
+    supplierName: MOCK_SUPPLIERS_LIST[0]?.name || 'Sun Pharma Care',
     amount: '',
     sku: '',
     batchNo: '',
+    expiryDate: '',
     quantity: '',
-    branchId: 'Main Store',
+    branchId: MOCK_BRANCHES_LIST[0]?.name || 'FIT Main Campus Hospital Pharmacy',
     shelfLocation: '',
+    isActive: true,
   });
   const [formErrors, setFormErrors] = useState({});
+  const [supplierDropdownOpen, setSupplierDropdownOpen] = useState(false);
+  const [branchDropdownOpen, setBranchDropdownOpen] = useState(false);
 
   const handleFormChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -82,25 +87,6 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
             );
           }
           return { ...item, isActive: nextActive };
-        }
-        return item;
-      })
-    );
-  };
-
-  const handleToggleRx = (itemId) => {
-    setStockItems((prev) =>
-      prev.map((item) => {
-        if (item.id === itemId) {
-          const nextRx = !item.rxRequired;
-          if (onShowToast) {
-            onShowToast(
-              `[PATCH /api/inventory/${item.sku}/rx] ${item.brandName || item.medicineName}: Prescription required: ${
-                nextRx ? 'YES (Rx Needed)' : 'NO (OTC)'
-              }`
-            );
-          }
-          return { ...item, rxRequired: nextRx };
         }
         return item;
       })
@@ -154,13 +140,15 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
         strength: item.strength || '',
         packSize: item.packSize || '',
         manufacturer: item.manufacturer || '',
-        supplierName: item.supplierName || '',
+        supplierName: item.supplierName || (MOCK_SUPPLIERS_LIST[0]?.name || 'Sun Pharma Care'),
         amount: item.amount || '',
         sku: item.sku,
         batchNo: item.batchNo,
+        expiryDate: item.expiryDate || '2026-12',
         quantity: String(item.quantity),
-        branchId: item.branchId || 'Main Store',
+        branchId: item.branchId || (MOCK_BRANCHES_LIST[0]?.name || 'Main Store'),
         shelfLocation: item.shelfLocation || '',
+        isActive: item.isActive !== undefined ? item.isActive : true,
       });
       if (onShowToast) {
         onShowToast(
@@ -226,13 +214,14 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
     if (!formData.brandName.trim()) errors.brandName = 'Brand Name is required (e.g. Crocin 500 / Dolo 650)';
     if (!formData.sku.trim()) errors.sku = 'SKU is required';
     if (!formData.batchNo.trim()) errors.batchNo = 'Batch No. is required';
+    if (!formData.expiryDate.trim()) errors.expiryDate = 'Expiry Date is required (e.g. 2027-06)';
     if (!formData.quantity.trim() || isNaN(formData.quantity) || Number(formData.quantity) <= 0) {
       errors.quantity = 'Valid quantity is required';
     }
 
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
-      if (onShowToast) onShowToast('Please fill in required medicine, brand & batch details.');
+      if (onShowToast) onShowToast('Please fill in required medicine, brand, batch & expiry details.');
       return;
     }
 
@@ -244,18 +233,18 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
       strength: formData.strength || '500mg',
       packSize: formData.packSize || '15 Tablets',
       manufacturer: formData.manufacturer || 'GSK',
-      supplierName: formData.supplierName || (formData.manufacturer ? `${formData.manufacturer} Distribution` : 'GSK Pharmaceuticals'),
+      supplierName: formData.supplierName || 'Sun Pharma Care',
       amount: formData.amount ? (formData.amount.startsWith('₹') ? formData.amount : `₹${formData.amount}`) : '₹15.00',
       sku: formData.sku,
       batchNo: formData.batchNo,
+      expiryDate: formData.expiryDate,
       quantity: Number(formData.quantity),
-      branchId: isMultiBranch ? (formData.branchId || 'BR-01') : 'Main Store',
+      branchId: isMultiBranch ? (formData.branchId || 'FIT Main Campus Hospital Pharmacy') : 'Main Store',
       shelfLocation: formData.shelfLocation || 'A1-S1',
       updatedBy: 'Manager',
       lastUpdated: new Date().toISOString().split('T')[0],
       status: Number(formData.quantity) < 50 ? 'Low Stock' : 'In Stock',
-      isActive: true,
-      rxRequired: false,
+      isActive: formData.isActive !== undefined ? formData.isActive : true,
     };
 
     setStockItems((prev) => [newItem, ...prev]);
@@ -266,13 +255,15 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
       strength: '',
       packSize: '',
       manufacturer: '',
-      supplierName: '',
+      supplierName: MOCK_SUPPLIERS_LIST[0]?.name || 'Sun Pharma Care',
       amount: '',
       sku: '',
       batchNo: '',
+      expiryDate: '',
       quantity: '',
-      branchId: 'Main Store',
+      branchId: MOCK_BRANCHES_LIST[0]?.name || 'FIT Main Campus Hospital Pharmacy',
       shelfLocation: '',
+      isActive: true,
     });
     setFormErrors({});
 
@@ -528,7 +519,6 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
                 )}
                 <Text style={[styles.thCell, { width: 95, textAlign: 'center' }]}>Shelf Loc</Text>
                 <Text style={[styles.thCell, { width: 85, textAlign: 'center' }]}>STATUS</Text>
-                <Text style={[styles.thCell, { width: 75, textAlign: 'center' }]}>RX</Text>
                 <Text style={[styles.thCell, { width: 95 }]}>Last Updated</Text>
                 <Text style={[styles.thCell, { width: 70, textAlign: 'center' }]}>ACTIONS</Text>
               </View>
@@ -614,28 +604,6 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
                           item.isActive ? styles.tableToggleThumbActive : styles.tableToggleThumbInactive,
                         ]}
                       />
-                    </Pressable>
-                  </View>
-
-                  {/* TOGGLE 2: Prescription Required (Rx Only / OTC) */}
-                  <View style={[styles.tdCenterCell, { width: 75 }]}>
-                    <Pressable
-                      onPress={() => handleToggleRx(item.id)}
-                      style={[
-                        styles.rxTagPill,
-                        item.rxRequired ? styles.rxTagRequired : styles.rxTagOtc,
-                      ]}
-                      accessibilityRole="button"
-                      accessibilityLabel="Toggle prescription requirement"
-                    >
-                      <Text
-                        style={[
-                          styles.rxTagPillText,
-                          item.rxRequired ? styles.rxTagTextRequired : styles.rxTagTextOtc,
-                        ]}
-                      >
-                        {item.rxRequired ? 'Rx' : 'OTC'}
-                      </Text>
                     </Pressable>
                   </View>
 
@@ -738,16 +706,71 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
             />
           </View>
 
-          {/* Row 3: Supplier Name & MRP */}
-          <View style={styles.formFieldHalf}>
-            <Text style={styles.fieldLabel}>Supplier Name / Distributor</Text>
-            <TextInput
-              style={styles.formInput}
-              placeholder="e.g., GSK Pharmaceuticals / Sun Pharma Care / Cipla Ltd"
-              placeholderTextColor="#94A3B8"
-              value={formData.supplierName}
-              onChangeText={(t) => handleFormChange('supplierName', t)}
-            />
+          {/* Row 3: Supplier Name (Dropdown) & MRP */}
+          <View style={[styles.formFieldHalf, { zIndex: 30 }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={styles.fieldLabel}>
+                Supplier Name / Distributor <Text style={styles.reqStar}>*</Text>
+              </Text>
+              {onNavigate && (
+                <Pressable onPress={() => onNavigate('suppliers')}>
+                  <Text style={{ fontSize: 11, color: '#0F766E', fontWeight: '700' }}>+ Add Supplier</Text>
+                </Pressable>
+              )}
+            </View>
+            <Pressable
+              onPress={() => {
+                setSupplierDropdownOpen(!supplierDropdownOpen);
+                setBranchDropdownOpen(false);
+              }}
+              style={[styles.formInput, styles.selectTrigger]}
+            >
+              <Text style={formData.supplierName ? styles.selectTriggerText : styles.selectPlaceholderText} numberOfLines={1}>
+                {formData.supplierName || 'Select Registered Supplier'}
+              </Text>
+              <Text style={styles.dropdownCaret}>▾</Text>
+            </Pressable>
+
+            {supplierDropdownOpen && (
+              <View style={styles.dropdownContainerBox}>
+                <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled>
+                  {MOCK_SUPPLIERS_LIST.map((sup) => (
+                    <Pressable
+                      key={sup.id}
+                      onPress={() => {
+                        handleFormChange('supplierName', sup.name);
+                        setSupplierDropdownOpen(false);
+                      }}
+                      style={[
+                        styles.dropdownOptionItem,
+                        formData.supplierName === sup.name && styles.dropdownOptionItemSelected,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.dropdownOptionLabel,
+                          formData.supplierName === sup.name && styles.dropdownOptionLabelSelected,
+                        ]}
+                      >
+                        {sup.name}
+                      </Text>
+                      <Text style={styles.dropdownOptionSub}>{sup.city || sup.category || 'Registered Vendor'}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+                {onNavigate && (
+                  <Pressable
+                    onPress={() => {
+                      setSupplierDropdownOpen(false);
+                      onNavigate('suppliers');
+                    }}
+                    style={styles.dropdownAddNewBtn}
+                  >
+                    <Text style={styles.dropdownAddNewText}>+ Manage / Add Supplier in Directory</Text>
+                  </Pressable>
+                )}
+              </View>
+            )}
           </View>
 
           <View style={styles.formFieldHalf}>
@@ -762,8 +785,8 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
             />
           </View>
 
-          {/* Row 4: SKU, Batch No & Quantity */}
-          <View style={styles.formFieldThird}>
+          {/* Row 4: SKU Code & Batch No */}
+          <View style={styles.formFieldHalf}>
             <Text style={styles.fieldLabel}>
               SKU Code <Text style={styles.reqStar}>*</Text>
             </Text>
@@ -777,7 +800,7 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
             {formErrors.sku && <Text style={styles.errorText}>{formErrors.sku}</Text>}
           </View>
 
-          <View style={styles.formFieldThird}>
+          <View style={styles.formFieldHalf}>
             <Text style={styles.fieldLabel}>
               Batch No. <Text style={styles.reqStar}>*</Text>
             </Text>
@@ -791,7 +814,22 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
             {formErrors.batchNo && <Text style={styles.errorText}>{formErrors.batchNo}</Text>}
           </View>
 
-          <View style={styles.formFieldThird}>
+          {/* Row 5: Expiry Date & Quantity */}
+          <View style={styles.formFieldHalf}>
+            <Text style={styles.fieldLabel}>
+              Expiry Date (YYYY-MM) <Text style={styles.reqStar}>*</Text>
+            </Text>
+            <TextInput
+              style={[styles.formInput, formErrors.expiryDate && styles.formInputError]}
+              placeholder="e.g., 2027-06 or 12/26"
+              placeholderTextColor="#94A3B8"
+              value={formData.expiryDate}
+              onChangeText={(t) => handleFormChange('expiryDate', t)}
+            />
+            {formErrors.expiryDate && <Text style={styles.errorText}>{formErrors.expiryDate}</Text>}
+          </View>
+
+          <View style={styles.formFieldHalf}>
             <Text style={styles.fieldLabel}>
               Quantity <Text style={styles.reqStar}>*</Text>
             </Text>
@@ -806,7 +844,7 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
             {formErrors.quantity && <Text style={styles.errorText}>{formErrors.quantity}</Text>}
           </View>
 
-          {/* Row 5: Shelf Location & (Branch ID only in Multi-Branch mode) */}
+          {/* Row 6: Shelf Location & Branch Selector (Dropdown) */}
           <View style={styles.formFieldHalf}>
             <Text style={styles.fieldLabel}>Shelf Location</Text>
             <TextInput
@@ -819,17 +857,92 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
           </View>
 
           {isMultiBranch ? (
-            <View style={styles.formFieldHalf}>
-              <Text style={styles.fieldLabel}>Branch ID</Text>
-              <TextInput
-                style={styles.formInput}
-                placeholder="e.g., BR-01 / Main Branch"
-                placeholderTextColor="#94A3B8"
-                value={formData.branchId}
-                onChangeText={(t) => handleFormChange('branchId', t)}
-              />
+            <View style={[styles.formFieldHalf, { zIndex: 20 }]}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={styles.fieldLabel}>
+                  Branch / Location <Text style={styles.reqStar}>*</Text>
+                </Text>
+                {onNavigate && (
+                  <Pressable onPress={() => onNavigate('branches')}>
+                    <Text style={{ fontSize: 11, color: '#0F766E', fontWeight: '700' }}>+ Add Branch</Text>
+                  </Pressable>
+                )}
+              </View>
+              <Pressable
+                onPress={() => {
+                  setBranchDropdownOpen(!branchDropdownOpen);
+                  setSupplierDropdownOpen(false);
+                }}
+                style={[styles.formInput, styles.selectTrigger]}
+              >
+                <Text style={formData.branchId ? styles.selectTriggerText : styles.selectPlaceholderText} numberOfLines={1}>
+                  {formData.branchId || 'Select Pharmacy Branch'}
+                </Text>
+                <Text style={styles.dropdownCaret}>▾</Text>
+              </Pressable>
+
+              {branchDropdownOpen && (
+                <View style={styles.dropdownContainerBox}>
+                  <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled>
+                    {MOCK_BRANCHES_LIST.map((br) => (
+                      <Pressable
+                        key={br.id}
+                        onPress={() => {
+                          handleFormChange('branchId', br.name);
+                          setBranchDropdownOpen(false);
+                        }}
+                        style={[
+                          styles.dropdownOptionItem,
+                          formData.branchId === br.name && styles.dropdownOptionItemSelected,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.dropdownOptionLabel,
+                            formData.branchId === br.name && styles.dropdownOptionLabelSelected,
+                          ]}
+                        >
+                          {br.name}
+                        </Text>
+                        <Text style={styles.dropdownOptionSub}>{br.code} • {br.city}</Text>
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                  {onNavigate && (
+                    <Pressable
+                      onPress={() => {
+                        setBranchDropdownOpen(false);
+                        onNavigate('branches');
+                      }}
+                      style={styles.dropdownAddNewBtn}
+                    >
+                      <Text style={styles.dropdownAddNewText}>+ Manage / Add Branch in Management</Text>
+                    </Pressable>
+                  )}
+                </View>
+              )}
             </View>
           ) : null}
+
+          {/* Row 7: Live in Billing (Active/Inactive) & Prescription Type (Rx vs OTC) */}
+          <View style={styles.formFieldHalf}>
+            <Text style={styles.fieldLabel}>Billing Status</Text>
+            <Pressable
+              onPress={() => handleFormChange('isActive', !formData.isActive)}
+              style={[
+                styles.formInput,
+                styles.statusToggleBtn,
+                formData.isActive ? styles.statusActiveBg : styles.statusInactiveBg,
+              ]}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: formData.isActive }}
+            >
+              <View style={[styles.statusDot, formData.isActive ? styles.statusDotActive : styles.statusDotInactive]} />
+              <Text style={[styles.statusToggleText, formData.isActive ? styles.statusTextActive : styles.statusTextInactive]}>
+                {formData.isActive ? 'Active (Live in Billing & POS)' : 'Inactive (Hidden from POS)'}
+              </Text>
+            </Pressable>
+          </View>
         </View>
 
         {/* Blue Submit Button */}
@@ -2077,6 +2190,153 @@ const styles = StyleSheet.create({
   closeDevGuideModalBtnText: {
     color: '#FFFFFF',
     fontSize: 12.5,
+    fontWeight: '700',
+  },
+  selectTrigger: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    cursor: 'pointer',
+  },
+  selectTriggerText: {
+    fontSize: 13,
+    color: '#0F172A',
+    fontWeight: '500',
+    flex: 1,
+  },
+  selectPlaceholderText: {
+    fontSize: 13,
+    color: '#94A3B8',
+    flex: 1,
+  },
+  dropdownCaret: {
+    fontSize: 13,
+    color: '#64748B',
+    marginLeft: 6,
+  },
+  dropdownContainerBox: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    marginTop: 4,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 8,
+    zIndex: 999,
+    overflow: 'hidden',
+  },
+  dropdownOptionItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    cursor: 'pointer',
+  },
+  dropdownOptionItemSelected: {
+    backgroundColor: '#F0FDFA',
+  },
+  dropdownOptionLabel: {
+    fontSize: 13,
+    color: '#1E293B',
+    fontWeight: '600',
+  },
+  dropdownOptionLabelSelected: {
+    color: '#0F766E',
+    fontWeight: '700',
+  },
+  dropdownOptionSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  dropdownAddNewBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    backgroundColor: '#F8FAFC',
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    alignItems: 'center',
+    cursor: 'pointer',
+  },
+  dropdownAddNewText: {
+    fontSize: 12,
+    color: '#0F766E',
+    fontWeight: '700',
+  },
+  statusToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    cursor: 'pointer',
+    paddingVertical: 9,
+  },
+  statusActiveBg: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#86EFAC',
+  },
+  statusInactiveBg: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 8,
+  },
+  statusDotActive: {
+    backgroundColor: '#16A34A',
+  },
+  statusDotInactive: {
+    backgroundColor: '#DC2626',
+  },
+  statusToggleText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  statusTextActive: {
+    color: '#15803D',
+  },
+  statusTextInactive: {
+    color: '#B91C1C',
+  },
+  rxChoicePill: {
+    flex: 1,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+  },
+  rxChoicePillOtcSelected: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#16A34A',
+  },
+  rxChoicePillRxSelected: {
+    backgroundColor: '#FAF5FF',
+    borderColor: '#9333EA',
+  },
+  rxChoiceText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  rxChoiceTextSelected: {
+    color: '#16A34A',
+    fontWeight: '700',
+  },
+  rxChoiceTextRxSelected: {
+    color: '#9333EA',
     fontWeight: '700',
   },
 });

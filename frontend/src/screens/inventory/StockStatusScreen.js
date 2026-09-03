@@ -74,34 +74,26 @@ export default function StockStatusScreen({ onNavigate, onShowToast, isMultiBran
   const [actionMenuModalOpen, setActionMenuModalOpen] = useState(false);
   const [devGuideModalOpen, setDevGuideModalOpen] = useState(false);
 
-  // Quick Toggles
-  const [criticalOnly, setCriticalOnly] = useState(false);
-  const [autoReorderAutomation, setAutoReorderAutomation] = useState(false);
-
   const filteredLowStock = MOCK_LOW_STOCK_ITEMS.filter((item) => {
     const q = searchQuery.toLowerCase();
-    const matchesSearch =
+    return (
       (item.brandName && item.brandName.toLowerCase().includes(q)) ||
       (item.genericName && item.genericName.toLowerCase().includes(q)) ||
       (item.medicine && item.medicine.toLowerCase().includes(q)) ||
       (item.sku && item.sku.toLowerCase().includes(q)) ||
-      (item.supplier && item.supplier.toLowerCase().includes(q));
-
-    const matchesCritical = !criticalOnly || item.status === 'Critical' || item.status === 'Out of Stock';
-    return matchesSearch && matchesCritical;
+      (item.supplier && item.supplier.toLowerCase().includes(q))
+    );
   });
 
   const filteredExpiry = MOCK_EXPIRY_BATCHES.filter((item) => {
     const q = searchQuery.toLowerCase();
-    const matchesSearch =
+    return (
       (item.brandName && item.brandName.toLowerCase().includes(q)) ||
       (item.genericName && item.genericName.toLowerCase().includes(q)) ||
       (item.medicine && item.medicine.toLowerCase().includes(q)) ||
       (item.batchNo && item.batchNo.toLowerCase().includes(q)) ||
-      (item.supplier && item.supplier.toLowerCase().includes(q));
-
-    const matchesCritical = !criticalOnly || item.status === 'Expired' || item.status === 'Expiring Soon';
-    return matchesSearch && matchesCritical;
+      (item.supplier && item.supplier.toLowerCase().includes(q))
+    );
   });
 
   const handleOpenActionMenu = (item, type) => {
@@ -232,72 +224,6 @@ export default function StockStatusScreen({ onNavigate, onShowToast, isMultiBran
                 <Text style={styles.clearBtnText}>✕</Text>
               </Pressable>
             ) : null}
-          </View>
-
-          {/* Quick Filter Toggles & Backend Guide Button */}
-          <View style={styles.filterTogglesGroup}>
-            {/* Toggle 1: Critical / Expired Only */}
-            <Pressable
-              onPress={() => setCriticalOnly(!criticalOnly)}
-              style={[
-                styles.filterTogglePill,
-                criticalOnly && styles.filterTogglePillActive,
-              ]}
-              accessibilityRole="switch"
-              accessibilityState={{ checked: criticalOnly }}
-            >
-              <View style={[styles.filterToggleDot, criticalOnly && styles.filterToggleDotActive]} />
-              <Text style={[styles.filterToggleText, criticalOnly && styles.filterToggleTextActive]}>
-                Critical / Expired Only
-              </Text>
-            </Pressable>
-
-            {/* Toggle 2: Auto-Reorder Automation */}
-            <Pressable
-              onPress={() => {
-                const nextVal = !autoReorderAutomation;
-                setAutoReorderAutomation(nextVal);
-                if (onShowToast) {
-                  onShowToast(
-                    `[PATCH /api/inventory/auto-reorder] Auto-PO Generation: ${
-                      nextVal ? 'ENABLED (Threshold-based PO generation)' : 'DISABLED'
-                    }`
-                  );
-                }
-              }}
-              style={[
-                styles.filterTogglePill,
-                autoReorderAutomation && styles.filterTogglePillActive,
-              ]}
-              accessibilityRole="switch"
-              accessibilityState={{ checked: autoReorderAutomation }}
-            >
-              <View
-                style={[
-                  styles.filterToggleDot,
-                  autoReorderAutomation && styles.filterToggleDotActive,
-                ]}
-              />
-              <Text
-                style={[
-                  styles.filterToggleText,
-                  autoReorderAutomation && styles.filterToggleTextActive,
-                ]}
-              >
-                Auto-Reorder Engine
-              </Text>
-            </Pressable>
-
-            {/* Backend & DB Guide Button */}
-            <Pressable
-              onPress={() => setDevGuideModalOpen(true)}
-              style={styles.devGuideTopBtn}
-              accessibilityRole="button"
-              accessibilityLabel="Backend & DB Guide"
-            >
-              <Text style={styles.devGuideTopBtnIcon}>🔌</Text>
-              <Text style={styles.devGuideTopBtnText}>Backend & DB Guide</Text>
-            </Pressable>
           </View>
         </View>
 

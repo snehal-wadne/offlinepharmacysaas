@@ -25,8 +25,6 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All Categories');
-  const [toggleActiveOnly, setToggleActiveOnly] = useState(false);
-  const [toggleGstinOnly, setToggleGstinOnly] = useState(false);
 
   // 3-Dots Action Menu State
   const [actionMenuModalOpen, setActionMenuModalOpen] = useState(false);
@@ -67,22 +65,6 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
     );
   };
 
-  const handleToggleActiveFilter = () => {
-    const nextVal = !toggleActiveOnly;
-    setToggleActiveOnly(nextVal);
-    if (onShowToast) {
-      onShowToast(nextVal ? 'Filter enabled: Active Suppliers Only' : 'Filter cleared: Showing All Suppliers');
-    }
-  };
-
-  const handleToggleGstinFilter = () => {
-    const nextVal = !toggleGstinOnly;
-    setToggleGstinOnly(nextVal);
-    if (onShowToast) {
-      onShowToast(nextVal ? 'Filter enabled: Verified GSTIN Only' : 'Filter cleared: Showing All');
-    }
-  };
-
   const handleOpenActionMenu = (sup) => {
     setSelectedSupplierForAction(sup);
     setActionMenuModalOpen(true);
@@ -100,10 +82,7 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
     const matchesCategory =
       selectedCategory === 'All Categories' || sup.category === selectedCategory;
 
-    const matchesActive = !toggleActiveOnly || sup.status === 'Active';
-    const matchesGstin = !toggleGstinOnly || (sup.gstin && sup.gstin.length >= 15);
-
-    return matchesSearch && matchesCategory && matchesActive && matchesGstin;
+    return matchesSearch && matchesCategory;
   });
 
   const handleOpenModal = () => {
@@ -228,59 +207,6 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
                 <Text style={styles.clearBtnText}>✕</Text>
               </Pressable>
             ) : null}
-          </View>
-
-          {/* Quick Filter Toggles */}
-          <View style={styles.filterTogglesGroup}>
-            <Pressable
-              onPress={handleToggleActiveFilter}
-              style={[
-                styles.filterTogglePill,
-                toggleActiveOnly && styles.filterTogglePillActive,
-              ]}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: toggleActiveOnly }}
-            >
-              <View
-                style={[
-                  styles.filterToggleDot,
-                  toggleActiveOnly && styles.filterToggleDotActive,
-                ]}
-              />
-              <Text
-                style={[
-                  styles.filterToggleText,
-                  toggleActiveOnly && styles.filterToggleTextActive,
-                ]}
-              >
-                Active Only
-              </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={handleToggleGstinFilter}
-              style={[
-                styles.filterTogglePill,
-                toggleGstinOnly && styles.filterTogglePillActive,
-              ]}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: toggleGstinOnly }}
-            >
-              <View
-                style={[
-                  styles.filterToggleDot,
-                  toggleGstinOnly && styles.filterToggleDotActive,
-                ]}
-              />
-              <Text
-                style={[
-                  styles.filterToggleText,
-                  toggleGstinOnly && styles.filterToggleTextActive,
-                ]}
-              >
-                Verified GSTIN (15 Digits)
-              </Text>
-            </Pressable>
           </View>
 
           {/* Category Filter Chips */}

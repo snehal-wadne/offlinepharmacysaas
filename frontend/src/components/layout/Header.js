@@ -22,6 +22,7 @@ export default function Header({
   onBranchChange,
   isMultiBranch = true,
   onTogglePharmacyMode,
+  onSetPharmacyMode,
   currentUser,
   onSignOut,
   syncStatus = "online",
@@ -94,8 +95,63 @@ export default function Header({
           </Pressable>
         )}
 
+        {/* Branch / Store Mode Selector: Single Shop vs Multi-Branch */}
+        {!isMobile && (
+          <View style={styles.modeSegmentContainer}>
+            <Pressable
+              onPress={() => {
+                if (isMultiBranch) {
+                  if (onSetPharmacyMode) onSetPharmacyMode(false);
+                  else if (onTogglePharmacyMode) onTogglePharmacyMode();
+                }
+              }}
+              style={[
+                styles.modeSegmentBtn,
+                !isMultiBranch && styles.modeSegmentBtnActive,
+              ]}
+              accessibilityRole="button"
+              accessibilityState={{ selected: !isMultiBranch }}
+              accessibilityLabel="Select Single Shop Mode"
+            >
+              <Text
+                style={[
+                  styles.modeSegmentText,
+                  !isMultiBranch && styles.modeSegmentTextActive,
+                ]}
+              >
+                Single Shop
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => {
+                if (!isMultiBranch) {
+                  if (onSetPharmacyMode) onSetPharmacyMode(true);
+                  else if (onTogglePharmacyMode) onTogglePharmacyMode();
+                }
+              }}
+              style={[
+                styles.modeSegmentBtn,
+                isMultiBranch && styles.modeSegmentBtnActive,
+              ]}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isMultiBranch }}
+              accessibilityLabel="Select Multi-Branch Mode"
+            >
+              <Text
+                style={[
+                  styles.modeSegmentText,
+                  isMultiBranch && styles.modeSegmentTextActive,
+                ]}
+              >
+                Multi-Branch
+              </Text>
+            </Pressable>
+          </View>
+        )}
+
+        {/* If in Multi-Branch mode, display Active Branch Switcher Dropdown */}
         {isMultiBranch ? (
-          // MULTI-BRANCH MODE: Active Branch Switcher Dropdown (Anchored directly below button)
           <View style={styles.branchSelectorRow}>
             {!isMobile && <Text style={styles.branchLabel}>Branch</Text>}
             <View style={styles.branchAnchorContainer}>
@@ -152,45 +208,7 @@ export default function Header({
               )}
             </View>
           </View>
-        ) : (
-          // SINGLE-SHOP MODE: Clean Non-Clickable Store Label
-          <View style={styles.singleShopBadge}>
-            <View style={styles.singleShopDot} />
-            <Text style={styles.singleShopLabel}>Single Store</Text>
-          </View>
-        )}
-
-        {/* Quick Mode Toggle Switch */}
-        {onTogglePharmacyMode && !isMobile && (
-          <Pressable
-            onPress={onTogglePharmacyMode}
-            style={styles.modeToggleSwitch}
-            accessibilityRole="switch"
-            accessibilityState={{ checked: isMultiBranch }}
-            accessibilityLabel="Toggle Single-Shop / Multi-Branch Mode"
-          >
-            <View
-              style={[
-                styles.toggleTrack,
-                isMultiBranch
-                  ? styles.toggleTrackMulti
-                  : styles.toggleTrackSingle,
-              ]}
-            >
-              <View
-                style={[
-                  styles.toggleThumb,
-                  isMultiBranch
-                    ? styles.toggleThumbMulti
-                    : styles.toggleThumbSingle,
-                ]}
-              />
-            </View>
-            <Text style={styles.modeToggleText}>
-              {isMultiBranch ? "Multi-Branch" : "Single-Shop"}
-            </Text>
-          </Pressable>
-        )}
+        ) : null}
       </View>
 
       {/* Middle: Global Search Input */}
@@ -336,82 +354,40 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#64748B",
   },
-  singleShopBadge: {
+  modeSegmentContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F1F5F9",
+    borderRadius: 8,
+    padding: 3,
     borderWidth: 1,
     borderColor: "#E2E8F0",
+    gap: 3,
+  },
+  modeSegmentBtn: {
     paddingVertical: 6,
     paddingHorizontal: 12,
-    borderRadius: 8,
-    gap: 7,
-  },
-  singleShopDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "#0F766E",
-  },
-  singleShopLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#334155",
-  },
-  modeToggleSwitch: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F8FAFC",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 20,
-    gap: 8,
+    borderRadius: 6,
     cursor: "pointer",
   },
-  toggleTrack: {
-    width: 34,
-    height: 18,
-    borderRadius: 9,
-    padding: 2,
-    justifyContent: "center",
-    position: "relative",
-    ...Platform.select({
-      web: {
-        transition: "background-color 0.2s ease",
-      },
-    }),
-  },
-  toggleTrackMulti: {
-    backgroundColor: "#0F766E",
-  },
-  toggleTrackSingle: {
-    backgroundColor: "#CBD5E1",
-  },
-  toggleThumb: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
+  modeSegmentBtnActive: {
     backgroundColor: "#FFFFFF",
-    position: "absolute",
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
     ...Platform.select({
       web: {
-        boxShadow: "0 1px 2px rgba(0, 0, 0, 0.2)",
-        transition: "left 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+        boxShadow: "0 1px 3px rgba(0, 0, 0, 0.08)",
       },
     }),
   },
-  toggleThumbMulti: {
-    left: 18,
+  modeSegmentText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#64748B",
   },
-  toggleThumbSingle: {
-    left: 2,
-  },
-  modeToggleText: {
-    fontSize: 11.5,
-    fontWeight: "700",
+  modeSegmentTextActive: {
     color: "#0F766E",
+    fontWeight: "700",
   },
   rightSection: {
     flexDirection: "row",

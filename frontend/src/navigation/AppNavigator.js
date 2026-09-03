@@ -87,13 +87,17 @@ export default function AppNavigator() {
   };
 
   const handleTogglePharmacyMode = () => {
-    const nextMode = !isMultiBranch;
-    setIsMultiBranch(nextMode);
-    if (!nextMode && currentRoute === 'stock-transfer') {
+    handleSetPharmacyMode(!isMultiBranch);
+  };
+
+  const handleSetPharmacyMode = (multi) => {
+    if (multi === isMultiBranch) return;
+    setIsMultiBranch(multi);
+    if (!multi && currentRoute === 'stock-transfer') {
       setCurrentRoute('stock-adjustments');
     }
     showToast(
-      nextMode
+      multi
         ? 'Switched to Multi-Branch Mode (Branch Switcher & Transfer Enabled)'
         : 'Switched to Single-Shop Mode (Streamlined for 1 Pharmacy Store)'
     );
@@ -370,6 +374,7 @@ export default function AppNavigator() {
           }}
           isMultiBranch={isMultiBranch}
           onTogglePharmacyMode={handleTogglePharmacyMode}
+          onSetPharmacyMode={handleSetPharmacyMode}
           currentUser={currentUser}
           onSignOut={handleSignOut}
           syncStatus="online"

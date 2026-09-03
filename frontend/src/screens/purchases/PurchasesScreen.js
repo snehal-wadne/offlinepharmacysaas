@@ -33,7 +33,6 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('All Statuses');
-  const [togglePendingOnly, setTogglePendingOnly] = useState(false);
   const [toggleAutoMatchGst, setToggleAutoMatchGst] = useState(true);
 
   // 3-Dots Action Menu State
@@ -69,9 +68,7 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
     const matchesStatus =
       selectedStatus === 'All Statuses' || po.status === selectedStatus;
 
-    const matchesTogglePending = !togglePendingOnly || po.status === 'Pending';
-
-    return matchesSearch && matchesStatus && matchesTogglePending;
+    return matchesSearch && matchesStatus;
   });
 
   const handleOpenModal = () => {
@@ -128,14 +125,6 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
     }
     if (onShowToast) {
       onShowToast(`Switched to Goods Receiving for ${po.id}`);
-    }
-  };
-
-  const handleTogglePending = () => {
-    const nextVal = !togglePendingOnly;
-    setTogglePendingOnly(nextVal);
-    if (onShowToast) {
-      onShowToast(nextVal ? 'Filter enabled: Showing Pending Orders Only' : 'Filter cleared: Showing All Orders');
     }
   };
 
@@ -251,31 +240,6 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
 
           {/* Quick Filter Toggles */}
           <View style={styles.filterTogglesGroup}>
-            <Pressable
-              onPress={handleTogglePending}
-              style={[
-                styles.filterTogglePill,
-                togglePendingOnly && styles.filterTogglePillActive,
-              ]}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: togglePendingOnly }}
-            >
-              <View
-                style={[
-                  styles.filterToggleDot,
-                  togglePendingOnly && styles.filterToggleDotActive,
-                ]}
-              />
-              <Text
-                style={[
-                  styles.filterToggleText,
-                  togglePendingOnly && styles.filterToggleTextActive,
-                ]}
-              >
-                Pending Only
-              </Text>
-            </Pressable>
-
             <Pressable
               onPress={handleToggleAutoMatch}
               style={[

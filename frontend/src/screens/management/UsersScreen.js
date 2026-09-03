@@ -750,7 +750,7 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                       </Pressable>
                     </View>
 
-                    {/* 7. Action Buttons (View, Edit, Resend Invite) */}
+                    {/* 7. Action Buttons (View, Edit, and conditional Resend Invite for pending members only) */}
                     <View style={[styles.colActions, styles.actionsRow]}>
                       <Pressable
                         onPress={() => handleOpenDetailModal(user)}
@@ -770,14 +770,17 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                         <Text style={styles.actionEditBtnText}>Edit</Text>
                       </Pressable>
 
-                      <Pressable
-                        onPress={() => handleResendInvite(user)}
-                        style={styles.actionInviteBtn}
-                        accessibilityRole="button"
-                        accessibilityLabel="Resend Invite / Key"
-                      >
-                        <Text style={styles.actionInviteBtnText}>Invite</Text>
-                      </Pressable>
+                      {/* Invite / Resend Invite option: Only shown if user is NOT an active member yet (e.g. Inactive or Pending Activation) */}
+                      {user.status !== 'Active' && (
+                        <Pressable
+                          onPress={() => handleResendInvite(user)}
+                          style={styles.actionInviteBtn}
+                          accessibilityRole="button"
+                          accessibilityLabel="Resend Invite / Key"
+                        >
+                          <Text style={styles.actionInviteBtnText}>Invite</Text>
+                        </Pressable>
+                      )}
                     </View>
                   </View>
                 );

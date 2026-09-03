@@ -244,6 +244,8 @@ CREATE TABLE IF NOT EXISTS products (
     pack_size VARCHAR(100),
     manufacturer VARCHAR(200),
     sku VARCHAR(100) NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    is_rx_required BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT products_organisation_sku_unique UNIQUE (organisation_id, sku)

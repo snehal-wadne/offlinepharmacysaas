@@ -42,9 +42,6 @@ export default function StockTransferScreen({ onShowToast }) {
   const [actionMenuOpen, setActionMenuOpen] = useState(false);
   const [devGuideOpen, setDevGuideOpen] = useState(false);
 
-  // Quick Toggle Buttons
-  const [autoApproveTransfers, setAutoApproveTransfers] = useState(false);
-  const [pendingOnly, setPendingOnly] = useState(false);
 
   // New Transfer Modal State
   const [modalVisible, setModalVisible] = useState(false);
@@ -76,9 +73,7 @@ export default function StockTransferScreen({ onShowToast }) {
     const matchesTo =
       toBranch === 'All Branches' || tr.toBranch === toBranch;
 
-    const matchesPending = !pendingOnly || tr.status === 'Draft' || tr.status === 'In Transit';
-
-    return matchesSearch && matchesStatus && matchesFrom && matchesTo && matchesPending;
+    return matchesSearch && matchesStatus && matchesFrom && matchesTo;
   });
 
   const handleOpenActionMenu = (tr) => {
@@ -244,59 +239,6 @@ export default function StockTransferScreen({ onShowToast }) {
                 <Text style={styles.clearBtnText}>✕</Text>
               </Pressable>
             ) : null}
-          </View>
-
-          {/* Quick Toggle Switches */}
-          <View style={styles.filterTogglesGroup}>
-            <Pressable
-              onPress={() => setPendingOnly(!pendingOnly)}
-              style={[
-                styles.filterTogglePill,
-                pendingOnly && styles.filterTogglePillActive,
-              ]}
-              accessibilityRole="switch"
-              accessibilityState={{ checked: pendingOnly }}
-            >
-              <View style={[styles.filterToggleDot, pendingOnly && styles.filterToggleDotActive]} />
-              <Text style={[styles.filterToggleText, pendingOnly && styles.filterToggleTextActive]}>
-                Pending / In-Transit Only
-              </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => {
-                const nextVal = !autoApproveTransfers;
-                setAutoApproveTransfers(nextVal);
-                if (onShowToast) {
-                  onShowToast(
-                    `[PATCH /api/settings/transfers] Auto-Approve: ${
-                      nextVal ? 'ENABLED (Instant branch deduction)' : 'DISABLED (Requires receiving check)'
-                    }`
-                  );
-                }
-              }}
-              style={[
-                styles.filterTogglePill,
-                autoApproveTransfers && styles.filterTogglePillActive,
-              ]}
-              accessibilityRole="switch"
-              accessibilityState={{ checked: autoApproveTransfers }}
-            >
-              <View
-                style={[
-                  styles.filterToggleDot,
-                  autoApproveTransfers && styles.filterToggleDotActive,
-                ]}
-              />
-              <Text
-                style={[
-                  styles.filterToggleText,
-                  autoApproveTransfers && styles.filterToggleTextActive,
-                ]}
-              >
-                Auto-Approve
-              </Text>
-            </Pressable>
           </View>
 
           {/* Filter Status & Branch Chips */}
