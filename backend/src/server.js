@@ -96,21 +96,18 @@ app.get("/health/db", async (req, res) => {
   }
 });
 
-/**
- * ------------------------------------------------------------
- * API ROUTES
- * ------------------------------------------------------------
- *
- * Feature-specific routes should be registered here.
- *
- * Example:
- *
- * const authRoutes = require('./routes/auth.routes');
- * app.use('/api/auth', authRoutes);
- *
- * We will add these as the corresponding controllers and
- * services are implemented.
- */
+const purchaseRoutes = require('./routes/purchase.routes');
+const goodsReceiptRoutes = require('./routes/goods-receipt.routes');
+const supplierRoutes = require('./routes/supplier.routes');
+const inventoryRoutes = require('./routes/inventory.routes');
+
+app.use('/api/purchases', purchaseRoutes);
+app.use('/api/goods-receipts', goodsReceiptRoutes);
+app.use('/api/suppliers', supplierRoutes);
+app.use('/api/inventory', inventoryRoutes);
+
+
+
 
 /**
  * ------------------------------------------------------------

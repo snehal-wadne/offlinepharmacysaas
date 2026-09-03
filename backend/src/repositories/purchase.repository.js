@@ -600,6 +600,80 @@ const deletePurchase = async (organisationId, purchaseId) => {
   return result.rowCount > 0;
 };
 
+const getPurchasesWithFilters = async (
+  organisationId,
+  { status = null, search = null, branchId = null, supplierId = null, limit = 50, offset = 0 } = {}
+) => {
+  const params = [organisationId];
+  let paramCount = 1;
+
+  let query = `
+        SELECT
+            p.id,
+            p.organisation_id,
+            p.purchase_number,
+            p.supplier_id,
+            s.name AS supplier_name,
+            p.branch_id,
+            b.name AS branch_name,
+            p.order_date,
+            p.expected_date,
+            p.status,
+            p.notes,
+            p.created_by,
+            u.name AS created_by_name,
+            p.created_at,
+            p.updated_at,
+            COALESCE(SUM(pi.ordered_quantity * pi.unit_cost + pi.tax_amount - pi.discount_amount), 0) AS total_amount,
+            COUNT(pi.id)::INT AS items_count
+        FROM purchases p
+        INNER JOIN suppliers s ON s.id = p.supplier_id
+        INNER JOIN branches b ON b.id = p.branch_id
+        LEFT JOIN users u ON u.id = p.created_by
+        LEFT JOIN purchase_items pi ON pi.purchase_id = p.id
+        WHERE p.organisation_id = $1
+    `;
+
+  if (status && status !== 'All Statuses') {
+    paramCount++;
+    query += ` AND UPPER(p.status) = UPPER($${paramCount})`;
+    params.push(status);
+  }
+
+  if (branchId) {
+    paramCount++;
+    query += ` AND p.branch_id = $${paramCount}`;
+    params.push(branchId);
+  }
+
+  if (supplierId) {
+    paramCount++;
+    query += ` AND p.supplier_id = $${paramCount}`;
+    params.push(supplierId);
+  }
+
+  if (search && search.trim()) {
+    paramCount++;
+    query += ` AND (
+      p.purchase_number ILIKE $${paramCount}
+      OR s.name ILIKE $${paramCount}
+      OR b.name ILIKE $${paramCount}
+    )`;
+    params.push(`%${search.trim()}%`);
+  }
+
+  query += `
+        GROUP BY p.id, s.name, b.name, u.name
+        ORDER BY p.order_date DESC, p.created_at DESC
+        LIMIT $${paramCount + 1} OFFSET $${paramCount + 2};
+  `;
+
+  params.push(limit, offset);
+
+  const result = await pool.query(query, params);
+  return result.rows;
+};
+
 /**
  * Export purchase repository functions.
  */
@@ -613,4 +687,6 @@ module.exports = {
   searchPurchases,
   updatePurchaseStatus,
   deletePurchase,
+  getPurchasesWithFilters,
 };
+

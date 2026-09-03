@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,12 @@ import {
   MOCK_PURCHASE_ORDERS_LIST,
   PO_STATUS_FILTER,
 } from '../../data/purchasesMockData';
+import {
+  fetchPurchases,
+  createPurchaseOrder,
+  receivePurchaseStock,
+  updatePurchaseStatus,
+} from '../../api/purchaseApi';
 
 const PO_STATUS_BADGES = {
   Pending: { bg: '#FEF3C7', text: '#B45309' },
@@ -35,6 +41,66 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
 
   // Purchase Orders List
   const [orders, setOrders] = useState(MOCK_PURCHASE_ORDERS_LIST);
+  const [loading, setLoading] = useState(false);
+
+  // Fetch orders from backend on mount or filter change
+  const loadData = async (isMounted = true) => {
+    try {
+      setLoading(true);
+      const response = await fetchPurchases({ status: selectedStatus, search: searchQuery });
+      if (isMounted && response && response.data && response.data.length > 0) {
+        const formatted = response.data.map((po) => {
+          const rawStatus = po.status || 'PENDING';
+          let statusText = 'Pending';
+          if (rawStatus === 'APPROVED') statusText = 'Approved';
+          else if (rawStatus === 'RECEIVED') statusText = 'Received';
+          else if (rawStatus === 'PARTIALLY_RECEIVED') statusText = 'Partially Received';
+          else if (rawStatus === 'CANCELLED') statusText = 'Cancelled';
+
+          const formattedOrderDate = po.order_date
+            ? new Date(po.order_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+            : po.orderDate || '29 Aug 2026';
+
+          const formattedExpDate = po.expected_date
+            ? (po.expected_date.includes('T')
+                ? new Date(po.expected_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+                : po.expected_date)
+            : po.expectedDate || '05 Sep 2026';
+
+          const totalAmt = po.total_amount != null
+            ? `₹${Number(po.total_amount).toLocaleString('en-IN')}`
+            : po.totalAmount
+            ? `₹${Number(po.totalAmount).toLocaleString('en-IN')}`
+            : po.amount || '₹12,450.00';
+
+          return {
+            id: po.purchase_number || po.purchaseNumber || po.id,
+            rawId: po.id,
+            supplier: po.supplier_name || po.supplierName || po.supplier || 'Sun Pharma Care',
+            orderDate: formattedOrderDate,
+            expectedDate: formattedExpDate,
+            amount: totalAmt,
+            itemsCount: po.items_count != null ? po.items_count : (po.itemsCount || 1),
+            status: statusText,
+            branch: po.branch_name || po.branchName || po.branch || 'Main Branch',
+          };
+        });
+        setOrders(formatted);
+      }
+    } catch (err) {
+      console.log('[PurchasesScreen] Backend offline or using fallback mock list');
+    } finally {
+      if (isMounted) setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+    loadData(isMounted);
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedStatus]);
 
   // New PO Modal State
   const [modalVisible, setModalVisible] = useState(false);
@@ -76,7 +142,7 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
     setModalVisible(true);
   };
 
-  const handleCreatePO = () => {
+  const handleCreatePO = async () => {
     const errors = {};
     if (!formData.supplier.trim()) errors.supplier = 'Supplier is required';
     if (!formData.medicine.trim()) errors.medicine = 'Medicine/Product is required';
@@ -102,20 +168,84 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
       createdBy: 'Manager',
     };
 
-    setOrders((prev) => [newPO, ...prev]);
+    try {
+      await createPurchaseOrder({
+        supplierName: formData.supplier,
+        branchName: formData.branch,
+        purchaseNumber: newPO.id,
+        orderDate: new Date().toISOString().split('T')[0],
+        expectedDate: formData.expectedDate,
+        notes: formData.notes,
+        items: [
+          {
+            productName: formData.medicine,
+            orderedQuantity: Number(formData.quantity),
+            unitCost: Number(formData.unitPrice || 100),
+          },
+        ],
+      });
+      // Re-fetch fresh data from backend
+      await loadData();
+    } catch (err) {
+      console.warn('[PurchasesScreen] Backend save failed, updated UI locally:', err.message);
+      setOrders((prev) => [newPO, ...prev]);
+    }
+
     setModalVisible(false);
 
     if (onShowToast) {
-      onShowToast(`✓ Created Purchase Order ${newPO.id} for ${newPO.supplier}!`);
+      onShowToast(`✓ Created Purchase Order ${newPO.id} for ${formData.supplier}!`);
     }
   };
 
-  const handleReceiveStockShortcut = (po) => {
-    if (onNavigate) {
-      onNavigate('goods-receiving');
+  const handleStatusChange = async (po, newStatus) => {
+    try {
+      const backendId = po.rawId || po.id;
+      const backendStatus =
+        newStatus === 'Approved'
+          ? 'APPROVED'
+          : newStatus === 'Cancelled'
+          ? 'CANCELLED'
+          : newStatus === 'Pending'
+          ? 'PENDING'
+          : newStatus.toUpperCase();
+
+      await updatePurchaseStatus(backendId, backendStatus);
+    } catch (err) {
+      console.warn('[PurchasesScreen] Backend status update:', err.message);
     }
+
+    setOrders((prev) =>
+      prev.map((item) =>
+        item.id === po.id ? { ...item, status: newStatus } : item
+      )
+    );
+
     if (onShowToast) {
-      onShowToast(`Switched to Goods Receiving for ${po.id}`);
+      onShowToast(`✓ Purchase Order ${po.id} status updated to ${newStatus}!`);
+    }
+  };
+
+  const handleReceiveStockShortcut = async (po) => {
+    try {
+      const backendId = po.rawId || po.id;
+      await receivePurchaseStock(backendId, {
+        receivedDate: new Date().toISOString().split('T')[0],
+        notes: `Received from Purchases screen action button for ${po.id}`,
+      });
+    } catch (err) {
+      console.warn('[PurchasesScreen] Backend receive call:', err.message);
+    }
+
+    // Update PO status to Received in local state
+    setOrders((prev) =>
+      prev.map((item) =>
+        item.id === po.id ? { ...item, status: 'Received' } : item
+      )
+    );
+
+    if (onShowToast) {
+      onShowToast(`✓ Received stock for ${po.id}! Status updated to Received.`);
     }
   };
 
@@ -214,7 +344,7 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
               <Text style={[styles.thCell, { width: 80, textAlign: 'center' }]}>ITEMS</Text>
               <Text style={[styles.thCell, { width: 130 }]}>BRANCH</Text>
               <Text style={[styles.thCell, { width: 130, textAlign: 'center' }]}>STATUS</Text>
-              <Text style={[styles.thCell, { width: 110, textAlign: 'center' }]}>ACTION</Text>
+              <Text style={[styles.thCell, { width: 170, textAlign: 'center' }]}>ACTION</Text>
             </View>
 
             {/* Rows */}
@@ -257,14 +387,43 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
                       </View>
                     </View>
 
-                    {/* Action Button */}
-                    <View style={[styles.actionCell, { width: 110 }]}>
-                      <Pressable
-                        onPress={() => handleReceiveStockShortcut(po)}
-                        style={styles.receiveBtn}
-                      >
-                        <Text style={styles.receiveBtnText}>Receive</Text>
-                      </Pressable>
+                    {/* Action Buttons based on PO Status */}
+                    <View style={[styles.actionCell, { width: 170 }]}>
+                      {po.status === 'Pending' ? (
+                        <View style={{ flexDirection: 'row', gap: 6, justifyContent: 'center' }}>
+                          <Pressable
+                            onPress={() => handleStatusChange(po, 'Approved')}
+                            style={[styles.actionBtn, styles.approveBtn]}
+                          >
+                            <Text style={styles.actionBtnText}>Approve</Text>
+                          </Pressable>
+                          <Pressable
+                            onPress={() => handleStatusChange(po, 'Cancelled')}
+                            style={[styles.actionBtn, styles.rejectBtn]}
+                          >
+                            <Text style={styles.rejectBtnText}>Reject</Text>
+                          </Pressable>
+                        </View>
+                      ) : po.status === 'Approved' ? (
+                        <View style={{ flexDirection: 'row', gap: 6, justifyContent: 'center' }}>
+                          <Pressable
+                            onPress={() => handleReceiveStockShortcut(po)}
+                            style={[styles.actionBtn, styles.receiveBtn]}
+                          >
+                            <Text style={styles.actionBtnText}>Receive</Text>
+                          </Pressable>
+                          <Pressable
+                            onPress={() => handleStatusChange(po, 'Cancelled')}
+                            style={[styles.actionBtn, styles.rejectBtn]}
+                          >
+                            <Text style={styles.rejectBtnText}>Cancel</Text>
+                          </Pressable>
+                        </View>
+                      ) : (
+                        <View style={{ alignItems: 'center' }}>
+                          <Text style={styles.actionDoneText}>{po.status}</Text>
+                        </View>
+                      )}
                     </View>
                   </View>
                 );
@@ -609,17 +768,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  receiveBtn: {
-    paddingVertical: 4,
-    paddingHorizontal: 10,
+  actionBtn: {
+    paddingVertical: 5,
+    paddingHorizontal: 9,
     borderRadius: 6,
-    backgroundColor: '#2563EB',
     cursor: 'pointer',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  receiveBtnText: {
+  approveBtn: {
+    backgroundColor: '#16A34A',
+  },
+  rejectBtn: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#DC2626',
+  },
+  receiveBtn: {
+    backgroundColor: '#2563EB',
+  },
+  actionBtnText: {
     fontSize: 11.5,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  rejectBtnText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  actionDoneText: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '500',
   },
   emptyState: {
     alignItems: 'center',

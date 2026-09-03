@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,17 +11,66 @@ import {
   Platform,
 } from 'react-native';
 import InventoryStatCard from '../../components/inventory/InventoryStatCard';
+import { MOCK_SUPPLIERS_LIST } from '../../data/suppliersMockData';
 import {
-  SUPPLIERS_KPIS,
-  MOCK_SUPPLIERS_LIST,
-} from '../../data/suppliersMockData';
+  fetchSuppliers,
+  createSupplier,
+  updateSupplierStatus,
+} from '../../api/purchaseApi';
+
+const SUPPLIER_STATUS_FILTER = ['All Statuses', 'Active', 'Pending', 'Inactive'];
+
+const SUPPLIER_STATUS_BADGES = {
+  Active: { bg: '#DCFCE7', text: '#15803D', dot: '#16A34A' },
+  Pending: { bg: '#FEF3C7', text: '#B45309', dot: '#F59E0B' },
+  Inactive: { bg: '#F1F5F9', text: '#64748B', dot: '#94A3B8' },
+};
 
 export default function SuppliersScreen({ onShowToast, onNavigate }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState('All Statuses');
   const [suppliers, setSuppliers] = useState(MOCK_SUPPLIERS_LIST);
+  const [activeMenuId, setActiveMenuId] = useState(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadSuppliers() {
+      try {
+        const res = await fetchSuppliers();
+        if (isMounted && res && res.data && res.data.length > 0) {
+          const formatted = res.data.map((sup, idx) => ({
+            realId: sup.id,
+            id: `SUP-${String(idx + 1).padStart(3, '0')}`,
+            name: sup.name,
+            contactPerson: sup.contact_person || sup.contactPerson || 'N/A',
+            phone: sup.phone || '+91 98XXX XXXXX',
+            email: sup.email || 'orders@vendor.com',
+            city: sup.city || 'Mumbai, MH',
+            gstin: sup.gstin || '27AAACB0000A1Z5',
+            paymentTerms: 'Net 30',
+            balance: '₹0.00',
+            status:
+              sup.status === 'ACTIVE'
+                ? 'Active'
+                : sup.status === 'PENDING'
+                ? 'Pending'
+                : 'Inactive',
+            category: 'Medicines & Injections',
+          }));
+          setSuppliers(formatted);
+        }
+      } catch (err) {
+        console.log('[SuppliersScreen] Backend offline or using default mock data');
+      }
+    }
+    loadSuppliers();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [formData, setFormData] = useState({
@@ -36,15 +85,59 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
   });
   const [formErrors, setFormErrors] = useState({});
 
+  // Dynamic KPI calculations
+  const totalVendors = suppliers.length;
+  const activeVendors = suppliers.filter((s) => s.status === 'Active').length;
+  const pendingVendors = suppliers.filter((s) => s.status === 'Pending').length;
+
+  const dynamicKpis = [
+    {
+      id: 'total',
+      label: 'TOTAL VENDORS',
+      value: String(totalVendors),
+      subtext: 'Active directory',
+      variant: 'teal',
+      filterKey: 'All Statuses',
+    },
+    {
+      id: 'active',
+      label: 'ACTIVE SUPPLIERS',
+      value: String(activeVendors),
+      subtext: 'Verified suppliers',
+      variant: 'emerald',
+      filterKey: 'Active',
+    },
+    {
+      id: 'pending',
+      label: 'PENDING APPROVALS',
+      value: String(pendingVendors),
+      subtext: 'Awaiting documentation',
+      variant: 'amber',
+      filterKey: 'Pending',
+    },
+    {
+      id: 'outstanding',
+      label: 'TOTAL OUTSTANDING',
+      value: '₹1,42,850',
+      subtext: 'Payable balance',
+      variant: 'rose',
+      filterKey: 'All Statuses',
+    },
+  ];
+
   const filteredSuppliers = suppliers.filter((sup) => {
     const query = searchQuery.toLowerCase();
-    return (
+    const matchesSearch =
       sup.name.toLowerCase().includes(query) ||
       sup.contactPerson.toLowerCase().includes(query) ||
       sup.city.toLowerCase().includes(query) ||
       sup.gstin.toLowerCase().includes(query) ||
-      sup.category.toLowerCase().includes(query)
-    );
+      sup.category.toLowerCase().includes(query);
+
+    const matchesStatus =
+      selectedStatus === 'All Statuses' || sup.status === selectedStatus;
+
+    return matchesSearch && matchesStatus;
   });
 
   const handleOpenModal = () => {
@@ -62,7 +155,7 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
     setModalVisible(true);
   };
 
-  const handleAddSupplier = () => {
+  const handleAddSupplier = async () => {
     const errors = {};
     if (!formData.name.trim()) errors.name = 'Supplier Name is required';
     if (!formData.contactPerson.trim()) errors.contactPerson = 'Contact person is required';
@@ -73,8 +166,10 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
       return;
     }
 
+    const tempId = `SUP-${String(suppliers.length + 1).padStart(3, '0')}`;
     const newSup = {
-      id: `SUP-00${suppliers.length + 1}`,
+      realId: tempId,
+      id: tempId,
       name: formData.name,
       contactPerson: formData.contactPerson,
       phone: formData.phone,
@@ -84,14 +179,52 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
       paymentTerms: formData.paymentTerms || 'Net 30',
       balance: '₹0.00',
       status: 'Active',
-      category: formData.category || 'General Pharma',
+      category: formData.category || 'Medicines & Injections',
     };
+
+    try {
+      const res = await createSupplier({
+        name: formData.name,
+        contactPerson: formData.contactPerson,
+        phone: formData.phone,
+        email: formData.email,
+        city: formData.city,
+        gstin: formData.gstin,
+        status: 'ACTIVE',
+      });
+      if (res && res.data && res.data.id) {
+        newSup.realId = res.data.id;
+      }
+    } catch (err) {
+      console.warn('[SuppliersScreen] Backend save failed, updated local state:', err.message);
+    }
 
     setSuppliers((prev) => [newSup, ...prev]);
     setModalVisible(false);
 
     if (onShowToast) {
       onShowToast(`✓ Added vendor "${newSup.name}" to directory!`);
+    }
+  };
+
+  const handleStatusChange = async (supItem, newStatus) => {
+    setActiveMenuId(null);
+    const targetId = supItem.realId || supItem.name;
+
+    try {
+      await updateSupplierStatus(targetId, newStatus);
+    } catch (err) {
+      console.warn('[SuppliersScreen] Backend status update failed, updated local state:', err.message);
+    }
+
+    setSuppliers((prev) =>
+      prev.map((item) =>
+        item.id === supItem.id ? { ...item, status: newStatus } : item
+      )
+    );
+
+    if (onShowToast) {
+      onShowToast(`✓ Updated vendor "${supItem.name}" status to ${newStatus}`);
     }
   };
 
@@ -131,22 +264,22 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
 
       {/* Top 4 KPI Cards */}
       <View style={[styles.kpiRow, isCompact && styles.kpiRowCompact]}>
-        {SUPPLIERS_KPIS.map((kpi) => (
+        {dynamicKpis.map((kpi) => (
           <InventoryStatCard
             key={kpi.id}
             label={kpi.label}
             value={kpi.value}
             subtext={kpi.subtext}
             variant={kpi.variant}
-            onPress={() => onShowToast && onShowToast(`Filter: ${kpi.label}`)}
+            onPress={() => setSelectedStatus(kpi.filterKey)}
           />
         ))}
       </View>
 
       {/* Suppliers Table Card */}
       <View style={styles.cardContainer}>
-        {/* Search Bar */}
-        <View style={styles.filtersBar}>
+        {/* Filters Bar */}
+        <View style={[styles.filtersBar, isCompact && styles.filtersBarCompact]}>
           <View style={styles.searchBox}>
             <TextInput
               style={styles.searchInput}
@@ -161,6 +294,29 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
               </Pressable>
             ) : null}
           </View>
+
+          {/* Status Filter Chips */}
+          <View style={styles.filterChipRow}>
+            {SUPPLIER_STATUS_FILTER.map((st) => (
+              <Pressable
+                key={st}
+                onPress={() => setSelectedStatus(st)}
+                style={[
+                  styles.filterChip,
+                  selectedStatus === st && styles.filterChipActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    selectedStatus === st && styles.filterChipTextActive,
+                  ]}
+                >
+                  {st}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
         </View>
 
         {/* Directory Table */}
@@ -168,69 +324,160 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
           <View style={styles.tableWrapper}>
             {/* Header */}
             <View style={styles.tableHeader}>
-              <Text style={[styles.thCell, { width: 100 }]}>VENDOR ID</Text>
-              <Text style={[styles.thCell, { width: 190 }]}>SUPPLIER NAME</Text>
-              <Text style={[styles.thCell, { width: 140 }]}>CONTACT PERSON</Text>
-              <Text style={[styles.thCell, { width: 130 }]}>PHONE</Text>
-              <Text style={[styles.thCell, { width: 180 }]}>EMAIL</Text>
-              <Text style={[styles.thCell, { width: 130 }]}>CITY</Text>
-              <Text style={[styles.thCell, { width: 160 }]}>GSTIN</Text>
-              <Text style={[styles.thCell, { width: 120, textAlign: 'right' }]}>OUTSTANDING</Text>
-              <Text style={[styles.thCell, { width: 90, textAlign: 'center' }]}>STATUS</Text>
-              <Text style={[styles.thCell, { width: 100, textAlign: 'center' }]}>ACTION</Text>
+              <Text style={[styles.thCell, { width: 90 }]}>VENDOR ID</Text>
+              <Text style={[styles.thCell, { width: 180 }]}>SUPPLIER NAME</Text>
+              <Text style={[styles.thCell, { width: 130 }]}>CONTACT PERSON</Text>
+              <Text style={[styles.thCell, { width: 120 }]}>PHONE</Text>
+              <Text style={[styles.thCell, { width: 170 }]}>EMAIL</Text>
+              <Text style={[styles.thCell, { width: 120 }]}>CITY</Text>
+              <Text style={[styles.thCell, { width: 150 }]}>GSTIN</Text>
+              <Text style={[styles.thCell, { width: 110, textAlign: 'right' }]}>OUTSTANDING</Text>
+              <Text style={[styles.thCell, { width: 110, textAlign: 'center' }]}>STATUS</Text>
+              <Text style={[styles.thCell, { width: 60, textAlign: 'center' }]}>ACTION</Text>
+              <Text style={[styles.thCell, { width: 90, textAlign: 'center' }]}>ORDER</Text>
             </View>
 
             {/* Rows */}
             {filteredSuppliers.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyTitle}>No suppliers found</Text>
-                <Text style={styles.emptySubtitle}>Try changing your search terms.</Text>
+                <Text style={styles.emptySubtitle}>Try changing your search terms or status filter.</Text>
               </View>
             ) : (
-              filteredSuppliers.map((sup, index) => (
-                <View
-                  key={sup.id}
-                  style={[
-                    styles.tableRow,
-                    index % 2 === 1 && styles.tableRowAlt,
-                  ]}
-                >
-                  <Text style={[styles.tdCell, styles.supId, { width: 100 }]}>{sup.id}</Text>
-                  <View style={[{ width: 190 }]}>
-                    <Text style={[styles.tdCell, styles.supName]} numberOfLines={1}>
-                      {sup.name}
-                    </Text>
-                    <Text style={styles.categorySubtext}>{sup.category}</Text>
-                  </View>
-                  <Text style={[styles.tdCell, { width: 140 }]}>{sup.contactPerson}</Text>
-                  <Text style={[styles.tdCell, { width: 130 }]}>{sup.phone}</Text>
-                  <Text style={[styles.tdCell, styles.emailText, { width: 180 }]} numberOfLines={1}>
-                    {sup.email}
-                  </Text>
-                  <Text style={[styles.tdCell, { width: 130 }]}>{sup.city}</Text>
-                  <Text style={[styles.tdCell, styles.gstinText, { width: 160 }]}>{sup.gstin}</Text>
-                  <Text style={[styles.tdCell, styles.balanceText, { width: 120, textAlign: 'right' }]}>
-                    {sup.balance}
-                  </Text>
+              filteredSuppliers.map((sup, index) => {
+                const badge =
+                  SUPPLIER_STATUS_BADGES[sup.status] || SUPPLIER_STATUS_BADGES.Active;
+                const isMenuOpen = activeMenuId === sup.id;
 
-                  {/* Status Badge */}
-                  <View style={[styles.statusWrapper, { width: 90 }]}>
-                    <View style={styles.statusBadgeActive}>
-                      <Text style={styles.statusBadgeTextActive}>{sup.status}</Text>
+                return (
+                  <View
+                    key={sup.id}
+                    style={[
+                      styles.tableRow,
+                      index % 2 === 1 && styles.tableRowAlt,
+                      { zIndex: isMenuOpen ? 999 : 1 },
+                    ]}
+                  >
+                    <Text style={[styles.tdCell, styles.supId, { width: 90 }]}>{sup.id}</Text>
+                    <View style={[{ width: 180 }]}>
+                      <Text style={[styles.tdCell, styles.supName]} numberOfLines={1}>
+                        {sup.name}
+                      </Text>
+                      <Text style={styles.categorySubtext}>{sup.category}</Text>
+                    </View>
+                    <Text style={[styles.tdCell, { width: 130 }]}>{sup.contactPerson}</Text>
+                    <Text style={[styles.tdCell, { width: 120 }]}>{sup.phone}</Text>
+                    <Text style={[styles.tdCell, styles.emailText, { width: 170 }]} numberOfLines={1}>
+                      {sup.email}
+                    </Text>
+                    <Text style={[styles.tdCell, { width: 120 }]}>{sup.city}</Text>
+                    <Text style={[styles.tdCell, styles.gstinText, { width: 150 }]}>{sup.gstin}</Text>
+                    <Text style={[styles.tdCell, styles.balanceText, { width: 110, textAlign: 'right' }]}>
+                      {sup.balance}
+                    </Text>
+
+                    {/* Status Badge */}
+                    <View style={[styles.statusWrapper, { width: 110 }]}>
+                      <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
+                        <Text style={[styles.statusBadgeText, { color: badge.text }]}>
+                          {sup.status}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* 3-Dots Action Column */}
+                    <View style={[styles.actionWrapper, { width: 60 }]}>
+                      <Pressable
+                        onPress={() =>
+                          setActiveMenuId((prev) => (prev === sup.id ? null : sup.id))
+                        }
+                        style={styles.threeDotsBtn}
+                        accessibilityRole="button"
+                        accessibilityLabel="Action menu"
+                      >
+                        <Text style={styles.threeDotsText}>⋮</Text>
+                      </Pressable>
+
+                      {/* Dropdown Menu */}
+                      {isMenuOpen && (
+                        <View style={styles.menuPopover}>
+                          <Text style={styles.menuHeaderTitle}>Update Status</Text>
+
+                          <Pressable
+                            style={styles.menuItem}
+                            onPress={() => handleStatusChange(sup, 'Active')}
+                          >
+                            <View
+                              style={[
+                                styles.menuDot,
+                                { backgroundColor: SUPPLIER_STATUS_BADGES['Active'].dot },
+                              ]}
+                            />
+                            <Text
+                              style={[
+                                styles.menuItemText,
+                                sup.status === 'Active' && styles.menuItemTextActive,
+                              ]}
+                            >
+                              Active
+                            </Text>
+                          </Pressable>
+
+                          <Pressable
+                            style={styles.menuItem}
+                            onPress={() => handleStatusChange(sup, 'Pending')}
+                          >
+                            <View
+                              style={[
+                                styles.menuDot,
+                                { backgroundColor: SUPPLIER_STATUS_BADGES['Pending'].dot },
+                              ]}
+                            />
+                            <Text
+                              style={[
+                                styles.menuItemText,
+                                sup.status === 'Pending' && styles.menuItemTextActive,
+                              ]}
+                            >
+                              Pending
+                            </Text>
+                          </Pressable>
+
+                          <Pressable
+                            style={styles.menuItem}
+                            onPress={() => handleStatusChange(sup, 'Inactive')}
+                          >
+                            <View
+                              style={[
+                                styles.menuDot,
+                                { backgroundColor: SUPPLIER_STATUS_BADGES['Inactive'].dot },
+                              ]}
+                            />
+                            <Text
+                              style={[
+                                styles.menuItemText,
+                                sup.status === 'Inactive' && styles.menuItemTextActive,
+                              ]}
+                            >
+                              Inactive
+                            </Text>
+                          </Pressable>
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Create PO Order Button */}
+                    <View style={[styles.actionWrapper, { width: 90 }]}>
+                      <Pressable
+                        onPress={() => handleCreatePOWithSupplier(sup)}
+                        style={styles.orderBtn}
+                      >
+                        <Text style={styles.orderBtnText}>+ Order</Text>
+                      </Pressable>
                     </View>
                   </View>
-
-                  {/* Action */}
-                  <View style={[styles.actionWrapper, { width: 100 }]}>
-                    <Pressable
-                      onPress={() => handleCreatePOWithSupplier(sup)}
-                      style={styles.orderBtn}
-                    >
-                      <Text style={styles.orderBtnText}>+ Order</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              ))
+                );
+              })
             )}
           </View>
         </ScrollView>
@@ -423,9 +670,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     cursor: 'pointer',
   },
-  newSupButtonHovered: {
-    backgroundColor: '#0D9488',
-  },
   newSupIcon: {
     color: '#FFFFFF',
     fontSize: 18,
@@ -450,7 +694,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    overflow: 'hidden',
+    overflow: 'visible',
     ...Platform.select({
       web: {
         boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)',
@@ -461,13 +705,22 @@ const styles = StyleSheet.create({
     }),
   },
   filtersBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 12,
     backgroundColor: '#FAFAFA',
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
+    gap: 12,
+  },
+  filtersBarCompact: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
   },
   searchBox: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
@@ -490,8 +743,34 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#94A3B8',
   },
+  filterChipRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  filterChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    cursor: 'pointer',
+  },
+  filterChipActive: {
+    backgroundColor: '#0F766E',
+    borderColor: '#0F766E',
+  },
+  filterChipText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#64748B',
+  },
+  filterChipTextActive: {
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
   tableWrapper: {
-    minWidth: 1250,
+    minWidth: 1280,
     paddingHorizontal: 8,
   },
   tableHeader: {
@@ -517,6 +796,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
+    position: 'relative',
   },
   tableRowAlt: {
     backgroundColor: '#F8FAFC',
@@ -555,20 +835,81 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  statusBadgeActive: {
+  statusBadge: {
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
-    backgroundColor: '#DCFCE7',
   },
-  statusBadgeTextActive: {
+  statusBadgeText: {
     fontSize: 11.5,
     fontWeight: '700',
-    color: '#15803D',
   },
   actionWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
+  },
+  threeDotsBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    cursor: 'pointer',
+  },
+  threeDotsText: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#64748B',
+  },
+  menuPopover: {
+    position: 'absolute',
+    right: 0,
+    top: 36,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    zIndex: 1000,
+    width: 150,
+    paddingVertical: 6,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+      },
+      default: {
+        elevation: 8,
+      },
+    }),
+  },
+  menuHeaderTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94A3B8',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    gap: 8,
+    cursor: 'pointer',
+  },
+  menuDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  menuItemText: {
+    fontSize: 12.5,
+    fontWeight: '500',
+    color: '#334155',
+  },
+  menuItemTextActive: {
+    fontWeight: '700',
+    color: '#0F172A',
   },
   orderBtn: {
     paddingVertical: 4,
@@ -714,3 +1055,4 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 });
+

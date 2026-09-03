@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,15 +12,19 @@ import {
 } from 'react-native';
 import InventoryStatCard from '../../components/inventory/InventoryStatCard';
 import {
-  GRN_KPIS,
   MOCK_GRN_LIST,
   GRN_STATUS_FILTER,
 } from '../../data/goodsReceivingMockData';
+import {
+  fetchGoodsReceipts,
+  createGoodsReceipt,
+  updateGoodsReceiptStatus,
+} from '../../api/purchaseApi';
 
 const GRN_STATUS_BADGES = {
-  Verified: { bg: '#DCFCE7', text: '#15803D' },
-  'Pending Inspection': { bg: '#FEF3C7', text: '#B45309' },
-  Discrepancy: { bg: '#FEE2E2', text: '#B91C1C' },
+  Verified: { bg: '#DCFCE7', text: '#15803D', dot: '#16A34A' },
+  'Pending Inspection': { bg: '#FEF3C7', text: '#B45309', dot: '#F59E0B' },
+  Discrepancy: { bg: '#FEE2E2', text: '#B91C1C', dot: '#EF4444' },
 };
 
 export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
@@ -30,6 +34,43 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('All Statuses');
   const [grnList, setGrnList] = useState(MOCK_GRN_LIST);
+  const [activeMenuId, setActiveMenuId] = useState(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadGRNs() {
+      try {
+        const response = await fetchGoodsReceipts();
+        if (isMounted && response && response.data && response.data.length > 0) {
+          const formatted = response.data.map((grn) => ({
+            realId: grn.id,
+            id: grn.receiptNumber || grn.receipt_number || grn.id,
+            poReference: grn.purchaseNumber || grn.poReference || 'PO-1026',
+            supplier: grn.supplierName || grn.supplier || 'Sun Pharma Care',
+            receivedDate: grn.receivedDate || grn.received_date || '29 Aug 2026',
+            receivedBy: grn.receivedBy || 'Manager',
+            itemsCount: grn.itemsCount || 4,
+            packagesCount: grn.packageCount || grn.package_count || 8,
+            invoiceNo: grn.supplierInvoiceNumber || grn.supplier_invoice_number || 'INV-SP-9012',
+            status:
+              grn.status === 'VERIFIED'
+                ? 'Verified'
+                : grn.status === 'DISCREPANCY'
+                ? 'Discrepancy'
+                : 'Pending Inspection',
+            branch: grn.branchName || grn.branch || 'Main Branch',
+          }));
+          setGrnList(formatted);
+        }
+      } catch (err) {
+        console.log('[GoodsReceivingScreen] Backend offline or using default list');
+      }
+    }
+    loadGRNs();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [formData, setFormData] = useState({
@@ -41,6 +82,53 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
     notes: '',
   });
   const [formErrors, setFormErrors] = useState({});
+
+  // Dynamic KPI Card counts derived from grnList
+  const totalReceived = grnList.length;
+  const pendingCount = grnList.filter(
+    (g) => g.status === 'Pending Inspection' || g.status === 'PENDING_INSPECTION'
+  ).length;
+  const verifiedCount = grnList.filter(
+    (g) => g.status === 'Verified' || g.status === 'VERIFIED'
+  ).length;
+  const discrepancyCount = grnList.filter(
+    (g) => g.status === 'Discrepancy' || g.status === 'DISCREPANCY'
+  ).length;
+
+  const dynamicKpis = [
+    {
+      id: 'received',
+      label: 'SHIPMENTS RECEIVED',
+      value: String(totalReceived),
+      subtext: 'This fiscal month',
+      variant: 'teal',
+      filterKey: 'All Statuses',
+    },
+    {
+      id: 'pending',
+      label: 'PENDING INSPECTION',
+      value: String(pendingCount),
+      subtext: 'Awaiting QC check',
+      variant: 'amber',
+      filterKey: 'Pending Inspection',
+    },
+    {
+      id: 'verified',
+      label: 'FULLY VERIFIED',
+      value: String(verifiedCount),
+      subtext: 'Added to inventory',
+      variant: 'emerald',
+      filterKey: 'Verified',
+    },
+    {
+      id: 'discrepancy',
+      label: 'DISCREPANCIES',
+      value: String(discrepancyCount),
+      subtext: 'Requires resolution',
+      variant: 'rose',
+      filterKey: 'Discrepancy',
+    },
+  ];
 
   const filteredGRNs = grnList.filter((grn) => {
     const matchesSearch =
@@ -59,7 +147,7 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
     setFormData({
       poReference: 'PO-1026',
       supplier: 'Sun Pharma Care',
-      invoiceNo: 'INV-SP-9012',
+      invoiceNo: `INV-SP-${Math.floor(1000 + Math.random() * 9000)}`,
       packagesCount: '8',
       branch: 'Main Branch',
       notes: '',
@@ -68,7 +156,7 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
     setModalVisible(true);
   };
 
-  const handleReceiveShipment = () => {
+  const handleReceiveShipment = async () => {
     const errors = {};
     if (!formData.poReference.trim()) errors.poReference = 'PO Reference is required';
     if (!formData.supplier.trim()) errors.supplier = 'Supplier is required';
@@ -79,24 +167,74 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
       return;
     }
 
+    const generatedId = `GRN-2026-0${90 + grnList.length}`;
     const newGRN = {
-      id: `GRN-2026-0${90 + grnList.length}`,
+      realId: generatedId,
+      id: generatedId,
       poReference: formData.poReference,
       supplier: formData.supplier,
-      receivedDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+      receivedDate: new Date().toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      }),
       receivedBy: 'Manager (HP)',
       itemsCount: 4,
-      packagesCount: Number(formData.packagesCount || 5),
+      packagesCount: Number(formData.packagesCount || 8),
       invoiceNo: formData.invoiceNo,
       status: 'Verified',
       branch: formData.branch || 'Main Branch',
     };
+
+    try {
+      const res = await createGoodsReceipt({
+        receiptNumber: newGRN.id,
+        poReference: formData.poReference,
+        supplier: formData.supplier,
+        supplierInvoiceNumber: formData.invoiceNo,
+        packageCount: Number(formData.packagesCount || 8),
+        status: 'VERIFIED',
+        notes: formData.notes,
+      });
+      if (res && res.data && res.data.id) {
+        newGRN.realId = res.data.id;
+      }
+    } catch (err) {
+      console.warn(
+        '[GoodsReceivingScreen] Backend GRN save failed, updated local state:',
+        err.message
+      );
+    }
 
     setGrnList((prev) => [newGRN, ...prev]);
     setModalVisible(false);
 
     if (onShowToast) {
       onShowToast(`✓ Logged Goods Received Note ${newGRN.id} for ${newGRN.poReference}!`);
+    }
+  };
+
+  const handleStatusChange = async (grnItem, newStatus) => {
+    setActiveMenuId(null);
+    const targetId = grnItem.realId || grnItem.id;
+
+    try {
+      await updateGoodsReceiptStatus(targetId, newStatus);
+    } catch (err) {
+      console.warn(
+        '[GoodsReceivingScreen] Status update in backend failed, updated local state:',
+        err.message
+      );
+    }
+
+    setGrnList((prev) =>
+      prev.map((item) =>
+        item.id === grnItem.id ? { ...item, status: newStatus } : item
+      )
+    );
+
+    if (onShowToast) {
+      onShowToast(`✓ Updated shipment ${grnItem.id} status to ${newStatus}`);
     }
   };
 
@@ -124,16 +262,16 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
         </Pressable>
       </View>
 
-      {/* Top 4 KPI Cards */}
+      {/* Top 4 Dynamic KPI Cards */}
       <View style={[styles.kpiRow, isCompact && styles.kpiRowCompact]}>
-        {GRN_KPIS.map((kpi) => (
+        {dynamicKpis.map((kpi) => (
           <InventoryStatCard
             key={kpi.id}
             label={kpi.label}
             value={kpi.value}
             subtext={kpi.subtext}
             variant={kpi.variant}
-            onPress={() => onShowToast && onShowToast(`Filter: ${kpi.label}`)}
+            onPress={() => setSelectedStatus(kpi.filterKey)}
           />
         ))}
       </View>
@@ -186,48 +324,71 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
           <View style={styles.tableWrapper}>
             {/* Table Header */}
             <View style={styles.tableHeader}>
-              <Text style={[styles.thCell, { width: 140 }]}>GRN NUMBER</Text>
-              <Text style={[styles.thCell, { width: 110 }]}>PO REF</Text>
-              <Text style={[styles.thCell, { width: 170 }]}>SUPPLIER</Text>
+              <Text style={[styles.thCell, { width: 130 }]}>GRN NUMBER</Text>
+              <Text style={[styles.thCell, { width: 100 }]}>PO REF</Text>
+              <Text style={[styles.thCell, { width: 160 }]}>SUPPLIER</Text>
               <Text style={[styles.thCell, { width: 120 }]}>RECEIVED DATE</Text>
-              <Text style={[styles.thCell, { width: 130 }]}>RECEIVED BY</Text>
-              <Text style={[styles.thCell, { width: 80, textAlign: 'center' }]}>ITEMS</Text>
+              <Text style={[styles.thCell, { width: 120 }]}>RECEIVED BY</Text>
+              <Text style={[styles.thCell, { width: 70, textAlign: 'center' }]}>ITEMS</Text>
               <Text style={[styles.thCell, { width: 90, textAlign: 'center' }]}>PACKAGES</Text>
-              <Text style={[styles.thCell, { width: 130 }]}>INVOICE NO</Text>
+              <Text style={[styles.thCell, { width: 120 }]}>INVOICE NO</Text>
               <Text style={[styles.thCell, { width: 140, textAlign: 'center' }]}>STATUS</Text>
+              <Text style={[styles.thCell, { width: 60, textAlign: 'center' }]}>ACTION</Text>
             </View>
 
             {/* Table Rows */}
             {filteredGRNs.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyTitle}>No goods received records found</Text>
-                <Text style={styles.emptySubtitle}>Try changing your search filters.</Text>
+                <Text style={styles.emptySubtitle}>Try changing your search or status filter.</Text>
               </View>
             ) : (
               filteredGRNs.map((grn, index) => {
-                const badge = GRN_STATUS_BADGES[grn.status] || GRN_STATUS_BADGES.Verified;
+                const badge =
+                  GRN_STATUS_BADGES[grn.status] || GRN_STATUS_BADGES.Verified;
+                const isMenuOpen = activeMenuId === grn.id;
+
                 return (
                   <View
                     key={grn.id}
                     style={[
                       styles.tableRow,
                       index % 2 === 1 && styles.tableRowAlt,
+                      { zIndex: isMenuOpen ? 999 : 1 },
                     ]}
                   >
-                    <Text style={[styles.tdCell, styles.grnId, { width: 140 }]}>{grn.id}</Text>
-                    <Text style={[styles.tdCell, styles.poRef, { width: 110 }]}>{grn.poReference}</Text>
-                    <Text style={[styles.tdCell, styles.supplierText, { width: 170 }]} numberOfLines={1}>
+                    <Text style={[styles.tdCell, styles.grnId, { width: 130 }]}>
+                      {grn.id}
+                    </Text>
+                    <Text style={[styles.tdCell, styles.poRef, { width: 100 }]}>
+                      {grn.poReference}
+                    </Text>
+                    <Text
+                      style={[styles.tdCell, styles.supplierText, { width: 160 }]}
+                      numberOfLines={1}
+                    >
                       {grn.supplier}
                     </Text>
-                    <Text style={[styles.tdCell, { width: 120 }]}>{grn.receivedDate}</Text>
-                    <Text style={[styles.tdCell, { width: 130 }]}>{grn.receivedBy}</Text>
-                    <Text style={[styles.tdCell, { width: 80, textAlign: 'center', fontWeight: '600' }]}>
+                    <Text style={[styles.tdCell, { width: 120 }]}>
+                      {grn.receivedDate}
+                    </Text>
+                    <Text style={[styles.tdCell, { width: 120 }]}>
+                      {grn.receivedBy}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.tdCell,
+                        { width: 70, textAlign: 'center', fontWeight: '600' },
+                      ]}
+                    >
                       {grn.itemsCount}
                     </Text>
                     <Text style={[styles.tdCell, { width: 90, textAlign: 'center' }]}>
                       {grn.packagesCount}
                     </Text>
-                    <Text style={[styles.tdCell, { width: 130 }]}>{grn.invoiceNo}</Text>
+                    <Text style={[styles.tdCell, { width: 120 }]}>
+                      {grn.invoiceNo}
+                    </Text>
 
                     {/* Status Badge */}
                     <View style={[styles.statusWrapper, { width: 140 }]}>
@@ -236,6 +397,87 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
                           {grn.status}
                         </Text>
                       </View>
+                    </View>
+
+                    {/* 3-Dots Action Column */}
+                    <View style={[styles.actionWrapper, { width: 60 }]}>
+                      <Pressable
+                        onPress={() =>
+                          setActiveMenuId((prev) => (prev === grn.id ? null : grn.id))
+                        }
+                        style={styles.threeDotsBtn}
+                        accessibilityRole="button"
+                        accessibilityLabel="Action menu"
+                      >
+                        <Text style={styles.threeDotsText}>⋮</Text>
+                      </Pressable>
+
+                      {/* Dropdown Menu */}
+                      {isMenuOpen && (
+                        <View style={styles.menuPopover}>
+                          <Text style={styles.menuHeaderTitle}>Update Status</Text>
+
+                          <Pressable
+                            style={styles.menuItem}
+                            onPress={() => handleStatusChange(grn, 'Verified')}
+                          >
+                            <View
+                              style={[
+                                styles.menuDot,
+                                { backgroundColor: GRN_STATUS_BADGES['Verified'].dot },
+                              ]}
+                            />
+                            <Text
+                              style={[
+                                styles.menuItemText,
+                                grn.status === 'Verified' && styles.menuItemTextActive,
+                              ]}
+                            >
+                              Verified
+                            </Text>
+                          </Pressable>
+
+                          <Pressable
+                            style={styles.menuItem}
+                            onPress={() => handleStatusChange(grn, 'Pending Inspection')}
+                          >
+                            <View
+                              style={[
+                                styles.menuDot,
+                                { backgroundColor: GRN_STATUS_BADGES['Pending Inspection'].dot },
+                              ]}
+                            />
+                            <Text
+                              style={[
+                                styles.menuItemText,
+                                grn.status === 'Pending Inspection' && styles.menuItemTextActive,
+                              ]}
+                            >
+                              Pending Inspection
+                            </Text>
+                          </Pressable>
+
+                          <Pressable
+                            style={styles.menuItem}
+                            onPress={() => handleStatusChange(grn, 'Discrepancy')}
+                          >
+                            <View
+                              style={[
+                                styles.menuDot,
+                                { backgroundColor: GRN_STATUS_BADGES['Discrepancy'].dot },
+                              ]}
+                            />
+                            <Text
+                              style={[
+                                styles.menuItemText,
+                                grn.status === 'Discrepancy' && styles.menuItemTextActive,
+                              ]}
+                            >
+                              Discrepancy
+                            </Text>
+                          </Pressable>
+                        </View>
+                      )}
                     </View>
                   </View>
                 );
@@ -389,9 +631,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     cursor: 'pointer',
   },
-  receiveButtonHovered: {
-    backgroundColor: '#0D9488',
-  },
   receiveText: {
     color: '#FFFFFF',
     fontSize: 13.5,
@@ -410,7 +649,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    overflow: 'hidden',
+    overflow: 'visible',
     ...Platform.select({
       web: {
         boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)',
@@ -512,6 +751,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
+    position: 'relative',
   },
   tableRowAlt: {
     backgroundColor: '#F8FAFC',
@@ -545,6 +785,75 @@ const styles = StyleSheet.create({
   statusBadgeText: {
     fontSize: 11.5,
     fontWeight: '700',
+  },
+  actionWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  threeDotsBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    cursor: 'pointer',
+  },
+  threeDotsText: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#64748B',
+  },
+  menuPopover: {
+    position: 'absolute',
+    right: 0,
+    top: 36,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    zIndex: 1000,
+    width: 170,
+    paddingVertical: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 8,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+      },
+    }),
+  },
+  menuHeaderTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94A3B8',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    gap: 8,
+    cursor: 'pointer',
+  },
+  menuDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  menuItemText: {
+    fontSize: 12.5,
+    fontWeight: '500',
+    color: '#334155',
+  },
+  menuItemTextActive: {
+    fontWeight: '700',
+    color: '#0F172A',
   },
   emptyState: {
     alignItems: 'center',
@@ -682,3 +991,4 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 });
+
