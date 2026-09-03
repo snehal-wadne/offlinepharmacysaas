@@ -18,12 +18,15 @@
  *
  * The inventory repository can then use these records to
  * create and test inventory batches.
+ *
+ * The seed is safe to run repeatedly. Existing development
+ * records are reused instead of creating duplicates.
  */
 
 const { pool } = require("./connection");
 
 /**
- * Create development data required by the repositories.
+ * Create or reuse development data required by the repositories.
  */
 const seedDevelopmentData = async () => {
   const client = await pool.connect();
@@ -31,28 +34,30 @@ const seedDevelopmentData = async () => {
   try {
     await client.query("BEGIN");
 
-    /*
-     * Create a development user.
-     *
-     * ON CONFLICT is used so that running the seed again
-     * does not create another development user.
-     */
+    // --------------------------------------------------------
+    // 1. DEVELOPMENT USER
+    // --------------------------------------------------------
+    //
+    // Use a fixed development email so the same user can be
+    // reused whenever this seed is executed.
+    //
     console.log("Creating development user...");
 
     const userResult = await client.query(
       `
-            INSERT INTO users (
-                email,
-                password_hash,
-                name,
-                status
-            )
-            VALUES ($1, $2, $3, $4)
-            ON CONFLICT (email)
-            DO UPDATE SET
-                name = EXCLUDED.name
-            RETURNING id;
-            `,
+        INSERT INTO users (
+          email,
+          password_hash,
+          name,
+          status
+        )
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (email)
+        DO UPDATE SET
+          name = EXCLUDED.name,
+          status = EXCLUDED.status
+        RETURNING id;
+      `,
       [
         "dev@falah.local",
         "development-only-password-hash",
@@ -65,51 +70,79 @@ const seedDevelopmentData = async () => {
 
     console.log(`Development user: ${userId}`);
 
-    /*
-     * Create the development organisation.
-     *
-     * The organisation is owned by the development user.
-     */
+    // --------------------------------------------------------
+    // 2. DEVELOPMENT ORGANISATION
+    // --------------------------------------------------------
+    //
+    // Organisations do not currently have a unique constraint
+    // on name, so we explicitly look for our development
+    // organisation before creating it.
+    //
     console.log("Creating development organisation...");
 
-    const organisationResult = await client.query(
+    let organisationResult = await client.query(
       `
-            INSERT INTO organisations (
-                owner_id,
-                name
-            )
-            VALUES ($1, $2)
-            RETURNING id;
-            `,
+        SELECT id
+        FROM organisations
+        WHERE owner_id = $1
+          AND name = $2
+        LIMIT 1;
+      `,
       [userId, "Falah Pharmacy - Development"],
     );
 
-    const organisationId = organisationResult.rows[0].id;
+    let organisationId;
+
+    if (organisationResult.rows.length > 0) {
+      organisationId = organisationResult.rows[0].id;
+    } else {
+      organisationResult = await client.query(
+        `
+          INSERT INTO organisations (
+            owner_id,
+            name
+          )
+          VALUES ($1, $2)
+          RETURNING id;
+        `,
+        [userId, "Falah Pharmacy - Development"],
+      );
+
+      organisationId = organisationResult.rows[0].id;
+    }
 
     console.log(`Development organisation: ${organisationId}`);
 
-    /*
-     * Create the development branch.
-     *
-     * Inventory is maintained at branch level, so we need
-     * at least one branch for inventory repository testing.
-     */
+    // --------------------------------------------------------
+    // 3. DEVELOPMENT BRANCH
+    // --------------------------------------------------------
+    //
+    // Branch names are unique within an organisation, so the
+    // existing branch can be reused.
+    //
     console.log("Creating development branch...");
 
     const branchResult = await client.query(
       `
-            INSERT INTO branches (
-                organisation_id,
-                name,
-                address,
-                city,
-                state,
-                postal_code,
-                phone
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            RETURNING id;
-            `,
+        INSERT INTO branches (
+          organisation_id,
+          name,
+          address,
+          city,
+          state,
+          postal_code,
+          phone
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT (organisation_id, name)
+        DO UPDATE SET
+          address = EXCLUDED.address,
+          city = EXCLUDED.city,
+          state = EXCLUDED.state,
+          postal_code = EXCLUDED.postal_code,
+          phone = EXCLUDED.phone
+        RETURNING id;
+      `,
       [
         organisationId,
         "Main Branch",
@@ -125,30 +158,46 @@ const seedDevelopmentData = async () => {
 
     console.log(`Development branch: ${branchId}`);
 
-    /*
-     * Create a development product.
-     *
-     * The product will later be placed into inventory
-     * through an inventory batch.
-     */
+    // --------------------------------------------------------
+    // 4. DEVELOPMENT PRODUCT
+    // --------------------------------------------------------
+    //
+    // Category belongs to the product because it describes
+    // what type of product it is. It is not duplicated in
+    // inventory_batches.
+    //
+    // The SKU is unique within the organisation, so it can be
+    // used to reuse the same development product.
+    //
     console.log("Creating development product...");
 
     const productResult = await client.query(
       `
-            INSERT INTO products (
-                organisation_id,
-                medicine_name,
-                brand_name,
-                strength,
-                pack_size,
-                manufacturer,
-                sku
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            RETURNING id;
-            `,
+        INSERT INTO products (
+          organisation_id,
+          category,
+          medicine_name,
+          brand_name,
+          strength,
+          pack_size,
+          manufacturer,
+          sku
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        ON CONFLICT (organisation_id, sku)
+        DO UPDATE SET
+          category = EXCLUDED.category,
+          medicine_name = EXCLUDED.medicine_name,
+          brand_name = EXCLUDED.brand_name,
+          strength = EXCLUDED.strength,
+          pack_size = EXCLUDED.pack_size,
+          manufacturer = EXCLUDED.manufacturer,
+          updated_at = CURRENT_TIMESTAMP
+        RETURNING id;
+      `,
       [
         organisationId,
+        "Medicines",
         "Paracetamol",
         "Dolo",
         "650 mg",
@@ -162,56 +211,84 @@ const seedDevelopmentData = async () => {
 
     console.log(`Development product: ${productId}`);
 
-    /*
-     * Create a development supplier.
-     *
-     * Inventory batches reference suppliers, so a supplier
-     * record is required before creating an inventory batch.
-     */
+    // --------------------------------------------------------
+    // 5. DEVELOPMENT SUPPLIER
+    // --------------------------------------------------------
+    //
+    // The current suppliers table does not have a unique
+    // business identifier such as GSTIN enforced by the schema.
+    //
+    // Therefore, find the development supplier first and create
+    // it only when it does not already exist.
+    //
     console.log("Creating development supplier...");
 
-    const supplierResult = await client.query(
+    let supplierResult = await client.query(
       `
-            INSERT INTO suppliers (
-                organisation_id,
-                name,
-                contact_person,
-                phone,
-                email,
-                city,
-                gstin,
-                status
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            RETURNING id;
-            `,
-      [
-        organisationId,
-        "Medico Distributors",
-        "Rajesh Kumar",
-        "9876501234",
-        "sales@medico.example",
-        "Delhi",
-        "07ABCDE1234F1Z5",
-        "ACTIVE",
-      ],
+        SELECT id
+        FROM suppliers
+        WHERE organisation_id = $1
+          AND name = $2
+        LIMIT 1;
+      `,
+      [organisationId, "Medico Distributors"],
     );
 
-    const supplierId = supplierResult.rows[0].id;
+    let supplierId;
+
+    if (supplierResult.rows.length > 0) {
+      supplierId = supplierResult.rows[0].id;
+    } else {
+      supplierResult = await client.query(
+        `
+          INSERT INTO suppliers (
+            organisation_id,
+            name,
+            contact_person,
+            phone,
+            email,
+            city,
+            gstin,
+            status
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          RETURNING id;
+        `,
+        [
+          organisationId,
+          "Medico Distributors",
+          "Rajesh Kumar",
+          "9876501234",
+          "sales@medico.example",
+          "Delhi",
+          "07ABCDE1234F1Z5",
+          "ACTIVE",
+        ],
+      );
+
+      supplierId = supplierResult.rows[0].id;
+    }
 
     console.log(`Development supplier: ${supplierId}`);
+
+    // --------------------------------------------------------
+    // 6. COMMIT
+    // --------------------------------------------------------
 
     await client.query("COMMIT");
 
     console.log("");
     console.log("Development seed completed successfully.");
     console.log("");
+
     console.log("Use these IDs when testing repositories:");
     console.log(`User ID:         ${userId}`);
     console.log(`Organisation ID: ${organisationId}`);
     console.log(`Branch ID:       ${branchId}`);
     console.log(`Product ID:      ${productId}`);
     console.log(`Supplier ID:     ${supplierId}`);
+    console.log("");
+    console.log("Product category: Medicines");
   } catch (error) {
     await client.query("ROLLBACK");
 

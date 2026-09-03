@@ -225,13 +225,19 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 -- ============================================================
 -- 12. PRODUCTS
 -- ============================================================
--- Stores the identity of a medicine/product.
+
+-- Stores the identity and characteristics of a medicine/product.
+--
 -- Stock, batch, branch and quantity are stored separately
 -- in inventory_batches.
+--
+-- Category belongs to the product because it describes what
+-- kind of product it is, rather than a particular stock batch.
 
 CREATE TABLE IF NOT EXISTS products (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
     organisation_id UUID NOT NULL REFERENCES organisations (id) ON DELETE CASCADE,
+    category VARCHAR(100) NOT NULL DEFAULT 'OTHERS',
     medicine_name VARCHAR(200) NOT NULL,
     brand_name VARCHAR(200) NOT NULL,
     strength VARCHAR(100),

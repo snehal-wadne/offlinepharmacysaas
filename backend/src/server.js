@@ -16,6 +16,7 @@ const cors = require("cors");
 require("dotenv").config();
 
 const { pool } = require("./db/connection");
+const { connectRedis, disconnectRedis } = require("./cache/redis");
 
 const app = express();
 const PORT = Number(process.env.PORT || 5000);
@@ -113,28 +114,67 @@ app.use('/api/inventory', inventoryRoutes);
  * START SERVER
  * ------------------------------------------------------------
  *
- * Verify the database connection before accepting API traffic.
+ * Verify all required infrastructure before accepting API
+ * traffic.
  *
- * If PostgreSQL is unavailable, the backend should fail to
- * start rather than running in a partially working state.
+ * PostgreSQL is the application's authoritative database.
+ * Redis is used as the server-side cache.
+ *
+ * The API should not start if either required dependency
+ * cannot be initialized successfully.
  */
 const startServer = async () => {
   try {
+    // --------------------------------------------------------
+    // 1. Verify PostgreSQL
+    // --------------------------------------------------------
+    //
+    // Run a lightweight query to make sure the database is
+    // reachable before the server starts accepting requests.
+    //
     await pool.query("SELECT 1");
 
     console.log("PostgreSQL connection successful.");
     console.log(`Database: ${process.env.DB_DATABASE}`);
 
+    // --------------------------------------------------------
+    // 2. Connect to Redis
+    // --------------------------------------------------------
+    //
+    // Redis is our server-side cache. PostgreSQL remains the
+    // source of truth, but the application needs Redis
+    // available before we begin handling API traffic.
+    //
+    await connectRedis();
+
+    // --------------------------------------------------------
+    // 3. Start the HTTP server
+    // --------------------------------------------------------
+    //
+    // Only start accepting API requests after both
+    // PostgreSQL and Redis are ready.
+    //
     app.listen(PORT, () => {
       console.log(`Backend server is running on port ${PORT}`);
     });
   } catch (error) {
-    console.error("Unable to connect to PostgreSQL.");
+    console.error("Backend startup failed.");
     console.error(error);
 
-    /*
-     * Do not start the API when the database is unavailable.
-     * Most of the application's functionality depends on it.
+    /**
+     * Redis may already be connected if PostgreSQL succeeded
+     * but a later startup step failed.
+     *
+     * disconnectRedis() safely does nothing when Redis is
+     * already disconnected.
+     */
+    await disconnectRedis();
+
+    /**
+     * Do not start the API in a partially working state.
+     *
+     * The process manager/development environment can restart
+     * the backend after the underlying problem is fixed.
      */
     process.exit(1);
   }

@@ -13,17 +13,32 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- handled through organisation_memberships.
 
 CREATE TABLE IF NOT EXISTS users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
-    email VARCHAR(255) UNIQUE,
-    password_hash VARCHAR(255) NOT NULL,
-    name VARCHAR(100) NOT NULL,
-    status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
-    email_verified_at TIMESTAMPTZ,
-    last_login_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
+-- Primary account identity used by the application.
+email VARCHAR(255) UNIQUE NOT NULL,
+
+-- BCrypt/Argon2-style password hash for local authentication.
+-- NULL means the user does not currently have password login enabled.
+password_hash VARCHAR(255),
+
+-- Stable Google account identifier obtained from the verified Google identity.
+-- NULL means Google login has not been linked to this account.
+google_sub VARCHAR(255) UNIQUE,
+name VARCHAR(100) NOT NULL,
+status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
+email_verified_at TIMESTAMPTZ,
+last_login_at TIMESTAMPTZ,
+created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+-- Every user must have at least one way to authenticate.
+CONSTRAINT users_auth_method_check
+        CHECK (
+            password_hash IS NOT NULL
+            OR google_sub IS NOT NULL
+        )
+);
 -- ============================================================
 -- 2. ORGANISATIONS
 -- ============================================================
@@ -121,7 +136,6 @@ CREATE TABLE IF NOT EXISTS organisation_memberships (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
     organisation_id UUID NOT NULL REFERENCES organisations (id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-    role_id UUID REFERENCES roles (id) ON DELETE SET NULL,
     status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
     joined_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -184,6 +198,7 @@ CREATE TABLE IF NOT EXISTS branches (
 CREATE TABLE IF NOT EXISTS branch_assignments (
     membership_id UUID NOT NULL REFERENCES organisation_memberships (id) ON DELETE CASCADE,
     branch_id UUID NOT NULL REFERENCES branches (id) ON DELETE CASCADE,
+    role_id UUID NOT NULL REFERENCES roles (id) ON DELETE RESTRICT,
     PRIMARY KEY (membership_id, branch_id)
 );
 
@@ -210,13 +225,19 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 -- ============================================================
 -- 12. PRODUCTS
 -- ============================================================
--- Stores the identity of a medicine/product.
+
+-- Stores the identity and characteristics of a medicine/product.
+--
 -- Stock, batch, branch and quantity are stored separately
 -- in inventory_batches.
+--
+-- Category belongs to the product because it describes what
+-- kind of product it is, rather than a particular stock batch.
 
 CREATE TABLE IF NOT EXISTS products (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
     organisation_id UUID NOT NULL REFERENCES organisations (id) ON DELETE CASCADE,
+    category VARCHAR(100) NOT NULL DEFAULT 'OTHERS',
     medicine_name VARCHAR(200) NOT NULL,
     brand_name VARCHAR(200) NOT NULL,
     strength VARCHAR(100),
@@ -245,7 +266,7 @@ CREATE TABLE IF NOT EXISTS suppliers (
     gstin VARCHAR(20),
     status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ============================================================
@@ -254,6 +275,7 @@ CREATE TABLE IF NOT EXISTS suppliers (
 -- Represents stock of a product at a branch for a particular
 -- batch. Batch number, expiry, MRP and quantity belong here,
 -- not in products.
+-- branch_number is human readable number for batch like B-001, -- B-002
 
 CREATE TABLE IF NOT EXISTS inventory_batches (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
@@ -298,6 +320,7 @@ CREATE TABLE IF NOT EXISTS stock_transfers (
     status VARCHAR(30) NOT NULL DEFAULT 'DRAFT',
 
     transfer_number VARCHAR(50) NOT NULL,
+    -- transfer_number is human readable text like TR-001
 
     notes TEXT,
 
@@ -403,6 +426,7 @@ purchase_number VARCHAR(50) NOT NULL,
     CONSTRAINT purchases_status_check
         CHECK (
             status IN (
+                'DRAFT'
                 'PENDING',
                 'APPROVED',
                 'PARTIALLY_RECEIVED',
@@ -578,8 +602,6 @@ CREATE INDEX IF NOT EXISTS idx_roles_organisation_id ON roles (organisation_id);
 CREATE INDEX IF NOT EXISTS idx_memberships_user_id ON organisation_memberships (user_id);
 
 CREATE INDEX IF NOT EXISTS idx_memberships_organisation_id ON organisation_memberships (organisation_id);
-
-CREATE INDEX IF NOT EXISTS idx_memberships_role_id ON organisation_memberships (role_id);
 
 CREATE INDEX IF NOT EXISTS idx_branches_organisation_id ON branches (organisation_id);
 
