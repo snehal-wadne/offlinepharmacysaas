@@ -423,7 +423,7 @@ const styles = StyleSheet.create({
     gap: 8,
     ...Platform.select({
       web: {
-        animation: 'fadeIn 0.2s ease-in-out',
+        transition: 'opacity 0.2s ease-in-out',
       },
     }),
   },

@@ -13,6 +13,12 @@ export default function PendingPurchaseOrders({
   onViewAll,
   onOrderPress,
 }) {
+  const orderList = Array.isArray(orders)
+    ? orders
+    : Array.isArray(MOCK_PURCHASE_ORDERS)
+    ? MOCK_PURCHASE_ORDERS
+    : [];
+
   return (
     <View style={styles.cardContainer}>
       {/* Header */}
@@ -30,31 +36,37 @@ export default function PendingPurchaseOrders({
 
       {/* Orders List */}
       <View style={styles.ordersList}>
-        {orders.map((order, index) => {
-          const isLast = index === orders.length - 1;
-          return (
-            <Pressable
-              key={order.id || index}
-              onPress={() => onOrderPress && onOrderPress(order)}
-              style={[
-                styles.orderItem,
-                !isLast && styles.orderItemBorder,
-              ]}
-            >
-              {/* Left Info: PO Number & Supplier */}
-              <View style={styles.orderLeft}>
-                <Text style={styles.poNumber}>{order.id}</Text>
-                <Text style={styles.supplierName}>{order.supplierName}</Text>
-              </View>
+        {orderList.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No pending purchase orders</Text>
+          </View>
+        ) : (
+          orderList.map((order, index) => {
+            const isLast = index === orderList.length - 1;
+            return (
+              <Pressable
+                key={order.id || index}
+                onPress={() => onOrderPress && onOrderPress(order)}
+                style={[
+                  styles.orderItem,
+                  !isLast && styles.orderItemBorder,
+                ]}
+              >
+                {/* Left Info: PO Number & Supplier */}
+                <View style={styles.orderLeft}>
+                  <Text style={styles.poNumber}>{order.id || '-'}</Text>
+                  <Text style={styles.supplierName}>{order.supplierName || 'Unknown Supplier'}</Text>
+                </View>
 
-              {/* Right Info: Amount & Time */}
-              <View style={styles.orderRight}>
-                <Text style={styles.amount}>{order.amount || order.formattedAmount}</Text>
-                <Text style={styles.timeAgo}>{order.timeAgo}</Text>
-              </View>
-            </Pressable>
-          );
-        })}
+                {/* Right Info: Amount & Time */}
+                <View style={styles.orderRight}>
+                  <Text style={styles.amount}>{order.amount || order.formattedAmount || '₹0.00'}</Text>
+                  <Text style={styles.timeAgo}>{order.timeAgo || ''}</Text>
+                </View>
+              </Pressable>
+            );
+          })
+        )}
       </View>
     </View>
   );
@@ -144,5 +156,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     color: '#94A3B8',
+  },
+  emptyContainer: {
+    paddingVertical: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    fontSize: 13,
+    color: '#94A3B8',
+    fontStyle: 'italic',
   },
 });

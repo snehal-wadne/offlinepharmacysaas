@@ -23,14 +23,14 @@ export default function InventoryDashboard({ onNavigate, onShowToast }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
 
-  const [pendingOrders, setPendingOrders] = useState(MOCK_PURCHASE_ORDERS);
+  const [pendingOrders, setPendingOrders] = useState(MOCK_PURCHASE_ORDERS || []);
 
   useEffect(() => {
     let isMounted = true;
     async function loadPendingPOs() {
       try {
         const response = await fetchPurchases({ status: 'PENDING' });
-        if (isMounted && response && response.data && response.data.length > 0) {
+        if (isMounted && response && Array.isArray(response.data) && response.data.length > 0) {
           const formatted = response.data.map((po) => ({
             id: po.purchase_number || po.purchaseNumber || po.id,
             rawId: po.id,
@@ -117,13 +117,13 @@ export default function InventoryDashboard({ onNavigate, onShowToast }) {
 
       {/* Section 1: KPI Cards */}
       <View style={[styles.kpiRow, isCompact && styles.kpiRowCompact]}>
-        {MOCK_KPI_DATA.map((kpi) => (
+        {(MOCK_KPI_DATA || []).map((kpi) => (
           <InventoryStatCard
             key={kpi.id}
-            label={kpi.label}
+            label={kpi.label || kpi.title}
             value={kpi.value}
-            subtext={kpi.subtext}
-            variant={kpi.variant}
+            subtext={kpi.subtext || kpi.trend}
+            variant={kpi.variant || 'teal'}
             onPress={() => {
               if (kpi.id === 'kpi-2') {
                 if (onNavigate) onNavigate('stock-status');
@@ -141,13 +141,13 @@ export default function InventoryDashboard({ onNavigate, onShowToast }) {
       <View style={[styles.gridRow, isCompact && styles.gridRowStacked]}>
         <View style={[styles.gridColLeft, isCompact && styles.gridColFull]}>
           <StockSummary
-            data={MOCK_STOCK_SUMMARY}
+            data={MOCK_STOCK_SUMMARY || []}
             onViewAll={handleViewAllStock}
           />
         </View>
         <View style={[styles.gridColRight, isCompact && styles.gridColFull]}>
           <PendingPurchaseOrders
-            orders={pendingOrders}
+            orders={pendingOrders || []}
             onViewAll={handleViewAllPurchaseOrders}
             onOrderPress={handleOrderPress}
           />
@@ -158,7 +158,7 @@ export default function InventoryDashboard({ onNavigate, onShowToast }) {
       <View style={[styles.gridRow, isCompact && styles.gridRowStacked]}>
         <View style={[styles.gridColLeft, isCompact && styles.gridColFull]}>
           <RecentStockMovements
-            movements={MOCK_RECENT_MOVEMENTS}
+            movements={MOCK_RECENT_MOVEMENTS || []}
             onViewAll={handleViewAllMovements}
             onMovementPress={handleMovementPress}
           />

@@ -19,14 +19,18 @@ const VARIANT_COLORS = {
 
 export default function InventoryStatCard({
   label,
+  title,
   value,
   subtext,
+  trend,
   variant = 'teal',
   onPress,
 }) {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const colors = VARIANT_COLORS[variant] || VARIANT_COLORS.teal;
+  const displayLabel = label || title || '';
+  const displaySubtext = subtext || trend || '';
 
   return (
     <Pressable
@@ -37,12 +41,12 @@ export default function InventoryStatCard({
         { borderLeftColor: colors.border },
       ]}
       accessibilityRole="button"
-      accessibilityLabel={`${label}: ${value}`}
+      accessibilityLabel={`${displayLabel}: ${value}`}
     >
       {/* Card Header with Label and Status Dot */}
       <View style={styles.cardHeader}>
         <Text style={styles.cardLabel} numberOfLines={1}>
-          {label}
+          {displayLabel}
         </Text>
         <View style={[styles.statusDot, { backgroundColor: colors.dot }]} />
       </View>
@@ -51,7 +55,7 @@ export default function InventoryStatCard({
       <Text style={styles.cardValue}>{value}</Text>
 
       {/* Subtext */}
-      {subtext ? <Text style={styles.cardSubtext}>{subtext}</Text> : null}
+      {displaySubtext ? <Text style={styles.cardSubtext}>{displaySubtext}</Text> : null}
     </Pressable>
   );
 }

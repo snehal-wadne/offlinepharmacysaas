@@ -10,6 +10,12 @@ import {
 import { MOCK_STOCK_SUMMARY } from '../../data/inventoryDashboardMockData';
 
 export default function StockSummary({ data = MOCK_STOCK_SUMMARY, onViewAll }) {
+  const stockList = Array.isArray(data)
+    ? data
+    : Array.isArray(MOCK_STOCK_SUMMARY)
+    ? MOCK_STOCK_SUMMARY
+    : [];
+
   return (
     <View style={styles.cardContainer}>
       {/* Header */}
@@ -41,43 +47,49 @@ export default function StockSummary({ data = MOCK_STOCK_SUMMARY, onViewAll }) {
           </View>
 
           {/* Table Rows */}
-          {data.map((row, index) => (
-            <View
-              key={row.id || index}
-              style={[
-                styles.tableRow,
-                index % 2 === 1 && styles.tableRowAlt,
-              ]}
-            >
-              <Text style={[styles.tdCell, styles.categoryCol, styles.categoryText]}>
-                {row.category}
-              </Text>
-              <Text style={[styles.tdCell, styles.numCol, styles.totalText]}>
-                {row.totalItems}
-              </Text>
-              <Text style={[styles.tdCell, styles.numCol, styles.inStockText]}>
-                {row.inStock}
-              </Text>
-              <Text
-                style={[
-                  styles.tdCell,
-                  styles.numCol,
-                  row.lowStock > 0 ? styles.lowStockText : styles.zeroText,
-                ]}
-              >
-                {row.lowStock}
-              </Text>
-              <Text
-                style={[
-                  styles.tdCell,
-                  styles.numCol,
-                  row.outOfStock > 0 ? styles.outOfStockText : styles.zeroText,
-                ]}
-              >
-                {row.outOfStock}
-              </Text>
+          {stockList.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No stock summary data available</Text>
             </View>
-          ))}
+          ) : (
+            stockList.map((row, index) => (
+              <View
+                key={row.id || index}
+                style={[
+                  styles.tableRow,
+                  index % 2 === 1 && styles.tableRowAlt,
+                ]}
+              >
+                <Text style={[styles.tdCell, styles.categoryCol, styles.categoryText]}>
+                  {row.category || '-'}
+                </Text>
+                <Text style={[styles.tdCell, styles.numCol, styles.totalText]}>
+                  {row.totalItems ?? 0}
+                </Text>
+                <Text style={[styles.tdCell, styles.numCol, styles.inStockText]}>
+                  {row.inStock ?? 0}
+                </Text>
+                <Text
+                  style={[
+                    styles.tdCell,
+                    styles.numCol,
+                    row.lowStock > 0 ? styles.lowStockText : styles.zeroText,
+                  ]}
+                >
+                  {row.lowStock ?? 0}
+                </Text>
+                <Text
+                  style={[
+                    styles.tdCell,
+                    styles.numCol,
+                    row.outOfStock > 0 ? styles.outOfStockText : styles.zeroText,
+                  ]}
+                >
+                  {row.outOfStock ?? 0}
+                </Text>
+              </View>
+            ))
+          )}
         </View>
       </ScrollView>
 
@@ -237,5 +249,16 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
     letterSpacing: 0.2,
+  },
+  emptyContainer: {
+    paddingVertical: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  emptyText: {
+    fontSize: 13,
+    color: '#94A3B8',
+    fontStyle: 'italic',
   },
 });

@@ -128,4 +128,179 @@ export const PERMISSION_OVERVIEW_ROWS = [
 ];
 
 // Preserved for legacy components if needed
-export const MOCK_KPI_DATA = DASHBOARD_KPIS;
+export const MOCK_KPI_DATA = [
+  {
+    id: 'kpi-1',
+    label: 'Total Products',
+    value: '1,420',
+    subtext: '+24 new this month',
+    variant: 'teal',
+  },
+  {
+    id: 'kpi-2',
+    label: 'Low Stock Alerts',
+    value: '28',
+    subtext: 'Requires reorder soon',
+    variant: 'amber',
+  },
+  {
+    id: 'kpi-3',
+    label: 'Near Expiry (< 60d)',
+    value: '14',
+    subtext: 'Discount or return',
+    variant: 'blue',
+  },
+  {
+    id: 'kpi-4',
+    label: 'Expired Stock',
+    value: '3',
+    subtext: 'Pending disposal/return',
+    variant: 'red',
+  },
+];
+
+export const MOCK_STOCK_SUMMARY = [
+  {
+    id: 'cat-1',
+    category: 'Antibiotics & Antibacterials',
+    totalItems: 340,
+    inStock: 310,
+    lowStock: 22,
+    outOfStock: 8,
+  },
+  {
+    id: 'cat-2',
+    category: 'Pain Relief & Analgesics',
+    totalItems: 285,
+    inStock: 260,
+    lowStock: 18,
+    outOfStock: 7,
+  },
+  {
+    id: 'cat-3',
+    category: 'Cardiovascular & Hypertension',
+    totalItems: 195,
+    inStock: 182,
+    lowStock: 10,
+    outOfStock: 3,
+  },
+  {
+    id: 'cat-4',
+    category: 'Vitamins & Dietary Supplements',
+    totalItems: 240,
+    inStock: 225,
+    lowStock: 12,
+    outOfStock: 3,
+  },
+  {
+    id: 'cat-5',
+    category: 'Dermatologicals & Skincare',
+    totalItems: 160,
+    inStock: 152,
+    lowStock: 6,
+    outOfStock: 2,
+  },
+  {
+    id: 'cat-6',
+    category: 'Respiratory & Anti-Allergy',
+    totalItems: 210,
+    inStock: 198,
+    lowStock: 9,
+    outOfStock: 3,
+  },
+];
+
+export const MOCK_PURCHASE_ORDERS = [
+  {
+    id: 'PO-2026-1025',
+    rawId: 'po-1',
+    supplierName: 'Sun Pharma Care Ltd',
+    amount: '₹34,800.00',
+    timeAgo: '2 hours ago',
+  },
+  {
+    id: 'PO-2026-1024',
+    rawId: 'po-2',
+    supplierName: 'Cipla Healthcare',
+    amount: '₹18,450.00',
+    timeAgo: '5 hours ago',
+  },
+  {
+    id: 'PO-2026-1023',
+    rawId: 'po-3',
+    supplierName: 'Dr. Reddy\'s Laboratories',
+    amount: '₹42,100.00',
+    timeAgo: '1 day ago',
+  },
+  {
+    id: 'PO-2026-1022',
+    rawId: 'po-4',
+    supplierName: 'Mankind Pharma Ltd',
+    amount: '₹9,650.00',
+    timeAgo: '2 days ago',
+  },
+  {
+    id: 'PO-2026-1021',
+    rawId: 'po-5',
+    supplierName: 'Torrent Pharmaceuticals',
+    amount: '₹15,200.00',
+    timeAgo: '3 days ago',
+  },
+];
+
+export const MOCK_RECENT_MOVEMENTS = [
+  {
+    id: 'mov-1',
+    date: '03 Sep 2026, 14:20',
+    type: 'Purchase',
+    item: 'Amoxicillin 500mg Strips',
+    quantity: '+100',
+    reference: 'PO-1025',
+    status: 'Completed',
+  },
+  {
+    id: 'mov-2',
+    date: '03 Sep 2026, 13:45',
+    type: 'Sale',
+    item: 'Paracetamol 650mg Tabs',
+    quantity: '-20',
+    reference: 'INV-8821',
+    status: 'Completed',
+  },
+  {
+    id: 'mov-3',
+    date: '03 Sep 2026, 11:15',
+    type: 'Transfer',
+    item: 'Azithromycin 250mg Tabs',
+    quantity: '-30',
+    reference: 'TR-0412',
+    status: 'In Transit',
+  },
+  {
+    id: 'mov-4',
+    date: '02 Sep 2026, 17:30',
+    type: 'Adjustment',
+    item: 'Cough Syrup 100ml Bottle',
+    quantity: '-5',
+    reference: 'ADJ-019',
+    status: 'Approved',
+  },
+  {
+    id: 'mov-5',
+    date: '02 Sep 2026, 15:10',
+    type: 'Purchase',
+    item: 'Omeprazole 20mg Capsules',
+    quantity: '+250',
+    reference: 'PO-1023',
+    status: 'Completed',
+  },
+  {
+    id: 'mov-6',
+    date: '02 Sep 2026, 10:05',
+    type: 'Return',
+    item: 'Cetirizine 10mg Tabs',
+    quantity: '+10',
+    reference: 'RET-005',
+    status: 'Completed',
+  },
+];

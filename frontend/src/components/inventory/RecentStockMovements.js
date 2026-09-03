@@ -69,6 +69,12 @@ export default function RecentStockMovements({
   onViewAll,
   onMovementPress,
 }) {
+  const movementList = Array.isArray(movements)
+    ? movements
+    : Array.isArray(MOCK_RECENT_MOVEMENTS)
+    ? MOCK_RECENT_MOVEMENTS
+    : [];
+
   return (
     <View style={styles.cardContainer}>
       {/* Header */}
@@ -97,92 +103,99 @@ export default function RecentStockMovements({
         </View>
 
         {/* Table Rows */}
-        {movements.map((mov, index) => {
-          const isPositive = mov.quantity.startsWith('+');
-          const isNegative = mov.quantity.startsWith('-');
-          const typeConf = TYPE_CONFIG[mov.type] || TYPE_CONFIG.Purchase;
-          const statusConf = STATUS_CONFIG[mov.status] || STATUS_CONFIG.Completed;
+        {movementList.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No recent stock movements recorded</Text>
+          </View>
+        ) : (
+          movementList.map((mov, index) => {
+            const qtyStr = String(mov.quantity || '');
+            const isPositive = qtyStr.startsWith('+');
+            const isNegative = qtyStr.startsWith('-');
+            const typeConf = TYPE_CONFIG[mov.type] || TYPE_CONFIG.Purchase;
+            const statusConf = STATUS_CONFIG[mov.status] || STATUS_CONFIG.Completed;
 
-          return (
-            <Pressable
-              key={mov.id || index}
-              onPress={() => onMovementPress && onMovementPress(mov)}
-              style={[
-                styles.tableRow,
-                index % 2 === 1 && styles.tableRowAlt,
-              ]}
-            >
-              {/* Date */}
-              <Text style={[styles.tdCell, styles.colDate, styles.dateText]}>
-                {mov.date}
-              </Text>
-
-              {/* Movement Type */}
-              <View style={[styles.colType, styles.badgeWrapper]}>
-                <View
-                  style={[
-                    styles.badge,
-                    { backgroundColor: typeConf.bgColor },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.badgeText,
-                      { color: typeConf.textColor },
-                    ]}
-                  >
-                    {typeConf.label}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Item Name */}
-              <Text
-                style={[styles.tdCell, styles.colItem, styles.itemText]}
-                numberOfLines={1}
-              >
-                {mov.item}
-              </Text>
-
-              {/* Quantity */}
-              <Text
+            return (
+              <Pressable
+                key={mov.id || index}
+                onPress={() => onMovementPress && onMovementPress(mov)}
                 style={[
-                  styles.tdCell,
-                  styles.colQty,
-                  styles.qtyText,
-                  isPositive && styles.qtyPositive,
-                  isNegative && styles.qtyNegative,
+                  styles.tableRow,
+                  index % 2 === 1 && styles.tableRowAlt,
                 ]}
               >
-                {mov.quantity}
-              </Text>
+                {/* Date */}
+                <Text style={[styles.tdCell, styles.colDate, styles.dateText]}>
+                  {mov.date || '-'}
+                </Text>
 
-              {/* Reference */}
-              <Text style={[styles.tdCell, styles.colRef, styles.refText]}>
-                {mov.reference}
-              </Text>
-
-              {/* Status */}
-              <View style={[styles.colStatus, styles.badgeWrapper]}>
-                <View
-                  style={[
-                    styles.badge,
-                    { backgroundColor: statusConf.bgColor },
-                  ]}
-                >
-                  <Text
+                {/* Movement Type */}
+                <View style={[styles.colType, styles.badgeWrapper]}>
+                  <View
                     style={[
-                      styles.badgeText,
-                      { color: statusConf.textColor },
+                      styles.badge,
+                      { backgroundColor: typeConf.bgColor },
                     ]}
                   >
-                    {statusConf.label}
-                  </Text>
+                    <Text
+                      style={[
+                        styles.badgeText,
+                        { color: typeConf.textColor },
+                      ]}
+                    >
+                      {typeConf.label}
+                    </Text>
+                  </View>
                 </View>
-              </View>
-            </Pressable>
-          );
-        })}
+
+                {/* Item Name */}
+                <Text
+                  style={[styles.tdCell, styles.colItem, styles.itemText]}
+                  numberOfLines={1}
+                >
+                  {mov.item || '-'}
+                </Text>
+
+                {/* Quantity */}
+                <Text
+                  style={[
+                    styles.tdCell,
+                    styles.colQty,
+                    styles.qtyText,
+                    isPositive && styles.qtyPositive,
+                    isNegative && styles.qtyNegative,
+                  ]}
+                >
+                  {mov.quantity || '0'}
+                </Text>
+
+                {/* Reference */}
+                <Text style={[styles.tdCell, styles.colRef, styles.refText]}>
+                  {mov.reference || '-'}
+                </Text>
+
+                {/* Status */}
+                <View style={[styles.colStatus, styles.badgeWrapper]}>
+                  <View
+                    style={[
+                      styles.badge,
+                      { backgroundColor: statusConf.bgColor },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.badgeText,
+                        { color: statusConf.textColor },
+                      ]}
+                    >
+                      {statusConf.label}
+                    </Text>
+                  </View>
+                </View>
+              </Pressable>
+            );
+          })
+        )}
       </View>
     </View>
   );
@@ -314,5 +327,16 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 11.5,
     fontWeight: '700',
+  },
+  emptyContainer: {
+    paddingVertical: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  emptyText: {
+    fontSize: 13,
+    color: '#94A3B8',
+    fontStyle: 'italic',
   },
 });
