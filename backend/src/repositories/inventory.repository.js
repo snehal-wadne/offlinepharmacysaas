@@ -9,6 +9,9 @@
  * record represents a particular product batch stored at a
  * particular branch.
  *
+ * Product information such as category belongs to the products
+ * table and is retrieved through the product relationship.
+ *
  * The repository is responsible only for database operations.
  * Business rules such as stock validation, FEFO selection,
  * permissions, and stock-transfer rules belong to the service
@@ -36,8 +39,8 @@ const { pool } = require("../db/connection");
  * - a branch
  * - a supplier
  *
- * The organisation is not stored directly in inventory_batches.
- * Tenant ownership is derived through the related branch/product.
+ * Product category is stored on the product itself and is
+ * therefore not duplicated in inventory_batches.
  *
  * @param {Object} inventory
  * @param {string} inventory.productId
@@ -122,21 +125,24 @@ const createInventoryBatch = async ({
 const getInventoryBatchById = async (branchId, inventoryBatchId) => {
   const query = `
         SELECT
-            id,
-            product_id,
-            branch_id,
-            supplier_id,
-            batch_number,
-            expiry_date,
-            mrp,
-            quantity,
-            shelf_location,
-            updated_by,
-            created_at,
-            updated_at
-        FROM inventory_batches
-        WHERE id = $1
-          AND branch_id = $2;
+            ib.id,
+            ib.product_id,
+            p.category,
+            ib.branch_id,
+            ib.supplier_id,
+            ib.batch_number,
+            ib.expiry_date,
+            ib.mrp,
+            ib.quantity,
+            ib.shelf_location,
+            ib.updated_by,
+            ib.created_at,
+            ib.updated_at
+        FROM inventory_batches ib
+        INNER JOIN products p
+            ON p.id = ib.product_id
+        WHERE ib.id = $1
+          AND ib.branch_id = $2;
     `;
 
   const values = [inventoryBatchId, branchId];
@@ -164,6 +170,7 @@ const getInventoryByBranch = async (branchId, limit = 50, offset = 0) => {
         SELECT
             ib.id,
             ib.product_id,
+            p.category,
             p.medicine_name,
             p.brand_name,
             p.strength,
@@ -202,15 +209,6 @@ const getInventoryByBranch = async (branchId, limit = 50, offset = 0) => {
  *
  * A product can have multiple batches at the same branch.
  *
- * Example:
- *
- * Paracetamol 500mg
- *     ├── Batch P001
- *     ├── Batch P002
- *     └── Batch P003
- *
- * This query returns all of those batches.
- *
  * @param {string} branchId
  * @param {string} productId
  *
@@ -221,6 +219,7 @@ const getProductBatchesAtBranch = async (branchId, productId) => {
         SELECT
             ib.id,
             ib.product_id,
+            p.category,
             p.medicine_name,
             p.brand_name,
             p.strength,
@@ -258,6 +257,7 @@ const getProductBatchesAtBranch = async (branchId, productId) => {
  *
  * The search covers:
  *
+ * - category
  * - medicine name
  * - brand name
  * - manufacturer
@@ -283,6 +283,7 @@ const searchInventory = async (
         SELECT
             ib.id,
             ib.product_id,
+            p.category,
             p.medicine_name,
             p.brand_name,
             p.strength,
@@ -307,7 +308,8 @@ const searchInventory = async (
             ON s.id = ib.supplier_id
         WHERE ib.branch_id = $1
           AND (
-                p.medicine_name ILIKE $2
+                p.category ILIKE $2
+                OR p.medicine_name ILIKE $2
                 OR p.brand_name ILIKE $2
                 OR p.manufacturer ILIKE $2
                 OR p.sku ILIKE $2
@@ -335,10 +337,6 @@ const searchInventory = async (
  * This is useful for the batch-expiry section of the inventory
  * portal.
  *
- * The service layer should decide what "approaching expiry"
- * means for the business. This repository simply accepts the
- * number of days to look ahead.
- *
  * @param {string} branchId
  * @param {number} days
  *
@@ -349,6 +347,7 @@ const getExpiringBatches = async (branchId, days = 90) => {
         SELECT
             ib.id,
             ib.product_id,
+            p.category,
             p.medicine_name,
             p.brand_name,
             p.strength,
@@ -380,14 +379,95 @@ const getExpiringBatches = async (branchId, days = 90) => {
 };
 
 /**
+ * Get all product categories currently represented in a branch's
+ * inventory.
+ *
+ * Category belongs to the product, so inventory_batches is joined
+ * with products to obtain the category.
+ *
+ * Only categories with inventory records in the specified branch
+ * are returned.
+ *
+ * @param {string} branchId
+ *
+ * @returns {string[]} Available inventory categories
+ */
+const getInventoryCategories = async (branchId) => {
+  const query = `
+        SELECT DISTINCT
+            p.category
+        FROM inventory_batches ib
+        INNER JOIN products p
+            ON p.id = ib.product_id
+        WHERE ib.branch_id = $1
+        ORDER BY p.category ASC;
+    `;
+
+  const values = [branchId];
+
+  const result = await pool.query(query, values);
+
+  return result.rows.map((row) => row.category);
+};
+
+/**
+ * Get inventory summary grouped by product category.
+ *
+ * This query is intended for inventory dashboard/reporting
+ * screens.
+ *
+ * For each category it returns:
+ *
+ * - total_products:
+ *     Number of distinct products in the category.
+ *
+ * - total_items:
+ *     Total quantity of all inventory batches in the category.
+ *
+ * - total_valuation:
+ *     Total stock value calculated as quantity × MRP.
+ *
+ * Category belongs to products, while quantity and MRP belong
+ * to inventory batches, so the aggregation is performed by
+ * joining both tables.
+ *
+ * @param {string} branchId
+ *
+ * @returns {Object[]} Category-level inventory summary
+ */
+const getInventoryCategorySummary = async (branchId) => {
+  const query = `
+        SELECT
+            p.category,
+            COUNT(DISTINCT ib.product_id) AS total_products,
+            COALESCE(SUM(ib.quantity), 0) AS total_items,
+            COALESCE(
+                SUM(ib.quantity * ib.mrp),
+                0
+            ) AS total_valuation
+        FROM inventory_batches ib
+        INNER JOIN products p
+            ON p.id = ib.product_id
+        WHERE ib.branch_id = $1
+        GROUP BY p.category
+        ORDER BY p.category ASC;
+    `;
+
+  const values = [branchId];
+
+  const result = await pool.query(query, values);
+
+  return result.rows;
+};
+
+/**
  * Update inventory batch information.
  *
  * This updates descriptive/batch information but deliberately
  * does not modify quantity.
  *
- * Stock quantity should be changed through updateInventoryQuantity()
- * so that stock-changing operations can later be controlled and
- * audited separately.
+ * Product category is not updated here because category belongs
+ * to products, not inventory batches.
  *
  * @param {string} branchId
  * @param {string} inventoryBatchId
@@ -452,19 +532,6 @@ const updateInventoryBatch = async (
 
 /**
  * Update the quantity of an inventory batch.
- *
- * The new quantity is supplied directly rather than calculating
- * it inside the repository.
- *
- * Business operations such as:
- *
- *     current quantity - sold quantity
- *
- * or:
- *
- *     current quantity + received quantity
- *
- * should be decided by the service layer.
  *
  * @param {string} branchId
  * @param {string} inventoryBatchId
@@ -546,6 +613,8 @@ module.exports = {
   getProductBatchesAtBranch,
   searchInventory,
   getExpiringBatches,
+  getInventoryCategories,
+  getInventoryCategorySummary,
   updateInventoryBatch,
   updateInventoryQuantity,
   deleteInventoryBatch,

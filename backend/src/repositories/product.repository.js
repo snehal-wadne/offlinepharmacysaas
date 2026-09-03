@@ -20,16 +20,27 @@
  */
 
 const { pool } = require("../db/connection");
+const { getCache, setCache, deleteCache } = require("../cache/cache");
+
+// Cache TTL in seconds. Redis is a temporary read cache.
+// The TTL provides fallback protection against stale data
+// if cache invalidation is missed for any reason.
+const PRODUCT_CACHE_TTL = 60;
+
+// Tenant-safe cache key: the organisation_id is embedded so that
+// one tenant can never retrieve another tenant's cached product.
+const buildProductCacheKey = (organisationId, productId) =>
+  `organisation:${organisationId}:product:${productId}`;
 
 /**
  * Create a new product.
  *
  * A product belongs to an organisation, so organisation_id is
- * required. This ensures that products remain isolated between
- * tenants in our multi-tenant SaaS application.
+ * required. Category describes what type of product this is.
  *
  * @param {Object} product
  * @param {string} product.organisationId
+ * @param {string} product.category
  * @param {string} product.medicineName
  * @param {string} product.brandName
  * @param {string} product.strength
@@ -41,6 +52,7 @@ const { pool } = require("../db/connection");
  */
 const createProduct = async ({
   organisationId,
+  category,
   medicineName,
   brandName,
   strength,
@@ -51,6 +63,7 @@ const createProduct = async ({
   const query = `
         INSERT INTO products (
             organisation_id,
+            category,
             medicine_name,
             brand_name,
             strength,
@@ -58,10 +71,11 @@ const createProduct = async ({
             manufacturer,
             sku
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING
             id,
             organisation_id,
+            category,
             medicine_name,
             brand_name,
             strength,
@@ -74,6 +88,7 @@ const createProduct = async ({
 
   const values = [
     organisationId,
+    category,
     medicineName,
     brandName,
     strength,
@@ -103,10 +118,27 @@ const createProduct = async ({
  * @returns {Object|null} Product if found, otherwise null
  */
 const getProductById = async (organisationId, productId) => {
+  const cacheKey = buildProductCacheKey(organisationId, productId);
+
+  // Cache-aside read: check Redis first so we can skip PostgreSQL
+  // entirely on a cache hit.
+  try {
+    const cachedProduct = await getCache(cacheKey);
+
+    if (cachedProduct) {
+      return cachedProduct;
+    }
+  } catch (cacheError) {
+    // Redis is an optimisation, not a requirement. A cache failure
+    // must never block a valid database read.
+    console.error("Cache read failed for getProductById:", cacheError.message);
+  }
+
   const query = `
         SELECT
             id,
             organisation_id,
+            category,
             medicine_name,
             brand_name,
             strength,
@@ -124,18 +156,30 @@ const getProductById = async (organisationId, productId) => {
 
   const result = await pool.query(query, values);
 
-  return result.rows[0] || null;
+  const product = result.rows[0] || null;
+
+  // Only cache positive results.
+  if (product) {
+    try {
+      await setCache(cacheKey, product, PRODUCT_CACHE_TTL);
+    } catch (cacheError) {
+      // A failed cache write is non-fatal because PostgreSQL
+      // already provided the authoritative result.
+      console.error(
+        "Cache write failed for getProductById:",
+        cacheError.message,
+      );
+    }
+  }
+
+  return product;
 };
 
 /**
  * Retrieve all products belonging to an organisation.
  *
  * Products are always filtered by organisation_id because the
- * application uses a shared database with tenant-level data
- * isolation.
- *
- * Pagination is supported so that the API does not attempt to
- * load thousands of products into memory at once.
+ * application uses a shared database with tenant-level isolation.
  *
  * @param {string} organisationId
  * @param {number} limit
@@ -152,6 +196,7 @@ const getProductsByOrganisation = async (
         SELECT
             id,
             organisation_id,
+            category,
             medicine_name,
             brand_name,
             strength,
@@ -178,15 +223,7 @@ const getProductsByOrganisation = async (
  * Search products within an organisation.
  *
  * The search term is checked against commonly searchable
- * product fields:
- *
- * - medicine name
- * - brand name
- * - manufacturer
- * - SKU
- *
- * organisation_id remains part of the query to prevent
- * cross-organisation data access.
+ * product fields, including category.
  *
  * @param {string} organisationId
  * @param {string} searchTerm
@@ -205,6 +242,7 @@ const searchProducts = async (
         SELECT
             id,
             organisation_id,
+            category,
             medicine_name,
             brand_name,
             strength,
@@ -216,7 +254,8 @@ const searchProducts = async (
         FROM products
         WHERE organisation_id = $1
           AND (
-                medicine_name ILIKE $2
+                category ILIKE $2
+                OR medicine_name ILIKE $2
                 OR brand_name ILIKE $2
                 OR manufacturer ILIKE $2
                 OR sku ILIKE $2
@@ -241,9 +280,6 @@ const searchProducts = async (
  * The product is identified by both product_id and
  * organisation_id to maintain tenant isolation.
  *
- * updated_at is explicitly refreshed whenever the product
- * is modified.
- *
  * @param {string} organisationId
  * @param {string} productId
  * @param {Object} product
@@ -253,23 +289,25 @@ const searchProducts = async (
 const updateProduct = async (
   organisationId,
   productId,
-  { medicineName, brandName, strength, packSize, manufacturer, sku },
+  { category, medicineName, brandName, strength, packSize, manufacturer, sku },
 ) => {
   const query = `
         UPDATE products
         SET
-            medicine_name = $1,
-            brand_name = $2,
-            strength = $3,
-            pack_size = $4,
-            manufacturer = $5,
-            sku = $6,
+            category = $1,
+            medicine_name = $2,
+            brand_name = $3,
+            strength = $4,
+            pack_size = $5,
+            manufacturer = $6,
+            sku = $7,
             updated_at = CURRENT_TIMESTAMP
-        WHERE id = $7
-          AND organisation_id = $8
+        WHERE id = $8
+          AND organisation_id = $9
         RETURNING
             id,
             organisation_id,
+            category,
             medicine_name,
             brand_name,
             strength,
@@ -281,6 +319,7 @@ const updateProduct = async (
     `;
 
   const values = [
+    category,
     medicineName,
     brandName,
     strength,
@@ -293,22 +332,34 @@ const updateProduct = async (
 
   const result = await pool.query(query, values);
 
-  return result.rows[0] || null;
+  const updatedProduct = result.rows[0] || null;
+
+  // PostgreSQL is the source of truth. Invalidate the cached
+  // product after a successful update so the next read obtains
+  // the latest category and product information.
+  if (updatedProduct) {
+    const cacheKey = buildProductCacheKey(organisationId, productId);
+
+    try {
+      await deleteCache(cacheKey);
+    } catch (cacheError) {
+      console.error(
+        "Cache invalidation failed for updateProduct:",
+        cacheError.message,
+      );
+    }
+  }
+
+  return updatedProduct;
 };
 
 /**
  * Delete a product.
  *
- * A product is deleted only when both its ID and organisation ID
- * match.
- *
- * IMPORTANT:
  * The service layer should determine whether deleting a product
  * is actually allowed. For example, a product that already has
  * inventory or purchase history may need to be deactivated
  * instead of physically deleted.
- *
- * The repository only performs the requested database operation.
  *
  * @param {string} organisationId
  * @param {string} productId
@@ -327,14 +378,28 @@ const deleteProduct = async (organisationId, productId) => {
 
   const result = await pool.query(query, values);
 
-  return result.rowCount > 0;
+  const deleted = result.rowCount > 0;
+
+  // Invalidate the corresponding Redis entry after a successful
+  // PostgreSQL deletion.
+  if (deleted) {
+    const cacheKey = buildProductCacheKey(organisationId, productId);
+
+    try {
+      await deleteCache(cacheKey);
+    } catch (cacheError) {
+      console.error(
+        "Cache invalidation failed for deleteProduct:",
+        cacheError.message,
+      );
+    }
+  }
+
+  return deleted;
 };
 
 /**
  * Export repository functions.
- *
- * Services can import these functions and use them without
- * needing to know the SQL implementation details.
  */
 module.exports = {
   createProduct,
