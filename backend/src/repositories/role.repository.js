@@ -7,31 +7,33 @@
  *
  * A role belongs to an organisation.
  *
- * Example:
+ * This repository handles database persistence and cache access.
+ * Authorization decisions and business rules belong in the service layer.
  *
- * Organisation
- *      |
- *      +--- Manager
- *      |      |
- *      |      +--- CREATE_INVOICE
- *      |      +--- VIEW_INVENTORY
- *      |
- *      +--- Cashier
- *             |
- *             +--- CREATE_INVOICE
- *
- * The roles table stores the role itself.
- *
- * The role_permissions table connects roles with permissions.
- * It is a junction table because one role can have many
- * permissions and one permission can belong to many roles.
- *
- * This repository handles database persistence only.
- * Authorization decisions and business rules belong in the
- * service layer.
+ * PostgreSQL remains the source of truth.
+ * Redis is used only as a short-lived read cache.
  */
 
 const { pool } = require("../db/connection");
+const { getCache, setCache, deleteCache } = require("../cache/cache");
+
+const ROLE_CACHE_TTL = 60;
+
+/**
+ * Build Redis cache keys.
+ */
+const buildRoleCacheKey = (roleId) => `role:${roleId}`;
+
+const buildOrganisationRolesCacheKey = (organisationId) =>
+  `role:organisation:${organisationId}`;
+
+const buildRolePermissionsCacheKey = (roleId) => `role:permissions:${roleId}`;
+
+const buildPermissionRolesCacheKey = (permissionId) =>
+  `role:permission:${permissionId}`;
+
+const buildRolePermissionCheckCacheKey = (roleId, permissionId) =>
+  `role:has-permission:${roleId}:${permissionId}`;
 
 /**
  * Create a role for an organisation.
@@ -51,22 +53,22 @@ const createRole = async ({
   isSystemRole = false,
 }) => {
   const query = `
-        INSERT INTO roles (
-            organisation_id,
-            name,
-            description,
-            is_system_role
-        )
-        VALUES ($1, $2, $3, $4)
-        RETURNING
-            id,
-            organisation_id,
-            name,
-            description,
-            is_system_role,
-            created_at,
-            updated_at;
-    `;
+    INSERT INTO roles (
+      organisation_id,
+      name,
+      description,
+      is_system_role
+    )
+    VALUES ($1, $2, $3, $4)
+    RETURNING
+      id,
+      organisation_id,
+      name,
+      description,
+      is_system_role,
+      created_at,
+      updated_at;
+  `;
 
   const result = await pool.query(query, [
     organisationId,
@@ -75,7 +77,15 @@ const createRole = async ({
     isSystemRole,
   ]);
 
-  return result.rows[0];
+  const role = result.rows[0];
+
+  try {
+    await deleteCache(buildOrganisationRolesCacheKey(organisationId));
+  } catch (error) {
+    console.error("Organisation roles cache invalidation failed:", error);
+  }
+
+  return role;
 };
 
 /**
@@ -86,60 +96,95 @@ const createRole = async ({
  * @returns {Object|null} Role or null if not found
  */
 const getRoleById = async (roleId) => {
+  const cacheKey = buildRoleCacheKey(roleId);
+
+  try {
+    const cachedRole = await getCache(cacheKey);
+
+    if (cachedRole !== null) {
+      return cachedRole;
+    }
+  } catch (error) {
+    console.error("Role cache read failed:", error);
+  }
+
   const query = `
-        SELECT
-            id,
-            organisation_id,
-            name,
-            description,
-            is_system_role,
-            created_at,
-            updated_at
-        FROM roles
-        WHERE id = $1;
-    `;
+    SELECT
+      id,
+      organisation_id,
+      name,
+      description,
+      is_system_role,
+      created_at,
+      updated_at
+    FROM roles
+    WHERE id = $1;
+  `;
 
   const result = await pool.query(query, [roleId]);
 
-  return result.rows[0] || null;
+  const role = result.rows[0] || null;
+
+  if (role) {
+    try {
+      await setCache(cacheKey, role, ROLE_CACHE_TTL);
+    } catch (error) {
+      console.error("Role cache write failed:", error);
+    }
+  }
+
+  return role;
 };
 
 /**
  * Get all roles belonging to an organisation.
- *
- * The organisation ID is deliberately required so that this
- * query cannot accidentally return roles belonging to another
- * tenant.
  *
  * @param {string} organisationId
  *
  * @returns {Array} Organisation roles
  */
 const getOrganisationRoles = async (organisationId) => {
+  const cacheKey = buildOrganisationRolesCacheKey(organisationId);
+
+  try {
+    const cachedRoles = await getCache(cacheKey);
+
+    if (cachedRoles !== null) {
+      return cachedRoles;
+    }
+  } catch (error) {
+    console.error("Organisation roles cache read failed:", error);
+  }
+
   const query = `
-        SELECT
-            id,
-            organisation_id,
-            name,
-            description,
-            is_system_role,
-            created_at,
-            updated_at
-        FROM roles
-        WHERE organisation_id = $1
-        ORDER BY created_at ASC;
-    `;
+    SELECT
+      id,
+      organisation_id,
+      name,
+      description,
+      is_system_role,
+      created_at,
+      updated_at
+    FROM roles
+    WHERE organisation_id = $1
+    ORDER BY created_at ASC;
+  `;
 
   const result = await pool.query(query, [organisationId]);
 
-  return result.rows;
+  const roles = result.rows;
+
+  try {
+    await setCache(cacheKey, roles, ROLE_CACHE_TTL);
+  } catch (error) {
+    console.error("Organisation roles cache write failed:", error);
+  }
+
+  return roles;
 };
 
 /**
  * Update a role's name and description.
- *
- * The service layer should decide whether the current user
- * is allowed to modify the role.
  *
  * @param {string} roleId
  * @param {Object} data
@@ -150,47 +195,74 @@ const getOrganisationRoles = async (organisationId) => {
  */
 const updateRole = async (roleId, { name, description = null }) => {
   const query = `
-        UPDATE roles
-        SET
-            name = $1,
-            description = $2,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = $3
-        RETURNING
-            id,
-            organisation_id,
-            name,
-            description,
-            is_system_role,
-            created_at,
-            updated_at;
-    `;
+    UPDATE roles
+    SET
+      name = $1,
+      description = $2,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = $3
+    RETURNING
+      id,
+      organisation_id,
+      name,
+      description,
+      is_system_role,
+      created_at,
+      updated_at;
+  `;
 
   const result = await pool.query(query, [name, description, roleId]);
 
-  return result.rows[0] || null;
+  const role = result.rows[0] || null;
+
+  if (role) {
+    try {
+      await deleteCache(buildRoleCacheKey(role.id));
+
+      await deleteCache(buildOrganisationRolesCacheKey(role.organisation_id));
+    } catch (error) {
+      console.error("Role cache invalidation failed:", error);
+    }
+  }
+
+  return role;
 };
 
 /**
  * Delete a role.
- *
- * role_permissions records referencing this role are removed
- * automatically because the schema uses ON DELETE CASCADE.
- *
- * The service layer should determine whether deletion is allowed.
  *
  * @param {string} roleId
  *
  * @returns {boolean} True if the role was deleted
  */
 const deleteRole = async (roleId) => {
+  /**
+   * Load the role first so its organisation and cached
+   * permission information can be invalidated correctly.
+   */
+  const existingRole = await getRoleById(roleId);
+
   const query = `
-        DELETE FROM roles
-        WHERE id = $1
-        RETURNING id;
-    `;
+    DELETE FROM roles
+    WHERE id = $1
+    RETURNING id;
+  `;
 
   const result = await pool.query(query, [roleId]);
+
+  if (result.rowCount > 0 && existingRole) {
+    try {
+      await Promise.all([
+        deleteCache(buildRoleCacheKey(existingRole.id)),
+        deleteCache(
+          buildOrganisationRolesCacheKey(existingRole.organisation_id),
+        ),
+        deleteCache(buildRolePermissionsCacheKey(existingRole.id)),
+      ]);
+    } catch (error) {
+      console.error("Role cache invalidation failed:", error);
+    }
+  }
 
   return result.rowCount > 0;
 };
@@ -198,38 +270,42 @@ const deleteRole = async (roleId) => {
 /**
  * Assign a permission to a role.
  *
- * role_permissions has a composite primary key:
- *
- *     (role_id, permission_id)
- *
- * Therefore the same permission cannot be assigned to the
- * same role more than once.
- *
- * ON CONFLICT DO NOTHING makes this operation idempotent.
- * Calling it twice produces the same final relationship.
- *
  * @param {string} roleId
  * @param {string} permissionId
  *
- * @returns {Object|null} Created relationship or null if it already exists
+ * @returns {Object|null} Created relationship
  */
 const assignPermissionToRole = async (roleId, permissionId) => {
   const query = `
-        INSERT INTO role_permissions (
-            role_id,
-            permission_id
-        )
-        VALUES ($1, $2)
-        ON CONFLICT (role_id, permission_id)
-        DO NOTHING
-        RETURNING
-            role_id,
-            permission_id;
-    `;
+    INSERT INTO role_permissions (
+      role_id,
+      permission_id
+    )
+    VALUES ($1, $2)
+    ON CONFLICT (role_id, permission_id)
+    DO NOTHING
+    RETURNING
+      role_id,
+      permission_id;
+  `;
 
   const result = await pool.query(query, [roleId, permissionId]);
 
-  return result.rows[0] || null;
+  const assignment = result.rows[0] || null;
+
+  if (assignment) {
+    try {
+      await Promise.all([
+        deleteCache(buildRolePermissionsCacheKey(roleId)),
+        deleteCache(buildRolePermissionCheckCacheKey(roleId, permissionId)),
+        deleteCache(buildPermissionRolesCacheKey(permissionId)),
+      ]);
+    } catch (error) {
+      console.error("Role permission cache invalidation failed:", error);
+    }
+  }
+
+  return assignment;
 };
 
 /**
@@ -242,15 +318,27 @@ const assignPermissionToRole = async (roleId, permissionId) => {
  */
 const removePermissionFromRole = async (roleId, permissionId) => {
   const query = `
-        DELETE FROM role_permissions
-        WHERE role_id = $1
-          AND permission_id = $2
-        RETURNING
-            role_id,
-            permission_id;
-    `;
+    DELETE FROM role_permissions
+    WHERE role_id = $1
+      AND permission_id = $2
+    RETURNING
+      role_id,
+      permission_id;
+  `;
 
   const result = await pool.query(query, [roleId, permissionId]);
+
+  if (result.rowCount > 0) {
+    try {
+      await Promise.all([
+        deleteCache(buildRolePermissionsCacheKey(roleId)),
+        deleteCache(buildRolePermissionCheckCacheKey(roleId, permissionId)),
+        deleteCache(buildPermissionRolesCacheKey(permissionId)),
+      ]);
+    } catch (error) {
+      console.error("Role permission cache invalidation failed:", error);
+    }
+  }
 
   return result.rowCount > 0;
 };
@@ -258,77 +346,104 @@ const removePermissionFromRole = async (roleId, permissionId) => {
 /**
  * Get all permissions assigned to a role.
  *
- * This joins role_permissions with permissions because the
- * junction table only stores the relationship IDs.
- *
  * @param {string} roleId
  *
  * @returns {Array} Permissions assigned to the role
  */
 const getRolePermissions = async (roleId) => {
+  const cacheKey = buildRolePermissionsCacheKey(roleId);
+
+  try {
+    const cachedPermissions = await getCache(cacheKey);
+
+    if (cachedPermissions !== null) {
+      return cachedPermissions;
+    }
+  } catch (error) {
+    console.error("Role permissions cache read failed:", error);
+  }
+
   const query = `
-        SELECT
-            p.id,
-            p.name,
-            p.description,
-            p.created_at,
-            p.updated_at
-        FROM role_permissions rp
-        INNER JOIN permissions p
-            ON p.id = rp.permission_id
-        WHERE rp.role_id = $1
-        ORDER BY p.name ASC;
-    `;
+    SELECT
+      p.id,
+      p.name,
+      p.description,
+      p.created_at,
+      p.updated_at
+    FROM role_permissions rp
+    INNER JOIN permissions p
+      ON p.id = rp.permission_id
+    WHERE rp.role_id = $1
+    ORDER BY p.name ASC;
+  `;
 
   const result = await pool.query(query, [roleId]);
 
-  return result.rows;
+  const permissions = result.rows;
+
+  try {
+    await setCache(cacheKey, permissions, ROLE_CACHE_TTL);
+  } catch (error) {
+    console.error("Role permissions cache write failed:", error);
+  }
+
+  return permissions;
 };
 
 /**
  * Get all roles that have a specific permission.
- *
- * Example:
- *
- * If CREATE_INVOICE is assigned to:
- *
- *     Manager
- *     Cashier
- *
- * this function returns both roles.
  *
  * @param {string} permissionId
  *
  * @returns {Array} Roles having the permission
  */
 const getRolesWithPermission = async (permissionId) => {
+  const cacheKey = buildPermissionRolesCacheKey(permissionId);
+
+  try {
+    const cachedRoles = await getCache(cacheKey);
+
+    if (cachedRoles !== null) {
+      return cachedRoles;
+    }
+  } catch (error) {
+    console.error("Permission roles cache read failed:", error);
+  }
+
   const query = `
-        SELECT
-            r.id,
-            r.organisation_id,
-            r.name,
-            r.description,
-            r.is_system_role,
-            r.created_at,
-            r.updated_at
-        FROM role_permissions rp
-        INNER JOIN roles r
-            ON r.id = rp.role_id
-        WHERE rp.permission_id = $1
-        ORDER BY r.name ASC;
-    `;
+    SELECT
+      r.id,
+      r.organisation_id,
+      r.name,
+      r.description,
+      r.is_system_role,
+      r.created_at,
+      r.updated_at
+    FROM role_permissions rp
+    INNER JOIN roles r
+      ON r.id = rp.role_id
+    WHERE rp.permission_id = $1
+    ORDER BY r.name ASC;
+  `;
 
   const result = await pool.query(query, [permissionId]);
 
-  return result.rows;
+  const roles = result.rows;
+
+  try {
+    await setCache(cacheKey, roles, ROLE_CACHE_TTL);
+  } catch (error) {
+    console.error("Permission roles cache write failed:", error);
+  }
+
+  return roles;
 };
 
 /**
  * Check whether a role has a particular permission.
  *
- * This returns a boolean instead of the permission record
- * because the main purpose of this function is authorization
- * checks.
+ * This is a frequent authorization lookup, so the boolean
+ * result is cached for a short period.
  *
  * @param {string} roleId
  * @param {string} permissionId
@@ -336,23 +451,40 @@ const getRolesWithPermission = async (permissionId) => {
  * @returns {boolean} True if the role has the permission
  */
 const hasRolePermission = async (roleId, permissionId) => {
+  const cacheKey = buildRolePermissionCheckCacheKey(roleId, permissionId);
+
+  try {
+    const cachedResult = await getCache(cacheKey);
+
+    if (cachedResult !== null) {
+      return cachedResult;
+    }
+  } catch (error) {
+    console.error("Role permission check cache read failed:", error);
+  }
+
   const query = `
-        SELECT EXISTS (
-            SELECT 1
-            FROM role_permissions
-            WHERE role_id = $1
-              AND permission_id = $2
-        ) AS has_permission;
-    `;
+    SELECT EXISTS (
+      SELECT 1
+      FROM role_permissions
+      WHERE role_id = $1
+        AND permission_id = $2
+    ) AS has_permission;
+  `;
 
   const result = await pool.query(query, [roleId, permissionId]);
 
-  return result.rows[0].has_permission;
+  const hasPermission = result.rows[0].has_permission;
+
+  try {
+    await setCache(cacheKey, hasPermission, ROLE_CACHE_TTL);
+  } catch (error) {
+    console.error("Role permission check cache write failed:", error);
+  }
+
+  return hasPermission;
 };
 
-/**
- * Export role repository functions.
- */
 module.exports = {
   createRole,
   getRoleById,

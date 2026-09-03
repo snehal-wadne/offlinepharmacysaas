@@ -7,30 +7,32 @@
  * Permissions represent individual capabilities available
  * inside the application.
  *
- * Examples:
- *
- * CREATE_INVOICE
- * VIEW_INVENTORY
- * ALLOW_REFUND
- * CREATE_PURCHASE
- *
- * Permissions are global definitions. They are not owned by
+ * Permissions are global definitions and are not owned by
  * a particular organisation.
  *
- * Roles receive permissions through the role_permissions
- * junction table.
- *
- * This repository handles persistence only.
+ * This repository handles persistence and cache access.
  * Authorization and business rules belong in the service layer.
+ *
+ * PostgreSQL remains the source of truth.
+ * Redis is used only as a short-lived read cache.
  */
 
 const { pool } = require("../db/connection");
+const { getCache, setCache, deleteCache } = require("../cache/cache");
+
+const PERMISSION_CACHE_TTL = 60;
+
+/**
+ * Build Redis cache keys.
+ */
+const buildPermissionCacheKey = (permissionId) => `permission:${permissionId}`;
+
+const buildPermissionNameCacheKey = (name) => `permission:name:${name}`;
+
+const PERMISSION_ALL_CACHE_KEY = "permission:all";
 
 /**
  * Create a permission.
- *
- * Permission names must be unique according to the database
- * constraint on the permissions table.
  *
  * @param {Object} data
  * @param {string} data.name
@@ -40,22 +42,30 @@ const { pool } = require("../db/connection");
  */
 const createPermission = async ({ name, description }) => {
   const query = `
-        INSERT INTO permissions (
-            name,
-            description
-        )
-        VALUES ($1, $2)
-        RETURNING
-            id,
-            name,
-            description,
-            created_at,
-            updated_at;
-    `;
+    INSERT INTO permissions (
+      name,
+      description
+    )
+    VALUES ($1, $2)
+    RETURNING
+      id,
+      name,
+      description,
+      created_at,
+      updated_at;
+  `;
 
   const result = await pool.query(query, [name, description]);
 
-  return result.rows[0];
+  const permission = result.rows[0];
+
+  try {
+    await deleteCache(PERMISSION_ALL_CACHE_KEY);
+  } catch (error) {
+    console.error("Permission list cache invalidation failed:", error);
+  }
+
+  return permission;
 };
 
 /**
@@ -66,51 +76,88 @@ const createPermission = async ({ name, description }) => {
  * @returns {Object|null} Permission or null if not found
  */
 const getPermissionById = async (permissionId) => {
+  const cacheKey = buildPermissionCacheKey(permissionId);
+
+  try {
+    const cachedPermission = await getCache(cacheKey);
+
+    if (cachedPermission !== null) {
+      return cachedPermission;
+    }
+  } catch (error) {
+    console.error("Permission cache read failed:", error);
+  }
+
   const query = `
-        SELECT
-            id,
-            name,
-            description,
-            created_at,
-            updated_at
-        FROM permissions
-        WHERE id = $1;
-    `;
+    SELECT
+      id,
+      name,
+      description,
+      created_at,
+      updated_at
+    FROM permissions
+    WHERE id = $1;
+  `;
 
   const result = await pool.query(query, [permissionId]);
 
-  return result.rows[0] || null;
+  const permission = result.rows[0] || null;
+
+  if (permission) {
+    try {
+      await setCache(cacheKey, permission, PERMISSION_CACHE_TTL);
+    } catch (error) {
+      console.error("Permission cache write failed:", error);
+    }
+  }
+
+  return permission;
 };
 
 /**
  * Get a permission by its unique name.
- *
- * Example:
- *
- *     CREATE_INVOICE
- *
- * This is useful when application code needs to resolve a
- * permission before assigning it to a role.
  *
  * @param {string} name
  *
  * @returns {Object|null} Permission or null if not found
  */
 const getPermissionByName = async (name) => {
+  const cacheKey = buildPermissionNameCacheKey(name);
+
+  try {
+    const cachedPermission = await getCache(cacheKey);
+
+    if (cachedPermission !== null) {
+      return cachedPermission;
+    }
+  } catch (error) {
+    console.error("Permission name cache read failed:", error);
+  }
+
   const query = `
-        SELECT
-            id,
-            name,
-            description,
-            created_at,
-            updated_at
-        FROM permissions
-        WHERE name = $1;
-    `;
+    SELECT
+      id,
+      name,
+      description,
+      created_at,
+      updated_at
+    FROM permissions
+    WHERE name = $1;
+  `;
 
   const result = await pool.query(query, [name]);
 
-  return result.rows[0] || null;
+  const permission = result.rows[0] || null;
+
+  if (permission) {
+    try {
+      await setCache(cacheKey, permission, PERMISSION_CACHE_TTL);
+    } catch (error) {
+      console.error("Permission name cache write failed:", error);
+    }
+  }
+
+  return permission;
 };
 
 /**
@@ -121,30 +168,45 @@ const getPermissionByName = async (name) => {
  * @returns {Array} All permissions
  */
 const getAllPermissions = async () => {
+  try {
+    const cachedPermissions = await getCache(PERMISSION_ALL_CACHE_KEY);
+
+    if (cachedPermissions !== null) {
+      return cachedPermissions;
+    }
+  } catch (error) {
+    console.error("All permissions cache read failed:", error);
+  }
+
   const query = `
-        SELECT
-            id,
-            name,
-            description,
-            created_at,
-            updated_at
-        FROM permissions
-        ORDER BY name ASC;
-    `;
+    SELECT
+      id,
+      name,
+      description,
+      created_at,
+      updated_at
+    FROM permissions
+    ORDER BY name ASC;
+  `;
 
   const result = await pool.query(query);
 
-  return result.rows;
+  const permissions = result.rows;
+
+  try {
+    await setCache(PERMISSION_ALL_CACHE_KEY, permissions, PERMISSION_CACHE_TTL);
+  } catch (error) {
+    console.error("All permissions cache write failed:", error);
+  }
+
+  return permissions;
 };
 
 /**
  * Update a permission.
  *
- * In production, permissions are normally treated as
- * controlled system definitions rather than user-editable data.
- *
- * This repository operation exists so the service layer can
- * decide whether a particular update is allowed.
+ * The old permission is loaded first because its old name
+ * may have an existing Redis lookup key.
  *
  * @param {string} permissionId
  * @param {Object} data
@@ -154,56 +216,86 @@ const getAllPermissions = async () => {
  * @returns {Object|null} Updated permission
  */
 const updatePermission = async (permissionId, { name, description }) => {
+  const existingPermission = await getPermissionById(permissionId);
+
   const query = `
-        UPDATE permissions
-        SET
-            name = $1,
-            description = $2,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = $3
-        RETURNING
-            id,
-            name,
-            description,
-            created_at,
-            updated_at;
-    `;
+    UPDATE permissions
+    SET
+      name = $1,
+      description = $2,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = $3
+    RETURNING
+      id,
+      name,
+      description,
+      created_at,
+      updated_at;
+  `;
 
   const result = await pool.query(query, [name, description, permissionId]);
 
-  return result.rows[0] || null;
+  const permission = result.rows[0] || null;
+
+  if (permission) {
+    try {
+      const keys = [
+        deleteCache(buildPermissionCacheKey(permission.id)),
+        deleteCache(buildPermissionNameCacheKey(permission.name)),
+        deleteCache(PERMISSION_ALL_CACHE_KEY),
+      ];
+
+      if (existingPermission && existingPermission.name !== permission.name) {
+        keys.push(
+          deleteCache(buildPermissionNameCacheKey(existingPermission.name)),
+        );
+      }
+
+      await Promise.all(keys);
+    } catch (error) {
+      console.error("Permission cache invalidation failed:", error);
+    }
+  }
+
+  return permission;
 };
 
 /**
  * Delete a permission.
  *
- * Any role_permissions records referencing this permission
- * will be removed automatically when the database foreign-key
- * relationship uses ON DELETE CASCADE.
- *
- * The service layer should normally restrict deletion of
- * permissions that are part of the application's standard
- * permission set.
+ * The permission is loaded first so both ID and name based
+ * cache entries can be invalidated after deletion.
  *
  * @param {string} permissionId
  *
  * @returns {boolean} True if the permission was deleted
  */
 const deletePermission = async (permissionId) => {
+  const existingPermission = await getPermissionById(permissionId);
+
   const query = `
-        DELETE FROM permissions
-        WHERE id = $1
-        RETURNING id;
-    `;
+    DELETE FROM permissions
+    WHERE id = $1
+    RETURNING id;
+  `;
 
   const result = await pool.query(query, [permissionId]);
+
+  if (result.rowCount > 0 && existingPermission) {
+    try {
+      await Promise.all([
+        deleteCache(buildPermissionCacheKey(existingPermission.id)),
+        deleteCache(buildPermissionNameCacheKey(existingPermission.name)),
+        deleteCache(PERMISSION_ALL_CACHE_KEY),
+      ]);
+    } catch (error) {
+      console.error("Permission cache invalidation failed:", error);
+    }
+  }
 
   return result.rowCount > 0;
 };
 
-/**
- * Export permission repository functions.
- */
 module.exports = {
   createPermission,
   getPermissionById,

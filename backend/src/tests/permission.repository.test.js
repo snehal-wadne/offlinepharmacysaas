@@ -1,24 +1,23 @@
 /**
- * Permission Repository Test
+ * Permission Repository Integration Tests
  *
- * Purpose:
- * Verifies permission repository operations against the
- * real PostgreSQL development database.
+ * Tests the Permission Repository against the real PostgreSQL
+ * database and local Redis instance.
  *
- * Test flow:
- *
- * 1. Create test permissions.
- * 2. Retrieve permissions by ID.
- * 3. Retrieve permissions by name.
- * 4. Retrieve all permissions.
- * 5. Update a permission.
- * 6. Verify the updated permission.
- * 7. Delete the permissions.
- * 8. Verify deletion.
- *
- * Permissions are global records, so this test does not need
- * an organisation or user.
+ * The tests verify:
+ * - Permission creation
+ * - Permission ID cache miss and hit
+ * - Permission name cache miss and hit
+ * - All permissions list caching
+ * - Cache invalidation after creation
+ * - Cache invalidation after updates
+ * - Cache invalidation after deletion
+ * - Old permission-name cache invalidation
  */
+
+require("dotenv").config();
+
+const assert = require("assert");
 
 const {
   createPermission,
@@ -31,179 +30,363 @@ const {
 
 const { pool } = require("../db/connection");
 
+const {
+  redisClient,
+  connectRedis,
+  disconnectRedis,
+} = require("../cache/redis");
+
+const { getCache, deleteCache } = require("../cache/cache");
+
+const uniqueValue = (prefix) =>
+  `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+const buildPermissionCacheKey = (permissionId) => `permission:${permissionId}`;
+
+const buildPermissionNameCacheKey = (name) => `permission:name:${name}`;
+
+const PERMISSION_ALL_CACHE_KEY = "permission:all";
+
 const runTests = async () => {
-  let permissionId;
-  let secondPermissionId;
+  let permissionId = null;
 
-  const timestamp = Date.now();
+  const permissionName = uniqueValue("VIEW_TEST");
 
-  const permissionName = `TEST_CREATE_INVOICE_${timestamp}`;
-
-  const secondPermissionName = `TEST_VIEW_INVENTORY_${timestamp}`;
+  const updatedPermissionName = uniqueValue("UPDATED_TEST");
 
   try {
-    /*
-     * ------------------------------------------------------
-     * 1. CREATE FIRST PERMISSION
-     * ------------------------------------------------------
-     */
-    console.log("--- Creating first permission ---");
+    await pool.query("SELECT 1");
+    await connectRedis();
+
+    console.log("\nRunning Permission Repository tests...\n");
+
+    // ---------------------------------------------------------
+    // Clean global permission-list cache
+    // ---------------------------------------------------------
+
+    await deleteCache(PERMISSION_ALL_CACHE_KEY);
+
+    // ---------------------------------------------------------
+    // Create permission
+    // ---------------------------------------------------------
 
     const permission = await createPermission({
       name: permissionName,
-      description: "Test permission for creating invoices",
+      description: "Permission repository Redis test",
     });
 
     permissionId = permission.id;
 
-    console.log(permission);
+    assert.ok(permission);
+    assert.ok(permission.id);
+    assert.strictEqual(permission.name, permissionName);
+    assert.strictEqual(
+      permission.description,
+      "Permission repository Redis test",
+    );
 
-    /*
-     * ------------------------------------------------------
-     * 2. CREATE SECOND PERMISSION
-     * ------------------------------------------------------
-     */
-    console.log("--- Creating second permission ---");
+    assert.strictEqual(await getCache(PERMISSION_ALL_CACHE_KEY), null);
 
-    const secondPermission = await createPermission({
-      name: secondPermissionName,
-      description: "Test permission for viewing inventory",
-    });
+    console.log("✓ 1. Create permission invalidates permission list cache");
 
-    secondPermissionId = secondPermission.id;
+    // ---------------------------------------------------------
+    // Get permission by ID
+    // ---------------------------------------------------------
 
-    console.log(secondPermission);
+    const firstPermission = await getPermissionById(permissionId);
 
-    /*
-     * ------------------------------------------------------
-     * 3. GET PERMISSION BY ID
-     * ------------------------------------------------------
-     */
-    console.log("--- Getting permission by ID ---");
+    assert.ok(firstPermission);
+    assert.strictEqual(firstPermission.id, permissionId);
 
-    const permissionById = await getPermissionById(permissionId);
+    const cachedById = await getCache(buildPermissionCacheKey(permissionId));
 
-    console.log(permissionById);
+    assert.ok(cachedById);
+    assert.strictEqual(cachedById.id, permissionId);
 
-    /*
-     * ------------------------------------------------------
-     * 4. GET PERMISSION BY NAME
-     * ------------------------------------------------------
-     */
-    console.log("--- Getting permission by name ---");
+    console.log("✓ 2. Permission ID cache miss populates Redis");
+
+    // ---------------------------------------------------------
+    // Verify ID cache hit
+    // ---------------------------------------------------------
+
+    await pool.query(
+      `
+        UPDATE permissions
+        SET description = $1
+        WHERE id = $2;
+      `,
+      ["Database description change", permissionId],
+    );
+
+    const idCacheHit = await getPermissionById(permissionId);
+
+    assert.strictEqual(
+      idCacheHit.description,
+      "Permission repository Redis test",
+    );
+
+    await pool.query(
+      `
+        UPDATE permissions
+        SET description = $1
+        WHERE id = $2;
+      `,
+      ["Permission repository Redis test", permissionId],
+    );
+
+    console.log("✓ 3. Permission ID lookup uses Redis cache");
+
+    // ---------------------------------------------------------
+    // Get permission by name
+    // ---------------------------------------------------------
+
+    await deleteCache(buildPermissionNameCacheKey(permissionName));
 
     const permissionByName = await getPermissionByName(permissionName);
 
-    console.log(permissionByName);
+    assert.ok(permissionByName);
+    assert.strictEqual(permissionByName.id, permissionId);
 
-    /*
-     * ------------------------------------------------------
-     * 5. GET ALL PERMISSIONS
-     * ------------------------------------------------------
-     *
-     * The development database may already contain other
-     * permissions, so the output can contain more than the
-     * two permissions created by this test.
-     */
-    console.log("--- Getting all permissions ---");
+    const cachedByName = await getCache(
+      buildPermissionNameCacheKey(permissionName),
+    );
+
+    assert.ok(cachedByName);
+    assert.strictEqual(cachedByName.id, permissionId);
+
+    console.log("✓ 4. Permission name cache miss populates Redis");
+
+    // ---------------------------------------------------------
+    // Verify name cache hit
+    // ---------------------------------------------------------
+
+    await pool.query(
+      `
+        UPDATE permissions
+        SET description = $1
+        WHERE id = $2;
+      `,
+      ["Database name lookup change", permissionId],
+    );
+
+    const nameCacheHit = await getPermissionByName(permissionName);
+
+    assert.strictEqual(
+      nameCacheHit.description,
+      "Permission repository Redis test",
+    );
+
+    await pool.query(
+      `
+        UPDATE permissions
+        SET description = $1
+        WHERE id = $2;
+      `,
+      ["Permission repository Redis test", permissionId],
+    );
+
+    console.log("✓ 5. Permission name lookup uses Redis cache");
+
+    // ---------------------------------------------------------
+    // Get all permissions
+    // ---------------------------------------------------------
+
+    await deleteCache(PERMISSION_ALL_CACHE_KEY);
 
     const allPermissions = await getAllPermissions();
 
-    console.log(allPermissions);
+    assert.ok(Array.isArray(allPermissions));
 
-    /*
-     * ------------------------------------------------------
-     * 6. UPDATE FIRST PERMISSION
-     * ------------------------------------------------------
-     */
-    console.log("--- Updating first permission ---");
+    assert.ok(allPermissions.some((item) => item.id === permissionId));
+
+    const cachedAllPermissions = await getCache(PERMISSION_ALL_CACHE_KEY);
+
+    assert.ok(Array.isArray(cachedAllPermissions));
+
+    console.log("✓ 6. All permissions cache works");
+
+    // ---------------------------------------------------------
+    // Verify all-permissions cache hit
+    // ---------------------------------------------------------
+
+    await pool.query(
+      `
+        UPDATE permissions
+        SET description = $1
+        WHERE id = $2;
+      `,
+      ["Database all-list change", permissionId],
+    );
+
+    const allPermissionsCacheHit = await getAllPermissions();
+
+    const cachedPermission = allPermissionsCacheHit.find(
+      (item) => item.id === permissionId,
+    );
+
+    assert.strictEqual(
+      cachedPermission.description,
+      "Permission repository Redis test",
+    );
+
+    await pool.query(
+      `
+        UPDATE permissions
+        SET description = $1
+        WHERE id = $2;
+      `,
+      ["Permission repository Redis test", permissionId],
+    );
+
+    console.log("✓ 7. All permissions lookup uses Redis cache");
+
+    // ---------------------------------------------------------
+    // Recreate all caches before update
+    // ---------------------------------------------------------
+
+    await getPermissionById(permissionId);
+
+    await getPermissionByName(permissionName);
+
+    await getAllPermissions();
+
+    assert.ok(await getCache(buildPermissionCacheKey(permissionId)));
+
+    assert.ok(await getCache(buildPermissionNameCacheKey(permissionName)));
+
+    assert.ok(await getCache(PERMISSION_ALL_CACHE_KEY));
+
+    // ---------------------------------------------------------
+    // Update permission name
+    // ---------------------------------------------------------
 
     const updatedPermission = await updatePermission(permissionId, {
-      name: `TEST_CREATE_INVOICE_UPDATED_${timestamp}`,
-      description: "Updated invoice creation permission",
+      name: updatedPermissionName,
+      description: "Updated permission description",
     });
 
-    console.log(updatedPermission);
+    assert.ok(updatedPermission);
+    assert.strictEqual(updatedPermission.name, updatedPermissionName);
 
-    /*
-     * ------------------------------------------------------
-     * 7. VERIFY UPDATED PERMISSION
-     * ------------------------------------------------------
-     */
-    console.log("--- Verifying updated permission ---");
+    assert.strictEqual(
+      await getCache(buildPermissionCacheKey(permissionId)),
+      null,
+    );
 
-    const updatedPermissionCheck = await getPermissionById(permissionId);
+    assert.strictEqual(
+      await getCache(buildPermissionNameCacheKey(permissionName)),
+      null,
+    );
 
-    console.log(updatedPermissionCheck);
+    assert.strictEqual(
+      await getCache(buildPermissionNameCacheKey(updatedPermissionName)),
+      null,
+    );
 
-    /*
-     * ------------------------------------------------------
-     * 8. DELETE FIRST PERMISSION
-     * ------------------------------------------------------
-     */
-    console.log("--- Deleting first permission ---");
+    assert.strictEqual(await getCache(PERMISSION_ALL_CACHE_KEY), null);
 
-    const firstDeleted = await deletePermission(permissionId);
+    console.log(
+      "✓ 8. Permission update invalidates ID, old-name, new-name, and list caches",
+    );
 
-    console.log({
-      firstDeleted,
-    });
+    // ---------------------------------------------------------
+    // Verify new name works
+    // ---------------------------------------------------------
 
-    /*
-     * ------------------------------------------------------
-     * 9. DELETE SECOND PERMISSION
-     * ------------------------------------------------------
-     */
-    console.log("--- Deleting second permission ---");
+    const freshUpdatedPermission = await getPermissionByName(
+      updatedPermissionName,
+    );
 
-    const secondDeleted = await deletePermission(secondPermissionId);
+    assert.ok(freshUpdatedPermission);
 
-    console.log({
-      secondDeleted,
-    });
+    assert.strictEqual(freshUpdatedPermission.id, permissionId);
 
-    /*
-     * ------------------------------------------------------
-     * 10. VERIFY FIRST PERMISSION WAS DELETED
-     * ------------------------------------------------------
-     */
-    console.log("--- Verifying first permission deletion ---");
+    assert.strictEqual(
+      freshUpdatedPermission.description,
+      "Updated permission description",
+    );
 
-    const deletedFirstPermission = await getPermissionById(permissionId);
+    console.log("✓ 9. Updated permission can be found by its new name");
 
-    console.log(deletedFirstPermission);
+    // ---------------------------------------------------------
+    // Verify old name no longer works
+    // ---------------------------------------------------------
 
-    /*
-     * ------------------------------------------------------
-     * 11. VERIFY SECOND PERMISSION WAS DELETED
-     * ------------------------------------------------------
-     */
-    console.log("--- Verifying second permission deletion ---");
+    const oldNamePermission = await getPermissionByName(permissionName);
 
-    const deletedSecondPermission = await getPermissionById(secondPermissionId);
+    assert.strictEqual(oldNamePermission, null);
 
-    console.log(deletedSecondPermission);
+    console.log("✓ 10. Old permission name no longer resolves");
 
-    /*
-     * ------------------------------------------------------
-     * FINAL RESULT
-     * ------------------------------------------------------
-     */
-    console.log("");
-    console.log("Permission repository tests completed successfully.");
+    // ---------------------------------------------------------
+    // Recreate caches before delete
+    // ---------------------------------------------------------
+
+    await getPermissionById(permissionId);
+
+    await getPermissionByName(updatedPermissionName);
+
+    await getAllPermissions();
+
+    // ---------------------------------------------------------
+    // Delete permission
+    // ---------------------------------------------------------
+
+    const deleted = await deletePermission(permissionId);
+
+    assert.strictEqual(deleted, true);
+
+    assert.strictEqual(
+      await getCache(buildPermissionCacheKey(permissionId)),
+      null,
+    );
+
+    assert.strictEqual(
+      await getCache(buildPermissionNameCacheKey(updatedPermissionName)),
+      null,
+    );
+
+    assert.strictEqual(await getCache(PERMISSION_ALL_CACHE_KEY), null);
+
+    const deletedPermission = await getPermissionById(permissionId);
+
+    assert.strictEqual(deletedPermission, null);
+
+    console.log("✓ 11. Permission deletion removes database and cache data");
+
+    console.log("\n✓ All Permission Repository tests passed.\n");
   } catch (error) {
-    console.error("Permission repository test failed.");
-
+    console.error("\n✗ Permission Repository test failed.");
     console.error(error);
 
-    process.exitCode = 1;
+    throw error;
   } finally {
-    /*
-     * Close the PostgreSQL connection pool so the Node.js
-     * process can terminate cleanly.
-     */
+    if (permissionId) {
+      try {
+        await pool.query(
+          `
+            DELETE FROM permissions
+            WHERE id = $1;
+          `,
+          [permissionId],
+        );
+      } catch (error) {
+        console.error("Permission cleanup failed:", error);
+      }
+    }
+
+    try {
+      if (redisClient.isOpen) {
+        await disconnectRedis();
+      }
+    } catch (error) {
+      console.error("Redis disconnect failed:", error);
+    }
+
     await pool.end();
   }
 };
 
-runTests();
+runTests().catch(() => {
+  process.exit(1);
+});
