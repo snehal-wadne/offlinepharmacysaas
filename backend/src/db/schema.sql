@@ -420,7 +420,7 @@ purchase_number VARCHAR(50) NOT NULL,
     CONSTRAINT purchases_status_check
         CHECK (
             status IN (
-                'DRAFT'
+                'DRAFT',
                 'PENDING',
                 'APPROVED',
                 'PARTIALLY_RECEIVED',

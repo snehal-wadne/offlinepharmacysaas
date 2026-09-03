@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -17,10 +17,44 @@ import {
   MOCK_PURCHASE_ORDERS,
   MOCK_RECENT_MOVEMENTS,
 } from '../../data/inventoryDashboardMockData';
+import { fetchPurchases } from '../../api/purchaseApi';
 
 export default function InventoryDashboard({ onNavigate, onShowToast }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
+
+  const [pendingOrders, setPendingOrders] = useState(MOCK_PURCHASE_ORDERS);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadPendingPOs() {
+      try {
+        const response = await fetchPurchases({ status: 'PENDING' });
+        if (isMounted && response && response.data && response.data.length > 0) {
+          const formatted = response.data.map((po) => ({
+            id: po.purchase_number || po.purchaseNumber || po.id,
+            rawId: po.id,
+            supplierName: po.supplier_name || po.supplierName || po.supplier || 'Supplier',
+            amount: po.total_amount != null
+              ? `₹${Number(po.total_amount).toLocaleString('en-IN')}`
+              : po.totalAmount
+              ? `₹${Number(po.totalAmount).toLocaleString('en-IN')}`
+              : po.amount || '₹12,450.00',
+            timeAgo: po.order_date
+              ? new Date(po.order_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+              : po.orderDate || 'Today',
+          }));
+          setPendingOrders(formatted);
+        }
+      } catch (err) {
+        console.log('[InventoryDashboard] Backend offline or using fallback mock pending POs');
+      }
+    }
+    loadPendingPOs();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleQuickAction = (id, label) => {
     if (id === 'stock-adjustment') {
@@ -113,7 +147,7 @@ export default function InventoryDashboard({ onNavigate, onShowToast }) {
         </View>
         <View style={[styles.gridColRight, isCompact && styles.gridColFull]}>
           <PendingPurchaseOrders
-            orders={MOCK_PURCHASE_ORDERS}
+            orders={pendingOrders}
             onViewAll={handleViewAllPurchaseOrders}
             onOrderPress={handleOrderPress}
           />
