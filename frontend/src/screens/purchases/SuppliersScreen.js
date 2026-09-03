@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,69 +11,154 @@ import {
   Platform,
 } from 'react-native';
 import InventoryStatCard from '../../components/inventory/InventoryStatCard';
+import { MOCK_SUPPLIERS_LIST } from '../../data/suppliersMockData';
 import {
-  SUPPLIERS_KPIS,
-  MOCK_SUPPLIERS_LIST,
-  SUPPLIER_CATEGORY_FILTER,
-} from '../../data/suppliersMockData';
+  fetchSuppliers,
+  createSupplier,
+  updateSupplierStatus,
+} from '../../api/purchaseApi';
+
+const SUPPLIER_STATUS_FILTER = ['All Statuses', 'Active', 'Pending', 'Inactive'];
+
+const SUPPLIER_STATUS_BADGES = {
+  Active: { bg: '#DCFCE7', text: '#15803D', dot: '#16A34A' },
+  Pending: { bg: '#FEF3C7', text: '#B45309', dot: '#F59E0B' },
+  Inactive: { bg: '#F1F5F9', text: '#64748B', dot: '#94A3B8' },
+};
 
 export default function SuppliersScreen({ onShowToast, onNavigate }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
-  const isMobile = width < 768;
 
-  // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('All Categories');
-
-  // Suppliers List State
+  const [selectedStatus, setSelectedStatus] = useState('All Statuses');
   const [suppliers, setSuppliers] = useState(MOCK_SUPPLIERS_LIST);
+  const [activeMenuId, setActiveMenuId] = useState(null);
 
-  // Add Supplier Modal State
+  useEffect(() => {
+    let isMounted = true;
+    async function loadSuppliers() {
+      try {
+        const res = await fetchSuppliers();
+        if (isMounted && res && res.data && res.data.length > 0) {
+          const formatted = res.data.map((sup, idx) => ({
+            realId: sup.id,
+            id: `SUP-${String(idx + 1).padStart(3, '0')}`,
+            name: sup.name,
+            contactPerson: sup.contact_person || sup.contactPerson || 'N/A',
+            phone: sup.phone || '+91 98XXX XXXXX',
+            email: sup.email || 'orders@vendor.com',
+            city: sup.city || 'Mumbai, MH',
+            gstin: sup.gstin || '27AAACB0000A1Z5',
+            paymentTerms: 'Net 30',
+            balance: '₹0.00',
+            status:
+              sup.status === 'ACTIVE'
+                ? 'Active'
+                : sup.status === 'PENDING'
+                ? 'Pending'
+                : 'Inactive',
+            category: 'Medicines & Injections',
+          }));
+          setSuppliers(formatted);
+        }
+      } catch (err) {
+        console.log('[SuppliersScreen] Backend offline or using default mock data');
+      }
+    }
+    loadSuppliers();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const [modalVisible, setModalVisible] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
-    category: 'Branded Formulations',
     contactPerson: '',
     phone: '',
     email: '',
-    city: 'Mumbai',
+    city: '',
     gstin: '',
+    paymentTerms: 'Net 30',
+    category: 'Medicines & Injections',
   });
   const [formErrors, setFormErrors] = useState({});
 
-  // Filtered Suppliers
+  // Dynamic KPI calculations
+  const totalVendors = suppliers.length;
+  const activeVendors = suppliers.filter((s) => s.status === 'Active').length;
+  const pendingVendors = suppliers.filter((s) => s.status === 'Pending').length;
+
+  const dynamicKpis = [
+    {
+      id: 'total',
+      label: 'TOTAL VENDORS',
+      value: String(totalVendors),
+      subtext: 'Active directory',
+      variant: 'teal',
+      filterKey: 'All Statuses',
+    },
+    {
+      id: 'active',
+      label: 'ACTIVE SUPPLIERS',
+      value: String(activeVendors),
+      subtext: 'Verified suppliers',
+      variant: 'emerald',
+      filterKey: 'Active',
+    },
+    {
+      id: 'pending',
+      label: 'PENDING APPROVALS',
+      value: String(pendingVendors),
+      subtext: 'Awaiting documentation',
+      variant: 'amber',
+      filterKey: 'Pending',
+    },
+    {
+      id: 'outstanding',
+      label: 'TOTAL OUTSTANDING',
+      value: '₹1,42,850',
+      subtext: 'Payable balance',
+      variant: 'rose',
+      filterKey: 'All Statuses',
+    },
+  ];
+
   const filteredSuppliers = suppliers.filter((sup) => {
+    const query = searchQuery.toLowerCase();
     const matchesSearch =
-      sup.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      sup.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      sup.contactPerson.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      sup.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      sup.gstin.toLowerCase().includes(searchQuery.toLowerCase());
+      sup.name.toLowerCase().includes(query) ||
+      sup.contactPerson.toLowerCase().includes(query) ||
+      sup.city.toLowerCase().includes(query) ||
+      sup.gstin.toLowerCase().includes(query) ||
+      sup.category.toLowerCase().includes(query);
 
-    const matchesCategory =
-      selectedCategory === 'All Categories' || sup.category === selectedCategory;
+    const matchesStatus =
+      selectedStatus === 'All Statuses' || sup.status === selectedStatus;
 
-    return matchesSearch && matchesCategory;
+    return matchesSearch && matchesStatus;
   });
 
   const handleOpenModal = () => {
     setFormData({
       name: '',
-      category: 'Branded Formulations',
       contactPerson: '',
       phone: '',
       email: '',
-      city: 'Mumbai',
+      city: '',
       gstin: '',
+      paymentTerms: 'Net 30',
+      category: 'Medicines & Injections',
     });
     setFormErrors({});
     setModalVisible(true);
   };
 
-  const handleSaveSupplier = () => {
+  const handleAddSupplier = async () => {
     const errors = {};
-    if (!formData.name.trim()) errors.name = 'Supplier name is required';
+    if (!formData.name.trim()) errors.name = 'Supplier Name is required';
+    if (!formData.contactPerson.trim()) errors.contactPerson = 'Contact person is required';
     if (!formData.phone.trim()) errors.phone = 'Phone number is required';
 
     if (Object.keys(errors).length > 0) {
@@ -81,24 +166,65 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
       return;
     }
 
+    const tempId = `SUP-${String(suppliers.length + 1).padStart(3, '0')}`;
     const newSup = {
-      id: `SUP-10${10 + suppliers.length}`,
+      realId: tempId,
+      id: tempId,
       name: formData.name,
-      category: formData.category || 'Pharmaceuticals',
-      contactPerson: formData.contactPerson || 'Account Executive',
+      contactPerson: formData.contactPerson,
       phone: formData.phone,
-      email: formData.email || 'orders@pharma.in',
-      city: formData.city || 'Mumbai',
-      gstin: formData.gstin || '27AABCT1234F1Z0',
+      email: formData.email || 'info@supplier.com',
+      city: formData.city || 'Mumbai, MH',
+      gstin: formData.gstin || '27AAACB0000A1Z5',
+      paymentTerms: formData.paymentTerms || 'Net 30',
       balance: '₹0.00',
       status: 'Active',
+      category: formData.category || 'Medicines & Injections',
     };
+
+    try {
+      const res = await createSupplier({
+        name: formData.name,
+        contactPerson: formData.contactPerson,
+        phone: formData.phone,
+        email: formData.email,
+        city: formData.city,
+        gstin: formData.gstin,
+        status: 'ACTIVE',
+      });
+      if (res && res.data && res.data.id) {
+        newSup.realId = res.data.id;
+      }
+    } catch (err) {
+      console.warn('[SuppliersScreen] Backend save failed, updated local state:', err.message);
+    }
 
     setSuppliers((prev) => [newSup, ...prev]);
     setModalVisible(false);
 
     if (onShowToast) {
-      onShowToast(`✓ Added ${newSup.name} to Vendor Directory!`);
+      onShowToast(`✓ Added vendor "${newSup.name}" to directory!`);
+    }
+  };
+
+  const handleStatusChange = async (supItem, newStatus) => {
+    setActiveMenuId(null);
+    const targetId = supItem.realId || supItem.name;
+
+    try {
+      await updateSupplierStatus(targetId, newStatus);
+    } catch (err) {
+      console.warn('[SuppliersScreen] Backend status update failed, updated local state:', err.message);
+    }
+
+    setSuppliers((prev) =>
+      prev.map((item) =>
+        item.id === supItem.id ? { ...item, status: newStatus } : item
+      )
+    );
+
+    if (onShowToast) {
+      onShowToast(`✓ Updated vendor "${supItem.name}" status to ${newStatus}`);
     }
   };
 
@@ -107,57 +233,57 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
       onNavigate('purchases');
     }
     if (onShowToast) {
-      onShowToast(`Created draft PO with ${sup.name}`);
+      onShowToast(`Create PO for ${sup.name}`);
     }
   };
 
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={[styles.contentContainer, isMobile && styles.contentContainerMobile]}
+      contentContainerStyle={styles.contentContainer}
       showsVerticalScrollIndicator={true}
     >
-      {/* Header Row */}
-      <View style={[styles.headerRow, isMobile && styles.headerRowMobile]}>
+      {/* Header */}
+      <View style={styles.headerRow}>
         <View>
           <Text style={styles.pageTitle}>Suppliers Directory</Text>
           <Text style={styles.pageSubtitle}>
-            Maintain pharmaceutical manufacturers, verified distributors, credit terms and GST records.
+            Manage pharmaceutical manufacturers, distributors, GSTIN tax records, and vendor terms.
           </Text>
         </View>
         <Pressable
           onPress={handleOpenModal}
           style={styles.newSupButton}
           accessibilityRole="button"
-          accessibilityLabel="Add New Supplier"
+          accessibilityLabel="+ Add Supplier"
         >
-          <Text style={styles.btnIcon}>+</Text>
-          <Text style={styles.btnText}>Add Supplier</Text>
+          <Text style={styles.newSupIcon}>+</Text>
+          <Text style={styles.newSupText}>Add Supplier</Text>
         </Pressable>
       </View>
 
       {/* Top 4 KPI Cards */}
       <View style={[styles.kpiRow, isCompact && styles.kpiRowCompact]}>
-        {SUPPLIERS_KPIS.map((kpi) => (
+        {dynamicKpis.map((kpi) => (
           <InventoryStatCard
             key={kpi.id}
             label={kpi.label}
             value={kpi.value}
             subtext={kpi.subtext}
             variant={kpi.variant}
-            onPress={() => onShowToast && onShowToast(`Filter: ${kpi.label}`)}
+            onPress={() => setSelectedStatus(kpi.filterKey)}
           />
         ))}
       </View>
 
-      {/* Main Table Card */}
+      {/* Suppliers Table Card */}
       <View style={styles.cardContainer}>
-        {/* Search & Filter Header */}
+        {/* Filters Bar */}
         <View style={[styles.filtersBar, isCompact && styles.filtersBarCompact]}>
           <View style={styles.searchBox}>
             <TextInput
               style={styles.searchInput}
-              placeholder="Search supplier, contact, city or GSTIN..."
+              placeholder="Search supplier name, contact person, city or GSTIN..."
               placeholderTextColor="#94A3B8"
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -169,151 +295,179 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
             ) : null}
           </View>
 
-          {/* Category Filter Chips */}
+          {/* Status Filter Chips */}
           <View style={styles.filterChipRow}>
-            {(SUPPLIER_CATEGORY_FILTER || ['All Categories']).map((cat) => (
+            {SUPPLIER_STATUS_FILTER.map((st) => (
               <Pressable
-                key={cat}
-                onPress={() => setSelectedCategory(cat)}
+                key={st}
+                onPress={() => setSelectedStatus(st)}
                 style={[
                   styles.filterChip,
-                  selectedCategory === cat && styles.filterChipActive,
+                  selectedStatus === st && styles.filterChipActive,
                 ]}
               >
                 <Text
                   style={[
                     styles.filterChipText,
-                    selectedCategory === cat && styles.filterChipTextActive,
+                    selectedStatus === st && styles.filterChipTextActive,
                   ]}
                 >
-                  {cat}
+                  {st}
                 </Text>
               </Pressable>
             ))}
           </View>
         </View>
 
-        {isMobile ? (
-          /* Mobile Supplier Cards */
-          <View style={styles.mobileCardList}>
+        {/* Directory Table */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+          <View style={styles.tableWrapper}>
+            {/* Header */}
+            <View style={styles.tableHeader}>
+              <Text style={[styles.thCell, { width: 90 }]}>VENDOR ID</Text>
+              <Text style={[styles.thCell, { width: 180 }]}>SUPPLIER NAME</Text>
+              <Text style={[styles.thCell, { width: 130 }]}>CONTACT PERSON</Text>
+              <Text style={[styles.thCell, { width: 120 }]}>PHONE</Text>
+              <Text style={[styles.thCell, { width: 170 }]}>EMAIL</Text>
+              <Text style={[styles.thCell, { width: 120 }]}>CITY</Text>
+              <Text style={[styles.thCell, { width: 150 }]}>GSTIN</Text>
+              <Text style={[styles.thCell, { width: 110, textAlign: 'right' }]}>OUTSTANDING</Text>
+              <Text style={[styles.thCell, { width: 110, textAlign: 'center' }]}>STATUS</Text>
+              <Text style={[styles.thCell, { width: 60, textAlign: 'center' }]}>ACTION</Text>
+              <Text style={[styles.thCell, { width: 90, textAlign: 'center' }]}>ORDER</Text>
+            </View>
+
+            {/* Rows */}
             {filteredSuppliers.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyTitle}>No suppliers found</Text>
-                <Text style={styles.emptySubtitle}>Try changing your search terms.</Text>
+                <Text style={styles.emptySubtitle}>Try changing your search terms or status filter.</Text>
               </View>
             ) : (
-              filteredSuppliers.map((sup) => (
-                <View key={sup.id} style={styles.mobileSupplierCard}>
-                  <View style={styles.mobileSupHeader}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.mobileSupName}>{sup.name}</Text>
-                      <Text style={styles.mobileCategoryText}>{sup.category} • {sup.id}</Text>
-                    </View>
-                    <View style={styles.statusBadgeActive}>
-                      <Text style={styles.statusBadgeTextActive}>{sup.status}</Text>
-                    </View>
-                  </View>
+              filteredSuppliers.map((sup, index) => {
+                const badge =
+                  SUPPLIER_STATUS_BADGES[sup.status] || SUPPLIER_STATUS_BADGES.Active;
+                const isMenuOpen = activeMenuId === sup.id;
 
-                  <View style={styles.mobileGrid}>
-                    <View style={styles.mobileGridCol}>
-                      <Text style={styles.mobileLabel}>Contact Person</Text>
-                      <Text style={styles.mobileValBold}>{sup.contactPerson}</Text>
-                    </View>
-                    <View style={styles.mobileGridCol}>
-                      <Text style={styles.mobileLabel}>Phone</Text>
-                      <Text style={styles.mobileValBold}>{sup.phone}</Text>
-                    </View>
-                    <View style={styles.mobileGridCol}>
-                      <Text style={styles.mobileLabel}>Email</Text>
-                      <Text style={styles.mobileVal} numberOfLines={1}>{sup.email}</Text>
-                    </View>
-                    <View style={styles.mobileGridCol}>
-                      <Text style={styles.mobileLabel}>City</Text>
-                      <Text style={styles.mobileVal}>{sup.city}</Text>
-                    </View>
-                    <View style={styles.mobileGridCol}>
-                      <Text style={styles.mobileLabel}>GSTIN</Text>
-                      <Text style={styles.mobileVal}>{sup.gstin}</Text>
-                    </View>
-                    <View style={styles.mobileGridCol}>
-                      <Text style={styles.mobileLabel}>Balance Dues</Text>
-                      <Text style={[styles.mobileValBold, { color: '#DC2626' }]}>{sup.balance}</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.mobileSupFooter}>
-                    <Pressable
-                      onPress={() => handleCreatePOWithSupplier(sup)}
-                      style={styles.mobileOrderBtn}
-                      accessibilityRole="button"
-                    >
-                      <Text style={styles.mobileOrderBtnText}>+ Create Purchase Order</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              ))
-            )}
-          </View>
-        ) : (
-          /* Desktop Suppliers Table */
-          <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-            <View style={styles.tableWrapper}>
-              {/* Header */}
-              <View style={styles.tableHeader}>
-                <Text style={[styles.thCell, { width: 100 }]}>SUPPLIER ID</Text>
-                <Text style={[styles.thCell, { width: 190 }]}>COMPANY NAME</Text>
-                <Text style={[styles.thCell, { width: 140 }]}>CONTACT PERSON</Text>
-                <Text style={[styles.thCell, { width: 130 }]}>PHONE</Text>
-                <Text style={[styles.thCell, { width: 180 }]}>EMAIL</Text>
-                <Text style={[styles.thCell, { width: 130 }]}>CITY</Text>
-                <Text style={[styles.thCell, { width: 160 }]}>GSTIN</Text>
-                <Text style={[styles.thCell, { width: 120, textAlign: 'right' }]}>BALANCE DUE</Text>
-                <Text style={[styles.thCell, { width: 90, textAlign: 'center' }]}>STATUS</Text>
-                <Text style={[styles.thCell, { width: 100, textAlign: 'center' }]}>ACTION</Text>
-              </View>
-
-              {/* Rows */}
-              {filteredSuppliers.length === 0 ? (
-                <View style={styles.emptyState}>
-                  <Text style={styles.emptyTitle}>No suppliers found</Text>
-                  <Text style={styles.emptySubtitle}>Try changing your search terms.</Text>
-                </View>
-              ) : (
-                filteredSuppliers.map((sup, index) => (
+                return (
                   <View
                     key={sup.id}
                     style={[
                       styles.tableRow,
                       index % 2 === 1 && styles.tableRowAlt,
+                      { zIndex: isMenuOpen ? 999 : 1 },
                     ]}
                   >
-                    <Text style={[styles.tdCell, styles.supId, { width: 100 }]}>{sup.id}</Text>
-                    <View style={[{ width: 190 }]}>
+                    <Text style={[styles.tdCell, styles.supId, { width: 90 }]}>{sup.id}</Text>
+                    <View style={[{ width: 180 }]}>
                       <Text style={[styles.tdCell, styles.supName]} numberOfLines={1}>
                         {sup.name}
                       </Text>
                       <Text style={styles.categorySubtext}>{sup.category}</Text>
                     </View>
-                    <Text style={[styles.tdCell, { width: 140 }]}>{sup.contactPerson}</Text>
-                    <Text style={[styles.tdCell, { width: 130 }]}>{sup.phone}</Text>
-                    <Text style={[styles.tdCell, styles.emailText, { width: 180 }]} numberOfLines={1}>
+                    <Text style={[styles.tdCell, { width: 130 }]}>{sup.contactPerson}</Text>
+                    <Text style={[styles.tdCell, { width: 120 }]}>{sup.phone}</Text>
+                    <Text style={[styles.tdCell, styles.emailText, { width: 170 }]} numberOfLines={1}>
                       {sup.email}
                     </Text>
-                    <Text style={[styles.tdCell, { width: 130 }]}>{sup.city}</Text>
-                    <Text style={[styles.tdCell, styles.gstinText, { width: 160 }]}>{sup.gstin}</Text>
-                    <Text style={[styles.tdCell, styles.balanceText, { width: 120, textAlign: 'right' }]}>
+                    <Text style={[styles.tdCell, { width: 120 }]}>{sup.city}</Text>
+                    <Text style={[styles.tdCell, styles.gstinText, { width: 150 }]}>{sup.gstin}</Text>
+                    <Text style={[styles.tdCell, styles.balanceText, { width: 110, textAlign: 'right' }]}>
                       {sup.balance}
                     </Text>
 
                     {/* Status Badge */}
-                    <View style={[styles.statusWrapper, { width: 90 }]}>
-                      <View style={styles.statusBadgeActive}>
-                        <Text style={styles.statusBadgeTextActive}>{sup.status}</Text>
+                    <View style={[styles.statusWrapper, { width: 110 }]}>
+                      <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
+                        <Text style={[styles.statusBadgeText, { color: badge.text }]}>
+                          {sup.status}
+                        </Text>
                       </View>
                     </View>
 
-                    {/* Action */}
-                    <View style={[styles.actionWrapper, { width: 100 }]}>
+                    {/* 3-Dots Action Column */}
+                    <View style={[styles.actionWrapper, { width: 60 }]}>
+                      <Pressable
+                        onPress={() =>
+                          setActiveMenuId((prev) => (prev === sup.id ? null : sup.id))
+                        }
+                        style={styles.threeDotsBtn}
+                        accessibilityRole="button"
+                        accessibilityLabel="Action menu"
+                      >
+                        <Text style={styles.threeDotsText}>⋮</Text>
+                      </Pressable>
+
+                      {/* Dropdown Menu */}
+                      {isMenuOpen && (
+                        <View style={styles.menuPopover}>
+                          <Text style={styles.menuHeaderTitle}>Update Status</Text>
+
+                          <Pressable
+                            style={styles.menuItem}
+                            onPress={() => handleStatusChange(sup, 'Active')}
+                          >
+                            <View
+                              style={[
+                                styles.menuDot,
+                                { backgroundColor: SUPPLIER_STATUS_BADGES['Active'].dot },
+                              ]}
+                            />
+                            <Text
+                              style={[
+                                styles.menuItemText,
+                                sup.status === 'Active' && styles.menuItemTextActive,
+                              ]}
+                            >
+                              Active
+                            </Text>
+                          </Pressable>
+
+                          <Pressable
+                            style={styles.menuItem}
+                            onPress={() => handleStatusChange(sup, 'Pending')}
+                          >
+                            <View
+                              style={[
+                                styles.menuDot,
+                                { backgroundColor: SUPPLIER_STATUS_BADGES['Pending'].dot },
+                              ]}
+                            />
+                            <Text
+                              style={[
+                                styles.menuItemText,
+                                sup.status === 'Pending' && styles.menuItemTextActive,
+                              ]}
+                            >
+                              Pending
+                            </Text>
+                          </Pressable>
+
+                          <Pressable
+                            style={styles.menuItem}
+                            onPress={() => handleStatusChange(sup, 'Inactive')}
+                          >
+                            <View
+                              style={[
+                                styles.menuDot,
+                                { backgroundColor: SUPPLIER_STATUS_BADGES['Inactive'].dot },
+                              ]}
+                            />
+                            <Text
+                              style={[
+                                styles.menuItemText,
+                                sup.status === 'Inactive' && styles.menuItemTextActive,
+                              ]}
+                            >
+                              Inactive
+                            </Text>
+                          </Pressable>
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Create PO Order Button */}
+                    <View style={[styles.actionWrapper, { width: 90 }]}>
                       <Pressable
                         onPress={() => handleCreatePOWithSupplier(sup)}
                         style={styles.orderBtn}
@@ -322,11 +476,11 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
                       </Pressable>
                     </View>
                   </View>
-                ))
-              )}
-            </View>
-          </ScrollView>
-        )}
+                );
+              })
+            )}
+          </View>
+        </ScrollView>
       </View>
 
       {/* Add Supplier Modal */}
@@ -465,7 +619,7 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </Pressable>
               <Pressable
-                onPress={handleSaveSupplier}
+                onPress={handleAddSupplier}
                 style={styles.submitModalButton}
               >
                 <Text style={styles.submitModalButtonText}>Save Supplier</Text>
@@ -488,23 +642,12 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     gap: 24,
   },
-  contentContainerMobile: {
-    paddingHorizontal: 12,
-    paddingTop: 16,
-    paddingBottom: 32,
-    gap: 16,
-  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     flexWrap: 'wrap',
     gap: 16,
-  },
-  headerRowMobile: {
-    flexDirection: 'column',
-    alignItems: 'stretch',
-    gap: 12,
   },
   pageTitle: {
     fontSize: 24,
@@ -527,25 +670,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     cursor: 'pointer',
   },
-  newSupButtonHovered: {
-    backgroundColor: '#0D9488',
-  },
   newSupIcon: {
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '700',
     marginRight: 6,
-  },
-  btnIcon: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '700',
-    marginRight: 6,
-  },
-  btnText: {
-    color: '#FFFFFF',
-    fontSize: 13.5,
-    fontWeight: '700',
   },
   newSupText: {
     color: '#FFFFFF',
@@ -565,7 +694,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    overflow: 'hidden',
+    overflow: 'visible',
     ...Platform.select({
       web: {
         boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)',
@@ -575,83 +704,10 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  /* Mobile Supplier Card Styles */
-  mobileCardList: {
-    padding: 12,
-    gap: 12,
-  },
-  mobileSupplierCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 14,
-  },
-  mobileSupHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    gap: 8,
-  },
-  mobileSupName: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  mobileCategoryText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#0F766E',
-    marginTop: 2,
-  },
-  mobileGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingVertical: 10,
-    gap: 10,
-  },
-  mobileGridCol: {
-    width: '47%',
-  },
-  mobileLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#94A3B8',
-    textTransform: 'uppercase',
-  },
-  mobileVal: {
-    fontSize: 12.5,
-    color: '#334155',
-    marginTop: 1,
-  },
-  mobileValBold: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginTop: 1,
-  },
-  mobileSupFooter: {
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-  },
-  mobileOrderBtn: {
-    backgroundColor: '#0F766E',
-    paddingVertical: 7,
-    paddingHorizontal: 16,
-    borderRadius: 6,
-    alignItems: 'center',
-    cursor: 'pointer',
-  },
-  mobileOrderBtnText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
   filtersBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 12,
     backgroundColor: '#FAFAFA',
@@ -661,12 +717,35 @@ const styles = StyleSheet.create({
   },
   filtersBarCompact: {
     flexDirection: 'column',
+    alignItems: 'stretch',
+  },
+  searchBox: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    height: 38,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 13,
+    color: '#0F172A',
+    outlineStyle: 'none',
+  },
+  clearBtn: {
+    padding: 4,
+  },
+  clearBtnText: {
+    fontSize: 12,
+    color: '#94A3B8',
   },
   filterChipRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 8,
-    marginTop: 8,
   },
   filterChip: {
     paddingHorizontal: 12,
@@ -690,31 +769,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
   },
-  searchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    height: 38,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 13,
-    color: '#0F172A',
-    outlineStyle: 'none',
-  },
-  clearBtn: {
-    padding: 4,
-  },
-  clearBtnText: {
-    fontSize: 12,
-    color: '#94A3B8',
-  },
   tableWrapper: {
-    minWidth: 1250,
+    minWidth: 1280,
     paddingHorizontal: 8,
   },
   tableHeader: {
@@ -740,6 +796,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
+    position: 'relative',
   },
   tableRowAlt: {
     backgroundColor: '#F8FAFC',
@@ -778,20 +835,81 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  statusBadgeActive: {
+  statusBadge: {
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
-    backgroundColor: '#DCFCE7',
   },
-  statusBadgeTextActive: {
+  statusBadgeText: {
     fontSize: 11.5,
     fontWeight: '700',
-    color: '#15803D',
   },
   actionWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
+  },
+  threeDotsBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    cursor: 'pointer',
+  },
+  threeDotsText: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#64748B',
+  },
+  menuPopover: {
+    position: 'absolute',
+    right: 0,
+    top: 36,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    zIndex: 1000,
+    width: 150,
+    paddingVertical: 6,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+      },
+      default: {
+        elevation: 8,
+      },
+    }),
+  },
+  menuHeaderTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94A3B8',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    gap: 8,
+    cursor: 'pointer',
+  },
+  menuDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  menuItemText: {
+    fontSize: 12.5,
+    fontWeight: '500',
+    color: '#334155',
+  },
+  menuItemTextActive: {
+    fontWeight: '700',
+    color: '#0F172A',
   },
   orderBtn: {
     paddingVertical: 4,
@@ -937,3 +1055,4 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 });
+

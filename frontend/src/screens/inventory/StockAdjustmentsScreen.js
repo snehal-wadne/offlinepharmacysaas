@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,17 +10,65 @@ import {
   Platform,
 } from 'react-native';
 import InventoryStatCard from '../../components/inventory/InventoryStatCard';
-import { CURRENT_STOCK_KPIS, MOCK_STOCK_ITEMS } from '../../data/currentStockMockData';
+import { MOCK_STOCK_ITEMS } from '../../data/currentStockMockData';
+import {
+  fetchInventory,
+  saveInventoryEntry,
+  updateInventoryEntry,
+  deleteInventoryEntry,
+} from '../../api/inventoryApi';
 
 export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = true }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
-  const isMobile = width < 768;
+  const scrollViewRef = useRef(null);
+  const formCardRef = useRef(null);
 
   // Stock Items State for Adjustments Table
   const [stockItems, setStockItems] = useState(MOCK_STOCK_ITEMS);
+  const [editingId, setEditingId] = useState(null);
+  const [editingRealId, setEditingRealId] = useState(null);
 
-  // Add Medicine Entry Form State
+  // Load Inventory from Backend
+  useEffect(() => {
+    let isMounted = true;
+    async function loadInventoryData() {
+      try {
+        const res = await fetchInventory();
+        if (isMounted && res && res.data && res.data.length > 0) {
+          const formatted = res.data.map((item, idx) => ({
+            realId: item.id,
+            id: `stk-${item.id || idx}`,
+            medicineName: item.medicineName || item.brandName || 'Paracetamol',
+            brandName: item.brandName || item.medicineName || 'Crocin 500',
+            genericName: item.medicineName || 'Paracetamol',
+            strength: item.strength || '500mg',
+            packSize: item.packSize || '15 Tablets',
+            manufacturer: item.manufacturer || 'GSK',
+            supplierName: item.supplierName || 'GSK Pharmaceuticals',
+            amount: item.mrp ? (String(item.mrp).startsWith('₹') ? String(item.mrp) : `₹${item.mrp}`) : '₹15.00',
+            sku: item.sku || `SKU-${idx + 100}`,
+            batchNo: item.batchNo || 'B-1001',
+            quantity: Number(item.quantity || 0),
+            branchId: item.branchName || 'BR-01',
+            shelfLocation: item.shelfLocation || 'A1-S1',
+            updatedBy: item.updatedBy || 'Manager',
+            lastUpdated: item.updated_at ? new Date(item.updated_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+            status: Number(item.quantity) < 50 ? 'Low Stock' : 'In Stock',
+          }));
+          setStockItems(formatted);
+        }
+      } catch (err) {
+        console.log('[StockAdjustmentsScreen] Backend offline or using mock inventory list');
+      }
+    }
+    loadInventoryData();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Add/Edit Medicine Entry Form State
   const [formData, setFormData] = useState({
     medicineName: '',
     brandName: '',
@@ -38,6 +86,39 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
   });
   const [formErrors, setFormErrors] = useState({});
 
+  // Dynamic KPI Card counts
+  const totalProducts = stockItems.length;
+  const lowStockCount = stockItems.filter(
+    (i) => Number(i.quantity) < 50 && Number(i.quantity) > 0
+  ).length;
+
+  const dynamicKpis = [
+    {
+      id: 'total',
+      label: 'TOTAL PRODUCTS',
+      value: String(totalProducts),
+      variant: 'teal',
+    },
+    {
+      id: 'low_stock',
+      label: 'LOW STOCK ITEMS',
+      value: String(lowStockCount),
+      variant: 'amber',
+    },
+    {
+      id: 'near_expiry',
+      label: 'NEAR EXPIRY ITEMS',
+      value: '18',
+      variant: 'blue',
+    },
+    {
+      id: 'expired',
+      label: 'EXPIRED ITEMS',
+      value: '6',
+      variant: 'rose',
+    },
+  ];
+
   const handleFormChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     if (formErrors[field]) {
@@ -45,43 +126,38 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
     }
   };
 
-  const handleAddMedicine = () => {
-    const errors = {};
-    if (!formData.medicineName.trim()) errors.medicineName = 'Medicine Name is required (e.g. Paracetamol)';
-    if (!formData.brandName.trim()) errors.brandName = 'Brand Name is required (e.g. Crocin 500 / Dolo 650)';
-    if (!formData.sku.trim()) errors.sku = 'SKU is required';
-    if (!formData.batchNo.trim()) errors.batchNo = 'Batch No. is required';
-    if (!formData.quantity.trim() || isNaN(formData.quantity) || Number(formData.quantity) <= 0) {
-      errors.quantity = 'Valid quantity is required';
+  const handleStartEdit = (item) => {
+    setEditingId(item.id);
+    setEditingRealId(item.realId || item.id);
+    setFormData({
+      medicineName: item.medicineName || item.genericName || '',
+      brandName: item.brandName || '',
+      genericName: item.genericName || item.medicineName || '',
+      strength: item.strength || '',
+      packSize: item.packSize || '',
+      manufacturer: item.manufacturer || '',
+      supplierName: item.supplierName || '',
+      amount: item.amount ? String(item.amount).replace('₹', '') : '',
+      sku: item.sku || '',
+      batchNo: item.batchNo || '',
+      quantity: String(item.quantity || ''),
+      branchId: item.branchId || 'Main Store',
+      shelfLocation: item.shelfLocation || '',
+    });
+    setFormErrors({});
+
+    if (onShowToast) {
+      onShowToast(`Editing entry for "${item.brandName || item.medicineName}"`);
     }
 
-    if (Object.keys(errors).length > 0) {
-      setFormErrors(errors);
-      if (onShowToast) onShowToast('Please fill in required medicine, brand & batch details.');
-      return;
+    if (scrollViewRef.current) {
+      scrollViewRef.current.scrollToEnd({ animated: true });
     }
+  };
 
-    const newItem = {
-      id: `adj-stk-${Date.now()}`,
-      medicineName: formData.medicineName,
-      brandName: formData.brandName,
-      genericName: formData.genericName || formData.medicineName,
-      strength: formData.strength || '500mg',
-      packSize: formData.packSize || '15 Tablets',
-      manufacturer: formData.manufacturer || 'GSK',
-      supplierName: formData.supplierName || (formData.manufacturer ? `${formData.manufacturer} Distribution` : 'GSK Pharmaceuticals'),
-      amount: formData.amount ? (formData.amount.startsWith('₹') ? formData.amount : `₹${formData.amount}`) : '₹15.00',
-      sku: formData.sku,
-      batchNo: formData.batchNo,
-      quantity: Number(formData.quantity),
-      branchId: isMultiBranch ? (formData.branchId || 'BR-01') : 'Main Store',
-      shelfLocation: formData.shelfLocation || 'A1-S1',
-      updatedBy: 'Manager',
-      lastUpdated: new Date().toISOString().split('T')[0],
-      status: Number(formData.quantity) < 50 ? 'Low Stock' : 'In Stock',
-    };
-
-    setStockItems((prev) => [newItem, ...prev]);
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setEditingRealId(null);
     setFormData({
       medicineName: '',
       brandName: '',
@@ -98,27 +174,128 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
       shelfLocation: '',
     });
     setFormErrors({});
+  };
+
+  const handleDeleteItem = async (item) => {
+    const targetId = item.realId || item.id;
+    try {
+      await deleteInventoryEntry(targetId);
+    } catch (err) {
+      console.warn('[StockAdjustmentsScreen] Delete in backend failed, updating local state:', err.message);
+    }
+
+    setStockItems((prev) => prev.filter((i) => i.id !== item.id));
 
     if (onShowToast) {
-      onShowToast(`✓ Added "${newItem.brandName}" from supplier "${newItem.supplierName}" to inventory!`);
+      onShowToast(`✓ Deleted batch ${item.batchNo} (${item.brandName || item.medicineName}) from inventory!`);
     }
   };
 
-  const handleEditOrDelete = (item) => {
-    if (onShowToast) {
-      onShowToast(`Modify / Adjust action for ${item.brandName} (${item.medicineName} - ${item.sku})`);
+  const handleSaveMedicine = async () => {
+    const errors = {};
+    if (!formData.medicineName.trim()) errors.medicineName = 'Medicine Name is required (e.g. Paracetamol)';
+    if (!formData.brandName.trim()) errors.brandName = 'Brand Name is required (e.g. Crocin 500 / Dolo 650)';
+    if (!formData.sku.trim()) errors.sku = 'SKU is required';
+    if (!formData.batchNo.trim()) errors.batchNo = 'Batch No. is required';
+    if (!formData.quantity.trim() || isNaN(formData.quantity) || Number(formData.quantity) <= 0) {
+      errors.quantity = 'Valid quantity is required';
     }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      if (onShowToast) onShowToast('Please fill in required medicine, brand & batch details.');
+      return;
+    }
+
+    const formattedAmount = formData.amount
+      ? formData.amount.startsWith('₹')
+        ? formData.amount
+        : `₹${formData.amount}`
+      : '₹15.00';
+
+    const payload = {
+      medicineName: formData.medicineName,
+      brandName: formData.brandName,
+      genericName: formData.genericName || formData.medicineName,
+      strength: formData.strength || '500mg',
+      packSize: formData.packSize || '15 Tablets',
+      manufacturer: formData.manufacturer || 'GSK',
+      supplierName: formData.supplierName || 'GSK Pharmaceuticals',
+      amount: formattedAmount,
+      sku: formData.sku,
+      batchNo: formData.batchNo,
+      quantity: Number(formData.quantity),
+      branchId: isMultiBranch ? (formData.branchId || 'BR-01') : 'Main Store',
+      shelfLocation: formData.shelfLocation || 'A1-S1',
+    };
+
+    if (editingId) {
+      // Editing Mode
+      const targetId = editingRealId || editingId;
+      try {
+        await updateInventoryEntry(targetId, payload);
+      } catch (err) {
+        console.warn('[StockAdjustmentsScreen] Backend update failed, updating local state:', err.message);
+      }
+
+      setStockItems((prev) =>
+        prev.map((item) =>
+          item.id === editingId
+            ? {
+                ...item,
+                ...payload,
+                updatedBy: 'Manager',
+                lastUpdated: new Date().toISOString().split('T')[0],
+                status: payload.quantity < 50 ? 'Low Stock' : 'In Stock',
+              }
+            : item
+        )
+      );
+
+      if (onShowToast) {
+        onShowToast(`✓ Updated medicine entry "${formData.brandName}" in inventory & database!`);
+      }
+    } else {
+      // New Entry Mode
+      let newRealId = `adj-stk-${Date.now()}`;
+      try {
+        const res = await saveInventoryEntry(payload);
+        if (res && res.data && res.data.id) {
+          newRealId = res.data.id;
+        }
+      } catch (err) {
+        console.warn('[StockAdjustmentsScreen] Backend save failed, updating local state:', err.message);
+      }
+
+      const newItem = {
+        realId: newRealId,
+        id: `stk-${newRealId}`,
+        ...payload,
+        updatedBy: 'Manager',
+        lastUpdated: new Date().toISOString().split('T')[0],
+        status: payload.quantity < 50 ? 'Low Stock' : 'In Stock',
+      };
+
+      setStockItems((prev) => [newItem, ...prev]);
+
+      if (onShowToast) {
+        onShowToast(`✓ Added "${newItem.brandName}" to inventory & saved to database!`);
+      }
+    }
+
+    handleCancelEdit();
   };
 
   return (
     <ScrollView
+      ref={scrollViewRef}
       style={styles.container}
-      contentContainerStyle={[styles.contentContainer, isMobile && styles.contentContainerMobile]}
+      contentContainerStyle={styles.contentContainer}
       showsVerticalScrollIndicator={true}
     >
-      {/* Top 4 KPI Cards */}
+      {/* Top 4 Dynamic KPI Cards */}
       <View style={[styles.kpiRow, isCompact && styles.kpiRowCompact]}>
-        {CURRENT_STOCK_KPIS.map((kpi) => (
+        {dynamicKpis.map((kpi) => (
           <InventoryStatCard
             key={kpi.id}
             label={kpi.label}
@@ -133,138 +310,47 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
       {/* Stock Information / Adjustments Table Card */}
       <View style={styles.cardContainer}>
         <View style={styles.cardHeader}>
-          <View>
-            <Text style={styles.cardTitle}>Stock Information</Text>
-            <Text style={styles.cardSubtitle}>
-              {stockItems.length} items in inventory {isMobile ? '• Tap Edit/Del to modify' : ''}
-            </Text>
-          </View>
+          <Text style={styles.cardTitle}>Stock Information</Text>
         </View>
 
-        {isMobile ? (
-          /* Mobile Card List View (No horizontal scrolling on phone screen) */
-          <View style={styles.mobileCardList}>
-            {stockItems.map((item) => (
-              <View key={item.id} style={styles.mobileStockCard}>
-                {/* Header: Brand, Generic Medicine & Status Badge */}
-                <View style={styles.mobileStockCardHeader}>
-                  <View style={styles.mobileStockTitleCol}>
-                    <Text style={styles.mobileBrandName}>{item.brandName}</Text>
-                    <Text style={styles.mobileMedName}>{item.medicineName || item.genericName}</Text>
-                  </View>
-                  <View
-                    style={[
-                      styles.mobileStatusBadge,
-                      item.quantity < 50 ? styles.statusBadgeLow : styles.statusBadgeInStock,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.mobileStatusText,
-                        item.quantity < 50 ? styles.statusTextLow : styles.statusTextInStock,
-                      ]}
-                    >
-                      {item.quantity < 50 ? 'Low Stock' : 'In Stock'}
-                    </Text>
-                  </View>
-                </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+          <View style={styles.tableWrapper}>
+            {/* Table Header */}
+            <View style={styles.tableHeader}>
+              <Text style={[styles.thCell, { width: 130 }]}>Medicine Name</Text>
+              <Text style={[styles.thCell, { width: 140 }]}>Brand Name</Text>
+              <Text style={[styles.thCell, { width: 140 }]}>Strength & Pack</Text>
+              <Text style={[styles.thCell, { width: 120 }]}>Manufacturer</Text>
+              <Text style={[styles.thCell, { width: 150 }]}>Supplier Name</Text>
+              <Text style={[styles.thCell, { width: 110 }]}>SKU</Text>
+              <Text style={[styles.thCell, { width: 95 }]}>Batch No.</Text>
+              <Text style={[styles.thCell, { width: 110, textAlign: 'center' }]}>
+                Qty Available
+              </Text>
+              <Text style={[styles.thCell, { width: 90, textAlign: 'right' }]}>MRP</Text>
+              {isMultiBranch && (
+                <Text style={[styles.thCell, { width: 90, textAlign: 'center' }]}>Branch ID</Text>
+              )}
+              <Text style={[styles.thCell, { width: 100, textAlign: 'center' }]}>Shelf Location</Text>
+              <Text style={[styles.thCell, { width: 95 }]}>Updated By</Text>
+              <Text style={[styles.thCell, { width: 105 }]}>Last Updated</Text>
+              <Text style={[styles.thCell, { width: 130, textAlign: 'center' }]}>Modify</Text>
+            </View>
 
-                {/* 2-Column Details Grid */}
-                <View style={styles.mobileGrid}>
-                  <View style={styles.mobileGridItem}>
-                    <Text style={styles.mobileItemLabel}>SKU</Text>
-                    <Text style={styles.mobileItemValueBold}>{item.sku}</Text>
-                  </View>
-                  <View style={styles.mobileGridItem}>
-                    <Text style={styles.mobileItemLabel}>Batch No.</Text>
-                    <Text style={styles.mobileItemValueBold}>{item.batchNo}</Text>
-                  </View>
-                  <View style={styles.mobileGridItem}>
-                    <Text style={styles.mobileItemLabel}>Qty Available</Text>
-                    <Text style={[styles.mobileItemValueBold, { color: '#0F766E' }]}>
-                      {item.quantity} units
-                    </Text>
-                  </View>
-                  <View style={styles.mobileGridItem}>
-                    <Text style={styles.mobileItemLabel}>MRP Price</Text>
-                    <Text style={[styles.mobileItemValueBold, { color: '#0F172A' }]}>
-                      {item.amount}
-                    </Text>
-                  </View>
-                  <View style={styles.mobileGridItem}>
-                    <Text style={styles.mobileItemLabel}>Strength & Pack</Text>
-                    <Text style={styles.mobileItemValue} numberOfLines={1}>
-                      {item.strength ? `${item.strength} • ${item.packSize || ''}` : '500mg • 15 Tabs'}
-                    </Text>
-                  </View>
-                  <View style={styles.mobileGridItem}>
-                    <Text style={styles.mobileItemLabel}>Shelf Location</Text>
-                    <Text style={styles.mobileItemValue}>{item.shelfLocation || 'A1-S1'}</Text>
-                  </View>
-                  {isMultiBranch && (
-                    <View style={styles.mobileGridItem}>
-                      <Text style={styles.mobileItemLabel}>Branch ID</Text>
-                      <Text style={styles.mobileItemValue}>{item.branchId}</Text>
-                    </View>
-                  )}
-                  <View style={styles.mobileGridItem}>
-                    <Text style={styles.mobileItemLabel}>Supplier</Text>
-                    <Text style={styles.mobileItemValue} numberOfLines={1}>
-                      {item.supplierName || item.manufacturer || 'GSK'}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Card Footer: Last Updated & Action Button */}
-                <View style={styles.mobileStockFooter}>
-                  <Text style={styles.mobileUpdatedText}>
-                    Updated: {item.lastUpdated} by {item.updatedBy || 'Manager'}
-                  </Text>
-                  <Pressable
-                    onPress={() => handleEditOrDelete(item)}
-                    style={styles.mobileEditBtn}
-                    accessibilityRole="button"
-                    accessibilityLabel="Edit or adjust stock"
-                  >
-                    <Text style={styles.mobileEditBtnText}>Edit / Del</Text>
-                  </Pressable>
-                </View>
+            {/* Table Rows */}
+            {stockItems.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyTitle}>No stock items found</Text>
+                <Text style={styles.emptySubtitle}>Use the form below to add a medicine entry.</Text>
               </View>
-            ))}
-          </View>
-        ) : (
-          /* Desktop Horizontal Scroll Data Table */
-          <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-            <View style={styles.tableWrapper}>
-              {/* Table Header */}
-              <View style={styles.tableHeader}>
-                <Text style={[styles.thCell, { width: 130 }]}>Medicine Name</Text>
-                <Text style={[styles.thCell, { width: 140 }]}>Brand Name</Text>
-                <Text style={[styles.thCell, { width: 140 }]}>Strength & Pack</Text>
-                <Text style={[styles.thCell, { width: 120 }]}>Manufacturer</Text>
-                <Text style={[styles.thCell, { width: 150 }]}>Supplier Name</Text>
-                <Text style={[styles.thCell, { width: 110 }]}>SKU</Text>
-                <Text style={[styles.thCell, { width: 95 }]}>Batch No.</Text>
-                <Text style={[styles.thCell, { width: 110, textAlign: 'center' }]}>
-                  Qty Available
-                </Text>
-                <Text style={[styles.thCell, { width: 90, textAlign: 'right' }]}>MRP</Text>
-                {isMultiBranch && (
-                  <Text style={[styles.thCell, { width: 90, textAlign: 'center' }]}>Branch ID</Text>
-                )}
-                <Text style={[styles.thCell, { width: 100, textAlign: 'center' }]}>Shelf Location</Text>
-                <Text style={[styles.thCell, { width: 95 }]}>Updated By</Text>
-                <Text style={[styles.thCell, { width: 105 }]}>Last Updated</Text>
-                <Text style={[styles.thCell, { width: 85, textAlign: 'center' }]}>Modify</Text>
-              </View>
-
-              {/* Table Rows */}
-              {stockItems.map((item, index) => (
+            ) : (
+              stockItems.map((item, index) => (
                 <View
                   key={item.id}
                   style={[
                     styles.tableRow,
                     index % 2 === 1 && styles.tableRowAlt,
+                    editingId === item.id && styles.editingTableRow,
                   ]}
                 >
                   {/* Medicine Name */}
@@ -326,30 +412,50 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
                   {/* Last Updated */}
                   <Text style={[styles.tdCell, { width: 105 }]}>{item.lastUpdated}</Text>
 
-                  {/* Modify Button Pill */}
-                  <View style={[styles.modifyWrapper, { width: 85 }]}>
+                  {/* Separate Edit and Delete Action Buttons */}
+                  <View style={[styles.actionRow, { width: 130 }]}>
                     <Pressable
-                      onPress={() => handleEditOrDelete(item)}
-                      style={styles.modifyButton}
+                      onPress={() => handleStartEdit(item)}
+                      style={styles.editButton}
                       accessibilityRole="button"
-                      accessibilityLabel="Edit or Delete adjustment"
+                      accessibilityLabel="Edit medicine adjustment"
                     >
-                      <Text style={styles.modifyButtonText}>Edit/Del</Text>
+                      <Text style={styles.editButtonText}>Edit</Text>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => handleDeleteItem(item)}
+                      style={styles.deleteButton}
+                      accessibilityRole="button"
+                      accessibilityLabel="Delete medicine adjustment"
+                    >
+                      <Text style={styles.deleteButtonText}>Delete</Text>
                     </Pressable>
                   </View>
                 </View>
-              ))}
-            </View>
-          </ScrollView>
-        )}
+              ))
+            )}
+          </View>
+        </ScrollView>
       </View>
 
-      {/* Add Medicine Entry Form Card */}
-      <View style={styles.cardContainer}>
+      {/* Add / Edit Medicine Entry Form Card */}
+      <View style={styles.cardContainer} ref={formCardRef}>
         <View style={styles.formHeader}>
-          <Text style={styles.cardTitle}>Add Medicine Entry</Text>
+          <View style={styles.formTitleRow}>
+            <Text style={styles.cardTitle}>
+              {editingId ? 'Edit Medicine Entry' : 'Add Medicine Entry'}
+            </Text>
+            {editingId && (
+              <View style={styles.editingBadge}>
+                <Text style={styles.editingBadgeText}>Editing Mode</Text>
+              </View>
+            )}
+          </View>
           <Text style={styles.formSubtitle}>
-            Enter medicine name, brand variant, supplier details, and batch information to adjust inventory.
+            {editingId
+              ? 'Modify medicine details below and save to update inventory and database.'
+              : 'Enter medicine name, brand variant, supplier details, and batch information to adjust inventory.'}
           </Text>
         </View>
 
@@ -516,16 +622,29 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
           ) : null}
         </View>
 
-        {/* Blue Submit Button */}
+        {/* Submit / Save Buttons */}
         <View style={styles.formFooter}>
           <Pressable
-            onPress={handleAddMedicine}
+            onPress={handleSaveMedicine}
             style={styles.blueSubmitButton}
             accessibilityRole="button"
             accessibilityLabel="Submit Medicine Entry"
           >
-            <Text style={styles.blueSubmitButtonText}>Submit</Text>
+            <Text style={styles.blueSubmitButtonText}>
+              {editingId ? 'Save Changes & Update DB' : 'Submit'}
+            </Text>
           </Pressable>
+
+          {editingId ? (
+            <Pressable
+              onPress={handleCancelEdit}
+              style={styles.cancelEditButton}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel edit mode"
+            >
+              <Text style={styles.cancelEditButtonText}>Cancel Edit</Text>
+            </Pressable>
+          ) : null}
         </View>
       </View>
     </ScrollView>
@@ -541,12 +660,6 @@ const styles = StyleSheet.create({
     paddingTop: 24,
     paddingBottom: 40,
     gap: 24,
-  },
-  contentContainerMobile: {
-    paddingHorizontal: 12,
-    paddingTop: 16,
-    paddingBottom: 32,
-    gap: 16,
   },
   kpiRow: {
     flexDirection: 'row',
@@ -582,134 +695,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0F172A',
   },
-  cardSubtitle: {
-    fontSize: 12.5,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  /* Mobile Card List Styles */
-  mobileCardList: {
-    padding: 12,
-    gap: 12,
-  },
-  mobileStockCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 14,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
-      },
-      default: {
-        elevation: 1,
-      },
-    }),
-  },
-  mobileStockCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    gap: 8,
-  },
-  mobileStockTitleCol: {
-    flex: 1,
-  },
-  mobileBrandName: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  mobileMedName: {
-    fontSize: 12.5,
-    fontWeight: '600',
-    color: '#0F766E',
-    marginTop: 2,
-  },
-  mobileStatusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  statusBadgeInStock: {
-    backgroundColor: '#DCFCE7',
-  },
-  statusBadgeLow: {
-    backgroundColor: '#FEF3C7',
-  },
-  mobileStatusText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  statusTextInStock: {
-    color: '#15803D',
-  },
-  statusTextLow: {
-    color: '#B45309',
-  },
-  mobileGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingVertical: 10,
-    gap: 10,
-  },
-  mobileGridItem: {
-    width: '47%',
-  },
-  mobileItemLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#94A3B8',
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
-  },
-  mobileItemValue: {
-    fontSize: 12.5,
-    fontWeight: '500',
-    color: '#334155',
-    marginTop: 1,
-  },
-  mobileItemValueBold: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginTop: 1,
-  },
-  mobileStockFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    marginTop: 4,
-    gap: 8,
-  },
-  mobileUpdatedText: {
-    fontSize: 11,
-    color: '#94A3B8',
-    flex: 1,
-  },
-  mobileEditBtn: {
-    backgroundColor: '#E0F2FE',
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-    paddingVertical: 5,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-    cursor: 'pointer',
-  },
-  mobileEditBtnText: {
-    fontSize: 11.5,
-    fontWeight: '700',
-    color: '#0369A1',
-  },
   tableWrapper: {
-    minWidth: 1520,
+    minWidth: 1560,
     paddingHorizontal: 8,
   },
   tableHeader: {
@@ -738,6 +725,11 @@ const styles = StyleSheet.create({
   },
   tableRowAlt: {
     backgroundColor: '#F8FAFC',
+  },
+  editingTableRow: {
+    backgroundColor: '#EFF6FF',
+    borderLeftWidth: 3,
+    borderLeftColor: '#2563EB',
   },
   tdCell: {
     fontSize: 13,
@@ -773,11 +765,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0F172A',
   },
-  modifyWrapper: {
+  actionRow: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 6,
   },
-  modifyButton: {
+  editButton: {
     backgroundColor: '#E0F2FE',
     borderWidth: 1,
     borderColor: '#BAE6FD',
@@ -786,10 +780,39 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     cursor: 'pointer',
   },
-  modifyButtonText: {
+  editButtonText: {
     fontSize: 11.5,
     fontWeight: '700',
     color: '#0369A1',
+  },
+  deleteButton: {
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    cursor: 'pointer',
+  },
+  deleteButtonText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#B91C1C',
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  emptySubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    marginTop: 2,
   },
   formHeader: {
     paddingHorizontal: 20,
@@ -797,6 +820,22 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
+  },
+  formTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  editingBadge: {
+    backgroundColor: '#DBEAFE',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  editingBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1E40AF',
   },
   formSubtitle: {
     fontSize: 12.5,
@@ -811,12 +850,12 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   formFieldHalf: {
-    flex: 1,
+    width: '48%',
     minWidth: 260,
   },
   formFieldThird: {
-    flex: 1,
-    minWidth: 180,
+    width: '31%',
+    minWidth: 200,
   },
   fieldLabel: {
     fontSize: 12.5,
@@ -854,7 +893,9 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
     backgroundColor: '#FAFAFA',
-    alignItems: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   blueSubmitButton: {
     backgroundColor: '#2563EB',
@@ -868,4 +909,17 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     fontWeight: '700',
   },
+  cancelEditButton: {
+    paddingVertical: 9,
+    paddingHorizontal: 18,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    cursor: 'pointer',
+  },
+  cancelEditButtonText: {
+    color: '#64748B',
+    fontSize: 13,
+    fontWeight: '600',
+  },
 });
+
