@@ -82,7 +82,7 @@ const ORGANISATION_SCOPED_TYPES = new Set(["CUSTOMER", "PRESCRIPTION"]);
  *
  * These sequences have a branch_id.
  */
-const BRANCH_SCOPED_TYPES = new Set(["INVOICE", "RECEIPT"]);
+const BRANCH_SCOPED_TYPES = new Set(["INVOICE", "RECEIPT", "RETURN"]);
 
 /**
  * Validate sequence scope.
