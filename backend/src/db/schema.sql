@@ -1549,6 +1549,175 @@ CONSTRAINT goods_receipt_items_unique_purchase_item
         UNIQUE (goods_receipt_id, purchase_item_id)
 );
 
+
+-- ============================================================
+-- 31. RETURNS
+-- ============================================================
+-- Represents a customer's request to return items from an invoice.
+--
+-- The return records the refund, its method, the processing status,
+-- and the users responsible for recording and processing it.
+
+CREATE TABLE IF NOT EXISTS returns (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    organisation_id UUID NOT NULL
+        REFERENCES organisations(id)
+        ON DELETE CASCADE,
+
+    branch_id UUID NOT NULL
+        REFERENCES branches(id)
+        ON DELETE RESTRICT,
+
+    customer_id UUID NOT NULL
+        REFERENCES customers(id)
+        ON DELETE RESTRICT,
+
+    invoice_id UUID NOT NULL
+        REFERENCES invoices(id)
+        ON DELETE RESTRICT,
+
+-- Human-readable return number.
+-- Example: RET-1001
+return_number VARCHAR(50) NOT NULL,
+return_date TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+status VARCHAR(30) NOT NULL DEFAULT 'PROCESSED',
+
+-- Total amount refunded for this return.
+refund_amount NUMERIC(12, 2) NOT NULL DEFAULT 0,
+
+-- How the customer received the refund.
+refund_method VARCHAR(30) NOT NULL,
+
+-- Reason supplied for the return.
+reason TEXT,
+
+-- Additional internal notes.
+notes TEXT,
+
+-- User who created/recorded the return.
+created_by UUID REFERENCES users (id) ON DELETE SET NULL,
+
+-- User who processed the return.
+
+
+processed_by UUID
+        REFERENCES users(id)
+        ON DELETE SET NULL,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT returns_number_unique
+        UNIQUE (branch_id, return_number),
+
+    CONSTRAINT returns_status_check
+        CHECK (
+            status IN (
+                'PENDING',
+                'APPROVED',
+                'PROCESSED',
+                'REJECTED',
+                'CANCELLED'
+            )
+        ),
+
+    CONSTRAINT returns_refund_amount_check
+        CHECK (refund_amount >= 0),
+
+    CONSTRAINT returns_refund_method_check
+        CHECK (
+            refund_method IN (
+                'CASH',
+                'STORE_CREDIT'
+            )
+        )
+);
+
+
+-- ============================================================
+-- 32. RETURN ITEMS
+-- ============================================================
+-- Contains the invoice items included in a return.
+--
+-- Each item records the quantity returned, the refund allocated to
+-- that item, its physical condition, and the quantity restocked.
+
+CREATE TABLE IF NOT EXISTS return_items (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    return_id UUID NOT NULL
+        REFERENCES returns(id)
+        ON DELETE CASCADE,
+
+-- Exact invoice item being returned.
+invoice_item_id UUID NOT NULL REFERENCES invoice_items (id) ON DELETE RESTRICT,
+
+-- Number of units returned.
+quantity_returned INTEGER NOT NULL,
+
+-- Refund allocated to this returned item.
+--
+-- This MUST be derived from the original invoice item's
+-- historical line_total and quantity.
+refund_amount NUMERIC(12, 2) NOT NULL,
+
+-- Physical condition of the returned medicine.
+return_condition VARCHAR(30) NOT NULL DEFAULT 'SEALED',
+
+-- Quantity that can actually be placed back into stock.
+
+restock_quantity INTEGER NOT NULL DEFAULT 0,
+
+    notes TEXT,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT return_items_quantity_check
+        CHECK (quantity_returned > 0),
+
+    CONSTRAINT return_items_refund_amount_check
+        CHECK (refund_amount >= 0),
+
+    CONSTRAINT return_items_restock_quantity_check
+        CHECK (
+            restock_quantity >= 0
+            AND restock_quantity <= quantity_returned
+        ),
+
+    CONSTRAINT return_items_condition_check
+        CHECK (
+            return_condition IN (
+                'SEALED',
+                'OPENED',
+                'DAMAGED',
+                'EXPIRED',
+                'OTHER'
+            )
+        ),
+
+    CONSTRAINT return_items_return_invoice_item_unique
+        UNIQUE (return_id, invoice_item_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_returns_organisation_date ON returns (
+    organisation_id,
+    return_date DESC
+);
+
+CREATE INDEX IF NOT EXISTS idx_returns_branch_date ON returns (branch_id, return_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_returns_customer_date ON returns (customer_id, return_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_returns_invoice ON returns (invoice_id);
+
+CREATE INDEX IF NOT EXISTS idx_return_items_return ON return_items (return_id);
+
+CREATE INDEX IF NOT EXISTS idx_return_items_invoice_item ON return_items (invoice_item_id);
+
 -- ============================================================
 -- INDEXES
 -- ============================================================

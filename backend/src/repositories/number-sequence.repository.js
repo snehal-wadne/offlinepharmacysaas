@@ -11,6 +11,7 @@
  *     PRESCRIPTION → RX-1001
  *     INVOICE      → INV-1001
  *     RECEIPT      → REC-1001
+ *     RETURN       → RET-1001
  *
  * PostgreSQL UUIDs remain the technical primary keys.
  * These business numbers are generated independently.
@@ -62,6 +63,7 @@ const NUMBER_PREFIXES = {
   PRESCRIPTION: "RX",
   INVOICE: "INV",
   RECEIPT: "REC",
+  RETURN: "RET",
 };
 
 /**
