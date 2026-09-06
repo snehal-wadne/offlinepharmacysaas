@@ -597,7 +597,8 @@ next_number BIGINT NOT NULL DEFAULT 1001,
                 'CUSTOMER',
                 'PRESCRIPTION',
                 'INVOICE',
-                'RECEIPT'
+                'RECEIPT',
+                'RETURN'
             )
         ),
 
