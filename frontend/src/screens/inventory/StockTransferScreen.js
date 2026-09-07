@@ -40,7 +40,6 @@ export default function StockTransferScreen({ onShowToast }) {
   // 3-Dots Action Menu & Backend Dev Guide Modal State
   const [selectedTransferForAction, setSelectedTransferForAction] = useState(null);
   const [actionMenuOpen, setActionMenuOpen] = useState(false);
-  const [devGuideOpen, setDevGuideOpen] = useState(false);
 
 
   // New Transfer Modal State
@@ -86,10 +85,6 @@ export default function StockTransferScreen({ onShowToast }) {
     setActionMenuOpen(false);
     if (!tr) return;
 
-    if (actionKey === 'dev-guide') {
-      setDevGuideOpen(true);
-      return;
-    }
 
     if (actionKey === 'in-transit') {
       setTransfers((prev) =>
@@ -200,15 +195,6 @@ export default function StockTransferScreen({ onShowToast }) {
           </Text>
         </View>
         <View style={styles.headerRightActions}>
-          <Pressable
-            onPress={() => setDevGuideOpen(true)}
-            style={styles.devGuideBtnTop}
-            accessibilityRole="button"
-            accessibilityLabel="Backend & Database Guide"
-          >
-            <Text style={styles.devGuideBtnTopIcon}>🔌</Text>
-            <Text style={styles.devGuideBtnTopText}>Backend & DB Guide</Text>
-          </Pressable>
 
           <Pressable
             onPress={handleOpenModal}
@@ -633,141 +619,11 @@ export default function StockTransferScreen({ onShowToast }) {
                 </View>
               </Pressable>
 
-              <Pressable
-                onPress={() => handleExecuteTransferAction('dev-guide')}
-                style={[styles.actionItem, styles.actionItemDev]}
-              >
-                <Text style={styles.actionItemIcon}>🔌</Text>
-                <View style={styles.actionItemTextCol}>
-                  <Text style={[styles.actionItemTitle, { color: '#0F766E' }]}>
-                    Backend & Database Guide (For Developers)
-                  </Text>
-                  <Text style={styles.actionItemSubtitle}>
-                    View API route, request JSON, and PostgreSQL tables for transfers
-                  </Text>
-                </View>
-              </Pressable>
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* 3. STOCK TRANSFER BACKEND & DB DEVELOPER GUIDE MODAL */}
-      <Modal
-        visible={devGuideOpen}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setDevGuideOpen(false)}
-      >
-        <View style={styles.modalOverlayAction}>
-          <View style={[styles.devGuideModalCard, isMobile && styles.devGuideModalCardMobile]}>
-            <View style={styles.devGuideModalHeader}>
-              <View style={styles.devGuideTitleRow}>
-                <View style={styles.devGuideIconBadge}>
-                  <Text style={styles.devGuideIconText}>🔌</Text>
-                </View>
-                <View>
-                  <Text style={styles.devGuideModalTitle}>Stock Transfer Backend & Database Guide</Text>
-                  <Text style={styles.devGuideModalSubtitle}>
-                    Complete specification for multi-branch transit API & DB wiring
-                  </Text>
-                </View>
-              </View>
-              <Pressable onPress={() => setDevGuideOpen(false)} style={styles.closeActionBtn}>
-                <Text style={styles.closeActionText}>✕</Text>
-              </Pressable>
-            </View>
-
-            <ScrollView style={styles.devGuideModalBody} showsVerticalScrollIndicator={true}>
-              {/* Endpoints */}
-              <View style={styles.guideSec}>
-                <Text style={styles.guideSecTitle}>1. Transfer Lifecycle API Endpoints</Text>
-
-                <View style={styles.endpointCard}>
-                  <View style={styles.endpointHeader}>
-                    <View style={styles.methodPost}><Text style={styles.methodText}>POST</Text></View>
-                    <Text style={styles.endpointRoute}>/api/transfers</Text>
-                  </View>
-                  <Text style={styles.endpointDesc}>
-                    Creates transfer record, decrements stock from source branch, and sets status to 'Draft' or 'In Transit'.
-                  </Text>
-                  <View style={styles.codeSnippet}>
-                    <Text style={styles.codeSnippetText}>
-{`// Payload: POST /api/transfers
-{
-  "from_branch_id": "FIT Main Campus Hospital Pharmacy",
-  "to_branch_id": "FIT Pune City OPD Pharmacy",
-  "item_id": "stk-101",
-  "batch_no": "BCH-8921",
-  "quantity": 50,
-  "created_by": "USR-102",
-  "notes": "Emergency restock for OPD"
-}`}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.endpointCard}>
-                  <View style={styles.endpointHeader}>
-                    <View style={styles.methodPatch}><Text style={styles.methodText}>PATCH</Text></View>
-                    <Text style={styles.endpointRoute}>/api/transfers/:id/status</Text>
-                  </View>
-                  <Text style={styles.endpointDesc}>
-                    Updates status between 'In Transit', 'Completed', or 'Cancelled'.
-                  </Text>
-                </View>
-
-                <View style={styles.endpointCard}>
-                  <View style={styles.endpointHeader}>
-                    <View style={styles.methodPost}><Text style={styles.methodText}>POST</Text></View>
-                    <Text style={styles.endpointRoute}>/api/transfers/:id/receive</Text>
-                  </View>
-                  <Text style={styles.endpointDesc}>
-                    Destination branch accepts delivery, atomic increment to destination branch stock.
-                  </Text>
-                </View>
-              </View>
-
-              {/* Database Schema */}
-              <View style={styles.guideSec}>
-                <Text style={styles.guideSecTitle}>2. PostgreSQL Database Schema</Text>
-                <View style={styles.codeSnippet}>
-                  <Text style={styles.codeSnippetText}>
-{`CREATE TABLE IF NOT EXISTS stock_transfers (
-  id VARCHAR(50) PRIMARY KEY, -- 'TRF-2024-001'
-  organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
-  from_branch_id UUID REFERENCES branches(id),
-  to_branch_id UUID REFERENCES branches(id),
-  status VARCHAR(20) NOT NULL DEFAULT 'Draft', -- 'Draft' | 'In Transit' | 'Completed' | 'Cancelled'
-  total_quantity INT NOT NULL,
-  total_items INT NOT NULL DEFAULT 1,
-  created_by UUID REFERENCES users(id),
-  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-  received_at TIMESTAMPTZ
-);
-
-CREATE TABLE IF NOT EXISTS stock_transfer_items (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  transfer_id VARCHAR(50) REFERENCES stock_transfers(id) ON DELETE CASCADE,
-  batch_id UUID REFERENCES inventory_batches(id),
-  quantity INT NOT NULL
-);`}
-                  </Text>
-                </View>
-              </View>
-            </ScrollView>
-
-            <View style={styles.devGuideModalFooter}>
-              <Pressable
-                onPress={() => setDevGuideOpen(false)}
-                style={styles.closeDevGuideModalBtn}
-              >
-                <Text style={styles.closeDevGuideModalBtnText}>Close Developer Guide</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </ScrollView>
   );
 }

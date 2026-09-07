@@ -45,8 +45,6 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
   const [actionMenuModalOpen, setActionMenuModalOpen] = useState(false);
   const [selectedPoForAction, setSelectedPoForAction] = useState(null);
 
-  // Developer Backend & DB Guide Modal State
-  const [devGuideModalOpen, setDevGuideModalOpen] = useState(false);
 
   // Purchase Orders List
   const [orders, setOrders] = useState([]);
@@ -344,8 +342,6 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
       if (onShowToast) {
         onShowToast(`📄 GST Invoice downloaded for ${po.id} (Supplier: ${po.supplier})`);
       }
-    } else if (actionKey === 'devGuide') {
-      setDevGuideModalOpen(true);
     }
   };
 
@@ -364,15 +360,6 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
           </Text>
         </View>
         <View style={styles.headerRightActions}>
-          <Pressable
-            onPress={() => setDevGuideModalOpen(true)}
-            style={styles.devGuideTopBtn}
-            accessibilityRole="button"
-            accessibilityLabel="Backend and Database Guide"
-          >
-            <Text style={styles.devGuideTopBtnIcon}>🔌</Text>
-            <Text style={styles.devGuideTopBtnText}>Backend & DB Guide</Text>
-          </Pressable>
 
           <Pressable
             onPress={handleOpenModal}
@@ -831,118 +818,6 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
                 </View>
               </Pressable>
 
-              <Pressable
-                onPress={() => handleExecutePoAction('devGuide')}
-                style={[styles.actionOptionRow, styles.actionOptionRowDev]}
-              >
-                <Text style={styles.actionOptionIcon}>🔌</Text>
-                <View style={styles.actionOptionTextCol}>
-                  <Text style={[styles.actionOptionTitle, { color: '#0F766E' }]}>
-                    Backend & Database Guide (For Developers)
-                  </Text>
-                  <Text style={styles.actionOptionDesc}>
-                    View REST APIs, database schemas, and queries for backend engineers
-                  </Text>
-                </View>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Developer Backend & DB Guide Modal */}
-      <Modal
-        visible={devGuideModalOpen}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setDevGuideModalOpen(false)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.devGuideModalCard, isMobile && styles.devGuideModalCardMobile]}>
-            <View style={styles.devGuideModalHeader}>
-              <View style={styles.devGuideTitleRow}>
-                <View style={styles.devGuideIconBadge}>
-                  <Text style={styles.devGuideIconText}>🔌</Text>
-                </View>
-                <View>
-                  <Text style={styles.devGuideModalTitle}>Purchase Orders & Vendor Backend Guide</Text>
-                  <Text style={styles.devGuideModalSubtitle}>
-                    Specification for Backend Engineers & DB Integrators
-                  </Text>
-                </View>
-              </View>
-              <Pressable onPress={() => setDevGuideModalOpen(false)} style={styles.closeActionBtn}>
-                <Text style={styles.closeActionText}>✕</Text>
-              </Pressable>
-            </View>
-
-            <ScrollView style={styles.devGuideModalBody}>
-              {/* Section 1 */}
-              <View style={styles.guideSec}>
-                <Text style={styles.guideSecTitle}>1. REST API Endpoints</Text>
-                <View style={styles.endpointCard}>
-                  <View style={styles.endpointHeader}>
-                    <View style={styles.methodPost}>
-                      <Text style={styles.methodText}>POST</Text>
-                    </View>
-                    <Text style={styles.endpointRoute}>/api/purchase-orders</Text>
-                  </View>
-                  <Text style={styles.endpointDesc}>
-                    Generates a new purchase order with line items, tax computations (GST 12%/18%), and supplier details.
-                  </Text>
-                </View>
-
-                <View style={styles.endpointCard}>
-                  <View style={styles.endpointHeader}>
-                    <View style={[styles.methodPost, { backgroundColor: '#D97706' }]}>
-                      <Text style={styles.methodText}>PATCH</Text>
-                    </View>
-                    <Text style={styles.endpointRoute}>/api/purchase-orders/:id/status</Text>
-                  </View>
-                  <Text style={styles.endpointDesc}>
-                    Updates status to 'Approved', 'Partially Received', or 'Received'.
-                  </Text>
-                </View>
-              </View>
-
-              {/* Section 2 */}
-              <View style={styles.guideSec}>
-                <Text style={styles.guideSecTitle}>2. PostgreSQL Database Schema</Text>
-                <Text style={styles.guideSecDesc}>Tables connecting purchase orders to suppliers and inventory:</Text>
-                <View style={styles.codeSnippet}>
-                  <Text style={styles.codeSnippetText}>
-{`CREATE TABLE purchase_orders (
-  id VARCHAR(50) PRIMARY KEY, -- e.g. 'PO-1024'
-  supplier_id UUID REFERENCES suppliers(id),
-  branch_id UUID REFERENCES branches(id),
-  expected_date DATE NOT NULL,
-  total_amount NUMERIC(10,2) NOT NULL,
-  gst_amount NUMERIC(10,2) NOT NULL,
-  status VARCHAR(30) DEFAULT 'Pending',
-  created_by VARCHAR(50),
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE purchase_order_items (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  po_id VARCHAR(50) REFERENCES purchase_orders(id) ON DELETE CASCADE,
-  medicine_id UUID REFERENCES inventory_items(id),
-  quantity INT NOT NULL,
-  unit_price NUMERIC(10,2) NOT NULL,
-  gst_rate NUMERIC(5,2) DEFAULT 12.00
-);`}
-                  </Text>
-                </View>
-              </View>
-            </ScrollView>
-
-            <View style={styles.devGuideModalFooter}>
-              <Pressable
-                onPress={() => setDevGuideModalOpen(false)}
-                style={styles.closeDevGuideModalBtn}
-              >
-                <Text style={styles.closeDevGuideModalBtnText}>Done / Close Guide</Text>
-              </Pressable>
             </View>
           </View>
         </View>

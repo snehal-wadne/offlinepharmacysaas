@@ -16,6 +16,7 @@ const cors = require("cors");
 require("dotenv").config();
 
 const { pool } = require("./db/connection");
+const { autoInitDatabase } = require("./db/auto-init");
 const { connectRedis, disconnectRedis } = require("./cache/redis");
 
 const app = express();
@@ -100,11 +101,13 @@ const purchaseRoutes = require('./routes/purchase.routes');
 const goodsReceiptRoutes = require('./routes/goods-receipt.routes');
 const supplierRoutes = require('./routes/supplier.routes');
 const inventoryRoutes = require('./routes/inventory.routes');
+const branchRoutes = require('./routes/branch.routes');
 
 app.use('/api/purchases', purchaseRoutes);
 app.use('/api/goods-receipts', goodsReceiptRoutes);
 app.use('/api/suppliers', supplierRoutes);
 app.use('/api/inventory', inventoryRoutes);
+app.use('/api/branches', branchRoutes);
 
 
 
@@ -125,6 +128,11 @@ app.use('/api/inventory', inventoryRoutes);
  */
 const startServer = async () => {
   try {
+    // --------------------------------------------------------
+    // 0. Auto-initialize Database & Schema if required
+    // --------------------------------------------------------
+    await autoInitDatabase();
+
     // --------------------------------------------------------
     // 1. Verify PostgreSQL
     // --------------------------------------------------------

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import {
   MOCK_BRANCHES_LIST,
   BRANCH_TYPES,
 } from '../../data/managementMockData';
+import { API_URL } from '../../config';
 
 export default function BranchesScreen({ onShowToast, onNavigate }) {
   const { width } = useWindowDimensions();
@@ -29,6 +30,53 @@ export default function BranchesScreen({ onShowToast, onNavigate }) {
 
   // Branches State
   const [branches, setBranches] = useState(MOCK_BRANCHES_LIST);
+
+  // Load branches from database
+  useEffect(() => {
+    let active = true;
+    const fetchBranches = async () => {
+      try {
+        const response = await fetch(`${API_URL}/branches`);
+        if (response.ok) {
+          const json = await response.json();
+          if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+            const mapped = json.data.map((dbB, idx) => ({
+              id: dbB.id || `BR-0${idx + 1}`,
+              name: dbB.name,
+              type: 'Hospital Pharmacy',
+              code: `FIT-PUN-0${idx + 1}`,
+              contactPerson: 'Pharmacist',
+              phone: dbB.phone || '+91 98220 00000',
+              email: 'info@flora.edu.in',
+              address: dbB.address || 'Pune, Maharashtra',
+              city: dbB.city || 'Pune',
+              state: dbB.state || 'Maharashtra',
+              pincode: dbB.postal_code || '412205',
+              gstin: '27AAAAF1234F1Z5',
+              drugLicenseNo: 'MH-PZ2-20B-184920',
+              invoicePrefix: `FIT-B0${idx + 1}-`,
+              currency: 'INR (₹)',
+              defaultTaxRate: '12%',
+              staffCount: 5,
+              monthlyRevenue: '₹4,50,000',
+              status: 'Active',
+              isMainHub: idx === 0,
+              openingHours: '08:00 AM - 10:00 PM',
+            }));
+            if (active) {
+              setBranches(mapped);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load branches from API:', err.message);
+      }
+    };
+    fetchBranches();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Add / Edit Modal State
   const [modalVisible, setModalVisible] = useState(false);
@@ -130,7 +178,7 @@ export default function BranchesScreen({ onShowToast, onNavigate }) {
     setModalVisible(true);
   };
 
-  const handleSaveBranch = () => {
+  const handleSaveBranch = async () => {
     const errors = {};
     if (!formData.name.trim()) errors.name = 'Branch name is required';
     if (!formData.code.trim()) errors.code = 'Branch Code is required';
@@ -142,33 +190,77 @@ export default function BranchesScreen({ onShowToast, onNavigate }) {
       return;
     }
 
-    if (isEditing) {
-      setBranches((prev) =>
-        prev.map((b) =>
-          b.id === activeBranchId
-            ? {
-                ...b,
-                ...formData,
-              }
-            : b
-        )
-      );
-      if (onShowToast) {
-        onShowToast(`✓ Successfully updated branch "${formData.name}"`);
+    try {
+      if (isEditing) {
+        // Save edit locally and attempt API call
+        setBranches((prev) =>
+          prev.map((b) =>
+            b.id === activeBranchId
+              ? {
+                  ...b,
+                  ...formData,
+                }
+              : b
+          )
+        );
+
+        if (String(activeBranchId).includes('-')) {
+          await fetch(`${API_URL}/branches/${activeBranchId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: formData.name,
+              address: formData.address,
+              city: formData.city,
+              state: formData.state,
+              postalCode: formData.pincode,
+              phone: formData.phone,
+            }),
+          }).catch(() => {});
+        }
+
+        if (onShowToast) {
+          onShowToast(`✓ Successfully updated branch "${formData.name}"`);
+        }
+      } else {
+        const payload = {
+          name: formData.name,
+          address: formData.address,
+          city: formData.city || 'Pune',
+          state: formData.state || 'Maharashtra',
+          postalCode: formData.pincode || '412205',
+          phone: formData.phone,
+        };
+
+        const res = await fetch(`${API_URL}/branches`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        let newId = `BR-0${branches.length + 1}`;
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && json.data?.id) {
+            newId = json.data.id;
+          }
+        }
+
+        const newBranch = {
+          id: newId,
+          ...formData,
+          staffCount: 2,
+          monthlyRevenue: '₹0.00',
+          currency: 'INR (₹)',
+          isMainHub: false,
+        };
+        setBranches((prev) => [newBranch, ...prev]);
+        if (onShowToast) {
+          onShowToast(`✓ Added new branch "${newBranch.name}" to database!`);
+        }
       }
-    } else {
-      const newBranch = {
-        id: `BR-0${branches.length + 1}`,
-        ...formData,
-        staffCount: 2,
-        monthlyRevenue: '₹0.00',
-        currency: 'INR (₹)',
-        isMainHub: false,
-      };
-      setBranches((prev) => [newBranch, ...prev]);
-      if (onShowToast) {
-        onShowToast(`✓ Added new branch "${newBranch.name}" to FIT Network!`);
-      }
+    } catch (err) {
+      console.warn('Error saving branch to database:', err.message);
     }
 
     setModalVisible(false);
