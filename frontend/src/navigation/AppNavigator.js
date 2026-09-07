@@ -12,6 +12,12 @@ import Sidebar from '../components/layout/Sidebar';
 import Header from '../components/layout/Header';
 import LoginScreen from '../screens/auth/LoginScreen';
 
+// 0. Sales & Cashier Screens (New Sale / POS, Held Bills, Returns, Cash Register)
+import CashRegisterScreen from '../screens/cashier/CashRegisterScreen';
+import PosBillingScreen from '../screens/cashier/PosBillingScreen';
+import HeldBillsScreen from '../screens/cashier/HeldBillsScreen';
+import SalesReturnsScreen from '../screens/cashier/SalesReturnsScreen';
+
 // 1. Master Dashboard
 import InventoryDashboard from '../screens/inventory/InventoryDashboard';
 
@@ -115,6 +121,40 @@ export default function AppNavigator() {
       case 'dashboard':
         return (
           <InventoryDashboard
+            onNavigate={handleNavigate}
+            onShowToast={showToast}
+            isMultiBranch={isMultiBranch}
+          />
+        );
+      case 'cash-register':
+        return (
+          <CashRegisterScreen
+            onNavigate={handleNavigate}
+            onShowToast={showToast}
+            isMultiBranch={isMultiBranch}
+          />
+        );
+      case 'new-sale':
+      case 'pos-billing':
+        return (
+          <PosBillingScreen
+            onNavigate={handleNavigate}
+            onShowToast={showToast}
+            isMultiBranch={isMultiBranch}
+          />
+        );
+      case 'held-bills':
+        return (
+          <HeldBillsScreen
+            onNavigate={handleNavigate}
+            onShowToast={showToast}
+            isMultiBranch={isMultiBranch}
+          />
+        );
+      case 'sales-returns':
+      case 'returns':
+        return (
+          <SalesReturnsScreen
             onNavigate={handleNavigate}
             onShowToast={showToast}
             isMultiBranch={isMultiBranch}
