@@ -266,11 +266,18 @@ export default function BranchesScreen({ onShowToast, onNavigate }) {
     setModalVisible(false);
   };
 
-  const handleToggleStatus = (branch) => {
+  const handleToggleStatus = async (branch) => {
     const newStatus = branch.status === 'Active' ? 'Inactive' : 'Active';
     setBranches((prev) =>
       prev.map((b) => (b.id === branch.id ? { ...b, status: newStatus } : b))
     );
+    if (String(branch.id).includes('-')) {
+      fetch(`${API_URL}/branches/${branch.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus === 'Active' ? 'ACTIVE' : 'INACTIVE' }),
+      }).catch(() => {});
+    }
     if (onShowToast) {
       onShowToast(
         `Branch "${branch.name}" marked as ${newStatus}`

@@ -22,6 +22,7 @@ const getBranchesByOrganisation = async (organisationId) => {
       state,
       postal_code,
       phone,
+      status,
       created_at,
       updated_at
     FROM branches
@@ -48,6 +49,7 @@ const getBranchById = async (branchId, organisationId = null) => {
       state,
       postal_code,
       phone,
+      status,
       created_at,
       updated_at
     FROM branches
@@ -67,7 +69,7 @@ const getBranchById = async (branchId, organisationId = null) => {
 /**
  * Create a new branch.
  */
-const createBranch = async ({ organisationId, name, address, city, state, postalCode, phone }) => {
+const createBranch = async ({ organisationId, name, address, city, state, postalCode, phone, status }) => {
   const query = `
     INSERT INTO branches (
       organisation_id,
@@ -76,12 +78,13 @@ const createBranch = async ({ organisationId, name, address, city, state, postal
       city,
       state,
       postal_code,
-      phone
+      phone,
+      status
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
     RETURNING *;
   `;
-  const values = [organisationId, name, address, city, state, postalCode, phone];
+  const values = [organisationId, name, address, city, state, postalCode, phone, status || 'ACTIVE'];
   const result = await pool.query(query, values);
   return result.rows[0];
 };
@@ -90,7 +93,7 @@ const createBranch = async ({ organisationId, name, address, city, state, postal
  * Update existing branch.
  */
 const updateBranch = async (branchId, organisationId, updates) => {
-  const { name, address, city, state, postalCode, phone } = updates;
+  const { name, address, city, state, postalCode, phone, status } = updates;
   const query = `
     UPDATE branches
     SET
@@ -100,11 +103,12 @@ const updateBranch = async (branchId, organisationId, updates) => {
       state = COALESCE($6, state),
       postal_code = COALESCE($7, postal_code),
       phone = COALESCE($8, phone),
+      status = COALESCE($9, status),
       updated_at = CURRENT_TIMESTAMP
     WHERE id = $1 AND organisation_id = $2
     RETURNING *;
   `;
-  const values = [branchId, organisationId, name, address, city, state, postalCode, phone];
+  const values = [branchId, organisationId, name, address, city, state, postalCode, phone, status];
   const result = await pool.query(query, values);
   return result.rows[0] || null;
 };

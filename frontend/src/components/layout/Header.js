@@ -8,14 +8,13 @@ import {
   Platform,
 } from "react-native";
 import { API_URL } from "../../config";
+import { MOCK_BRANCHES_LIST } from "../../data/managementMockData";
 
 const DEFAULT_BRANCH_OPTIONS = [
   "All Branches",
-  "FIT Main Campus Hospital Pharmacy",
-  "FIT Pune City OPD Pharmacy",
-  "FIT Central Medical Warehouse",
-  "FIT Student Health Center Dispensary",
-  "FIT Kothrud Specialty Clinic Pharmacy",
+  ...MOCK_BRANCHES_LIST.filter(
+    (b) => b.status === "Active" || b.status === "ACTIVE"
+  ).map((b) => b.name),
 ];
 
 export default function Header({
@@ -45,7 +44,10 @@ export default function Header({
         if (response.ok) {
           const json = await response.json();
           if (json.success && Array.isArray(json.data) && json.data.length > 0) {
-            const dbNames = json.data.map((b) => b.name);
+            const activeBranches = json.data.filter(
+              (b) => b.status === "ACTIVE" || b.status === "Active" || !b.status
+            );
+            const dbNames = activeBranches.map((b) => b.name);
             const combined = ["All Branches", ...dbNames.filter((n) => n !== "All Branches")];
             if (active) {
               setBranchOptions(combined);

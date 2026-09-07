@@ -20,6 +20,7 @@ const FIT_BRANCHES = [
     state: 'Maharashtra',
     postalCode: '412205',
     phone: '+91 98220 11450',
+    status: 'ACTIVE',
   },
   {
     name: 'FIT Pune City OPD Pharmacy',
@@ -28,6 +29,7 @@ const FIT_BRANCHES = [
     state: 'Maharashtra',
     postalCode: '411005',
     phone: '+91 98224 88310',
+    status: 'ACTIVE',
   },
   {
     name: 'FIT Central Medical Warehouse',
@@ -36,6 +38,7 @@ const FIT_BRANCHES = [
     state: 'Maharashtra',
     postalCode: '411028',
     phone: '+91 94223 55901',
+    status: 'ACTIVE',
   },
   {
     name: 'FIT Student Health Center Dispensary',
@@ -44,6 +47,7 @@ const FIT_BRANCHES = [
     state: 'Maharashtra',
     postalCode: '412205',
     phone: '+91 98229 33211',
+    status: 'ACTIVE',
   },
   {
     name: 'FIT Kothrud Specialty Clinic Pharmacy',
@@ -52,6 +56,7 @@ const FIT_BRANCHES = [
     state: 'Maharashtra',
     postalCode: '411038',
     phone: '+91 98221 77490',
+    status: 'INACTIVE',
   },
 ];
 
@@ -98,8 +103,8 @@ const seedBranches = async () => {
     // 3. Upsert each branch
     for (const b of FIT_BRANCHES) {
       const res = await client.query(
-        `INSERT INTO branches (organisation_id, name, address, city, state, postal_code, phone)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `INSERT INTO branches (organisation_id, name, address, city, state, postal_code, phone, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          ON CONFLICT (organisation_id, name)
          DO UPDATE SET
            address = EXCLUDED.address,
@@ -107,12 +112,13 @@ const seedBranches = async () => {
            state = EXCLUDED.state,
            postal_code = EXCLUDED.postal_code,
            phone = EXCLUDED.phone,
+           status = EXCLUDED.status,
            updated_at = CURRENT_TIMESTAMP
-         RETURNING id, name, city, phone;`,
-        [orgId, b.name, b.address, b.city, b.state, b.postalCode, b.phone]
+         RETURNING id, name, city, phone, status;`,
+        [orgId, b.name, b.address, b.city, b.state, b.postalCode, b.phone, b.status]
       );
       seededBranches.push(res.rows[0]);
-      console.log(`✓ Seeded branch: ${res.rows[0].name} (ID: ${res.rows[0].id})`);
+      console.log(`✓ Seeded branch: ${res.rows[0].name} (ID: ${res.rows[0].id}, Status: ${res.rows[0].status})`);
     }
 
     await client.query('COMMIT');

@@ -184,6 +184,7 @@ CREATE TABLE IF NOT EXISTS branches (
     state VARCHAR(100),
     postal_code VARCHAR(20),
     phone VARCHAR(30),
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT branches_organisation_name_unique UNIQUE (organisation_id, name)

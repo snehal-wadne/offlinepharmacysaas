@@ -97,7 +97,6 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
     { id: 'BR-02', name: 'FIT Pune City OPD Pharmacy', city: 'Pune' },
     { id: 'BR-03', name: 'FIT Central Medical Warehouse', city: 'Pune' },
     { id: 'BR-04', name: 'FIT Student Health Center Dispensary', city: 'Pune' },
-    { id: 'BR-05', name: 'FIT Kothrud Specialty Clinic Pharmacy', city: 'Pune' },
   ]);
 
   const loadBranchesData = async () => {
@@ -106,8 +105,11 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
       if (res.ok) {
         const json = await res.json();
         if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+          const activeOnly = json.data.filter(
+            (b) => b.status === 'ACTIVE' || b.status === 'Active' || !b.status
+          );
           setBranchesList(
-            json.data.map((b, idx) => ({
+            activeOnly.map((b, idx) => ({
               id: b.id || `BR-0${idx + 1}`,
               name: b.name,
               city: b.city || 'Pune',

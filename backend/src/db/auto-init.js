@@ -151,6 +151,10 @@ const autoInitDatabase = async () => {
       console.log("✓ Database schema applied successfully.");
     } else {
       console.log(`✓ Database schema verified (${tableCount} tables present).`);
+      // Run light migrations for schema updates
+      await targetPool.query(
+        "ALTER TABLE branches ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE';"
+      ).catch(() => {});
     }
 
     // 3. Verify user table seed data
