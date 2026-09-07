@@ -59,7 +59,7 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
               defaultTaxRate: '12%',
               staffCount: 5,
               monthlyRevenue: '₹4,50,000',
-              status: 'Active',
+              status: dbB.status === 'INACTIVE' || dbB.status === 'Inactive' ? 'Inactive' : 'Active',
               isMainHub: idx === 0,
               openingHours: '08:00 AM - 10:00 PM',
             }));
@@ -215,6 +215,7 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
               state: formData.state,
               postalCode: formData.pincode,
               phone: formData.phone,
+              status: formData.status === 'Active' ? 'ACTIVE' : 'INACTIVE',
             }),
           }).catch(() => {});
         }
@@ -230,6 +231,7 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
           state: formData.state || 'Maharashtra',
           postalCode: formData.pincode || '412205',
           phone: formData.phone,
+          status: formData.status === 'Active' ? 'ACTIVE' : 'INACTIVE',
         };
 
         const res = await fetch(`${API_URL}/branches`, {
@@ -271,6 +273,8 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
 
   const handleToggleStatus = async (branch) => {
     const newStatus = branch.status === 'Active' ? 'Inactive' : 'Active';
+    const dbStatus = newStatus === 'Active' ? 'ACTIVE' : 'INACTIVE';
+
     setBranches((prev) =>
       prev.map((b) => (b.id === branch.id ? { ...b, status: newStatus } : b))
     );
@@ -281,12 +285,14 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
       mockMatch.status = newStatus;
     }
 
-    if (String(branch.id).includes('-')) {
-      fetch(`${API_URL}/branches/${branch.id}`, {
+    try {
+      await fetch(`${API_URL}/branches/${branch.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus === 'Active' ? 'ACTIVE' : 'INACTIVE' }),
-      }).catch(() => {});
+        body: JSON.stringify({ status: dbStatus }),
+      });
+    } catch (err) {
+      console.warn('Error updating branch status in database:', err.message);
     }
 
     if (onBranchesUpdated) {
