@@ -63,6 +63,11 @@ export default function AppNavigator() {
   const [selectedCustomerId, setSelectedCustomerId] = useState('CUST-1040');
   const [toastMessage, setToastMessage] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [branchRefreshKey, setBranchRefreshKey] = useState(0);
+
+  const handleBranchesUpdated = () => {
+    setBranchRefreshKey((prev) => prev + 1);
+  };
 
   // Authenticated User State (Default mock logged in as Administrator)
   const [currentUser, setCurrentUser] = useState({
@@ -253,6 +258,7 @@ export default function AppNavigator() {
             onNavigate={handleNavigate}
             onShowToast={showToast}
             isMultiBranch={isMultiBranch}
+            onBranchesUpdated={handleBranchesUpdated}
           />
         );
       case 'users':
@@ -425,6 +431,7 @@ export default function AppNavigator() {
           isMobile={isMobile}
           onToggleMobileMenu={() => setMobileMenuOpen(true)}
           onNavigate={handleNavigate}
+          branchRefreshKey={branchRefreshKey}
         />
 
         {/* Global Action Feedback Toast */}

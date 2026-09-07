@@ -18,7 +18,7 @@ import {
 } from '../../data/managementMockData';
 import { API_URL } from '../../config';
 
-export default function BranchesScreen({ onShowToast, onNavigate }) {
+export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpdated }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
   const isMobile = width < 768;
@@ -259,6 +259,9 @@ export default function BranchesScreen({ onShowToast, onNavigate }) {
           onShowToast(`✓ Added new branch "${newBranch.name}" to database!`);
         }
       }
+      if (onBranchesUpdated) {
+        onBranchesUpdated();
+      }
     } catch (err) {
       console.warn('Error saving branch to database:', err.message);
     }
@@ -271,6 +274,13 @@ export default function BranchesScreen({ onShowToast, onNavigate }) {
     setBranches((prev) =>
       prev.map((b) => (b.id === branch.id ? { ...b, status: newStatus } : b))
     );
+
+    // Sync MOCK_BRANCHES_LIST in-memory array for fallbacks
+    const mockMatch = MOCK_BRANCHES_LIST.find((m) => m.id === branch.id || m.name === branch.name);
+    if (mockMatch) {
+      mockMatch.status = newStatus;
+    }
+
     if (String(branch.id).includes('-')) {
       fetch(`${API_URL}/branches/${branch.id}`, {
         method: 'PUT',
@@ -278,6 +288,11 @@ export default function BranchesScreen({ onShowToast, onNavigate }) {
         body: JSON.stringify({ status: newStatus === 'Active' ? 'ACTIVE' : 'INACTIVE' }),
       }).catch(() => {});
     }
+
+    if (onBranchesUpdated) {
+      onBranchesUpdated();
+    }
+
     if (onShowToast) {
       onShowToast(
         `Branch "${branch.name}" marked as ${newStatus}`
