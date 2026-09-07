@@ -247,7 +247,7 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
         regNumber: formData.regNumber.trim() || (formData.role.includes('Pharmacist') ? 'PCI-MH-PENDING' : 'N/A'),
         accessLevel:
           formData.role === 'Administrator'
-            ? 'Super Admin'
+            ? 'Admin'
             : formData.role === 'Chief Pharmacist'
             ? 'High'
             : formData.role === 'Store Manager'

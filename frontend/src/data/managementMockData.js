@@ -231,7 +231,7 @@ export const MOCK_USERS_LIST = [
     joinedDate: '10 Jan 2021',
     lastActive: 'Just now',
     regNumber: 'PCI-MH-94821',
-    accessLevel: 'Super Admin',
+    accessLevel: 'Admin',
     shift: 'General Shift (09:00 - 18:00)',
   },
   {
@@ -248,7 +248,7 @@ export const MOCK_USERS_LIST = [
     joinedDate: '15 Mar 2021',
     lastActive: '5 mins ago',
     regNumber: 'FIT-ADMIN-01',
-    accessLevel: 'Super Admin',
+    accessLevel: 'Admin',
     shift: 'General Shift (09:00 - 18:00)',
   },
   {
@@ -464,7 +464,7 @@ export const MOCK_ROLES_LIST = [
     userCount: 3,
     isSystem: true,
     badgeColor: '#0F766E',
-    clearanceLevel: 'Super Admin',
+    clearanceLevel: 'Admin',
     assignedUsersList: [
       { id: 'usr-001', name: 'Dr. Ramesh Kulkarni', branch: 'FIT Main Campus Hospital Pharmacy', email: 'ramesh.k@flora.edu.in' },
       { id: 'usr-002', name: 'Pooja Deshmukh', branch: 'All Branches (Central)', email: 'pooja.admin@flora.edu.in' },

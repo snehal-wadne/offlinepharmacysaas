@@ -64,6 +64,7 @@ export default function AppNavigator() {
     display_name: 'Pooja Deshmukh',
     name: 'Pooja Deshmukh',
     role: 'Administrator',
+    accessLevel: 'Admin',
     email: 'pooja.d@flora.edu.in',
     branch: 'FIT Main Campus Hospital Pharmacy',
   });
@@ -277,6 +278,7 @@ export default function AppNavigator() {
             onNavigate={handleNavigate}
             onShowToast={showToast}
             isMultiBranch={isMultiBranch}
+            currentUser={currentUser}
           />
         );
       case 'subscription-plans':
@@ -318,6 +320,7 @@ export default function AppNavigator() {
           activeItem={currentRoute}
           onNavigate={handleNavigate}
           isMultiBranch={isMultiBranch}
+          currentUser={currentUser}
         />
       )}
 
@@ -352,6 +355,7 @@ export default function AppNavigator() {
                 onNavigate={handleNavigate}
                 isMultiBranch={isMultiBranch}
                 isMobile={true}
+                currentUser={currentUser}
               />
             </View>
             <Pressable

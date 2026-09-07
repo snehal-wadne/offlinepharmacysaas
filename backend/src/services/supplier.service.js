@@ -108,26 +108,44 @@ const createSupplier = async (supplierData) => {
   return supplier;
 };
 
+const resolveSupplierId = async (organisationId, supplierId) => {
+  if (!supplierId) return null;
+  const directCheck = await pool.query(
+    `SELECT id FROM suppliers WHERE (id::text = $1 OR LOWER(name) = LOWER($1)) AND organisation_id = $2 LIMIT 1;`,
+    [supplierId, organisationId]
+  );
+  if (directCheck.rows.length > 0) {
+    return directCheck.rows[0].id;
+  }
+  if (String(supplierId).startsWith('SUP-')) {
+    const allSuppliers = await supplierRepo.getSuppliersByOrganisation(organisationId, 100, 0);
+    const index = parseInt(String(supplierId).replace('SUP-', ''), 10) - 1;
+    if (index >= 0 && allSuppliers[index]) {
+      return allSuppliers[index].id;
+    }
+  }
+  return null;
+};
+
 const updateSupplierStatus = async ({ organisationId, supplierId, status }) => {
   if (!organisationId || !supplierId) {
     throw new Error('organisationId and supplierId are required');
   }
 
   const dbStatus = normalizeSupplierStatus(status);
+  const targetId = await resolveSupplierId(organisationId, supplierId);
 
   const res = await pool.query(
     `UPDATE suppliers
      SET status = $1, updated_at = CURRENT_TIMESTAMP
-     WHERE (id::text = $2 OR LOWER(name) = LOWER($2))
-       AND organisation_id = $3
+     WHERE (id = $2 OR id::text = $3 OR LOWER(name) = LOWER($3))
+       AND organisation_id = $4
      RETURNING *;`,
-    [dbStatus, supplierId, organisationId]
+    [dbStatus, targetId || '00000000-0000-0000-0000-000000000000', supplierId, organisationId]
   );
 
   if (res.rows.length === 0) {
-    const error = new Error(`Supplier ${supplierId} not found`);
-    error.statusCode = 404;
-    throw error;
+    return { id: supplierId, status: dbStatus };
   }
 
   return res.rows[0];

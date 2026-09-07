@@ -41,7 +41,7 @@ const REPORTS_SUBITEMS = [
 ];
 
 const SETTINGS_SUBITEMS = [
-  { title: 'Tax / GST Settings', key: 'tax-settings', icon: '⚙️' },
+  { title: 'Tax and GST Settings', key: 'tax-settings', icon: '⚙️', adminOnly: true },
   { title: 'Subscription & Plans', key: 'subscription-plans', icon: '💳' },
   { title: 'Page Permissions', key: 'page-permissions', icon: '🛡️' },
 ];
@@ -51,10 +51,22 @@ export default function Sidebar({
   onNavigate,
   isMultiBranch = true,
   isMobile = false,
+  currentUser,
 }) {
+  const roleName = (currentUser?.role || '').toLowerCase();
+  const accessLevel = (currentUser?.accessLevel || '').toLowerCase();
+  const isAdmin =
+    !currentUser ||
+    roleName.includes('admin') ||
+    accessLevel.includes('admin');
+
   // Filter inventory subitems conditionally based on Single-Shop vs Multi-Branch
   const inventorySubItems = ALL_INVENTORY_SUBITEMS.filter(
     (item) => !item.multiOnly || isMultiBranch
+  );
+
+  const settingsSubItems = SETTINGS_SUBITEMS.filter(
+    (item) => !item.adminOnly || isAdmin
   );
 
   const isInventoryActive = inventorySubItems.some((item) => item.key === activeItem);
@@ -530,7 +542,7 @@ export default function Sidebar({
           {/* Submenu: Tax / GST Settings, Page Permissions */}
           {settingsExpanded && (
             <View style={styles.submenuContainer}>
-              {SETTINGS_SUBITEMS.map((subItem) => {
+              {settingsSubItems.map((subItem) => {
                 const isActive = activeItem === subItem.key;
                 return (
                   <Pressable

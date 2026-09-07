@@ -264,7 +264,7 @@ export default function Header({
                 {displayName || "Admin Owner"}
               </Text>
               <Text style={styles.userRoleText}>
-                {currentUser?.role || "Super Admin"}
+                {currentUser?.role || "Admin"}
               </Text>
             </View>
           )}
