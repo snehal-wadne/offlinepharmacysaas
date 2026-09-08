@@ -100,8 +100,6 @@ export default function SubscriptionPlansScreen({ onNavigate, onShowToast, isMul
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
   const [generatedInvoice, setGeneratedInvoice] = useState(null);
 
-  // Backend Dev Guide Modal
-  const [devGuideOpen, setDevGuideOpen] = useState(false);
 
   // Open Checkout
   const handleSelectPlan = (plan) => {
@@ -181,14 +179,6 @@ export default function SubscriptionPlansScreen({ onNavigate, onShowToast, isMul
         </View>
 
         <View style={styles.topHeaderRight}>
-          <Pressable
-            onPress={() => setDevGuideOpen(true)}
-            style={styles.devGuideBtn}
-            accessibilityRole="button"
-          >
-            <Text style={styles.devGuideBtnIcon}>🔌</Text>
-            <Text style={styles.devGuideBtnText}>Backend & DB Specs</Text>
-          </Pressable>
 
           <Pressable
             onPress={() => onNavigate && onNavigate('tax-settings')}
@@ -686,141 +676,6 @@ export default function SubscriptionPlansScreen({ onNavigate, onShowToast, isMul
         </View>
       </Modal>
 
-      {/* BACKEND & DATABASE DEVELOPER GUIDE MODAL */}
-      <Modal
-        visible={devGuideOpen}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setDevGuideOpen(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.devGuideModalCard, isMobile && styles.devGuideModalCardMobile]}>
-            <View style={styles.devGuideModalHeader}>
-              <View style={styles.devGuideTitleRow}>
-                <View style={styles.devGuideIconBadge}>
-                  <Text style={styles.devGuideIconText}>🔌</Text>
-                </View>
-                <View>
-                  <Text style={styles.devGuideModalTitle}>
-                    Subscription & 18% GST: Backend & DB Guide
-                  </Text>
-                  <Text style={styles.devGuideModalSubtitle}>
-                    Instructions for backend engineers to wire PostgreSQL & Express APIs
-                  </Text>
-                </View>
-              </View>
-              <Pressable onPress={() => setDevGuideOpen(false)} style={styles.modalCloseBtn}>
-                <Text style={styles.modalCloseText}>✕</Text>
-              </Pressable>
-            </View>
-
-            <ScrollView style={styles.devGuideBody} showsVerticalScrollIndicator={true}>
-              {/* 1. DB Schema */}
-              <View style={styles.guideBlock}>
-                <Text style={styles.guideBlockTitle}>1. PostgreSQL Database Tables</Text>
-                <Text style={styles.guideBlockDesc}>
-                  Tables required to store plans, tenant subscriptions, and 18% GST tax invoices:
-                </Text>
-                <View style={styles.sqlCodeBox}>
-                  <Text style={styles.sqlCodeText}>
-{`-- 1. SaaS Plans Table
-CREATE TABLE IF NOT EXISTS subscription_plans (
-  id VARCHAR(50) PRIMARY KEY, -- 'plan-starter', 'plan-growth', 'plan-enterprise'
-  name TEXT NOT NULL,
-  monthly_price NUMERIC(10,2) NOT NULL,
-  annual_price NUMERIC(10,2) NOT NULL,
-  max_branches INT NOT NULL DEFAULT 1,
-  max_users INT NOT NULL DEFAULT 3,
-  is_active BOOLEAN DEFAULT true
-);
-
--- 2. Tenant Active Subscriptions
-CREATE TABLE IF NOT EXISTS tenant_subscriptions (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
-  plan_id VARCHAR(50) REFERENCES subscription_plans(id),
-  billing_cycle VARCHAR(10) NOT NULL, -- 'monthly' | 'annual'
-  status VARCHAR(20) NOT NULL DEFAULT 'active', -- 'active' | 'expired' | 'canceled'
-  start_date TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  end_date TIMESTAMPTZ NOT NULL,
-  auto_renew BOOLEAN DEFAULT true
-);
-
--- 3. GST Invoices for Subscriptions (SAC 998313)
-CREATE TABLE IF NOT EXISTS subscription_invoices (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  subscription_id UUID REFERENCES tenant_subscriptions(id) ON DELETE CASCADE,
-  invoice_number VARCHAR(50) UNIQUE NOT NULL,
-  base_price NUMERIC(10,2) NOT NULL,
-  gst_rate NUMERIC(5,2) NOT NULL DEFAULT 18.00,
-  cgst_amount NUMERIC(10,2) NOT NULL DEFAULT 0.00,
-  sgst_amount NUMERIC(10,2) NOT NULL DEFAULT 0.00,
-  igst_amount NUMERIC(10,2) NOT NULL DEFAULT 0.00,
-  total_amount NUMERIC(10,2) NOT NULL,
-  customer_gstin VARCHAR(15),
-  place_of_supply_state_code VARCHAR(2) NOT NULL,
-  payment_method VARCHAR(20) NOT NULL,
-  payment_status VARCHAR(20) NOT NULL DEFAULT 'PAID',
-  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-);`}
-                  </Text>
-                </View>
-              </View>
-
-              {/* 2. API Endpoint */}
-              <View style={styles.guideBlock}>
-                <Text style={styles.guideBlockTitle}>2. Checkout API Endpoint</Text>
-                <View style={styles.apiEndpointItem}>
-                  <View style={styles.apiMethodBadge}>
-                    <Text style={styles.apiMethodText}>POST</Text>
-                  </View>
-                  <Text style={styles.apiPathText}>/api/subscriptions/checkout</Text>
-                </View>
-                <View style={styles.sqlCodeBox}>
-                  <Text style={styles.sqlCodeText}>
-{`// Express API Controller Implementation
-app.post('/api/subscriptions/checkout', async (req, res) => {
-  const { planId, billingCycle, customerGstin, stateCode, paymentMethod } = req.body;
-  
-  // 1. Fetch plan from DB
-  const plan = await pool.query('SELECT * FROM subscription_plans WHERE id = $1', [planId]);
-  const basePrice = billingCycle === 'annual' ? plan.rows[0].annual_price : plan.rows[0].monthly_price;
-  
-  // 2. Compute 18% GST (SAC 998313)
-  const isIntraState = (stateCode === '27'); // Maharashtra
-  const gstAmount = Number((basePrice * 0.18).toFixed(2));
-  const cgstAmount = isIntraState ? Number((gstAmount / 2).toFixed(2)) : 0;
-  const sgstAmount = isIntraState ? Number((gstAmount / 2).toFixed(2)) : 0;
-  const igstAmount = isIntraState ? 0 : gstAmount;
-  const totalPayable = Number((basePrice + gstAmount).toFixed(2));
-
-  // 3. Insert record & return invoice JSON
-  return res.status(200).json({
-    status: 'success',
-    invoiceNumber: 'INV-PF-' + Date.now().toString().slice(-6),
-    basePrice,
-    cgstAmount,
-    sgstAmount,
-    igstAmount,
-    totalPayable
-  });
-});`}
-                  </Text>
-                </View>
-              </View>
-            </ScrollView>
-
-            <View style={styles.devGuideFooter}>
-              <Pressable
-                onPress={() => setDevGuideOpen(false)}
-                style={styles.closeDevGuideBtn}
-              >
-                <Text style={styles.closeDevGuideBtnText}>Close Developer Guide</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </ScrollView>
   );
 }

@@ -56,51 +56,31 @@ Make sure you have the following installed on your machine:
 
 ---
 
-## ⚡ Setup & Run Instructions
+## ⚡ Setup & Run Instructions (Single-Tier Application)
 
-Follow these step-by-step instructions to get the application running locally:
+The application features an **automated single-tier process launcher**. Starting the frontend automatically checks/starts PostgreSQL service, initializes and seeds the database, and boots the backend API server before launching the frontend UI.
 
-### Step 1: PostgreSQL Server Setup
-Ensure your local PostgreSQL server is running. You can connect to your server using the default admin credentials:
-* **Host**: `localhost`
-* **Port**: `5432`
-* **Username**: `postgres`
-* **Password**: `root`
+### 🌟 Single-Command Quickstart (Recommended)
 
-The backend server will automatically check for and create the `falah_pharmacy` database and tables upon launch.
+Run a single command from the project root:
 
-### Step 2: Configure Backend Environment
-Navigate to the `backend/` folder and create a `.env` file:
-```env
-PORT=5000
-DB_USER=postgres
-DB_PASSWORD=root
-DB_HOST=localhost
-DB_PORT=5432
-DB_DATABASE=falah_pharmacy
-```
-
-### Step 3: Run the Backend API
-In your terminal, navigate to the `backend/` directory:
 ```bash
-# Install server dependencies
-npm install
-
-# Start the Express server with Nodemon (auto-reloads on file edits)
-npm run dev
+# Start frontend web app + backend API + database in single-tier mode
+npm start
 ```
-*You should see logs indicating the database was created and seeded with default credentials.*
-
-### Step 4: Run the Expo Frontend App
-Open a new terminal window and navigate to the `frontend/` directory:
+or for web development directly:
 ```bash
-# Install frontend dependencies
-npm install
-
-# Start the Expo development server
-npx expo start --web
+npm run web
 ```
-*Press **w** in the terminal to launch the web client at `http://localhost:8081`.*
+
+---
+
+### What happens automatically when you start:
+1. **Database Service Verification**: Auto-detects and starts local PostgreSQL service if stopped.
+2. **Auto-Database Creation**: Creates the `falah_pharmacy` PostgreSQL database if it does not exist.
+3. **Auto-Schema & Seeding**: Applies `schema.sql` and seeds initial development records if empty.
+4. **Backend API Startup**: Boots the Express API server on `http://localhost:5000` and verifies health.
+5. **Frontend Application**: Launches the Expo React Native app (Web / Mobile).
 
 ---
 

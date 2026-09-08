@@ -8,13 +8,13 @@ import {
   Platform,
 } from "react-native";
 import { API_URL } from "../../config";
+import { MOCK_BRANCHES_LIST } from "../../data/managementMockData";
 
-const BRANCH_OPTIONS = [
+const DEFAULT_BRANCH_OPTIONS = [
   "All Branches",
-  "FIT Main Campus Hospital Pharmacy",
-  "FIT Pune City OPD Pharmacy",
-  "FIT Central Medical Warehouse",
-  "FIT Student Health Center Dispensary",
+  ...MOCK_BRANCHES_LIST.filter(
+    (b) => b.status === "Active" || b.status === "ACTIVE"
+  ).map((b) => b.name),
 ];
 
 export default function Header({
@@ -29,13 +29,42 @@ export default function Header({
   isMobile = false,
   onToggleMobileMenu,
   onNavigate,
+  branchRefreshKey = 0,
 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
+  const [branchOptions, setBranchOptions] = useState(DEFAULT_BRANCH_OPTIONS);
 
-  // Dynamic connection monitoring to backend server
+  const fetchBranchesFromDb = async () => {
+    try {
+      const response = await fetch(`${API_URL}/branches`);
+      if (response.ok) {
+        const json = await response.json();
+        if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+          const activeBranches = json.data.filter(
+            (b) => b.status === "ACTIVE" || b.status === "Active" || !b.status
+          );
+          const dbNames = activeBranches.map((b) => b.name);
+          const combined = ["All Branches", ...dbNames.filter((n) => n !== "All Branches")];
+          setBranchOptions(combined);
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn("Could not fetch database branches in Header:", err.message);
+    }
+
+    // Fallback: filter MOCK_BRANCHES_LIST for active branches
+    const activeMock = MOCK_BRANCHES_LIST.filter(
+      (b) => b.status === "Active" || b.status === "ACTIVE"
+    ).map((b) => b.name);
+    setBranchOptions(["All Branches", ...activeMock]);
+  };
+
+  // Dynamic connection monitoring and branch fetching from backend
   useEffect(() => {
     let active = true;
+
     const checkConnection = async () => {
       try {
         const controller = new AbortController();
@@ -55,13 +84,14 @@ export default function Header({
     };
 
     checkConnection();
+    fetchBranchesFromDb();
     const interval = setInterval(checkConnection, 10000);
 
     return () => {
       active = false;
       clearInterval(interval);
     };
-  }, []);
+  }, [branchRefreshKey]);
 
   const displayName = currentUser?.display_name || "User";
   const initials = displayName
@@ -156,7 +186,10 @@ export default function Header({
             {!isMobile && <Text style={styles.branchLabel}>Branch</Text>}
             <View style={styles.branchAnchorContainer}>
               <Pressable
-                onPress={() => setDropdownOpen(!dropdownOpen)}
+                onPress={() => {
+                  if (!dropdownOpen) fetchBranchesFromDb();
+                  setDropdownOpen(!dropdownOpen);
+                }}
                 style={styles.branchButton}
                 accessibilityRole="button"
                 accessibilityLabel="Select Branch"
@@ -178,7 +211,7 @@ export default function Header({
                     <Text style={styles.dropdownTitle}>
                       Select Active Branch
                     </Text>
-                    {BRANCH_OPTIONS.map((branch) => {
+                    {branchOptions.map((branch) => {
                       const isSelected = branch === currentBranch;
                       return (
                         <Pressable

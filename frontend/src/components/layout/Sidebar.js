@@ -8,6 +8,13 @@ import {
   Platform,
 } from 'react-native';
 
+const SALES_SUBITEMS = [
+  { title: 'New Sale', key: 'new-sale', icon: '🛍️' },
+  { title: 'Held Bills', key: 'held-bills', icon: '⏸️' },
+  { title: 'Returns', key: 'sales-returns', icon: '🔄' },
+  { title: 'Cash Register', key: 'cash-register', icon: '🗄️' },
+];
+
 const ALL_INVENTORY_SUBITEMS = [
   { title: 'Stock Adjustments', key: 'stock-adjustments', icon: '📝' },
   { title: 'Stock Transfer', key: 'stock-transfer', multiOnly: true, icon: '🔄' },
@@ -69,6 +76,9 @@ export default function Sidebar({
     (item) => !item.adminOnly || isAdmin
   );
 
+  const isSalesActive =
+    SALES_SUBITEMS.some((item) => item.key === activeItem) ||
+    activeItem === 'pos-billing';
   const isInventoryActive = inventorySubItems.some((item) => item.key === activeItem);
   const isPurchasesActive = PURCHASES_SUBITEMS.some((item) => item.key === activeItem);
   const isCustomersActive = CUSTOMERS_SUBITEMS.some((item) => item.key === activeItem);
@@ -82,6 +92,7 @@ export default function Sidebar({
     activeItem === 'page-permissions';
 
   // Default all sections to expanded, EXCEPT Management which is collapsed by default
+  const [salesExpanded, setSalesExpanded] = useState(true);
   const [inventoryExpanded, setInventoryExpanded] = useState(true);
   const [purchasesExpanded, setPurchasesExpanded] = useState(true);
   const [customersExpanded, setCustomersExpanded] = useState(true);
@@ -104,6 +115,10 @@ export default function Sidebar({
   }, []);
 
   // Ensure sections stay expanded when navigated
+  useEffect(() => {
+    if (isSalesActive) setSalesExpanded(true);
+  }, [activeItem, isSalesActive]);
+
   useEffect(() => {
     if (isInventoryActive) setInventoryExpanded(true);
   }, [activeItem, isInventoryActive]);
@@ -132,6 +147,10 @@ export default function Sidebar({
     if (onNavigate) {
       onNavigate('dashboard');
     }
+  };
+
+  const handleSalesClick = () => {
+    setSalesExpanded(!salesExpanded);
   };
 
   const handleInventoryClick = () => {
@@ -204,6 +223,69 @@ export default function Sidebar({
 
         {/* Section Divider */}
         <View style={styles.sectionDivider} />
+
+        {/* 1.5 Sales & Cashier Section */}
+        <View style={styles.expandableSection}>
+          <Pressable
+            onPress={handleSalesClick}
+            style={[
+              styles.expandableHeader,
+              isSalesActive && styles.expandableHeaderSelected,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Sales & Cashier Menu"
+          >
+            <Text
+              style={[
+                styles.mainNavText,
+                isSalesActive && styles.expandableTextSelected,
+              ]}
+            >
+              Sales & Cashier
+            </Text>
+            <Text
+              style={[
+                styles.chevronText,
+                isSalesActive && styles.chevronSelected,
+              ]}
+            >
+              {salesExpanded ? '▴' : '▾'}
+            </Text>
+          </Pressable>
+
+          {/* Sales Submenu */}
+          {salesExpanded && (
+            <View style={styles.submenuContainer}>
+              {SALES_SUBITEMS.map((subItem) => {
+                const isActive =
+                  activeItem === subItem.key ||
+                  (subItem.key === 'new-sale' && activeItem === 'pos-billing');
+                return (
+                  <Pressable
+                    key={subItem.key}
+                    onPress={() => handleSubItemClick(subItem.key)}
+                    style={[
+                      styles.subNavItem,
+                      isActive && styles.subNavItemActive,
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel={subItem.title}
+                  >
+                    {isActive && <View style={styles.subActiveIndicator} />}
+                    <Text
+                      style={[
+                        styles.subNavText,
+                        isActive && styles.subNavTextActive,
+                      ]}
+                    >
+                      {subItem.title}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+        </View>
 
         {/* 2. Inventory Section (Dynamic subitems) */}
         <View style={styles.expandableSection}>

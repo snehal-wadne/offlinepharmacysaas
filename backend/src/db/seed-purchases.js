@@ -10,7 +10,7 @@ const SEED_POS = [
     supplierName: 'Sun Pharma Care',
     orderDate: '2026-08-29',
     expectedDate: '2026-09-02',
-    branchName: 'Main Branch',
+    branchName: 'FIT Main Campus Hospital Pharmacy',
     status: 'PENDING',
     items: [
       { medicineName: 'Paracetamol', brandName: 'Crocin 500', qty: 5, unitCost: 2490.00 },
@@ -21,7 +21,7 @@ const SEED_POS = [
     supplierName: 'Cipla Healthcare',
     orderDate: '2026-08-28',
     expectedDate: '2026-08-31',
-    branchName: 'Downtown Branch',
+    branchName: 'FIT Pune City OPD Pharmacy',
     status: 'RECEIVED',
     items: [
       { medicineName: 'Cetirizine', brandName: 'Cetcip 10mg', qty: 3, unitCost: 2733.33 },
@@ -32,7 +32,7 @@ const SEED_POS = [
     supplierName: 'Abbott Laboratories',
     orderDate: '2026-08-27',
     expectedDate: '2026-09-01',
-    branchName: 'Main Branch',
+    branchName: 'FIT Main Campus Hospital Pharmacy',
     status: 'PENDING',
     items: [
       { medicineName: 'Ibuprofen', brandName: 'Brufen 400', qty: 8, unitCost: 1975.00 },
@@ -43,7 +43,7 @@ const SEED_POS = [
     supplierName: 'GenSupply Dist.',
     orderDate: '2026-08-25',
     expectedDate: '2026-08-28',
-    branchName: 'East Clinic',
+    branchName: 'FIT Central Medical Warehouse',
     status: 'RECEIVED',
     items: [
       { medicineName: 'Omeprazole', brandName: 'Omez 20mg', qty: 2, unitCost: 3200.00 },
@@ -54,7 +54,7 @@ const SEED_POS = [
     supplierName: 'PharmaCo Ltd',
     orderDate: '2026-08-24',
     expectedDate: '2026-08-27',
-    branchName: 'Downtown Branch',
+    branchName: 'FIT Pune City OPD Pharmacy',
     status: 'APPROVED',
     items: [
       { medicineName: 'Amoxicillin', brandName: 'Amoxil 500', qty: 4, unitCost: 2450.00 },
@@ -65,7 +65,7 @@ const SEED_POS = [
     supplierName: 'MedLife Distribution',
     orderDate: '2026-08-22',
     expectedDate: '2026-08-25',
-    branchName: 'Main Branch',
+    branchName: 'FIT Main Campus Hospital Pharmacy',
     status: 'RECEIVED',
     items: [
       { medicineName: 'Paracetamol', brandName: 'Dolo 650', qty: 6, unitCost: 3033.33 },
@@ -76,7 +76,7 @@ const SEED_POS = [
     supplierName: 'Sun Pharma Care',
     orderDate: '2026-08-20',
     expectedDate: '2026-08-23',
-    branchName: 'Main Branch',
+    branchName: 'FIT Main Campus Hospital Pharmacy',
     status: 'CANCELLED',
     items: [
       { medicineName: 'Omeprazole', brandName: 'Razole 20mg', qty: 4, unitCost: 3625.00 },
@@ -87,7 +87,7 @@ const SEED_POS = [
     supplierName: 'GSK Pharmaceuticals',
     orderDate: '2026-08-18',
     expectedDate: '2026-08-21',
-    branchName: 'Main Branch',
+    branchName: 'FIT Main Campus Hospital Pharmacy',
     status: 'CANCELLED',
     items: [
       { medicineName: 'Paracetamol', brandName: 'Calpol 500', qty: 10, unitCost: 2210.00 },
