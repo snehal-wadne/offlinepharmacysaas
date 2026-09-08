@@ -243,7 +243,7 @@ const migrateBranchManagement = async () => {
     await client.query(`
       ALTER TABLE number_sequences DROP CONSTRAINT IF EXISTS number_sequences_type_check;
       ALTER TABLE number_sequences ADD CONSTRAINT number_sequences_type_check
-        CHECK (sequence_type IN ('CUSTOMER', 'PRESCRIPTION', 'INVOICE', 'RECEIPT', 'RETURN', 'BRANCH', 'STAFF'));
+        CHECK (sequence_type IN ('CUSTOMER', 'PRESCRIPTION', 'INVOICE', 'RECEIPT', 'RETURN', 'BRANCH', 'STAFF', 'PURCHASE', 'STOCK_TRANSFER', 'GOODS_RECEIPT'));
     `);
 
     // ============================================================

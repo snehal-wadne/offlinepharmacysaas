@@ -646,7 +646,10 @@ next_number BIGINT NOT NULL DEFAULT 1001,
                 'RECEIPT',
                 'RETURN',
                 'BRANCH',
-                'STAFF'
+                'STAFF',
+                'PURCHASE',
+                'STOCK_TRANSFER',
+                'GOODS_RECEIPT'
             )
         ),
 

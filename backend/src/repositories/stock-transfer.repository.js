@@ -29,6 +29,7 @@
  */
 
 const { pool } = require("../db/connection");
+const { getNextBusinessNumber } = require("./number-sequence.repository");
 
 const { getCache, setCache, deleteCache } = require("../cache/cache");
 
@@ -52,28 +53,26 @@ const buildStockTransferCacheKey = (organisationId, transferId) =>
 /**
  * Create a stock transfer together with all of its items.
  *
+ * Transfer numbers are organisation-scoped and generated
+ * using number-sequence.repository.js (sequenceType: 'STOCK_TRANSFER', prefix: 'TR').
+ *
  * The transfer header and all transfer items are created inside
  * one PostgreSQL transaction.
  *
- * This guarantees that we don't end up with:
- *
- *     transfer created
- *     item 1 created
- *     item 2 failed
- *
- * Instead, either everything is committed or everything is
- * rolled back.
+ * If a transaction client is supplied, the caller owns the transaction.
+ * If no client is supplied, this function creates and manages its own transaction.
  *
  * @param {Object} transfer
  * @param {string} transfer.organisationId
  * @param {string} transfer.fromBranchId
  * @param {string} transfer.toBranchId
  * @param {string} transfer.transferDate
- * @param {string} transfer.status
- * @param {string} transfer.transferNumber
- * @param {string|null} transfer.notes
- * @param {string|null} transfer.createdBy
+ * @param {string} [transfer.status]
+ * @param {string|null} [transfer.transferNumber] Optional override
+ * @param {string|null} [transfer.notes]
+ * @param {string|null} [transfer.createdBy]
  * @param {Array<Object>} transfer.items
+ * @param {Object|null} [transfer.client] PostgreSQL transaction client
  *
  * @returns {Object} Created transfer with its items
  */
@@ -83,20 +82,33 @@ const createStockTransfer = async ({
   toBranchId,
   transferDate,
   status = "DRAFT",
-  transferNumber,
+  transferNumber = null,
   notes = null,
   createdBy = null,
   items,
+  client = null,
 }) => {
-  const client = await pool.connect();
+  const dbClient = client || (await pool.connect());
+  const ownsTransaction = !client;
 
   try {
-    await client.query("BEGIN");
+    if (ownsTransaction) {
+      await dbClient.query("BEGIN");
+    }
+
+    const resolvedTransferNumber =
+      transferNumber ||
+      (await getNextBusinessNumber({
+        organisationId,
+        branchId: null,
+        sequenceType: "STOCK_TRANSFER",
+        client: dbClient,
+      }));
 
     /*
      * Create the transfer header first.
      */
-    const transferResult = await client.query(
+    const transferResult = await dbClient.query(
       `
         INSERT INTO stock_transfers (
             organisation_id,
@@ -128,7 +140,7 @@ const createStockTransfer = async ({
         toBranchId,
         transferDate,
         status,
-        transferNumber,
+        resolvedTransferNumber,
         notes,
         createdBy,
       ],
@@ -142,7 +154,7 @@ const createStockTransfer = async ({
     const createdItems = [];
 
     for (const item of items) {
-      const itemResult = await client.query(
+      const itemResult = await dbClient.query(
         `
           INSERT INTO stock_transfer_items (
               transfer_id,
@@ -163,7 +175,9 @@ const createStockTransfer = async ({
       createdItems.push(itemResult.rows[0]);
     }
 
-    await client.query("COMMIT");
+    if (ownsTransaction) {
+      await dbClient.query("COMMIT");
+    }
 
     return {
       ...transfer,
@@ -174,14 +188,15 @@ const createStockTransfer = async ({
      * If either the transfer or any of its items fails,
      * none of the changes should remain in the database.
      */
-    await client.query("ROLLBACK");
+    if (ownsTransaction && dbClient) {
+      await dbClient.query("ROLLBACK");
+    }
 
     throw error;
   } finally {
-    /*
-     * Release the client back to the connection pool.
-     */
-    client.release();
+    if (ownsTransaction && dbClient) {
+      dbClient.release();
+    }
   }
 };
 

@@ -61,6 +61,7 @@ const runTests = async () => {
   let productId = null;
   let inventoryBatchId = null;
   let transferId = null;
+  let orgBId = null;
 
   try {
     await pool.query("SELECT 1");
@@ -296,15 +297,13 @@ const runTests = async () => {
     // Create stock transfer with one item
     // ---------------------------------------------------------
 
-    const transferNumber = uniqueValue("TR");
-
+    // Do not supply transferNumber; verify it is generated through number_sequences
     const transfer = await createStockTransfer({
       organisationId,
       fromBranchId,
       toBranchId,
       transferDate: "2026-09-03",
       status: "DRAFT",
-      transferNumber,
       notes: "Stock transfer repository integration test",
       createdBy: ownerId,
       items: [
@@ -325,7 +324,9 @@ const runTests = async () => {
 
     assert.strictEqual(transfer.to_branch_id, toBranchId);
 
-    assert.strictEqual(transfer.transfer_number, transferNumber);
+    // Business number sequence verification
+    assert.strictEqual(transfer.transfer_number, "TR-1001");
+    const transferNumber = transfer.transfer_number;
 
     assert.strictEqual(transfer.status, "DRAFT");
 
@@ -339,7 +340,227 @@ const runTests = async () => {
 
     transferId = transfer.id;
 
-    console.log("✓ 8. Create stock transfer with transfer item");
+    console.log(
+      "✓ 8. Create stock transfer with transfer item and generated TR-1001",
+    );
+
+    // ---------------------------------------------------------
+    // Create second stock transfer to verify sequential increment (TR-1002)
+    // ---------------------------------------------------------
+
+    const secondTransfer = await createStockTransfer({
+      organisationId,
+      fromBranchId,
+      toBranchId,
+      transferDate: "2026-09-04",
+      status: "DRAFT",
+      items: [
+        {
+          inventoryBatchId,
+          quantity: 20,
+        },
+      ],
+    });
+
+    assert.strictEqual(
+      secondTransfer.transfer_number,
+      "TR-1002",
+      "Second stock transfer should be assigned TR-1002 sequentially",
+    );
+
+    console.log("✓ 8b. Sequential TR generation verified (TR-1002)");
+
+    // ---------------------------------------------------------
+    // Verify organisation isolation: Org B starts at TR-1001
+    // ---------------------------------------------------------
+
+    const orgBResult = await pool.query(
+      `
+        INSERT INTO organisations (owner_id, name)
+        VALUES ($1, $2)
+        RETURNING id;
+      `,
+      [ownerId, uniqueValue("Transfer Test Org B")],
+    );
+    orgBId = orgBResult.rows[0].id;
+
+    const branchB1Result = await pool.query(
+      `
+        INSERT INTO branches (organisation_id, name, address, city, state, postal_code, phone)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id;
+      `,
+      [
+        orgBId,
+        "Org B Branch 1",
+        "Addr 1",
+        "City B",
+        "State B",
+        "400001",
+        "9000000001",
+      ],
+    );
+    const branchB1Id = branchB1Result.rows[0].id;
+
+    const branchB2Result = await pool.query(
+      `
+        INSERT INTO branches (organisation_id, name, address, city, state, postal_code, phone)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id;
+      `,
+      [
+        orgBId,
+        "Org B Branch 2",
+        "Addr 2",
+        "City B",
+        "State B",
+        "400002",
+        "9000000002",
+      ],
+    );
+    const branchB2Id = branchB2Result.rows[0].id;
+
+    const supplierBResult = await pool.query(
+      `
+        INSERT INTO suppliers (organisation_id, name, contact_person, phone, email, city, gstin, status)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING id;
+      `,
+      [
+        orgBId,
+        "Org B Supplier",
+        "Contact B",
+        "9876543211",
+        "supplierB@test.local",
+        "Mumbai",
+        uniqueValue("GSTB"),
+        "ACTIVE",
+      ],
+    );
+    const supplierBId = supplierBResult.rows[0].id;
+
+    const productBResult = await pool.query(
+      `
+        INSERT INTO products (organisation_id, category, medicine_name, brand_name, strength, pack_size, manufacturer, sku)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING id;
+      `,
+      [
+        orgBId,
+        "Medicines",
+        "Org B Product",
+        "Brand B",
+        "250mg",
+        "10 Tablets",
+        "Mfr B",
+        uniqueValue("SKUB"),
+      ],
+    );
+    const productBId = productBResult.rows[0].id;
+
+    const batchBResult = await pool.query(
+      `
+        INSERT INTO inventory_batches (
+          product_id,
+          branch_id,
+          supplier_id,
+          batch_number,
+          expiry_date,
+          mrp,
+          quantity,
+          shelf_location,
+          updated_by
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        RETURNING id;
+      `,
+      [
+        productBId,
+        branchB1Id,
+        supplierBId,
+        uniqueValue("BATCHB"),
+        "2028-01-01",
+        20.0,
+        200,
+        "A1",
+        ownerId,
+      ],
+    );
+    const batchBId = batchBResult.rows[0].id;
+
+    const transferOrgB = await createStockTransfer({
+      organisationId: orgBId,
+      fromBranchId: branchB1Id,
+      toBranchId: branchB2Id,
+      transferDate: "2026-09-03",
+      items: [
+        {
+          inventoryBatchId: batchBId,
+          quantity: 10,
+        },
+      ],
+    });
+
+    assert.strictEqual(
+      transferOrgB.transfer_number,
+      "TR-1001",
+      "Organisation B stock transfer sequence must start independently at TR-1001 without conflict",
+    );
+
+    console.log(
+      "✓ 8c. Stock transfer organisation isolation verified (Org B got TR-1001)",
+    );
+
+    // ---------------------------------------------------------
+    // Verify transaction client rollback safety
+    // ---------------------------------------------------------
+
+    const txClient = await pool.connect();
+    try {
+      await txClient.query("BEGIN");
+      const rolledBackTransfer = await createStockTransfer({
+        organisationId,
+        fromBranchId,
+        toBranchId,
+        transferDate: "2026-09-05",
+        items: [
+          {
+            inventoryBatchId,
+            quantity: 5,
+          },
+        ],
+        client: txClient,
+      });
+
+      assert.strictEqual(rolledBackTransfer.transfer_number, "TR-1003");
+      await txClient.query("ROLLBACK");
+    } finally {
+      txClient.release();
+    }
+
+    // Since transaction rolled back, next committed transfer should reuse TR-1003
+    const transferAfterRollback = await createStockTransfer({
+      organisationId,
+      fromBranchId,
+      toBranchId,
+      transferDate: "2026-09-05",
+      items: [
+        {
+          inventoryBatchId,
+          quantity: 5,
+        },
+      ],
+    });
+
+    assert.strictEqual(
+      transferAfterRollback.transfer_number,
+      "TR-1003",
+      "After rollback, next transfer in Organisation A must be TR-1003 without gaps",
+    );
+
+    console.log(
+      "✓ 8d. Stock transfer transaction rollback safety verified (TR-1003 reused after rollback)",
+    );
 
     // ---------------------------------------------------------
     // Ensure transfer cache is clean
@@ -689,6 +910,22 @@ const runTests = async () => {
     }
 
     // ---------------------------------------------------------
+    // Clean all test stock transfers before cleaning batches
+    // ---------------------------------------------------------
+
+    try {
+      await pool.query(
+        `
+          DELETE FROM stock_transfers
+          WHERE organisation_id IN ($1, $2);
+        `,
+        [organisationId, orgBId],
+      );
+    } catch (error) {
+      // Ignore
+    }
+
+    // ---------------------------------------------------------
     // Clean inventory batch
     // ---------------------------------------------------------
 
@@ -793,6 +1030,20 @@ const runTests = async () => {
         );
       } catch (error) {
         console.error("Organisation cleanup failed:", error);
+      }
+    }
+
+    if (orgBId) {
+      try {
+        await pool.query(
+          `
+            DELETE FROM organisations
+            WHERE id = $1;
+          `,
+          [orgBId],
+        );
+      } catch (error) {
+        console.error("Organisation B cleanup failed:", error);
       }
     }
 

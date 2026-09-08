@@ -66,6 +66,9 @@ const NUMBER_PREFIXES = {
   RETURN: "RET",
   BRANCH: "BR",
   STAFF: "EMP",
+  PURCHASE: "PO",
+  STOCK_TRANSFER: "TR",
+  GOODS_RECEIPT: "GRN",
 };
 
 /**
@@ -82,6 +85,9 @@ const ORGANISATION_SCOPED_TYPES = new Set([
   "PRESCRIPTION",
   "BRANCH",
   "STAFF",
+  "PURCHASE",
+  "STOCK_TRANSFER",
+  "GOODS_RECEIPT",
 ]);
 
 /**
