@@ -16,8 +16,27 @@
 
 const { pool } = require("../db/connection");
 const { getCache, setCache, deleteCache } = require("../cache/cache");
+const {
+  invalidateBranchManagementDashboardCache,
+} = require("./branch-management-dashboard.repository");
 
 const ROLE_CACHE_TTL = 60;
+
+/**
+ * Columns returned by role queries.
+ * Explicitly includes role_identifier and clearance_level.
+ */
+const ROLE_COLUMNS = `
+  id,
+  organisation_id,
+  name,
+  role_identifier,
+  clearance_level,
+  description,
+  is_system_role,
+  created_at,
+  updated_at
+`;
 
 /**
  * Build Redis cache keys.
@@ -41,38 +60,47 @@ const buildRolePermissionCheckCacheKey = (roleId, permissionId) =>
  * @param {Object} data
  * @param {string} data.organisationId
  * @param {string} data.name
- * @param {string|null} data.description
- * @param {boolean} data.isSystemRole
+ * @param {string|null} [data.roleIdentifier]
+ * @param {string} [data.clearanceLevel]
+ * @param {string|null} [data.description]
+ * @param {boolean} [data.isSystemRole]
  *
  * @returns {Object} Created role
  */
 const createRole = async ({
   organisationId,
   name,
+  roleIdentifier = null,
+  clearanceLevel = "STANDARD_POS",
   description = null,
   isSystemRole = false,
 }) => {
+  const identifier =
+    roleIdentifier ||
+    name
+      .toUpperCase()
+      .trim()
+      .replace(/[^A-Z0-9]+/g, "_");
+
   const query = `
     INSERT INTO roles (
       organisation_id,
       name,
+      role_identifier,
+      clearance_level,
       description,
       is_system_role
     )
-    VALUES ($1, $2, $3, $4)
+    VALUES ($1, $2, $3, $4, $5, $6)
     RETURNING
-      id,
-      organisation_id,
-      name,
-      description,
-      is_system_role,
-      created_at,
-      updated_at;
+      ${ROLE_COLUMNS};
   `;
 
   const result = await pool.query(query, [
     organisationId,
     name,
+    identifier,
+    clearanceLevel,
     description,
     isSystemRole,
   ]);
@@ -80,7 +108,13 @@ const createRole = async ({
   const role = result.rows[0];
 
   try {
-    await deleteCache(buildOrganisationRolesCacheKey(organisationId));
+    await Promise.all([
+      deleteCache(buildOrganisationRolesCacheKey(organisationId)),
+      invalidateBranchManagementDashboardCache(organisationId, {
+        staff: true,
+        role: true,
+      }),
+    ]);
   } catch (error) {
     console.error("Organisation roles cache invalidation failed:", error);
   }
@@ -110,13 +144,7 @@ const getRoleById = async (roleId) => {
 
   const query = `
     SELECT
-      id,
-      organisation_id,
-      name,
-      description,
-      is_system_role,
-      created_at,
-      updated_at
+      ${ROLE_COLUMNS}
     FROM roles
     WHERE id = $1;
   `;
@@ -134,6 +162,27 @@ const getRoleById = async (roleId) => {
   }
 
   return role;
+};
+
+/**
+ * Get a role by its identifier within an organisation.
+ *
+ * @param {string} organisationId
+ * @param {string} roleIdentifier
+ *
+ * @returns {Object|null} Role or null if not found
+ */
+const getRoleByIdentifier = async (organisationId, roleIdentifier) => {
+  const query = `
+    SELECT
+      ${ROLE_COLUMNS}
+    FROM roles
+    WHERE organisation_id = $1
+      AND role_identifier = $2;
+  `;
+
+  const result = await pool.query(query, [organisationId, roleIdentifier]);
+  return result.rows[0] || null;
 };
 
 /**
@@ -158,13 +207,7 @@ const getOrganisationRoles = async (organisationId) => {
 
   const query = `
     SELECT
-      id,
-      organisation_id,
-      name,
-      description,
-      is_system_role,
-      created_at,
-      updated_at
+      ${ROLE_COLUMNS}
     FROM roles
     WHERE organisation_id = $1
     ORDER BY created_at ASC;
@@ -184,34 +227,41 @@ const getOrganisationRoles = async (organisationId) => {
 };
 
 /**
- * Update a role's name and description.
+ * Update a role's information.
  *
  * @param {string} roleId
  * @param {Object} data
- * @param {string} data.name
- * @param {string|null} data.description
+ * @param {string} [data.name]
+ * @param {string|null} [data.description]
+ * @param {string|null} [data.roleIdentifier]
+ * @param {string|null} [data.clearanceLevel]
  *
  * @returns {Object|null} Updated role
  */
-const updateRole = async (roleId, { name, description = null }) => {
+const updateRole = async (
+  roleId,
+  { name, description = null, roleIdentifier, clearanceLevel } = {},
+) => {
   const query = `
     UPDATE roles
     SET
-      name = $1,
-      description = $2,
+      name = COALESCE($1, name),
+      description = COALESCE($2, description),
+      role_identifier = COALESCE($3, role_identifier),
+      clearance_level = COALESCE($4, clearance_level),
       updated_at = CURRENT_TIMESTAMP
-    WHERE id = $3
+    WHERE id = $5
     RETURNING
-      id,
-      organisation_id,
-      name,
-      description,
-      is_system_role,
-      created_at,
-      updated_at;
+      ${ROLE_COLUMNS};
   `;
 
-  const result = await pool.query(query, [name, description, roleId]);
+  const result = await pool.query(query, [
+    name !== undefined ? name : null,
+    description !== undefined ? description : null,
+    roleIdentifier !== undefined ? roleIdentifier : null,
+    clearanceLevel !== undefined ? clearanceLevel : null,
+    roleId,
+  ]);
 
   const role = result.rows[0] || null;
 
@@ -220,6 +270,10 @@ const updateRole = async (roleId, { name, description = null }) => {
       await deleteCache(buildRoleCacheKey(role.id));
 
       await deleteCache(buildOrganisationRolesCacheKey(role.organisation_id));
+      await invalidateBranchManagementDashboardCache(role.organisation_id, {
+        staff: true,
+        role: true,
+      });
     } catch (error) {
       console.error("Role cache invalidation failed:", error);
     }
@@ -236,10 +290,6 @@ const updateRole = async (roleId, { name, description = null }) => {
  * @returns {boolean} True if the role was deleted
  */
 const deleteRole = async (roleId) => {
-  /**
-   * Load the role first so its organisation and cached
-   * permission information can be invalidated correctly.
-   */
   const existingRole = await getRoleById(roleId);
 
   const query = `
@@ -258,6 +308,10 @@ const deleteRole = async (roleId) => {
           buildOrganisationRolesCacheKey(existingRole.organisation_id),
         ),
         deleteCache(buildRolePermissionsCacheKey(existingRole.id)),
+        invalidateBranchManagementDashboardCache(existingRole.organisation_id, {
+          staff: true,
+          role: true,
+        }),
       ]);
     } catch (error) {
       console.error("Role cache invalidation failed:", error);
@@ -415,6 +469,8 @@ const getRolesWithPermission = async (permissionId) => {
       r.id,
       r.organisation_id,
       r.name,
+      r.role_identifier,
+      r.clearance_level,
       r.description,
       r.is_system_role,
       r.created_at,
@@ -441,9 +497,6 @@ const getRolesWithPermission = async (permissionId) => {
 
 /**
  * Check whether a role has a particular permission.
- *
- * This is a frequent authorization lookup, so the boolean
- * result is cached for a short period.
  *
  * @param {string} roleId
  * @param {string} permissionId
@@ -488,6 +541,7 @@ const hasRolePermission = async (roleId, permissionId) => {
 module.exports = {
   createRole,
   getRoleById,
+  getRoleByIdentifier,
   getOrganisationRoles,
   updateRole,
   deleteRole,

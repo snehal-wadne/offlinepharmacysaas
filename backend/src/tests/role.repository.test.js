@@ -24,6 +24,7 @@ const assert = require("assert");
 const {
   createRole,
   getRoleById,
+  getRoleByIdentifier,
   getOrganisationRoles,
   updateRole,
   deleteRole,
@@ -306,6 +307,19 @@ const runTests = async () => {
     // Update role
     // ---------------------------------------------------------
 
+    const dashboardStaffCacheKey = `organisation:${organisationId}:branch-mgmt:staff-stats`;
+    const dashboardRoleCacheKey = `organisation:${organisationId}:branch-mgmt:role-stats`;
+    await redisClient.set(
+      dashboardStaffCacheKey,
+      JSON.stringify({ total_staff: 1 }),
+      { EX: 60 },
+    );
+    await redisClient.set(
+      dashboardRoleCacheKey,
+      JSON.stringify({ total_roles: 1 }),
+      { EX: 60 },
+    );
+
     const updatedRole = await updateRole(roleId, {
       name: "Updated Cashier",
       description: "Updated role description",
@@ -315,6 +329,8 @@ const runTests = async () => {
     assert.strictEqual(updatedRole.name, "Updated Cashier");
 
     assert.strictEqual(await getCache(buildRoleCacheKey(roleId)), null);
+    assert.strictEqual(await redisClient.get(dashboardStaffCacheKey), null);
+    assert.strictEqual(await redisClient.get(dashboardRoleCacheKey), null);
 
     assert.strictEqual(
       await getCache(buildOrganisationRolesCacheKey(organisationId)),
@@ -440,6 +456,45 @@ const runTests = async () => {
     assert.strictEqual(deletedRole, null);
 
     console.log("✓ 18. Role deletion removes database and cache data");
+
+    // ---------------------------------------------------------
+    // 19. Role identifier and clearance level support
+    // ---------------------------------------------------------
+    const clinicalRole = await createRole({
+      organisationId,
+      name: "Clinical Lead",
+      roleIdentifier: "CLINICAL_LEAD",
+      clearanceLevel: "CLINICAL_DISPENSING",
+      description: "Clinical dispensing lead",
+      isSystemRole: false,
+    });
+
+    assert.ok(clinicalRole);
+    assert.strictEqual(clinicalRole.role_identifier, "CLINICAL_LEAD");
+    assert.strictEqual(clinicalRole.clearance_level, "CLINICAL_DISPENSING");
+
+    const fetchedRole = await getRoleById(clinicalRole.id);
+    assert.strictEqual(fetchedRole.role_identifier, "CLINICAL_LEAD");
+    assert.strictEqual(fetchedRole.clearance_level, "CLINICAL_DISPENSING");
+
+    const fetchedByIdentifier = await getRoleByIdentifier(
+      organisationId,
+      "CLINICAL_LEAD",
+    );
+    assert.ok(fetchedByIdentifier);
+    assert.strictEqual(fetchedByIdentifier.id, clinicalRole.id);
+
+    const updatedClinicalRole = await updateRole(clinicalRole.id, {
+      clearanceLevel: "MANAGEMENT",
+    });
+    assert.strictEqual(updatedClinicalRole.clearance_level, "MANAGEMENT");
+    assert.strictEqual(updatedClinicalRole.role_identifier, "CLINICAL_LEAD");
+
+    await deleteRole(clinicalRole.id);
+
+    console.log(
+      "✓ 19. Role identifier and clearance level created, read, and updated",
+    );
 
     console.log("\n✓ All Role Repository tests passed.\n");
   } catch (error) {

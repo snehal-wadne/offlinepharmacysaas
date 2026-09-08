@@ -30,6 +30,27 @@ const { getCache, setCache, deleteCache } = require("../cache/cache");
 const USER_CACHE_TTL = 60;
 
 /**
+ * Columns returned by all user queries.
+ * Explicit list guarantees staff and registration fields are always projected.
+ */
+const USER_COLUMNS = `
+    id,
+    email,
+    password_hash,
+    google_sub,
+    name,
+    status,
+    staff_id,
+    phone,
+    professional_registration_number,
+    working_shift,
+    email_verified_at,
+    last_login_at,
+    created_at,
+    updated_at
+`;
+
+/**
  * Build Redis keys for the different ways a user can be found.
  */
 const buildUserIdCacheKey = (userId) => `user:${userId}`;
@@ -89,16 +110,21 @@ const cacheUser = async (user) => {
  * - A local user by providing passwordHash.
  * - A Google user by providing googleSub.
  * - A user supporting both methods by providing both.
+ * - Staff identity details (staffId, phone, professionalRegistrationNumber, workingShift).
  *
  * The password is expected to already be hashed by the
  * service layer before reaching the repository.
  *
  * @param {Object} data
  * @param {string} data.email
- * @param {string|null} data.passwordHash
- * @param {string|null} data.googleSub
+ * @param {string|null} [data.passwordHash]
+ * @param {string|null} [data.googleSub]
  * @param {string} data.name
- * @param {string} data.status
+ * @param {string} [data.status]
+ * @param {string|null} [data.staffId]
+ * @param {string|null} [data.phone]
+ * @param {string|null} [data.professionalRegistrationNumber]
+ * @param {string|null} [data.workingShift]
  *
  * @returns {Object} Created user
  */
@@ -108,6 +134,10 @@ const createUser = async ({
   googleSub = null,
   name,
   status = "ACTIVE",
+  staffId = null,
+  phone = null,
+  professionalRegistrationNumber = null,
+  workingShift = null,
 }) => {
   const query = `
         INSERT INTO users (
@@ -115,20 +145,15 @@ const createUser = async ({
             password_hash,
             google_sub,
             name,
-            status
-        )
-        VALUES ($1, $2, $3, $4, $5)
-        RETURNING
-            id,
-            email,
-            password_hash,
-            google_sub,
-            name,
             status,
-            email_verified_at,
-            last_login_at,
-            created_at,
-            updated_at;
+            staff_id,
+            phone,
+            professional_registration_number,
+            working_shift
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        RETURNING
+            ${USER_COLUMNS};
     `;
 
   const result = await pool.query(query, [
@@ -137,6 +162,10 @@ const createUser = async ({
     googleSub,
     name,
     status,
+    staffId,
+    phone,
+    professionalRegistrationNumber,
+    workingShift,
   ]);
 
   return result.rows[0];
@@ -167,16 +196,7 @@ const getUserById = async (userId) => {
 
   const query = `
         SELECT
-            id,
-            email,
-            password_hash,
-            google_sub,
-            name,
-            status,
-            email_verified_at,
-            last_login_at,
-            created_at,
-            updated_at
+            ${USER_COLUMNS}
         FROM users
         WHERE id = $1;
     `;
@@ -198,13 +218,6 @@ const getUserById = async (userId) => {
 /**
  * Find a user by email address.
  *
- * This is useful during:
- *
- * - Local login
- * - Signup checks
- * - Google account linking
- * - Password reset
- *
  * @param {string} email
  *
  * @returns {Object|null} User or null if not found
@@ -224,16 +237,7 @@ const getUserByEmail = async (email) => {
 
   const query = `
         SELECT
-            id,
-            email,
-            password_hash,
-            google_sub,
-            name,
-            status,
-            email_verified_at,
-            last_login_at,
-            created_at,
-            updated_at
+            ${USER_COLUMNS}
         FROM users
         WHERE email = $1;
     `;
@@ -255,9 +259,6 @@ const getUserByEmail = async (email) => {
 /**
  * Find a user by their Google subject identifier.
  *
- * google_sub is the stable identifier assigned to the user's
- * Google account.
- *
  * @param {string} googleSub
  *
  * @returns {Object|null} User or null if not found
@@ -277,16 +278,7 @@ const getUserByGoogleSub = async (googleSub) => {
 
   const query = `
         SELECT
-            id,
-            email,
-            password_hash,
-            google_sub,
-            name,
-            status,
-            email_verified_at,
-            last_login_at,
-            created_at,
-            updated_at
+            ${USER_COLUMNS}
         FROM users
         WHERE google_sub = $1;
     `;
@@ -306,37 +298,67 @@ const getUserByGoogleSub = async (googleSub) => {
 };
 
 /**
- * Update basic user profile information.
+ * Find a user by staff identifier.
+ *
+ * @param {string} staffId
+ *
+ * @returns {Object|null} User or null if not found
+ */
+const getUserByStaffId = async (staffId) => {
+  const query = `
+        SELECT
+            ${USER_COLUMNS}
+        FROM users
+        WHERE staff_id = $1;
+    `;
+
+  const result = await pool.query(query, [staffId]);
+  return result.rows[0] || null;
+};
+
+/**
+ * Update user profile and staff information.
  *
  * Authentication credentials are intentionally not updated here.
  *
  * @param {string} userId
  * @param {Object} data
- * @param {string} data.name
+ * @param {string} [data.name]
+ * @param {string|null} [data.phone]
+ * @param {string|null} [data.professionalRegistrationNumber]
+ * @param {string|null} [data.workingShift]
+ * @param {string|null} [data.staffId]
  *
  * @returns {Object|null} Updated user
  */
-const updateUser = async (userId, { name }) => {
+const updateUser = async (
+  userId,
+  { name, phone, professionalRegistrationNumber, workingShift, staffId } = {},
+) => {
   const query = `
         UPDATE users
         SET
-            name = $1,
+            name = COALESCE($1, name),
+            phone = COALESCE($2, phone),
+            professional_registration_number = COALESCE($3, professional_registration_number),
+            working_shift = COALESCE($4, working_shift),
+            staff_id = COALESCE($5, staff_id),
             updated_at = CURRENT_TIMESTAMP
-        WHERE id = $2
+        WHERE id = $6
         RETURNING
-            id,
-            email,
-            password_hash,
-            google_sub,
-            name,
-            status,
-            email_verified_at,
-            last_login_at,
-            created_at,
-            updated_at;
+            ${USER_COLUMNS};
     `;
 
-  const result = await pool.query(query, [name, userId]);
+  const result = await pool.query(query, [
+    name !== undefined ? name : null,
+    phone !== undefined ? phone : null,
+    professionalRegistrationNumber !== undefined
+      ? professionalRegistrationNumber
+      : null,
+    workingShift !== undefined ? workingShift : null,
+    staffId !== undefined ? staffId : null,
+    userId,
+  ]);
   const user = result.rows[0] || null;
 
   if (user) {
@@ -353,8 +375,6 @@ const updateUser = async (userId, { name }) => {
 /**
  * Update the stored password hash.
  *
- * The service layer is responsible for hashing the password.
- *
  * @param {string} userId
  * @param {string} passwordHash
  *
@@ -368,16 +388,7 @@ const updatePasswordHash = async (userId, passwordHash) => {
             updated_at = CURRENT_TIMESTAMP
         WHERE id = $2
         RETURNING
-            id,
-            email,
-            password_hash,
-            google_sub,
-            name,
-            status,
-            email_verified_at,
-            last_login_at,
-            created_at,
-            updated_at;
+            ${USER_COLUMNS};
     `;
 
   const result = await pool.query(query, [passwordHash, userId]);
@@ -397,9 +408,6 @@ const updatePasswordHash = async (userId, passwordHash) => {
 /**
  * Link a Google account to an existing user.
  *
- * The old user cache is invalidated after the database update.
- * The next lookup will repopulate Redis with the new google_sub.
- *
  * @param {string} userId
  * @param {string} googleSub
  *
@@ -413,16 +421,7 @@ const linkGoogleAccount = async (userId, googleSub) => {
             updated_at = CURRENT_TIMESTAMP
         WHERE id = $2
         RETURNING
-            id,
-            email,
-            password_hash,
-            google_sub,
-            name,
-            status,
-            email_verified_at,
-            last_login_at,
-            created_at,
-            updated_at;
+            ${USER_COLUMNS};
     `;
 
   const result = await pool.query(query, [googleSub, userId]);
@@ -454,16 +453,7 @@ const unlinkGoogleAccount = async (userId) => {
             updated_at = CURRENT_TIMESTAMP
         WHERE id = $1
         RETURNING
-            id,
-            email,
-            password_hash,
-            google_sub,
-            name,
-            status,
-            email_verified_at,
-            last_login_at,
-            created_at,
-            updated_at;
+            ${USER_COLUMNS};
     `;
 
   const result = await pool.query(query, [userId]);
@@ -495,16 +485,7 @@ const markEmailAsVerified = async (userId) => {
             updated_at = CURRENT_TIMESTAMP
         WHERE id = $1
         RETURNING
-            id,
-            email,
-            password_hash,
-            google_sub,
-            name,
-            status,
-            email_verified_at,
-            last_login_at,
-            created_at,
-            updated_at;
+            ${USER_COLUMNS};
     `;
 
   const result = await pool.query(query, [userId]);
@@ -524,9 +505,6 @@ const markEmailAsVerified = async (userId) => {
 /**
  * Update the user's last login timestamp.
  *
- * This changes the cached user object, so the old cache must
- * be invalidated after the database update.
- *
  * @param {string} userId
  *
  * @returns {Object|null} Updated user
@@ -539,16 +517,7 @@ const updateLastLogin = async (userId) => {
             updated_at = CURRENT_TIMESTAMP
         WHERE id = $1
         RETURNING
-            id,
-            email,
-            password_hash,
-            google_sub,
-            name,
-            status,
-            email_verified_at,
-            last_login_at,
-            created_at,
-            updated_at;
+            ${USER_COLUMNS};
     `;
 
   const result = await pool.query(query, [userId]);
@@ -581,16 +550,7 @@ const updateUserStatus = async (userId, status) => {
             updated_at = CURRENT_TIMESTAMP
         WHERE id = $2
         RETURNING
-            id,
-            email,
-            password_hash,
-            google_sub,
-            name,
-            status,
-            email_verified_at,
-            last_login_at,
-            created_at,
-            updated_at;
+            ${USER_COLUMNS};
     `;
 
   const result = await pool.query(query, [status, userId]);
@@ -609,9 +569,6 @@ const updateUserStatus = async (userId, status) => {
 
 /**
  * Delete a user by ID.
- *
- * The user is loaded before deletion so all lookup keys can
- * be invalidated after the database deletion succeeds.
  *
  * @param {string} userId
  *
@@ -639,14 +596,12 @@ const deleteUser = async (userId) => {
   return result.rowCount > 0;
 };
 
-/**
- * Export user repository functions.
- */
 module.exports = {
   createUser,
   getUserById,
   getUserByEmail,
   getUserByGoogleSub,
+  getUserByStaffId,
   updateUser,
   updatePasswordHash,
   linkGoogleAccount,
