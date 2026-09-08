@@ -64,6 +64,7 @@ const runTests = async () => {
   let productId = null;
   let secondProductId = null;
   let purchaseId = null;
+  let orgBId = null;
 
   try {
     await pool.query("SELECT 1");
@@ -265,11 +266,9 @@ const runTests = async () => {
     // Create purchase with two different products
     // ---------------------------------------------------------
 
-    const purchaseNumber = uniqueValue("PO");
-
+    // Do not supply purchaseNumber; verify it is generated through number_sequences
     const purchase = await createPurchase({
       organisationId,
-      purchaseNumber,
       supplierId,
       branchId,
       orderDate: "2026-09-03",
@@ -301,7 +300,9 @@ const runTests = async () => {
 
     assert.strictEqual(purchase.organisation_id, organisationId);
 
-    assert.strictEqual(purchase.purchase_number, purchaseNumber);
+    // Business number sequence verification
+    assert.strictEqual(purchase.purchase_number, "PO-1001");
+    const purchaseNumber = purchase.purchase_number;
 
     assert.strictEqual(purchase.supplier_id, supplierId);
 
@@ -315,7 +316,186 @@ const runTests = async () => {
 
     purchaseId = purchase.id;
 
-    console.log("✓ 7. Create purchase with purchase items");
+    console.log(
+      "✓ 7. Create purchase with purchase items and generated PO-1001",
+    );
+
+    // ---------------------------------------------------------
+    // Create second purchase to verify sequential increment (PO-1002)
+    // ---------------------------------------------------------
+
+    const secondPurchase = await createPurchase({
+      organisationId,
+      supplierId,
+      branchId,
+      orderDate: "2026-09-04",
+      items: [
+        {
+          productId,
+          orderedQuantity: 10,
+          unitCost: 15,
+          taxAmount: 0,
+          discountAmount: 0,
+        },
+      ],
+    });
+
+    assert.strictEqual(
+      secondPurchase.purchase_number,
+      "PO-1002",
+      "Second purchase should be assigned PO-1002 sequentially",
+    );
+
+    console.log("✓ 7b. Sequential PO generation verified (PO-1002)");
+
+    // ---------------------------------------------------------
+    // Verify organisation isolation: Org B starts at PO-1001
+    // ---------------------------------------------------------
+
+    const orgBResult = await pool.query(
+      `
+        INSERT INTO organisations (owner_id, name)
+        VALUES ($1, $2)
+        RETURNING id;
+      `,
+      [ownerId, uniqueValue("Purchase Test Org B")],
+    );
+    orgBId = orgBResult.rows[0].id;
+
+    const branchBResult = await pool.query(
+      `
+        INSERT INTO branches (organisation_id, name, address, city, state, postal_code, phone)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id;
+      `,
+      [
+        orgBId,
+        "Org B Branch",
+        "456 Org B St",
+        "City B",
+        "State B",
+        "400002",
+        "9000000002",
+      ],
+    );
+    const branchBId = branchBResult.rows[0].id;
+
+    const supplierBResult = await pool.query(
+      `
+        INSERT INTO suppliers (organisation_id, name, contact_person, phone, email, city, gstin, status)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING id;
+      `,
+      [
+        orgBId,
+        "Org B Supplier",
+        "Contact B",
+        "9876543211",
+        "supplierB@test.local",
+        "Mumbai",
+        uniqueValue("GSTB"),
+        "ACTIVE",
+      ],
+    );
+    const supplierBId = supplierBResult.rows[0].id;
+
+    const productBResult = await pool.query(
+      `
+        INSERT INTO products (organisation_id, category, medicine_name, brand_name, strength, pack_size, manufacturer, sku)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING id;
+      `,
+      [
+        orgBId,
+        "Medicines",
+        "Org B Product",
+        "Brand B",
+        "250mg",
+        "10 Tablets",
+        "Mfr B",
+        uniqueValue("SKUB"),
+      ],
+    );
+    const productBId = productBResult.rows[0].id;
+
+    const purchaseOrgB = await createPurchase({
+      organisationId: orgBId,
+      supplierId: supplierBId,
+      branchId: branchBId,
+      orderDate: "2026-09-03",
+      items: [
+        {
+          productId: productBId,
+          orderedQuantity: 5,
+          unitCost: 12,
+          taxAmount: 0,
+          discountAmount: 0,
+        },
+      ],
+    });
+
+    assert.strictEqual(
+      purchaseOrgB.purchase_number,
+      "PO-1001",
+      "Organisation B purchase sequence must start independently at PO-1001 without conflict",
+    );
+
+    console.log(
+      "✓ 7c. Purchase organisation isolation verified (Org B got PO-1001)",
+    );
+
+    // ---------------------------------------------------------
+    // Verify transaction client rollback safety
+    // ---------------------------------------------------------
+
+    const txClient = await pool.connect();
+    try {
+      await txClient.query("BEGIN");
+      const rolledBackPurchase = await createPurchase({
+        organisationId,
+        supplierId,
+        branchId,
+        orderDate: "2026-09-05",
+        items: [
+          {
+            productId,
+            orderedQuantity: 5,
+            unitCost: 10,
+          },
+        ],
+        client: txClient,
+      });
+
+      assert.strictEqual(rolledBackPurchase.purchase_number, "PO-1003");
+      await txClient.query("ROLLBACK");
+    } finally {
+      txClient.release();
+    }
+
+    // Since transaction rolled back, next committed purchase should reuse PO-1003
+    const purchaseAfterRollback = await createPurchase({
+      organisationId,
+      supplierId,
+      branchId,
+      orderDate: "2026-09-05",
+      items: [
+        {
+          productId,
+          orderedQuantity: 5,
+          unitCost: 10,
+        },
+      ],
+    });
+
+    assert.strictEqual(
+      purchaseAfterRollback.purchase_number,
+      "PO-1003",
+      "After rollback, next purchase in Organisation A must be PO-1003 without gaps",
+    );
+
+    console.log(
+      "✓ 7d. Purchase transaction rollback safety verified (PO-1003 reused after rollback)",
+    );
 
     // ---------------------------------------------------------
     // Ensure purchase cache is clean
@@ -696,6 +876,22 @@ const runTests = async () => {
     }
 
     // ---------------------------------------------------------
+    // Clean all test purchases before removing products
+    // ---------------------------------------------------------
+
+    try {
+      await pool.query(
+        `
+          DELETE FROM purchases
+          WHERE organisation_id IN ($1, $2);
+        `,
+        [organisationId, orgBId],
+      );
+    } catch (error) {
+      // Ignore
+    }
+
+    // ---------------------------------------------------------
     // Clean second product
     // ---------------------------------------------------------
 
@@ -782,6 +978,20 @@ const runTests = async () => {
         );
       } catch (error) {
         console.error("Organisation cleanup failed:", error);
+      }
+    }
+
+    if (orgBId) {
+      try {
+        await pool.query(
+          `
+            DELETE FROM organisations
+            WHERE id = $1;
+          `,
+          [orgBId],
+        );
+      } catch (error) {
+        console.error("Organisation B cleanup failed:", error);
       }
     }
 

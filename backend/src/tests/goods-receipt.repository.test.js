@@ -56,18 +56,11 @@ const {
   disconnectRedis,
 } = require("../cache/redis");
 
-const {
-  getCache,
-  deleteCache,
-} = require("../cache/cache");
+const { getCache, deleteCache } = require("../cache/cache");
 
-const uniqueValue = (prefix) =>
-  `${prefix}-${Date.now()}`;
+const uniqueValue = (prefix) => `${prefix}-${Date.now()}`;
 
-const buildGoodsReceiptCacheKey = (
-  organisationId,
-  receiptId,
-) =>
+const buildGoodsReceiptCacheKey = (organisationId, receiptId) =>
   `organisation:${organisationId}:goods-receipt:${receiptId}`;
 
 const runTests = async () => {
@@ -79,15 +72,14 @@ const runTests = async () => {
   let purchaseId = null;
   let purchaseItemId = null;
   let receiptId = null;
+  let orgBId = null;
 
   try {
     await pool.query("SELECT 1");
 
     await connectRedis();
 
-    console.log(
-      "\nRunning Goods Receipt Repository tests...\n",
-    );
+    console.log("\nRunning Goods Receipt Repository tests...\n");
 
     // ---------------------------------------------------------
     // Create test owner
@@ -114,9 +106,7 @@ const runTests = async () => {
 
     ownerId = ownerResult.rows[0].id;
 
-    console.log(
-      "✓ 1. Create test owner",
-    );
+    console.log("✓ 1. Create test owner");
 
     // ---------------------------------------------------------
     // Create test organisation
@@ -131,18 +121,12 @@ const runTests = async () => {
         VALUES ($1, $2)
         RETURNING id;
       `,
-      [
-        ownerId,
-        uniqueValue("Goods Receipt Test Pharmacy"),
-      ],
+      [ownerId, uniqueValue("Goods Receipt Test Pharmacy")],
     );
 
-    organisationId =
-      organisationResult.rows[0].id;
+    organisationId = organisationResult.rows[0].id;
 
-    console.log(
-      "✓ 2. Create test organisation",
-    );
+    console.log("✓ 2. Create test organisation");
 
     // ---------------------------------------------------------
     // Create test branch
@@ -173,12 +157,9 @@ const runTests = async () => {
       ],
     );
 
-    branchId =
-      branchResult.rows[0].id;
+    branchId = branchResult.rows[0].id;
 
-    console.log(
-      "✓ 3. Create test branch",
-    );
+    console.log("✓ 3. Create test branch");
 
     // ---------------------------------------------------------
     // Create test supplier
@@ -211,12 +192,9 @@ const runTests = async () => {
       ],
     );
 
-    supplierId =
-      supplierResult.rows[0].id;
+    supplierId = supplierResult.rows[0].id;
 
-    console.log(
-      "✓ 4. Create test supplier",
-    );
+    console.log("✓ 4. Create test supplier");
 
     // ---------------------------------------------------------
     // Create test product
@@ -249,12 +227,9 @@ const runTests = async () => {
       ],
     );
 
-    productId =
-      productResult.rows[0].id;
+    productId = productResult.rows[0].id;
 
-    console.log(
-      "✓ 5. Create test product",
-    );
+    console.log("✓ 5. Create test product");
 
     // ---------------------------------------------------------
     // Create test purchase
@@ -263,226 +238,350 @@ const runTests = async () => {
     // purchase and purchase item are required first.
     // ---------------------------------------------------------
 
-    const purchase =
-      await createPurchase({
-        organisationId,
-        purchaseNumber:
-          uniqueValue("PO"),
-        supplierId,
-        branchId,
-        orderDate: "2026-09-03",
-        expectedDate: "2026-09-10",
-        status: "PENDING",
-        notes:
-          "Goods receipt repository integration test",
-        createdBy: ownerId,
-        items: [
-          {
-            productId,
-            orderedQuantity: 100,
-            unitCost: 10,
-            taxAmount: 50,
-            discountAmount: 20,
-          },
-        ],
-      });
+    const purchase = await createPurchase({
+      organisationId,
+      purchaseNumber: uniqueValue("PO"),
+      supplierId,
+      branchId,
+      orderDate: "2026-09-03",
+      expectedDate: "2026-09-10",
+      status: "PENDING",
+      notes: "Goods receipt repository integration test",
+      createdBy: ownerId,
+      items: [
+        {
+          productId,
+          orderedQuantity: 100,
+          unitCost: 10,
+          taxAmount: 50,
+          discountAmount: 20,
+        },
+      ],
+    });
 
     assert.ok(purchase);
 
     assert.ok(purchase.id);
 
-    assert.ok(
-      Array.isArray(purchase.items),
-    );
+    assert.ok(Array.isArray(purchase.items));
 
-    assert.strictEqual(
-      purchase.items.length,
-      1,
-    );
+    assert.strictEqual(purchase.items.length, 1);
 
-    purchaseId =
-      purchase.id;
+    purchaseId = purchase.id;
 
-    purchaseItemId =
-      purchase.items[0].id;
+    purchaseItemId = purchase.items[0].id;
 
-    console.log(
-      "✓ 6. Create test purchase and purchase item",
-    );
+    console.log("✓ 6. Create test purchase and purchase item");
 
     // ---------------------------------------------------------
     // Verify purchase item exists
     // ---------------------------------------------------------
 
-    const purchaseItems =
-      await getPurchaseItems(
-        organisationId,
-        purchaseId,
-      );
+    const purchaseItems = await getPurchaseItems(organisationId, purchaseId);
 
-    assert.strictEqual(
-      purchaseItems.length,
-      1,
-    );
+    assert.strictEqual(purchaseItems.length, 1);
 
-    assert.strictEqual(
-      purchaseItems[0].id,
-      purchaseItemId,
-    );
+    assert.strictEqual(purchaseItems[0].id, purchaseItemId);
 
-    assert.strictEqual(
-      purchaseItems[0].product_id,
-      productId,
-    );
+    assert.strictEqual(purchaseItems[0].product_id, productId);
 
-    console.log(
-      "✓ 7. Verify purchase item",
-    );
+    console.log("✓ 7. Verify purchase item");
 
     // ---------------------------------------------------------
     // Create goods receipt
     // ---------------------------------------------------------
 
-    const receiptNumber =
-      uniqueValue("GRN");
-
-    const goodsReceipt =
-      await createGoodsReceipt({
-        organisationId,
-        purchaseId,
-        receiptNumber,
-        receivedDate: "2026-09-03",
-        receivedBy: ownerId,
-        supplierInvoiceNumber:
-          uniqueValue("INV"),
-        packageCount: 5,
-        status:
-          "PENDING_INSPECTION",
-        notes:
-          "Goods receipt repository integration test",
-        items: [
-          {
-            purchaseItemId,
-            receivedQuantity: 100,
-            rejectedQuantity: 5,
-          },
-        ],
-      });
+    // Do not supply receiptNumber; verify it is generated through number_sequences
+    const goodsReceipt = await createGoodsReceipt({
+      organisationId,
+      purchaseId,
+      receivedDate: "2026-09-03",
+      receivedBy: ownerId,
+      supplierInvoiceNumber: uniqueValue("INV"),
+      packageCount: 5,
+      status: "PENDING_INSPECTION",
+      notes: "Goods receipt repository integration test",
+      items: [
+        {
+          purchaseItemId,
+          receivedQuantity: 100,
+          rejectedQuantity: 5,
+        },
+      ],
+    });
 
     assert.ok(goodsReceipt);
 
     assert.ok(goodsReceipt.id);
 
-    assert.strictEqual(
-      goodsReceipt.organisation_id,
-      organisationId,
-    );
+    assert.strictEqual(goodsReceipt.organisation_id, organisationId);
 
-    assert.strictEqual(
-      goodsReceipt.purchase_id,
-      purchaseId,
-    );
+    assert.strictEqual(goodsReceipt.purchase_id, purchaseId);
 
-    assert.strictEqual(
-      goodsReceipt.receipt_number,
-      receiptNumber,
-    );
+    // Business number sequence verification
+    assert.strictEqual(goodsReceipt.receipt_number, "GRN-1001");
+    const receiptNumber = goodsReceipt.receipt_number;
 
-    assert.strictEqual(
-      goodsReceipt.received_by,
-      ownerId,
-    );
+    assert.strictEqual(goodsReceipt.received_by, ownerId);
 
-    assert.strictEqual(
-      goodsReceipt.package_count,
-      5,
-    );
+    assert.strictEqual(goodsReceipt.package_count, 5);
 
-    assert.strictEqual(
-      goodsReceipt.status,
-      "PENDING_INSPECTION",
-    );
+    assert.strictEqual(goodsReceipt.status, "PENDING_INSPECTION");
 
-    assert.ok(
-      Array.isArray(goodsReceipt.items),
-    );
+    assert.ok(Array.isArray(goodsReceipt.items));
 
-    assert.strictEqual(
-      goodsReceipt.items.length,
-      1,
-    );
+    assert.strictEqual(goodsReceipt.items.length, 1);
 
-    assert.strictEqual(
-      goodsReceipt.items[0].purchase_item_id,
-      purchaseItemId,
-    );
+    assert.strictEqual(goodsReceipt.items[0].purchase_item_id, purchaseItemId);
 
-    assert.strictEqual(
-      goodsReceipt.items[0].received_quantity,
-      100,
-    );
+    assert.strictEqual(goodsReceipt.items[0].received_quantity, 100);
 
-    assert.strictEqual(
-      goodsReceipt.items[0].rejected_quantity,
-      5,
-    );
+    assert.strictEqual(goodsReceipt.items[0].rejected_quantity, 5);
 
-    receiptId =
-      goodsReceipt.id;
+    receiptId = goodsReceipt.id;
 
     console.log(
-      "✓ 8. Create goods receipt with receipt item",
+      "✓ 8. Create goods receipt with receipt item and generated GRN-1001",
+    );
+
+    // ---------------------------------------------------------
+    // Create second goods receipt to verify sequential increment (GRN-1002)
+    // ---------------------------------------------------------
+
+    const secondGoodsReceipt = await createGoodsReceipt({
+      organisationId,
+      purchaseId,
+      receivedDate: "2026-09-04",
+      receivedBy: ownerId,
+      supplierInvoiceNumber: uniqueValue("INV2"),
+      packageCount: 2,
+      status: "PENDING_INSPECTION",
+      items: [
+        {
+          purchaseItemId,
+          receivedQuantity: 50,
+          rejectedQuantity: 0,
+        },
+      ],
+    });
+
+    assert.strictEqual(
+      secondGoodsReceipt.receipt_number,
+      "GRN-1002",
+      "Second goods receipt should be assigned GRN-1002 sequentially",
+    );
+
+    console.log("✓ 8b. Sequential GRN generation verified (GRN-1002)");
+
+    // ---------------------------------------------------------
+    // Verify organisation isolation: Org B starts at GRN-1001
+    // ---------------------------------------------------------
+
+    const orgBResult = await pool.query(
+      `
+        INSERT INTO organisations (owner_id, name)
+        VALUES ($1, $2)
+        RETURNING id;
+      `,
+      [ownerId, uniqueValue("Goods Receipt Test Org B")],
+    );
+    orgBId = orgBResult.rows[0].id;
+
+    const branchBResult = await pool.query(
+      `
+        INSERT INTO branches (organisation_id, name, address, city, state, postal_code, phone)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id;
+      `,
+      [
+        orgBId,
+        "Org B Branch",
+        "Addr B",
+        "City B",
+        "State B",
+        "400001",
+        "9000000001",
+      ],
+    );
+    const branchBId = branchBResult.rows[0].id;
+
+    const supplierBResult = await pool.query(
+      `
+        INSERT INTO suppliers (organisation_id, name, contact_person, phone, email, city, gstin, status)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING id;
+      `,
+      [
+        orgBId,
+        "Org B Supplier",
+        "Contact B",
+        "9876543211",
+        "supplierB@test.local",
+        "Mumbai",
+        uniqueValue("GSTB"),
+        "ACTIVE",
+      ],
+    );
+    const supplierBId = supplierBResult.rows[0].id;
+
+    const productBResult = await pool.query(
+      `
+        INSERT INTO products (organisation_id, category, medicine_name, brand_name, strength, pack_size, manufacturer, sku)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING id;
+      `,
+      [
+        orgBId,
+        "Medicines",
+        "Org B Product",
+        "Brand B",
+        "250mg",
+        "10 Tablets",
+        "Mfr B",
+        uniqueValue("SKUB"),
+      ],
+    );
+    const productBId = productBResult.rows[0].id;
+
+    const purchaseOrgB = await createPurchase({
+      organisationId: orgBId,
+      supplierId: supplierBId,
+      branchId: branchBId,
+      orderDate: "2026-09-03",
+      items: [
+        {
+          productId: productBId,
+          orderedQuantity: 50,
+          unitCost: 15,
+        },
+      ],
+    });
+
+    const goodsReceiptOrgB = await createGoodsReceipt({
+      organisationId: orgBId,
+      purchaseId: purchaseOrgB.id,
+      receivedDate: "2026-09-03",
+      items: [
+        {
+          purchaseItemId: purchaseOrgB.items[0].id,
+          receivedQuantity: 50,
+          rejectedQuantity: 0,
+        },
+      ],
+    });
+
+    assert.strictEqual(
+      goodsReceiptOrgB.receipt_number,
+      "GRN-1001",
+      "Organisation B goods receipt sequence must start independently at GRN-1001 without conflict",
+    );
+
+    console.log(
+      "✓ 8c. Goods receipt organisation isolation verified (Org B got GRN-1001)",
+    );
+
+    // ---------------------------------------------------------
+    // Verify transaction client rollback safety
+    // ---------------------------------------------------------
+
+    const txClient = await pool.connect();
+    try {
+      await txClient.query("BEGIN");
+      const rolledBackReceipt = await createGoodsReceipt({
+        organisationId,
+        purchaseId,
+        receivedDate: "2026-09-05",
+        items: [
+          {
+            purchaseItemId,
+            receivedQuantity: 10,
+            rejectedQuantity: 0,
+          },
+        ],
+        client: txClient,
+      });
+
+      assert.strictEqual(rolledBackReceipt.receipt_number, "GRN-1003");
+      await txClient.query("ROLLBACK");
+    } finally {
+      txClient.release();
+    }
+
+    // Since transaction rolled back, next committed goods receipt should reuse GRN-1003
+    const receiptAfterRollback = await createGoodsReceipt({
+      organisationId,
+      purchaseId,
+      receivedDate: "2026-09-05",
+      items: [
+        {
+          purchaseItemId,
+          receivedQuantity: 10,
+          rejectedQuantity: 0,
+        },
+      ],
+    });
+
+    assert.strictEqual(
+      receiptAfterRollback.receipt_number,
+      "GRN-1003",
+      "After rollback, next goods receipt in Organisation A must be GRN-1003 without gaps",
+    );
+
+    console.log(
+      "✓ 8d. Goods receipt transaction rollback safety verified (GRN-1003 reused after rollback)",
+    );
+
+    // ---------------------------------------------------------
+    // Verify GOODS_RECEIPT does NOT consume financial RECEIPT sequence
+    // ---------------------------------------------------------
+
+    const financialSeqCheck = await pool.query(
+      `
+        SELECT next_number FROM number_sequences
+        WHERE organisation_id = $1 AND sequence_type = 'RECEIPT';
+      `,
+      [organisationId],
+    );
+
+    assert.strictEqual(
+      financialSeqCheck.rowCount,
+      0,
+      "Financial RECEIPT sequence must remain completely uncreated/unaffected by GOODS_RECEIPT operations",
+    );
+
+    console.log(
+      "✓ 8e. Independent sequences verified: GOODS_RECEIPT did not consume RECEIPT sequence",
     );
 
     // ---------------------------------------------------------
     // Ensure receipt cache is clean
     // ---------------------------------------------------------
 
-    const receiptCacheKey =
-      buildGoodsReceiptCacheKey(
-        organisationId,
-        receiptId,
-      );
-
-    await deleteCache(
-      receiptCacheKey,
+    const receiptCacheKey = buildGoodsReceiptCacheKey(
+      organisationId,
+      receiptId,
     );
 
-    assert.strictEqual(
-      await getCache(
-        receiptCacheKey,
-      ),
-      null,
-    );
+    await deleteCache(receiptCacheKey);
+
+    assert.strictEqual(await getCache(receiptCacheKey), null);
 
     // ---------------------------------------------------------
     // Get receipt by ID - cache miss
     // ---------------------------------------------------------
 
-    const firstReceiptLookup =
-      await getGoodsReceiptById(
-        organisationId,
-        receiptId,
-      );
-
-    assert.ok(
-      firstReceiptLookup,
-    );
-
-    assert.strictEqual(
-      firstReceiptLookup.id,
+    const firstReceiptLookup = await getGoodsReceiptById(
+      organisationId,
       receiptId,
     );
 
-    assert.strictEqual(
-      firstReceiptLookup.organisation_id,
-      organisationId,
-    );
+    assert.ok(firstReceiptLookup);
 
-    assert.strictEqual(
-      firstReceiptLookup.purchase_id,
-      purchaseId,
-    );
+    assert.strictEqual(firstReceiptLookup.id, receiptId);
+
+    assert.strictEqual(firstReceiptLookup.organisation_id, organisationId);
+
+    assert.strictEqual(firstReceiptLookup.purchase_id, purchaseId);
 
     assert.strictEqual(
       firstReceiptLookup.purchase_number,
@@ -499,38 +598,19 @@ const runTests = async () => {
       "Goods Receipt Test Branch",
     );
 
-    assert.strictEqual(
-      firstReceiptLookup.receipt_number,
-      receiptNumber,
-    );
+    assert.strictEqual(firstReceiptLookup.receipt_number, receiptNumber);
 
-    assert.strictEqual(
-      firstReceiptLookup.status,
-      "PENDING_INSPECTION",
-    );
+    assert.strictEqual(firstReceiptLookup.status, "PENDING_INSPECTION");
 
-    const cachedReceipt =
-      await getCache(
-        receiptCacheKey,
-      );
+    const cachedReceipt = await getCache(receiptCacheKey);
 
-    assert.ok(
-      cachedReceipt,
-    );
+    assert.ok(cachedReceipt);
 
-    assert.strictEqual(
-      cachedReceipt.id,
-      receiptId,
-    );
+    assert.strictEqual(cachedReceipt.id, receiptId);
 
-    assert.strictEqual(
-      cachedReceipt.status,
-      "PENDING_INSPECTION",
-    );
+    assert.strictEqual(cachedReceipt.status, "PENDING_INSPECTION");
 
-    console.log(
-      "✓ 9. Goods receipt cache miss populates Redis",
-    );
+    console.log("✓ 9. Goods receipt cache miss populates Redis");
 
     // ---------------------------------------------------------
     // Verify receipt cache hit
@@ -546,27 +626,17 @@ const runTests = async () => {
         WHERE id = $2
           AND organisation_id = $3;
       `,
-      [
-        "VERIFIED",
-        receiptId,
-        organisationId,
-      ],
+      ["VERIFIED", receiptId, organisationId],
     );
 
-    const cacheHitReceipt =
-      await getGoodsReceiptById(
-        organisationId,
-        receiptId,
-      );
-
-    assert.ok(
-      cacheHitReceipt,
+    const cacheHitReceipt = await getGoodsReceiptById(
+      organisationId,
+      receiptId,
     );
 
-    assert.strictEqual(
-      cacheHitReceipt.status,
-      "PENDING_INSPECTION",
-    );
+    assert.ok(cacheHitReceipt);
+
+    assert.strictEqual(cacheHitReceipt.status, "PENDING_INSPECTION");
 
     // Restore PostgreSQL to match cached value.
     await pool.query(
@@ -576,264 +646,142 @@ const runTests = async () => {
         WHERE id = $2
           AND organisation_id = $3;
       `,
-      [
-        "PENDING_INSPECTION",
-        receiptId,
-        organisationId,
-      ],
+      ["PENDING_INSPECTION", receiptId, organisationId],
     );
 
-    console.log(
-      "✓ 10. Goods receipt lookup uses Redis cache",
-    );
+    console.log("✓ 10. Goods receipt lookup uses Redis cache");
 
     // ---------------------------------------------------------
     // Tenant-safe receipt cache
     // ---------------------------------------------------------
 
-    const otherOrganisationId =
-      "00000000-0000-0000-0000-000000000001";
+    const otherOrganisationId = "00000000-0000-0000-0000-000000000001";
 
     assert.strictEqual(
-      await getCache(
-        buildGoodsReceiptCacheKey(
-          otherOrganisationId,
-          receiptId,
-        ),
-      ),
+      await getCache(buildGoodsReceiptCacheKey(otherOrganisationId, receiptId)),
       null,
     );
 
-    const crossOrganisationReceipt =
-      await getGoodsReceiptById(
-        otherOrganisationId,
-        receiptId,
-      );
-
-    assert.strictEqual(
-      crossOrganisationReceipt,
-      null,
+    const crossOrganisationReceipt = await getGoodsReceiptById(
+      otherOrganisationId,
+      receiptId,
     );
 
-    console.log(
-      "✓ 11. Goods receipt cache remains tenant-safe",
-    );
+    assert.strictEqual(crossOrganisationReceipt, null);
+
+    console.log("✓ 11. Goods receipt cache remains tenant-safe");
 
     // ---------------------------------------------------------
     // Get goods receipt items
     // ---------------------------------------------------------
 
-    const receiptItems =
-      await getGoodsReceiptItems(
-        organisationId,
-        receiptId,
-      );
+    const receiptItems = await getGoodsReceiptItems(organisationId, receiptId);
 
-    assert.ok(
-      Array.isArray(receiptItems),
-    );
+    assert.ok(Array.isArray(receiptItems));
 
-    assert.strictEqual(
-      receiptItems.length,
-      1,
-    );
+    assert.strictEqual(receiptItems.length, 1);
 
-    assert.strictEqual(
-      receiptItems[0].goods_receipt_id,
-      receiptId,
-    );
+    assert.strictEqual(receiptItems[0].goods_receipt_id, receiptId);
 
-    assert.strictEqual(
-      receiptItems[0].purchase_item_id,
-      purchaseItemId,
-    );
+    assert.strictEqual(receiptItems[0].purchase_item_id, purchaseItemId);
 
-    assert.strictEqual(
-      receiptItems[0].product_id,
-      productId,
-    );
+    assert.strictEqual(receiptItems[0].product_id, productId);
 
-    assert.strictEqual(
-      receiptItems[0].medicine_name,
-      "Paracetamol",
-    );
+    assert.strictEqual(receiptItems[0].medicine_name, "Paracetamol");
 
-    assert.strictEqual(
-      receiptItems[0].ordered_quantity,
-      100,
-    );
+    assert.strictEqual(receiptItems[0].ordered_quantity, 100);
 
-    assert.strictEqual(
-      receiptItems[0].received_quantity,
-      100,
-    );
+    assert.strictEqual(receiptItems[0].received_quantity, 100);
 
-    assert.strictEqual(
-      receiptItems[0].rejected_quantity,
-      5,
-    );
+    assert.strictEqual(receiptItems[0].rejected_quantity, 5);
 
-    console.log(
-      "✓ 12. Goods receipt items are returned correctly",
-    );
+    console.log("✓ 12. Goods receipt items are returned correctly");
 
     // ---------------------------------------------------------
     // Get receipts by purchase
     // ---------------------------------------------------------
 
-    const purchaseReceipts =
-      await getGoodsReceiptsByPurchase(
-        organisationId,
-        purchaseId,
-      );
-
-    assert.ok(
-      Array.isArray(purchaseReceipts),
+    const purchaseReceipts = await getGoodsReceiptsByPurchase(
+      organisationId,
+      purchaseId,
     );
 
+    assert.ok(Array.isArray(purchaseReceipts));
+
+    assert.ok(purchaseReceipts.some((item) => item.id === receiptId));
+
     assert.ok(
-      purchaseReceipts.some(
-        (item) =>
-          item.id === receiptId,
-      ),
+      purchaseReceipts.every((item) => item.organisation_id === organisationId),
     );
 
     assert.ok(
-      purchaseReceipts.every(
-        (item) =>
-          item.organisation_id ===
-          organisationId,
-      ),
+      purchaseReceipts.every((item) => item.purchase_id === purchaseId),
     );
 
-    assert.ok(
-      purchaseReceipts.every(
-        (item) =>
-          item.purchase_id ===
-          purchaseId,
-      ),
-    );
-
-    console.log(
-      "✓ 13. Goods receipts by purchase work",
-    );
+    console.log("✓ 13. Goods receipts by purchase work");
 
     // ---------------------------------------------------------
     // Get receipts by organisation
     // ---------------------------------------------------------
 
     const organisationReceipts =
-      await getGoodsReceiptsByOrganisation(
-        organisationId,
-      );
+      await getGoodsReceiptsByOrganisation(organisationId);
 
-    assert.ok(
-      Array.isArray(
-        organisationReceipts,
-      ),
-    );
+    assert.ok(Array.isArray(organisationReceipts));
 
-    assert.ok(
-      organisationReceipts.some(
-        (item) =>
-          item.id === receiptId,
-      ),
-    );
+    assert.ok(organisationReceipts.some((item) => item.id === receiptId));
 
     assert.ok(
       organisationReceipts.every(
-        (item) =>
-          item.organisation_id ===
-          organisationId,
+        (item) => item.organisation_id === organisationId,
       ),
     );
 
-    console.log(
-      "✓ 14. Goods receipts by organisation work",
-    );
+    console.log("✓ 14. Goods receipts by organisation work");
 
     // ---------------------------------------------------------
     // Get receipts by branch
     // ---------------------------------------------------------
 
-    const branchReceipts =
-      await getGoodsReceiptsByBranch(
-        organisationId,
-        branchId,
-      );
+    const branchReceipts = await getGoodsReceiptsByBranch(
+      organisationId,
+      branchId,
+    );
+
+    assert.ok(Array.isArray(branchReceipts));
+
+    assert.ok(branchReceipts.some((item) => item.id === receiptId));
 
     assert.ok(
-      Array.isArray(
-        branchReceipts,
-      ),
+      branchReceipts.every((item) => item.organisation_id === organisationId),
     );
 
-    assert.ok(
-      branchReceipts.some(
-        (item) =>
-          item.id === receiptId,
-      ),
-    );
+    assert.ok(branchReceipts.every((item) => item.branch_id === branchId));
 
-    assert.ok(
-      branchReceipts.every(
-        (item) =>
-          item.organisation_id ===
-          organisationId,
-      ),
-    );
-
-    assert.ok(
-      branchReceipts.every(
-        (item) =>
-          item.branch_id ===
-          branchId,
-      ),
-    );
-
-    console.log(
-      "✓ 15. Goods receipts by branch work",
-    );
+    console.log("✓ 15. Goods receipts by branch work");
 
     // ---------------------------------------------------------
     // Search goods receipts
     // ---------------------------------------------------------
 
-    const searchResults =
-      await searchGoodsReceipts(
-        organisationId,
-        receiptNumber,
-      );
-
-    assert.ok(
-      Array.isArray(searchResults),
+    const searchResults = await searchGoodsReceipts(
+      organisationId,
+      receiptNumber,
     );
 
-    assert.ok(
-      searchResults.some(
-        (item) =>
-          item.id === receiptId,
-      ),
-    );
+    assert.ok(Array.isArray(searchResults));
 
-    console.log(
-      "✓ 16. Goods receipt search works",
-    );
+    assert.ok(searchResults.some((item) => item.id === receiptId));
+
+    console.log("✓ 16. Goods receipt search works");
 
     // ---------------------------------------------------------
     // Recreate cache before status update
     // ---------------------------------------------------------
 
-    await getGoodsReceiptById(
-      organisationId,
-      receiptId,
-    );
+    await getGoodsReceiptById(organisationId, receiptId);
 
-    assert.ok(
-      await getCache(
-        receiptCacheKey,
-      ),
-    );
+    assert.ok(await getCache(receiptCacheKey));
 
     // ---------------------------------------------------------
     // Update receipt status
@@ -842,191 +790,104 @@ const runTests = async () => {
     // the goods_receipts_status_check constraint.
     // ---------------------------------------------------------
 
-    const updatedReceipt =
-      await updateGoodsReceiptStatus(
-        organisationId,
-        receiptId,
-        "VERIFIED",
-      );
-
-    assert.ok(
-      updatedReceipt,
-    );
-
-    assert.strictEqual(
-      updatedReceipt.id,
+    const updatedReceipt = await updateGoodsReceiptStatus(
+      organisationId,
       receiptId,
-    );
-
-    assert.strictEqual(
-      updatedReceipt.status,
       "VERIFIED",
     );
 
-    // The old cached receipt must be gone.
-    assert.strictEqual(
-      await getCache(
-        receiptCacheKey,
-      ),
-      null,
-    );
+    assert.ok(updatedReceipt);
 
-    console.log(
-      "✓ 17. Goods receipt status update invalidates Redis cache",
-    );
+    assert.strictEqual(updatedReceipt.id, receiptId);
+
+    assert.strictEqual(updatedReceipt.status, "VERIFIED");
+
+    // The old cached receipt must be gone.
+    assert.strictEqual(await getCache(receiptCacheKey), null);
+
+    console.log("✓ 17. Goods receipt status update invalidates Redis cache");
 
     // ---------------------------------------------------------
     // Fresh receipt after invalidation
     // ---------------------------------------------------------
 
-    const freshReceipt =
-      await getGoodsReceiptById(
-        organisationId,
-        receiptId,
-      );
+    const freshReceipt = await getGoodsReceiptById(organisationId, receiptId);
 
-    assert.ok(
-      freshReceipt,
-    );
+    assert.ok(freshReceipt);
 
-    assert.strictEqual(
-      freshReceipt.id,
-      receiptId,
-    );
+    assert.strictEqual(freshReceipt.id, receiptId);
 
-    assert.strictEqual(
-      freshReceipt.status,
-      "VERIFIED",
-    );
+    assert.strictEqual(freshReceipt.status, "VERIFIED");
 
-    const refreshedReceiptCache =
-      await getCache(
-        receiptCacheKey,
-      );
+    const refreshedReceiptCache = await getCache(receiptCacheKey);
 
-    assert.ok(
-      refreshedReceiptCache,
-    );
+    assert.ok(refreshedReceiptCache);
 
-    assert.strictEqual(
-      refreshedReceiptCache.status,
-      "VERIFIED",
-    );
+    assert.strictEqual(refreshedReceiptCache.status, "VERIFIED");
 
-    console.log(
-      "✓ 18. Fresh goods receipt is returned after status update",
-    );
+    console.log("✓ 18. Fresh goods receipt is returned after status update");
 
     // ---------------------------------------------------------
     // Recreate cache before delete test
     // ---------------------------------------------------------
 
-    await getGoodsReceiptById(
-      organisationId,
-      receiptId,
-    );
+    await getGoodsReceiptById(organisationId, receiptId);
 
-    assert.ok(
-      await getCache(
-        receiptCacheKey,
-      ),
-    );
+    assert.ok(await getCache(receiptCacheKey));
 
     // ---------------------------------------------------------
     // Delete goods receipt
     // ---------------------------------------------------------
 
-    const deleted =
-      await deleteGoodsReceipt(
-        organisationId,
-        receiptId,
-      );
+    const deleted = await deleteGoodsReceipt(organisationId, receiptId);
 
-    assert.strictEqual(
-      deleted,
-      true,
-    );
+    assert.strictEqual(deleted, true);
 
     // Cache must be gone.
-    assert.strictEqual(
-      await getCache(
-        receiptCacheKey,
-      ),
-      null,
-    );
+    assert.strictEqual(await getCache(receiptCacheKey), null);
 
-    console.log(
-      "✓ 19. Goods receipt deletion invalidates Redis cache",
-    );
+    console.log("✓ 19. Goods receipt deletion invalidates Redis cache");
 
     // ---------------------------------------------------------
     // Verify receipt no longer exists
     // ---------------------------------------------------------
 
-    const deletedReceipt =
-      await getGoodsReceiptById(
-        organisationId,
-        receiptId,
-      );
+    const deletedReceipt = await getGoodsReceiptById(organisationId, receiptId);
 
-    assert.strictEqual(
-      deletedReceipt,
-      null,
-    );
+    assert.strictEqual(deletedReceipt, null);
 
-    console.log(
-      "✓ 20. Deleted goods receipt is no longer returned",
-    );
+    console.log("✓ 20. Deleted goods receipt is no longer returned");
 
     // ---------------------------------------------------------
     // Verify receipt items were deleted by cascade
     // ---------------------------------------------------------
 
-    const remainingItemsResult =
-      await pool.query(
-        `
+    const remainingItemsResult = await pool.query(
+      `
           SELECT id
           FROM goods_receipt_items
           WHERE goods_receipt_id = $1;
         `,
-        [receiptId],
-      );
-
-    assert.strictEqual(
-      remainingItemsResult.rows.length,
-      0,
+      [receiptId],
     );
 
-    console.log(
-      "✓ 21. Goods receipt items are removed by cascade",
-    );
+    assert.strictEqual(remainingItemsResult.rows.length, 0);
+
+    console.log("✓ 21. Goods receipt items are removed by cascade");
 
     // ---------------------------------------------------------
     // Verify deleting again returns false
     // ---------------------------------------------------------
 
-    const deleteAgain =
-      await deleteGoodsReceipt(
-        organisationId,
-        receiptId,
-      );
+    const deleteAgain = await deleteGoodsReceipt(organisationId, receiptId);
 
-    assert.strictEqual(
-      deleteAgain,
-      false,
-    );
+    assert.strictEqual(deleteAgain, false);
 
-    console.log(
-      "✓ 22. Deleting a missing goods receipt returns false",
-    );
+    console.log("✓ 22. Deleting a missing goods receipt returns false");
 
-    console.log(
-      "\n✓ All Goods Receipt Repository tests passed.\n",
-    );
+    console.log("\n✓ All Goods Receipt Repository tests passed.\n");
   } catch (error) {
-    console.error(
-      "\n✗ Goods Receipt Repository test failed.",
-    );
+    console.error("\n✗ Goods Receipt Repository test failed.");
 
     console.error(error);
 
@@ -1036,23 +897,11 @@ const runTests = async () => {
     // Clean Redis test key
     // ---------------------------------------------------------
 
-    if (
-      redisClient.isOpen &&
-      organisationId &&
-      receiptId
-    ) {
+    if (redisClient.isOpen && organisationId && receiptId) {
       try {
-        await deleteCache(
-          buildGoodsReceiptCacheKey(
-            organisationId,
-            receiptId,
-          ),
-        );
+        await deleteCache(buildGoodsReceiptCacheKey(organisationId, receiptId));
       } catch (error) {
-        console.error(
-          "Goods receipt cache cleanup failed:",
-          error,
-        );
+        console.error("Goods receipt cache cleanup failed:", error);
       }
     }
 
@@ -1070,33 +919,31 @@ const runTests = async () => {
           [receiptId],
         );
       } catch (error) {
-        console.error(
-          "Goods receipt cleanup failed:",
-          error,
-        );
+        console.error("Goods receipt cleanup failed:", error);
       }
     }
 
     // ---------------------------------------------------------
-    // Clean purchase
-    //
-    // Deleting the purchase also removes its purchase items
-    // because purchase_items references purchases with
-    // ON DELETE CASCADE.
+    // Clean all test goods receipts and purchases before removing products
     // ---------------------------------------------------------
 
-    if (purchaseId) {
-      try {
-        await deletePurchase(
-          organisationId,
-          purchaseId,
-        );
-      } catch (error) {
-        console.error(
-          "Purchase cleanup failed:",
-          error,
-        );
-      }
+    try {
+      await pool.query(
+        `
+          DELETE FROM goods_receipts
+          WHERE organisation_id IN ($1, $2);
+        `,
+        [organisationId, orgBId],
+      );
+      await pool.query(
+        `
+          DELETE FROM purchases
+          WHERE organisation_id IN ($1, $2);
+        `,
+        [organisationId, orgBId],
+      );
+    } catch (error) {
+      // Ignore
     }
 
     // ---------------------------------------------------------
@@ -1113,10 +960,7 @@ const runTests = async () => {
           [productId],
         );
       } catch (error) {
-        console.error(
-          "Product cleanup failed:",
-          error,
-        );
+        console.error("Product cleanup failed:", error);
       }
     }
 
@@ -1134,10 +978,7 @@ const runTests = async () => {
           [supplierId],
         );
       } catch (error) {
-        console.error(
-          "Supplier cleanup failed:",
-          error,
-        );
+        console.error("Supplier cleanup failed:", error);
       }
     }
 
@@ -1155,10 +996,7 @@ const runTests = async () => {
           [branchId],
         );
       } catch (error) {
-        console.error(
-          "Branch cleanup failed:",
-          error,
-        );
+        console.error("Branch cleanup failed:", error);
       }
     }
 
@@ -1176,10 +1014,21 @@ const runTests = async () => {
           [organisationId],
         );
       } catch (error) {
-        console.error(
-          "Organisation cleanup failed:",
-          error,
+        console.error("Organisation cleanup failed:", error);
+      }
+    }
+
+    if (orgBId) {
+      try {
+        await pool.query(
+          `
+            DELETE FROM organisations
+            WHERE id = $1;
+          `,
+          [orgBId],
         );
+      } catch (error) {
+        console.error("Organisation B cleanup failed:", error);
       }
     }
 
@@ -1197,10 +1046,7 @@ const runTests = async () => {
           [ownerId],
         );
       } catch (error) {
-        console.error(
-          "Owner cleanup failed:",
-          error,
-        );
+        console.error("Owner cleanup failed:", error);
       }
     }
 
@@ -1213,10 +1059,7 @@ const runTests = async () => {
         await disconnectRedis();
       }
     } catch (error) {
-      console.error(
-        "Redis disconnect failed:",
-        error,
-      );
+      console.error("Redis disconnect failed:", error);
     }
 
     // ---------------------------------------------------------

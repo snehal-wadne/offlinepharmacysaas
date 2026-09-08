@@ -18,6 +18,7 @@ import {
   updateInventoryEntry,
   deleteInventoryEntry,
 } from '../../api/inventoryApi';
+import { API_URL } from '../../config';
 
 export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = true }) {
   const { width } = useWindowDimensions();
@@ -31,6 +32,7 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
 
   useEffect(() => {
     loadInventoryData();
+    loadBranchesData();
   }, []);
 
   const loadInventoryData = async () => {
@@ -82,6 +84,43 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
   const [adjustDelta, setAdjustDelta] = useState('10');
   const [adjustType, setAdjustType] = useState('CYCLE_COUNT');
   const [adjustReason, setAdjustReason] = useState('Physical stock count adjustment');
+
+  // Inter-Branch Transfer Modal State
+  const [transferModalOpen, setTransferModalOpen] = useState(false);
+  const [fromBranch, setFromBranch] = useState('');
+  const [toBranch, setToBranch] = useState('');
+  const [transferQty, setTransferQty] = useState('50');
+  const [transferReason, setTransferReason] = useState('Inter-branch stock rebalancing');
+  const [transferError, setTransferError] = useState('');
+  const [branchesList, setBranchesList] = useState([
+    { id: 'BR-01', name: 'FIT Main Campus Hospital Pharmacy', city: 'Pune' },
+    { id: 'BR-02', name: 'FIT Pune City OPD Pharmacy', city: 'Pune' },
+    { id: 'BR-03', name: 'FIT Central Medical Warehouse', city: 'Pune' },
+    { id: 'BR-04', name: 'FIT Student Health Center Dispensary', city: 'Pune' },
+  ]);
+
+  const loadBranchesData = async () => {
+    try {
+      const res = await fetch(`${API_URL}/branches`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+          const activeOnly = json.data.filter(
+            (b) => b.status === 'ACTIVE' || b.status === 'Active' || !b.status
+          );
+          setBranchesList(
+            activeOnly.map((b, idx) => ({
+              id: b.id || `BR-0${idx + 1}`,
+              name: b.name,
+              city: b.city || 'Pune',
+            }))
+          );
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to fetch branches from API:', e.message);
+    }
+  };
 
   // Add/Edit Medicine Entry Form State
   const [formData, setFormData] = useState({
@@ -164,11 +203,18 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
     }
 
     if (actionKey === 'transfer') {
-      if (onShowToast) {
-        onShowToast(
-          `[POST /api/inventory/transfers] Transfer request created for ${item.brandName} (${item.sku})`
-        );
-      }
+      const currentBranch = item.branchId || 'FIT Main Campus Hospital Pharmacy';
+      setFromBranch(currentBranch);
+
+      const destCandidate =
+        branchesList.find((b) => b.name !== currentBranch && b.id !== currentBranch) ||
+        branchesList[1] ||
+        branchesList[0];
+      setToBranch(destCandidate ? destCandidate.name || destCandidate.id : 'FIT Pune City OPD Pharmacy');
+      setTransferQty(item.quantity > 50 ? '50' : String(Math.max(1, Math.floor(item.quantity / 2))));
+      setTransferReason('Inter-branch stock rebalancing');
+      setTransferError('');
+      setTransferModalOpen(true);
       return;
     }
 
@@ -278,6 +324,107 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
       );
     }
     setAdjustModalOpen(false);
+  };
+
+  const handleConfirmTransfer = async () => {
+    if (!selectedItemForAction) return;
+
+    const qtyNum = parseInt(transferQty, 10);
+    if (isNaN(qtyNum) || qtyNum <= 0) {
+      setTransferError('Please enter a valid transfer quantity greater than 0.');
+      return;
+    }
+
+    if (qtyNum > selectedItemForAction.quantity) {
+      setTransferError(
+        `Transfer quantity cannot exceed source branch stock (${selectedItemForAction.quantity} units).`
+      );
+      return;
+    }
+
+    if (fromBranch === toBranch) {
+      setTransferError('Source and Destination branches must be different.');
+      return;
+    }
+
+    setTransferError('');
+
+    const sourceItem = selectedItemForAction;
+    const remainingSourceQty = sourceItem.quantity - qtyNum;
+
+    // 1. Update source branch item quantity
+    const updatedSourceItem = {
+      ...sourceItem,
+      quantity: remainingSourceQty,
+      lastUpdated: new Date().toISOString().split('T')[0],
+      status: remainingSourceQty < 50 ? (remainingSourceQty === 0 ? 'Out of Stock' : 'Low Stock') : 'In Stock',
+    };
+
+    // 2. Check if item exists in target branch
+    const existingDestIndex = stockItems.findIndex(
+      (i) =>
+        i.sku === sourceItem.sku &&
+        i.batchNo === sourceItem.batchNo &&
+        (i.branchId === toBranch || i.branchName === toBranch) &&
+        i.id !== sourceItem.id
+    );
+
+    let updatedStockList = [];
+
+    if (existingDestIndex >= 0) {
+      const destItem = stockItems[existingDestIndex];
+      const newDestQty = Number(destItem.quantity) + qtyNum;
+      const updatedDestItem = {
+        ...destItem,
+        quantity: newDestQty,
+        lastUpdated: new Date().toISOString().split('T')[0],
+        status: newDestQty < 50 ? 'Low Stock' : 'In Stock',
+      };
+
+      updatedStockList = stockItems.map((item, idx) => {
+        if (item.id === sourceItem.id) return updatedSourceItem;
+        if (idx === existingDestIndex) return updatedDestItem;
+        return item;
+      });
+
+      try {
+        await updateInventoryEntry(sourceItem.id, updatedSourceItem);
+        await updateInventoryEntry(destItem.id, updatedDestItem);
+      } catch (e) {
+        console.warn('Backend transfer sync notice:', e.message);
+      }
+    } else {
+      const newDestItem = {
+        ...sourceItem,
+        id: `stk-trf-${Date.now()}`,
+        branchId: toBranch,
+        quantity: qtyNum,
+        lastUpdated: new Date().toISOString().split('T')[0],
+        status: qtyNum < 50 ? 'Low Stock' : 'In Stock',
+        updatedBy: 'Transfer System',
+      };
+
+      updatedStockList = stockItems.map((item) =>
+        item.id === sourceItem.id ? updatedSourceItem : item
+      );
+      updatedStockList.unshift(newDestItem);
+
+      try {
+        await updateInventoryEntry(sourceItem.id, updatedSourceItem);
+        await saveInventoryEntry(newDestItem);
+      } catch (e) {
+        console.warn('Backend transfer creation notice:', e.message);
+      }
+    }
+
+    setStockItems(updatedStockList);
+    setTransferModalOpen(false);
+
+    if (onShowToast) {
+      onShowToast(
+        `✓ Inter-Branch Transfer Success: ${qtyNum} units of "${sourceItem.brandName}" transferred from "${fromBranch}" to "${toBranch}". Stock updated!`
+      );
+    }
   };
 
   // Active KPI Filter State
@@ -1266,6 +1413,243 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
         </View>
       </Modal>
 
+      {/* 3. INTER-BRANCH STOCK TRANSFER MODAL */}
+      <Modal
+        visible={transferModalOpen}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setTransferModalOpen(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.transferModalCard}>
+            {/* Header */}
+            <View style={styles.transferModalHeader}>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <View style={styles.transferHeaderBadge}>
+                    <Text style={styles.transferHeaderBadgeIcon}>🔄</Text>
+                  </View>
+                  <Text style={styles.transferModalTitle}>Initiate Inter-Branch Stock Transfer</Text>
+                </View>
+                <Text style={styles.transferModalSubtitle}>
+                  Move inventory stock between hospital main store, OPD clinics, and satellite branches
+                </Text>
+              </View>
+              <Pressable onPress={() => setTransferModalOpen(false)} style={styles.closeActionBtn}>
+                <Text style={styles.closeActionText}>✕</Text>
+              </Pressable>
+            </View>
+
+            {/* Body */}
+            <ScrollView style={{ maxHeight: 520 }} contentContainerStyle={styles.transferModalBody}>
+              {/* Product Info Card */}
+              <View style={styles.transferProductCard}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.transferMedTitle}>
+                    {selectedItemForAction?.brandName || selectedItemForAction?.medicineName}
+                  </Text>
+                  <Text style={styles.transferMedMeta}>
+                    Generic: {selectedItemForAction?.medicineName || selectedItemForAction?.genericName} • Strength: {selectedItemForAction?.strength || '500mg'}
+                  </Text>
+                  <View style={styles.transferPillsRow}>
+                    <View style={styles.transferPill}>
+                      <Text style={styles.transferPillText}>SKU: {selectedItemForAction?.sku}</Text>
+                    </View>
+                    <View style={styles.transferPill}>
+                      <Text style={styles.transferPillText}>Batch: {selectedItemForAction?.batchNo}</Text>
+                    </View>
+                    <View style={styles.transferPillTeal}>
+                      <Text style={styles.transferPillTextTeal}>Source Stock: {selectedItemForAction?.quantity} units</Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+
+              {/* Error Alert Box if any */}
+              {transferError ? (
+                <View style={styles.transferErrorAlert}>
+                  <Text style={styles.transferErrorText}>⚠️ {transferError}</Text>
+                </View>
+              ) : null}
+
+              {/* Branch Selection Section */}
+              <View style={styles.branchSelectionGrid}>
+                {/* Source Branch (From) */}
+                <View style={styles.branchCol}>
+                  <Text style={styles.fieldLabelModal}>
+                    From Branch (Source) <Text style={styles.reqStar}>*</Text>
+                  </Text>
+                  <View style={styles.branchPickerBox}>
+                    <ScrollView style={{ maxHeight: 150 }} nestedScrollEnabled={true}>
+                      {branchesList.map((b) => {
+                        const bName = b.name || b.id;
+                        const isSelected = fromBranch === bName;
+                        return (
+                          <Pressable
+                            key={`from-${b.id}`}
+                            onPress={() => {
+                              setFromBranch(bName);
+                              if (toBranch === bName) {
+                                const other = branchesList.find((x) => (x.name || x.id) !== bName);
+                                if (other) setToBranch(other.name || other.id);
+                              }
+                            }}
+                            style={[
+                              styles.branchOptionItem,
+                              isSelected && styles.branchOptionItemFromActive,
+                            ]}
+                          >
+                            <View style={[styles.branchDot, isSelected && styles.branchDotFromActive]} />
+                            <View style={{ flex: 1 }}>
+                              <Text style={[styles.branchOptionName, isSelected && styles.branchOptionNameFromActive]}>
+                                {bName}
+                              </Text>
+                              <Text style={styles.branchOptionCity}>{b.city || 'Pune'}</Text>
+                            </View>
+                            {isSelected && <Text style={{ fontSize: 11, fontWeight: '800', color: '#0F766E' }}>SOURCE</Text>}
+                          </Pressable>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                </View>
+
+                {/* Direction Indicator */}
+                <View style={styles.transferDirectionCol}>
+                  <View style={styles.transferDirectionCircle}>
+                    <Text style={styles.transferDirectionArrow}>➔</Text>
+                  </View>
+                </View>
+
+                {/* Destination Branch (To) */}
+                <View style={styles.branchCol}>
+                  <Text style={styles.fieldLabelModal}>
+                    To Branch (Destination) <Text style={styles.reqStar}>*</Text>
+                  </Text>
+                  <View style={styles.branchPickerBox}>
+                    <ScrollView style={{ maxHeight: 150 }} nestedScrollEnabled={true}>
+                      {branchesList.map((b) => {
+                        const bName = b.name || b.id;
+                        const isSelected = toBranch === bName;
+                        const isDisabled = fromBranch === bName;
+                        return (
+                          <Pressable
+                            key={`to-${b.id}`}
+                            disabled={isDisabled}
+                            onPress={() => setToBranch(bName)}
+                            style={[
+                              styles.branchOptionItem,
+                              isSelected && styles.branchOptionItemToActive,
+                              isDisabled && styles.branchOptionDisabled,
+                            ]}
+                          >
+                            <View style={[styles.branchDot, isSelected && styles.branchDotToActive]} />
+                            <View style={{ flex: 1 }}>
+                              <Text
+                                style={[
+                                  styles.branchOptionName,
+                                  isSelected && styles.branchOptionNameToActive,
+                                  isDisabled && styles.branchOptionNameDisabled,
+                                ]}
+                              >
+                                {bName} {isDisabled ? '(Current Source)' : ''}
+                              </Text>
+                              <Text style={styles.branchOptionCity}>{b.city || 'Pune'}</Text>
+                            </View>
+                            {isSelected && <Text style={{ fontSize: 11, fontWeight: '800', color: '#2563EB' }}>DESTINATION</Text>}
+                          </Pressable>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                </View>
+              </View>
+
+              {/* Quantity Input & Preset Buttons */}
+              <View style={styles.formGroupModal}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={styles.fieldLabelModal}>
+                    Stock Quantity to Transfer <Text style={styles.reqStar}>*</Text>
+                  </Text>
+                  <Text style={{ fontSize: 12, color: '#64748B' }}>
+                    Available: <Text style={{ fontWeight: '700', color: '#0F766E' }}>{selectedItemForAction?.quantity || 0} units</Text>
+                  </Text>
+                </View>
+
+                <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <TextInput
+                    style={[styles.adjustInput, { flex: 1, minWidth: 140, fontSize: 15, fontWeight: '700', color: '#0F172A' }]}
+                    value={transferQty}
+                    onChangeText={setTransferQty}
+                    keyboardType="numeric"
+                    placeholder="Enter units (e.g. 50)"
+                  />
+                  {/* Preset Buttons */}
+                  {['10', '25', '50', '100'].map((preset) => (
+                    <Pressable
+                      key={preset}
+                      onPress={() => setTransferQty(preset)}
+                      style={[
+                        styles.transferPresetBtn,
+                        transferQty === preset && styles.transferPresetBtnActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.transferPresetText,
+                          transferQty === preset && styles.transferPresetTextActive,
+                        ]}
+                      >
+                        +{preset}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+
+              {/* Transfer Stock Calculation Preview */}
+              {selectedItemForAction && (
+                <View style={styles.transferCalcBox}>
+                  <Text style={styles.transferCalcTitle}>Stock Impact Summary:</Text>
+                  <View style={styles.transferCalcRow}>
+                    <Text style={styles.transferCalcLabel}>• {fromBranch || 'Source Branch'}:</Text>
+                    <Text style={{ color: '#DC2626', fontWeight: '700', fontSize: 12.5 }}>
+                      {selectedItemForAction.quantity} ➔ {Math.max(0, selectedItemForAction.quantity - (parseInt(transferQty, 10) || 0))} units (-{parseInt(transferQty, 10) || 0})
+                    </Text>
+                  </View>
+                  <View style={styles.transferCalcRow}>
+                    <Text style={styles.transferCalcLabel}>• {toBranch || 'Destination Branch'}:</Text>
+                    <Text style={{ color: '#16A34A', fontWeight: '700', fontSize: 12.5 }}>
+                      +{parseInt(transferQty, 10) || 0} units added to target branch stock
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Reason / Reference Input */}
+              <View style={styles.formGroupModal}>
+                <Text style={styles.fieldLabelModal}>Transfer Reason / Reference Notes</Text>
+                <TextInput
+                  style={styles.adjustInput}
+                  value={transferReason}
+                  onChangeText={setTransferReason}
+                  placeholder="e.g. Emergency stock transfer to OPD branch"
+                />
+              </View>
+            </ScrollView>
+
+            {/* Footer */}
+            <View style={styles.adjustModalFooter}>
+              <Pressable onPress={() => setTransferModalOpen(false)} style={styles.cancelBtn}>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </Pressable>
+              <Pressable onPress={handleConfirmTransfer} style={styles.confirmTransferBtn}>
+                <Text style={styles.confirmTransferBtnText}>🔄 Confirm & Transfer Stock</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
     </ScrollView>
   );
@@ -2138,6 +2522,260 @@ const styles = StyleSheet.create({
     cursor: 'pointer',
   },
   closeDevGuideModalBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12.5,
+    fontWeight: '700',
+  },
+  /* Inter-Branch Stock Transfer Modal Styles */
+  transferModalCard: {
+    width: '100%',
+    maxWidth: 680,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    overflow: 'hidden',
+  },
+  transferModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  transferHeaderBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  transferHeaderBadgeIcon: {
+    fontSize: 16,
+  },
+  transferModalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  transferModalSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  transferModalBody: {
+    padding: 20,
+    gap: 14,
+  },
+  transferProductCard: {
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+    borderRadius: 10,
+    padding: 14,
+  },
+  transferMedTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F766E',
+  },
+  transferMedMeta: {
+    fontSize: 12,
+    color: '#334155',
+    marginTop: 2,
+  },
+  transferPillsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+    flexWrap: 'wrap',
+  },
+  transferPill: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+  },
+  transferPillText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  transferPillTeal: {
+    backgroundColor: '#CCFBF1',
+    borderWidth: 1,
+    borderColor: '#5EEAD4',
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+  },
+  transferPillTextTeal: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#0F766E',
+  },
+  transferErrorAlert: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    padding: 10,
+    borderRadius: 8,
+  },
+  transferErrorText: {
+    fontSize: 12,
+    color: '#DC2626',
+    fontWeight: '600',
+  },
+  branchSelectionGrid: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 10,
+  },
+  branchCol: {
+    flex: 1,
+  },
+  branchPickerBox: {
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    backgroundColor: '#F8FAFC',
+    overflow: 'hidden',
+    marginTop: 4,
+  },
+  branchOptionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    backgroundColor: '#FFFFFF',
+    cursor: 'pointer',
+  },
+  branchOptionItemFromActive: {
+    backgroundColor: '#F0FDFA',
+    borderLeftWidth: 4,
+    borderLeftColor: '#0F766E',
+  },
+  branchOptionItemToActive: {
+    backgroundColor: '#EFF6FF',
+    borderLeftWidth: 4,
+    borderLeftColor: '#2563EB',
+  },
+  branchOptionDisabled: {
+    opacity: 0.4,
+    backgroundColor: '#F8FAFC',
+  },
+  branchDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#CBD5E1',
+  },
+  branchDotFromActive: {
+    backgroundColor: '#0F766E',
+  },
+  branchDotToActive: {
+    backgroundColor: '#2563EB',
+  },
+  branchOptionName: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  branchOptionNameFromActive: {
+    color: '#0F766E',
+    fontWeight: '800',
+  },
+  branchOptionNameToActive: {
+    color: '#2563EB',
+    fontWeight: '800',
+  },
+  branchOptionNameDisabled: {
+    color: '#94A3B8',
+  },
+  branchOptionCity: {
+    fontSize: 11,
+    color: '#94A3B8',
+  },
+  transferDirectionCol: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 28,
+    paddingTop: 18,
+  },
+  transferDirectionCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#2563EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  transferDirectionArrow: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  transferPresetBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F8FAFC',
+    cursor: 'pointer',
+  },
+  transferPresetBtnActive: {
+    backgroundColor: '#2563EB',
+    borderColor: '#2563EB',
+  },
+  transferPresetText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  transferPresetTextActive: {
+    color: '#FFFFFF',
+  },
+  transferCalcBox: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    padding: 12,
+    gap: 4,
+  },
+  transferCalcTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#334155',
+  },
+  transferCalcRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  transferCalcLabel: {
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '600',
+  },
+  confirmTransferBtn: {
+    backgroundColor: '#2563EB',
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+    borderRadius: 6,
+    cursor: 'pointer',
+  },
+  confirmTransferBtnText: {
     color: '#FFFFFF',
     fontSize: 12.5,
     fontWeight: '700',

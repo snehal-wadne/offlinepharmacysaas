@@ -28,6 +28,7 @@
  */
 
 const { pool } = require("../db/connection");
+const { getNextBusinessNumber } = require("./number-sequence.repository");
 
 const { getCache, setCache, deleteCache } = require("../cache/cache");
 
@@ -39,10 +40,14 @@ const buildPurchaseCacheKey = (organisationId, purchaseId) =>
 /**
  * Create a purchase together with its purchase items.
  *
- * The purchase header and all purchase items are inserted
+ * Purchase numbers are organisation-scoped and generated
+ * using number-sequence.repository.js (sequenceType: 'PURCHASE', prefix: 'PO').
+ *
+ * The purchase header, sequence increment, and all purchase items are inserted
  * inside a single PostgreSQL transaction.
  *
- * This prevents partially-created purchases.
+ * If a transaction client is supplied, the caller owns the transaction.
+ * If no client is supplied, this function creates and manages its own transaction.
  *
  * IMPORTANT:
  * Creating a purchase does NOT modify inventory.
@@ -50,21 +55,22 @@ const buildPurchaseCacheKey = (organisationId, purchaseId) =>
  *
  * @param {Object} purchase
  * @param {string} purchase.organisationId
- * @param {string} purchase.purchaseNumber
+ * @param {string|null} [purchase.purchaseNumber] Optional override
  * @param {string} purchase.supplierId
  * @param {string} purchase.branchId
  * @param {string} purchase.orderDate
- * @param {string|null} purchase.expectedDate
- * @param {string} purchase.status
- * @param {string|null} purchase.notes
- * @param {string|null} purchase.createdBy
+ * @param {string|null} [purchase.expectedDate]
+ * @param {string} [purchase.status]
+ * @param {string|null} [purchase.notes]
+ * @param {string|null} [purchase.createdBy]
  * @param {Array<Object>} purchase.items
+ * @param {Object|null} [purchase.client] PostgreSQL transaction client
  *
  * @returns {Object} Created purchase with its items
  */
 const createPurchase = async ({
   organisationId,
-  purchaseNumber,
+  purchaseNumber = null,
   supplierId,
   branchId,
   orderDate,
@@ -73,16 +79,29 @@ const createPurchase = async ({
   notes = null,
   createdBy = null,
   items,
+  client = null,
 }) => {
-  const client = await pool.connect();
+  const dbClient = client || (await pool.connect());
+  const ownsTransaction = !client;
 
   try {
-    await client.query("BEGIN");
+    if (ownsTransaction) {
+      await dbClient.query("BEGIN");
+    }
+
+    const resolvedPurchaseNumber =
+      purchaseNumber ||
+      (await getNextBusinessNumber({
+        organisationId,
+        branchId: null,
+        sequenceType: "PURCHASE",
+        client: dbClient,
+      }));
 
     /*
      * Create the purchase header first.
      */
-    const purchaseResult = await client.query(
+    const purchaseResult = await dbClient.query(
       `
         INSERT INTO purchases (
             organisation_id,
@@ -112,7 +131,7 @@ const createPurchase = async ({
       `,
       [
         organisationId,
-        purchaseNumber,
+        resolvedPurchaseNumber,
         supplierId,
         branchId,
         orderDate,
@@ -132,7 +151,7 @@ const createPurchase = async ({
     const createdItems = [];
 
     for (const item of items) {
-      const itemResult = await client.query(
+      const itemResult = await dbClient.query(
         `
           INSERT INTO purchase_items (
               purchase_id,
@@ -167,7 +186,9 @@ const createPurchase = async ({
       createdItems.push(itemResult.rows[0]);
     }
 
-    await client.query("COMMIT");
+    if (ownsTransaction) {
+      await dbClient.query("COMMIT");
+    }
 
     return {
       ...purchase,
@@ -178,11 +199,15 @@ const createPurchase = async ({
      * If anything fails, undo the purchase and every item
      * created during this transaction.
      */
-    await client.query("ROLLBACK");
+    if (ownsTransaction && dbClient) {
+      await dbClient.query("ROLLBACK");
+    }
 
     throw error;
   } finally {
-    client.release();
+    if (ownsTransaction && dbClient) {
+      dbClient.release();
+    }
   }
 };
 

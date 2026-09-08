@@ -56,6 +56,7 @@ const rollbackSafely = async (client) => {
 const runTests = async () => {
   let testUserId = null;
   let testOrganisationId = null;
+  let testOrganisationBId = null;
   let testBranchId = null;
 
   try {
@@ -105,6 +106,31 @@ const runTests = async () => {
     assert(
       testOrganisationId,
       "Test organisation should be created successfully.",
+    );
+
+    // --------------------------------------------------------
+    // 2b. CREATE SECOND ISOLATED TEST ORGANISATION (FOR ISOLATION TESTS)
+    // --------------------------------------------------------
+
+    console.log("--- Creating second isolated test organisation ---");
+
+    const organisationBResult = await pool.query(
+      `
+        INSERT INTO organisations (
+            owner_id,
+            name
+        )
+        VALUES ($1, $2)
+        RETURNING id;
+      `,
+      [testUserId, `Number Sequence Test Organisation B ${Date.now()}`],
+    );
+
+    testOrganisationBId = organisationBResult.rows[0].id;
+
+    assert(
+      testOrganisationBId,
+      "Second test organisation should be created successfully.",
     );
 
     // --------------------------------------------------------
@@ -644,6 +670,377 @@ const runTests = async () => {
       "Existing sequence should not be reset by createNumberSequence.",
     );
 
+    // --------------------------------------------------------
+    // 19. TEST PURCHASE SEQUENCE (PO-1001, PO-1002, ISOLATION, SCOPE, CONCURRENCY)
+    // --------------------------------------------------------
+
+    console.log("--- Testing PURCHASE sequence (PO) ---");
+
+    const poClient = await pool.connect();
+    try {
+      await poClient.query("BEGIN");
+
+      const poNumber1 = await getNextBusinessNumber({
+        organisationId: testOrganisationId,
+        branchId: null,
+        sequenceType: "PURCHASE",
+        client: poClient,
+      });
+
+      console.log({ poNumber1 });
+
+      assert(
+        poNumber1 === "PO-1001",
+        "First purchase order number should be PO-1001.",
+      );
+
+      const poNumber2 = await getNextBusinessNumber({
+        organisationId: testOrganisationId,
+        branchId: null,
+        sequenceType: "PURCHASE",
+        client: poClient,
+      });
+
+      console.log({ poNumber2 });
+
+      assert(
+        poNumber2 === "PO-1002",
+        "Second purchase order number should be PO-1002.",
+      );
+
+      await poClient.query("COMMIT");
+    } catch (error) {
+      await rollbackSafely(poClient);
+      throw error;
+    } finally {
+      poClient.release();
+    }
+
+    // Verify Organisation Isolation for PURCHASE
+    console.log("--- Testing PURCHASE organisation isolation ---");
+
+    const poOrgBClient = await pool.connect();
+    try {
+      await poOrgBClient.query("BEGIN");
+
+      const poOrgBNumber = await getNextBusinessNumber({
+        organisationId: testOrganisationBId,
+        branchId: null,
+        sequenceType: "PURCHASE",
+        client: poOrgBClient,
+      });
+
+      console.log({ poOrgBNumber });
+
+      assert(
+        poOrgBNumber === "PO-1001",
+        "Organisation B purchase order should start independently at PO-1001.",
+      );
+
+      await poOrgBClient.query("COMMIT");
+    } catch (error) {
+      await rollbackSafely(poOrgBClient);
+      throw error;
+    } finally {
+      poOrgBClient.release();
+    }
+
+    // Verify branchId is rejected for PURCHASE
+    console.log("--- Testing invalid PURCHASE branch scope ---");
+    let invalidPurchaseScopeFailed = false;
+    try {
+      await getNextBusinessNumber({
+        organisationId: testOrganisationId,
+        branchId: testBranchId,
+        sequenceType: "PURCHASE",
+        client: pool,
+      });
+    } catch (error) {
+      invalidPurchaseScopeFailed = true;
+      console.log("Expected validation error:", error.message);
+    }
+    assert(
+      invalidPurchaseScopeFailed,
+      "PURCHASE sequence must reject branchId.",
+    );
+
+    // Concurrency test for PURCHASE
+    console.log("--- Testing concurrent PURCHASE generation ---");
+    const poClientA = await pool.connect();
+    const poClientB = await pool.connect();
+
+    try {
+      await poClientA.query("BEGIN");
+      const poConcurrentA = await getNextBusinessNumber({
+        organisationId: testOrganisationId,
+        branchId: null,
+        sequenceType: "PURCHASE",
+        client: poClientA,
+      });
+
+      assert(
+        poConcurrentA === "PO-1003",
+        "Concurrent purchase A should be PO-1003.",
+      );
+
+      await poClientB.query("BEGIN");
+      const poConcurrentPromiseB = getNextBusinessNumber({
+        organisationId: testOrganisationId,
+        branchId: null,
+        sequenceType: "PURCHASE",
+        client: poClientB,
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      await poClientA.query("COMMIT");
+
+      const poConcurrentB = await poConcurrentPromiseB;
+
+      assert(
+        poConcurrentB === "PO-1004",
+        "Concurrent purchase B should be PO-1004.",
+      );
+
+      await poClientB.query("COMMIT");
+
+      console.log({ poConcurrentA, poConcurrentB });
+    } catch (error) {
+      await rollbackSafely(poClientA);
+      await rollbackSafely(poClientB);
+      throw error;
+    } finally {
+      poClientA.release();
+      poClientB.release();
+    }
+
+    // --------------------------------------------------------
+    // 20. TEST STOCK_TRANSFER SEQUENCE (TR-1001, TR-1002, ISOLATION, SCOPE)
+    // --------------------------------------------------------
+
+    console.log("--- Testing STOCK_TRANSFER sequence (TR) ---");
+
+    const trClient = await pool.connect();
+    try {
+      await trClient.query("BEGIN");
+
+      const trNumber1 = await getNextBusinessNumber({
+        organisationId: testOrganisationId,
+        branchId: null,
+        sequenceType: "STOCK_TRANSFER",
+        client: trClient,
+      });
+
+      console.log({ trNumber1 });
+
+      assert(
+        trNumber1 === "TR-1001",
+        "First stock transfer number should be TR-1001.",
+      );
+
+      const trNumber2 = await getNextBusinessNumber({
+        organisationId: testOrganisationId,
+        branchId: null,
+        sequenceType: "STOCK_TRANSFER",
+        client: trClient,
+      });
+
+      console.log({ trNumber2 });
+
+      assert(
+        trNumber2 === "TR-1002",
+        "Second stock transfer number should be TR-1002.",
+      );
+
+      await trClient.query("COMMIT");
+    } catch (error) {
+      await rollbackSafely(trClient);
+      throw error;
+    } finally {
+      trClient.release();
+    }
+
+    // Verify Organisation Isolation for STOCK_TRANSFER
+    console.log("--- Testing STOCK_TRANSFER organisation isolation ---");
+
+    const trOrgBClient = await pool.connect();
+    try {
+      await trOrgBClient.query("BEGIN");
+
+      const trOrgBNumber = await getNextBusinessNumber({
+        organisationId: testOrganisationBId,
+        branchId: null,
+        sequenceType: "STOCK_TRANSFER",
+        client: trOrgBClient,
+      });
+
+      console.log({ trOrgBNumber });
+
+      assert(
+        trOrgBNumber === "TR-1001",
+        "Organisation B stock transfer should start independently at TR-1001.",
+      );
+
+      await trOrgBClient.query("COMMIT");
+    } catch (error) {
+      await rollbackSafely(trOrgBClient);
+      throw error;
+    } finally {
+      trOrgBClient.release();
+    }
+
+    // Verify branchId is rejected for STOCK_TRANSFER
+    console.log("--- Testing invalid STOCK_TRANSFER branch scope ---");
+    let invalidTransferScopeFailed = false;
+    try {
+      await getNextBusinessNumber({
+        organisationId: testOrganisationId,
+        branchId: testBranchId,
+        sequenceType: "STOCK_TRANSFER",
+        client: pool,
+      });
+    } catch (error) {
+      invalidTransferScopeFailed = true;
+      console.log("Expected validation error:", error.message);
+    }
+    assert(
+      invalidTransferScopeFailed,
+      "STOCK_TRANSFER sequence must reject branchId.",
+    );
+
+    // --------------------------------------------------------
+    // 21. TEST GOODS_RECEIPT SEQUENCE (GRN-1001, GRN-1002, ISOLATION, SCOPE)
+    // --------------------------------------------------------
+
+    console.log("--- Testing GOODS_RECEIPT sequence (GRN) ---");
+
+    const grnClient = await pool.connect();
+    try {
+      await grnClient.query("BEGIN");
+
+      const grnNumber1 = await getNextBusinessNumber({
+        organisationId: testOrganisationId,
+        branchId: null,
+        sequenceType: "GOODS_RECEIPT",
+        client: grnClient,
+      });
+
+      console.log({ grnNumber1 });
+
+      assert(
+        grnNumber1 === "GRN-1001",
+        "First goods receipt number should be GRN-1001.",
+      );
+
+      const grnNumber2 = await getNextBusinessNumber({
+        organisationId: testOrganisationId,
+        branchId: null,
+        sequenceType: "GOODS_RECEIPT",
+        client: grnClient,
+      });
+
+      console.log({ grnNumber2 });
+
+      assert(
+        grnNumber2 === "GRN-1002",
+        "Second goods receipt number should be GRN-1002.",
+      );
+
+      await grnClient.query("COMMIT");
+    } catch (error) {
+      await rollbackSafely(grnClient);
+      throw error;
+    } finally {
+      grnClient.release();
+    }
+
+    // Verify Organisation Isolation for GOODS_RECEIPT
+    console.log("--- Testing GOODS_RECEIPT organisation isolation ---");
+
+    const grnOrgBClient = await pool.connect();
+    try {
+      await grnOrgBClient.query("BEGIN");
+
+      const grnOrgBNumber = await getNextBusinessNumber({
+        organisationId: testOrganisationBId,
+        branchId: null,
+        sequenceType: "GOODS_RECEIPT",
+        client: grnOrgBClient,
+      });
+
+      console.log({ grnOrgBNumber });
+
+      assert(
+        grnOrgBNumber === "GRN-1001",
+        "Organisation B goods receipt should start independently at GRN-1001.",
+      );
+
+      await grnOrgBClient.query("COMMIT");
+    } catch (error) {
+      await rollbackSafely(grnOrgBClient);
+      throw error;
+    } finally {
+      grnOrgBClient.release();
+    }
+
+    // Verify branchId is rejected for GOODS_RECEIPT
+    console.log("--- Testing invalid GOODS_RECEIPT branch scope ---");
+    let invalidReceiptScopeFailed = false;
+    try {
+      await getNextBusinessNumber({
+        organisationId: testOrganisationId,
+        branchId: testBranchId,
+        sequenceType: "GOODS_RECEIPT",
+        client: pool,
+      });
+    } catch (error) {
+      invalidReceiptScopeFailed = true;
+      console.log("Expected validation error:", error.message);
+    }
+    assert(
+      invalidReceiptScopeFailed,
+      "GOODS_RECEIPT sequence must reject branchId.",
+    );
+
+    // --------------------------------------------------------
+    // 22. EXPLICITLY VERIFY GOODS_RECEIPT DOES NOT USE FINANCIAL RECEIPT SEQUENCE
+    // --------------------------------------------------------
+
+    console.log(
+      "--- Verifying GOODS_RECEIPT and RECEIPT sequences are completely independent ---",
+    );
+
+    const financialReceiptSeq = await getNumberSequence({
+      organisationId: testOrganisationId,
+      branchId: testBranchId,
+      sequenceType: "RECEIPT",
+    });
+
+    const goodsReceiptSeq = await getNumberSequence({
+      organisationId: testOrganisationId,
+      branchId: null,
+      sequenceType: "GOODS_RECEIPT",
+    });
+
+    console.log({
+      financialReceiptSeqNext: financialReceiptSeq?.next_number,
+      goodsReceiptSeqNext: goodsReceiptSeq?.next_number,
+    });
+
+    assert(
+      financialReceiptSeq !== null,
+      "Financial RECEIPT sequence should exist.",
+    );
+    assert(goodsReceiptSeq !== null, "GOODS_RECEIPT sequence should exist.");
+    assert(
+      Number(financialReceiptSeq.next_number) === 1002,
+      "Financial RECEIPT next_number should still be 1002 (unaffected by GOODS_RECEIPT).",
+    );
+    assert(
+      Number(goodsReceiptSeq.next_number) === 1003,
+      "GOODS_RECEIPT next_number should be 1003 after 2 issues.",
+    );
+
     console.log("");
     console.log("Number sequence repository tests completed successfully.");
   } catch (error) {
@@ -678,6 +1075,20 @@ const runTests = async () => {
         );
       } catch (cleanupError) {
         console.error("Organisation cleanup failed:", cleanupError.message);
+      }
+    }
+
+    if (testOrganisationBId) {
+      try {
+        await pool.query(
+          `
+            DELETE FROM organisations
+            WHERE id = $1;
+          `,
+          [testOrganisationBId],
+        );
+      } catch (cleanupError) {
+        console.error("Organisation B cleanup failed:", cleanupError.message);
       }
     }
 

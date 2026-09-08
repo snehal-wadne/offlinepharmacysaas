@@ -16,6 +16,7 @@ const cors = require("cors");
 require("dotenv").config();
 
 const { pool, testConnection, isDbOnline, getDbStatus } = require("./db/connection");
+const { autoInitDatabase } = require("./db/auto-init");
 const { connectRedis, disconnectRedis } = require("./cache/redis");
 const localStore = require("./db/localStore");
 
@@ -77,6 +78,7 @@ const cashierRoutes = require('./routes/cashier.routes');
 const syncRoutes = require('./routes/sync.routes');
 const authRoutes = require('./routes/auth.routes');
 const authController = require('./controllers/auth.controller');
+const branchRoutes = require('./routes/branch.routes');
 
 app.use('/api/purchases', purchaseRoutes);
 app.use('/api/goods-receipts', goodsReceiptRoutes);
@@ -85,8 +87,8 @@ app.use('/api/inventory', inventoryRoutes);
 app.use('/api/cashier', cashierRoutes);
 app.use('/api/sync', syncRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/branches', branchRoutes);
 app.post('/api/login', authController.login);
-
 
 /**
  * ------------------------------------------------------------

@@ -24,6 +24,7 @@ const {
   getUserById,
   getUserByEmail,
   getUserByGoogleSub,
+  getUserByStaffId,
   updateUser,
   updatePasswordHash,
   linkGoogleAccount,
@@ -368,6 +369,83 @@ const runTests = async () => {
     assert.strictEqual(deletedUser, null);
 
     console.log("✓ 15. User deletion removes database and cache data");
+
+    // ---------------------------------------------------------
+    // 16. Staff Fields Support (Creation, SELECT, UPDATE)
+    // ---------------------------------------------------------
+    const staffEmail = `${uniqueValue("staff-user")}@test.local`;
+    const staffUser = await createUser({
+      email: staffEmail,
+      name: "Dr. Chief Pharmacist",
+      passwordHash: "secure-hash",
+      status: "ACTIVE",
+      staffId: "EMP-TEST-1001",
+      phone: "+91 98220 11450",
+      professionalRegistrationNumber: "PCI-MH-94821",
+      workingShift: "Morning Shift (08:00 - 16:30)",
+    });
+
+    assert.ok(staffUser);
+    assert.strictEqual(staffUser.staff_id, "EMP-TEST-1001");
+    assert.strictEqual(staffUser.phone, "+91 98220 11450");
+    assert.strictEqual(
+      staffUser.professional_registration_number,
+      "PCI-MH-94821",
+    );
+    assert.strictEqual(
+      staffUser.working_shift,
+      "Morning Shift (08:00 - 16:30)",
+    );
+
+    // Read back via getUserById
+    const fetchedStaffById = await getUserById(staffUser.id);
+    assert.strictEqual(fetchedStaffById.staff_id, "EMP-TEST-1001");
+    assert.strictEqual(fetchedStaffById.phone, "+91 98220 11450");
+    assert.strictEqual(
+      fetchedStaffById.professional_registration_number,
+      "PCI-MH-94821",
+    );
+    assert.strictEqual(
+      fetchedStaffById.working_shift,
+      "Morning Shift (08:00 - 16:30)",
+    );
+
+    // Read back via getUserByEmail
+    const fetchedStaffByEmail = await getUserByEmail(staffEmail);
+    assert.strictEqual(fetchedStaffByEmail.staff_id, "EMP-TEST-1001");
+
+    // Read back via getUserByStaffId
+    const fetchedStaffByCode = await getUserByStaffId("EMP-TEST-1001");
+    assert.ok(fetchedStaffByCode);
+    assert.strictEqual(fetchedStaffByCode.id, staffUser.id);
+
+    // Update staff fields
+    const updatedStaff = await updateUser(staffUser.id, {
+      phone: "+91 98220 99999",
+      workingShift: "Night Shift (20:00 - 08:00)",
+    });
+    assert.strictEqual(updatedStaff.phone, "+91 98220 99999");
+    assert.strictEqual(
+      updatedStaff.working_shift,
+      "Night Shift (20:00 - 08:00)",
+    );
+    assert.strictEqual(
+      updatedStaff.staff_id,
+      "EMP-TEST-1001",
+      "Preserved staff_id on partial update",
+    );
+    assert.strictEqual(
+      updatedStaff.professional_registration_number,
+      "PCI-MH-94821",
+      "Preserved reg number",
+    );
+
+    // Cleanup staff user
+    await deleteUser(staffUser.id);
+
+    console.log(
+      "✓ 16. Staff fields written, read back, and preserved during update",
+    );
 
     console.log("\n✓ All User Repository tests passed.\n");
   } catch (error) {

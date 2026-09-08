@@ -27,6 +27,11 @@ password_hash VARCHAR(255),
 google_sub VARCHAR(255) UNIQUE,
 name VARCHAR(100) NOT NULL,
 status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
+-- Human-readable staff identifier (e.g. EMP-1001), generated via STAFF sequence.
+staff_id VARCHAR(50),
+phone VARCHAR(50),
+professional_registration_number VARCHAR(100),
+working_shift VARCHAR(100),
 email_verified_at TIMESTAMPTZ,
 last_login_at TIMESTAMPTZ,
 created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -119,11 +124,26 @@ CREATE TABLE IF NOT EXISTS roles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
     organisation_id UUID NOT NULL REFERENCES organisations (id) ON DELETE CASCADE,
     name VARCHAR(100) NOT NULL,
+    role_identifier VARCHAR(50) NOT NULL,
+    clearance_level VARCHAR(50) NOT NULL DEFAULT 'STANDARD_POS',
     description TEXT,
     is_system_role BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT roles_organisation_name_unique UNIQUE (organisation_id, name)
+    CONSTRAINT roles_organisation_name_unique UNIQUE (organisation_id, name),
+    CONSTRAINT roles_organisation_identifier_unique UNIQUE (
+        organisation_id,
+        role_identifier
+    ),
+    CONSTRAINT roles_clearance_level_check CHECK (
+        clearance_level IN (
+            'ADMIN',
+            'CLINICAL_DISPENSING',
+            'MANAGEMENT',
+            'STANDARD_POS',
+            'AUDIT'
+        )
+    )
 );
 
 -- ============================================================
@@ -178,15 +198,35 @@ CREATE TABLE IF NOT EXISTS role_permissions (
 CREATE TABLE IF NOT EXISTS branches (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
     organisation_id UUID NOT NULL REFERENCES organisations (id) ON DELETE CASCADE,
+    branch_code VARCHAR(50),
     name VARCHAR(150) NOT NULL,
+    facility_type VARCHAR(50) NOT NULL DEFAULT 'RETAIL_DISPENSARY',
+    contact_person VARCHAR(150),
+    contact_phone VARCHAR(50),
+    contact_email VARCHAR(255),
     address VARCHAR(255),
     city VARCHAR(100),
     state VARCHAR(100),
     postal_code VARCHAR(20),
     phone VARCHAR(30),
+    operating_hours VARCHAR(150),
+    drug_license_number VARCHAR(150),
+    invoice_prefix VARCHAR(50),
+    status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT branches_organisation_name_unique UNIQUE (organisation_id, name)
+    CONSTRAINT branches_organisation_name_unique UNIQUE (organisation_id, name),
+    CONSTRAINT branches_organisation_code_unique UNIQUE (organisation_id, branch_code),
+    CONSTRAINT branches_facility_type_check CHECK (
+        facility_type IN (
+            'HOSPITAL_PHARMACY',
+            'RETAIL_DISPENSARY',
+            'CENTRAL_WAREHOUSE'
+        )
+    ),
+    CONSTRAINT branches_status_check CHECK (
+        status IN ('ACTIVE', 'INACTIVE')
+    )
 );
 
 -- ============================================================
@@ -199,8 +239,13 @@ CREATE TABLE IF NOT EXISTS branch_assignments (
     membership_id UUID NOT NULL REFERENCES organisation_memberships (id) ON DELETE CASCADE,
     branch_id UUID NOT NULL REFERENCES branches (id) ON DELETE CASCADE,
     role_id UUID NOT NULL REFERENCES roles (id) ON DELETE RESTRICT,
+    is_primary BOOLEAN NOT NULL DEFAULT FALSE,
     PRIMARY KEY (membership_id, branch_id)
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS branch_assignments_one_primary_per_membership ON branch_assignments (membership_id)
+WHERE
+    is_primary = TRUE;
 
 -- ============================================================
 -- 11. AUDIT LOGS
@@ -599,7 +644,12 @@ next_number BIGINT NOT NULL DEFAULT 1001,
                 'PRESCRIPTION',
                 'INVOICE',
                 'RECEIPT',
-                'RETURN'
+                'RETURN',
+                'BRANCH',
+                'STAFF',
+                'PURCHASE',
+                'STOCK_TRANSFER',
+                'GOODS_RECEIPT'
             )
         ),
 
@@ -1550,7 +1600,6 @@ CONSTRAINT goods_receipt_items_unique_purchase_item
         UNIQUE (goods_receipt_id, purchase_item_id)
 );
 
-
 -- ============================================================
 -- 31. RETURNS
 -- ============================================================
@@ -1558,6 +1607,7 @@ CONSTRAINT goods_receipt_items_unique_purchase_item
 --
 -- The return records the refund, its method, the processing status,
 -- and the users responsible for recording and processing it.
+
 
 CREATE TABLE IF NOT EXISTS returns (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1636,7 +1686,6 @@ processed_by UUID
         )
 );
 
-
 -- ============================================================
 -- 32. RETURN ITEMS
 -- ============================================================
@@ -1644,6 +1693,7 @@ processed_by UUID
 --
 -- Each item records the quantity returned, the refund allocated to
 -- that item, its physical condition, and the quantity restocked.
+
 
 CREATE TABLE IF NOT EXISTS return_items (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1668,6 +1718,7 @@ refund_amount NUMERIC(12, 2) NOT NULL,
 return_condition VARCHAR(30) NOT NULL DEFAULT 'SEALED',
 
 -- Quantity that can actually be placed back into stock.
+
 
 restock_quantity INTEGER NOT NULL DEFAULT 0,
 
@@ -1718,6 +1769,81 @@ CREATE INDEX IF NOT EXISTS idx_returns_invoice ON returns (invoice_id);
 CREATE INDEX IF NOT EXISTS idx_return_items_return ON return_items (return_id);
 
 CREATE INDEX IF NOT EXISTS idx_return_items_invoice_item ON return_items (invoice_item_id);
+
+-- ============================================================
+-- 33. BRANCH GST SETTINGS
+-- ============================================================
+-- One-to-one GST and tax registration configuration for a branch.
+
+CREATE TABLE IF NOT EXISTS branch_gst_settings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
+    organisation_id UUID NOT NULL REFERENCES organisations (id) ON DELETE CASCADE,
+    branch_id UUID NOT NULL REFERENCES branches (id) ON DELETE CASCADE,
+    gstin VARCHAR(20) NOT NULL,
+    legal_name VARCHAR(200),
+    trade_name VARCHAR(200),
+    state VARCHAR(100),
+    state_code VARCHAR(10),
+    gst_scheme VARCHAR(30) NOT NULL DEFAULT 'REGULAR',
+    tax_inclusive_pricing BOOLEAN NOT NULL DEFAULT TRUE,
+    auto_interstate_split BOOLEAN NOT NULL DEFAULT TRUE,
+    e_invoicing_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT branch_gst_settings_branch_unique UNIQUE (branch_id),
+    CONSTRAINT branch_gst_settings_scheme_check CHECK (
+        gst_scheme IN ('REGULAR', 'COMPOSITION')
+    ),
+    CONSTRAINT branch_gst_settings_status_check CHECK (
+        status IN ('ACTIVE', 'INACTIVE')
+    )
+);
+
+-- ============================================================
+-- 34. TAXES
+-- ============================================================
+-- Organisation-specific configurable tax definitions (e.g. CGST, SGST, IGST, VAT, Cess).
+
+CREATE TABLE IF NOT EXISTS taxes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
+    organisation_id UUID NOT NULL REFERENCES organisations (id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL,
+    tax_type VARCHAR(50) NOT NULL,
+    rate NUMERIC(5, 2) NOT NULL DEFAULT 0.00,
+    is_default BOOLEAN NOT NULL DEFAULT FALSE,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    description TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT taxes_rate_check CHECK (
+        rate >= 0
+        AND rate <= 100
+    ),
+    CONSTRAINT taxes_tax_type_check CHECK (
+        tax_type IN (
+            'CENTRAL_TAX',
+            'STATE_TAX',
+            'VAT_TAX',
+            'CESS',
+            'OTHER'
+        )
+    ),
+    CONSTRAINT taxes_organisation_name_unique UNIQUE (organisation_id, name)
+);
+
+-- ============================================================
+-- 35. BRANCH TAX ASSIGNMENTS
+-- ============================================================
+-- Junction table connecting branches to configured taxes (Applied to Bill / Not Applied).
+
+CREATE TABLE IF NOT EXISTS branch_tax_assignments (
+    branch_id UUID NOT NULL REFERENCES branches (id) ON DELETE CASCADE,
+    tax_id UUID NOT NULL REFERENCES taxes (id) ON DELETE CASCADE,
+    is_applied BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (branch_id, tax_id)
+);
 
 -- ============================================================
 -- INDEXES
@@ -1836,3 +1962,17 @@ CREATE INDEX IF NOT EXISTS idx_goods_receipts_received_date ON goods_receipts (r
 CREATE INDEX IF NOT EXISTS idx_goods_receipt_items_receipt_id ON goods_receipt_items (goods_receipt_id);
 
 CREATE INDEX IF NOT EXISTS idx_goods_receipt_items_purchase_item_id ON goods_receipt_items (purchase_item_id);
+
+-- ============================================================
+-- BRANCH MANAGEMENT INDEXES
+-- ============================================================
+
+CREATE INDEX IF NOT EXISTS idx_users_staff_id ON users (staff_id)
+WHERE
+    staff_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_branch_gst_settings_org_branch ON branch_gst_settings (organisation_id, branch_id);
+
+CREATE INDEX IF NOT EXISTS idx_taxes_organisation_id ON taxes (organisation_id);
+
+CREATE INDEX IF NOT EXISTS idx_branch_tax_assignments_tax_id ON branch_tax_assignments (tax_id);

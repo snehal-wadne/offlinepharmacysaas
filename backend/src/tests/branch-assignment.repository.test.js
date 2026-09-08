@@ -21,6 +21,7 @@ const assert = require("assert");
 
 const {
   assignBranchToMembership,
+  setPrimaryBranchAssignment,
   getAssignment,
   getMembershipAssignments,
   getBranchMembers,
@@ -59,10 +60,13 @@ const runTests = async () => {
   let ownerId = null;
   let memberId = null;
   let organisationId = null;
+  let otherOrganisationId = null;
   let branchId = null;
   let secondBranchId = null;
+  let otherBranchId = null;
   let roleId = null;
   let secondRoleId = null;
+  let otherRoleId = null;
   let membershipId = null;
 
   try {
@@ -143,6 +147,12 @@ const runTests = async () => {
 
     organisationId = organisationResult.rows[0].id;
 
+    const otherOrganisationResult = await pool.query(
+      `INSERT INTO organisations (owner_id, name) VALUES ($1, $2) RETURNING id;`,
+      [ownerId, uniqueValue("Other Branch Test Pharmacy")],
+    );
+    otherOrganisationId = otherOrganisationResult.rows[0].id;
+
     console.log("✓ 3. Create test organisation");
 
     // ---------------------------------------------------------
@@ -203,6 +213,12 @@ const runTests = async () => {
 
     secondBranchId = secondBranchResult.rows[0].id;
 
+    const otherBranchResult = await pool.query(
+      `INSERT INTO branches (organisation_id, name) VALUES ($1, $2) RETURNING id;`,
+      [otherOrganisationId, "Other Organisation Branch"],
+    );
+    otherBranchId = otherBranchResult.rows[0].id;
+
     console.log("✓ 4. Create test branches");
 
     // ---------------------------------------------------------
@@ -240,6 +256,13 @@ const runTests = async () => {
     );
 
     secondRoleId = secondRoleResult.rows[0].id;
+
+    const otherRoleResult = await pool.query(
+      `INSERT INTO roles (organisation_id, name, role_identifier, clearance_level)
+       VALUES ($1, $2, $3, $4) RETURNING id;`,
+      [otherOrganisationId, "Other Cashier", "OTHER_CASHIER", "STANDARD_POS"],
+    );
+    otherRoleId = otherRoleResult.rows[0].id;
 
     console.log("✓ 5. Create test roles");
 
@@ -280,6 +303,26 @@ const runTests = async () => {
     // Assign branch
     // ---------------------------------------------------------
 
+    const dashboardCacheKeys = [
+      `organisation:${organisationId}:branch-mgmt:branch-stats`,
+      `organisation:${organisationId}:branch-mgmt:staff-stats`,
+      `organisation:${organisationId}:branch-mgmt:role-stats`,
+    ];
+    for (const key of dashboardCacheKeys) {
+      await redisClient.set(key, JSON.stringify({ stale: true }), { EX: 60 });
+    }
+
+    assert.strictEqual(
+      await assignBranchToMembership(membershipId, otherBranchId, roleId),
+      null,
+      "A membership cannot be assigned to a branch in another organisation",
+    );
+    assert.strictEqual(
+      await assignBranchToMembership(membershipId, branchId, otherRoleId),
+      null,
+      "A membership cannot be assigned a role from another organisation",
+    );
+
     const assignment = await assignBranchToMembership(
       membershipId,
       branchId,
@@ -290,6 +333,13 @@ const runTests = async () => {
     assert.strictEqual(assignment.membership_id, membershipId);
     assert.strictEqual(assignment.branch_id, branchId);
     assert.strictEqual(assignment.role_id, roleId);
+    for (const key of dashboardCacheKeys) {
+      assert.strictEqual(
+        await redisClient.get(key),
+        null,
+        "Branch-assignment writes must invalidate affected dashboard stats",
+      );
+    }
 
     console.log("✓ 7. Assign branch to membership");
 
@@ -566,6 +616,63 @@ const runTests = async () => {
 
     console.log("✓ 19. All branch assignments removed successfully");
 
+    // ---------------------------------------------------------
+    // 20. Primary Branch Assignment Support (is_primary)
+    // ---------------------------------------------------------
+    const primaryAssign1 = await assignBranchToMembership(
+      membershipId,
+      branchId,
+      roleId,
+      true,
+    );
+    assert.ok(primaryAssign1);
+    assert.strictEqual(primaryAssign1.is_primary, true);
+
+    const primaryAssign2 = await assignBranchToMembership(
+      membershipId,
+      secondBranchId,
+      secondRoleId,
+      false,
+    );
+    assert.ok(primaryAssign2);
+    assert.strictEqual(primaryAssign2.is_primary, false);
+
+    const checkPrimary1 = await getAssignment(membershipId, branchId);
+    assert.strictEqual(checkPrimary1.is_primary, true);
+
+    const memberAssignments = await getMembershipAssignments(membershipId);
+    assert.strictEqual(memberAssignments.length, 2);
+    assert.strictEqual(memberAssignments[0].is_primary, true);
+    assert.ok(memberAssignments[0].role_name);
+
+    // Switch primary to second branch
+    const switchedPrimary = await setPrimaryBranchAssignment(
+      membershipId,
+      secondBranchId,
+    );
+    assert.ok(switchedPrimary);
+    assert.strictEqual(switchedPrimary.is_primary, true);
+
+    const recheckBranch1 = await getAssignment(membershipId, branchId);
+    assert.strictEqual(
+      recheckBranch1.is_primary,
+      false,
+      "Previous primary should now be false",
+    );
+
+    const recheckBranch2 = await getAssignment(membershipId, secondBranchId);
+    assert.strictEqual(
+      recheckBranch2.is_primary,
+      true,
+      "New primary should now be true",
+    );
+
+    await removeAllBranchAssignments(membershipId);
+
+    console.log(
+      "✓ 20. Primary branch assignment verified with is_primary flag",
+    );
+
     console.log("\n✓ All Branch Assignment Repository tests passed.\n");
   } catch (error) {
     console.error("\n✗ Branch Assignment Repository test failed.");
@@ -587,28 +694,28 @@ const runTests = async () => {
       }
     }
 
-    if (roleId || secondRoleId) {
+    if (roleId || secondRoleId || otherRoleId) {
       try {
         await pool.query(
           `
             DELETE FROM roles
             WHERE id = ANY($1::uuid[]);
           `,
-          [[roleId, secondRoleId].filter(Boolean)],
+          [[roleId, secondRoleId, otherRoleId].filter(Boolean)],
         );
       } catch (error) {
         console.error("Role cleanup failed:", error);
       }
     }
 
-    if (branchId || secondBranchId) {
+    if (branchId || secondBranchId || otherBranchId) {
       try {
         await pool.query(
           `
             DELETE FROM branches
             WHERE id = ANY($1::uuid[]);
           `,
-          [[branchId, secondBranchId].filter(Boolean)],
+          [[branchId, secondBranchId, otherBranchId].filter(Boolean)],
         );
       } catch (error) {
         console.error("Branch cleanup failed:", error);
@@ -626,6 +733,17 @@ const runTests = async () => {
         );
       } catch (error) {
         console.error("Organisation cleanup failed:", error);
+      }
+    }
+
+    if (otherOrganisationId) {
+      try {
+        await pool.query(
+          `DELETE FROM organisations WHERE id = $1;`,
+          [otherOrganisationId],
+        );
+      } catch (error) {
+        console.error("Other organisation cleanup failed:", error);
       }
     }
 

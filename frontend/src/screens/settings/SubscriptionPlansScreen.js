@@ -676,7 +676,6 @@ export default function SubscriptionPlansScreen({ onNavigate, onShowToast, isMul
         </View>
       </Modal>
 
-
     </ScrollView>
   );
 }

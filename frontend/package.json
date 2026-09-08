@@ -3,10 +3,11 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web"
+    "start": "node scripts/start-single-tier.js npx expo start",
+    "android": "node scripts/start-single-tier.js npx expo start --android",
+    "ios": "node scripts/start-single-tier.js npx expo start --ios",
+    "web": "node scripts/start-single-tier.js npx expo start --web",
+    "frontend-only": "expo start"
   },
   "dependencies": {
     "@expo/metro-config": "~0.18.11",

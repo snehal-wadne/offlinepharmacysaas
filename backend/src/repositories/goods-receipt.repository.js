@@ -32,12 +32,9 @@
  */
 
 const { pool } = require("../db/connection");
+const { getNextBusinessNumber } = require("./number-sequence.repository");
 
-const {
-  getCache,
-  setCache,
-  deleteCache,
-} = require("../cache/cache");
+const { getCache, setCache, deleteCache } = require("../cache/cache");
 
 const GOODS_RECEIPT_CACHE_TTL = 60;
 
@@ -52,39 +49,40 @@ const GOODS_RECEIPT_CACHE_TTL = 60;
  *
  * @returns {string} Redis cache key
  */
-const buildGoodsReceiptCacheKey = (
-  organisationId,
-  receiptId,
-) =>
+const buildGoodsReceiptCacheKey = (organisationId, receiptId) =>
   `organisation:${organisationId}:goods-receipt:${receiptId}`;
 
 /**
  * Create a goods receipt together with all receipt items.
  *
+ * Goods receipt numbers are organisation-scoped and generated
+ * using number-sequence.repository.js (sequenceType: 'GOODS_RECEIPT', prefix: 'GRN').
+ *
  * The receipt header and receipt items are inserted inside one
  * PostgreSQL transaction.
  *
- * Either the complete receipt is committed or the entire
- * operation is rolled back.
+ * If a transaction client is supplied, the caller owns the transaction.
+ * If no client is supplied, this function creates and manages its own transaction.
  *
  * @param {Object} receipt
  * @param {string} receipt.organisationId
  * @param {string} receipt.purchaseId
- * @param {string} receipt.receiptNumber
+ * @param {string|null} [receipt.receiptNumber] Optional override
  * @param {string} receipt.receivedDate
- * @param {string|null} receipt.receivedBy
- * @param {string|null} receipt.supplierInvoiceNumber
- * @param {number} receipt.packageCount
- * @param {string} receipt.status
- * @param {string|null} receipt.notes
+ * @param {string|null} [receipt.receivedBy]
+ * @param {string|null} [receipt.supplierInvoiceNumber]
+ * @param {number} [receipt.packageCount]
+ * @param {string} [receipt.status]
+ * @param {string|null} [receipt.notes]
  * @param {Array<Object>} receipt.items
+ * @param {Object|null} [receipt.client] PostgreSQL transaction client
  *
  * @returns {Object} Created goods receipt with items
  */
 const createGoodsReceipt = async ({
   organisationId,
   purchaseId,
-  receiptNumber,
+  receiptNumber = null,
   receivedDate,
   receivedBy = null,
   supplierInvoiceNumber = null,
@@ -92,16 +90,29 @@ const createGoodsReceipt = async ({
   status = "PENDING_INSPECTION",
   notes = null,
   items,
+  client = null,
 }) => {
-  const client = await pool.connect();
+  const dbClient = client || (await pool.connect());
+  const ownsTransaction = !client;
 
   try {
-    await client.query("BEGIN");
+    if (ownsTransaction) {
+      await dbClient.query("BEGIN");
+    }
+
+    const resolvedReceiptNumber =
+      receiptNumber ||
+      (await getNextBusinessNumber({
+        organisationId,
+        branchId: null,
+        sequenceType: "GOODS_RECEIPT",
+        client: dbClient,
+      }));
 
     /*
      * Create the goods receipt header first.
      */
-    const receiptResult = await client.query(
+    const receiptResult = await dbClient.query(
       `
         INSERT INTO goods_receipts (
             organisation_id,
@@ -132,7 +143,7 @@ const createGoodsReceipt = async ({
       [
         organisationId,
         purchaseId,
-        receiptNumber,
+        resolvedReceiptNumber,
         receivedDate,
         receivedBy,
         supplierInvoiceNumber,
@@ -150,7 +161,7 @@ const createGoodsReceipt = async ({
     const createdItems = [];
 
     for (const item of items) {
-      const itemResult = await client.query(
+      const itemResult = await dbClient.query(
         `
           INSERT INTO goods_receipt_items (
               goods_receipt_id,
@@ -179,7 +190,9 @@ const createGoodsReceipt = async ({
       createdItems.push(itemResult.rows[0]);
     }
 
-    await client.query("COMMIT");
+    if (ownsTransaction) {
+      await dbClient.query("COMMIT");
+    }
 
     return {
       ...receipt,
@@ -190,11 +203,15 @@ const createGoodsReceipt = async ({
      * If any part of the receipt fails, roll back the complete
      * receipt and all of its items.
      */
-    await client.query("ROLLBACK");
+    if (ownsTransaction && dbClient) {
+      await dbClient.query("ROLLBACK");
+    }
 
     throw error;
   } finally {
-    client.release();
+    if (ownsTransaction && dbClient) {
+      dbClient.release();
+    }
   }
 };
 
@@ -211,14 +228,8 @@ const createGoodsReceipt = async ({
  *
  * @returns {Object|null} Goods receipt or null
  */
-const getGoodsReceiptById = async (
-  organisationId,
-  receiptId,
-) => {
-  const cacheKey = buildGoodsReceiptCacheKey(
-    organisationId,
-    receiptId,
-  );
+const getGoodsReceiptById = async (organisationId, receiptId) => {
+  const cacheKey = buildGoodsReceiptCacheKey(organisationId, receiptId);
 
   /*
    * Redis is an optimization only.
@@ -270,10 +281,7 @@ const getGoodsReceiptById = async (
       AND gr.organisation_id = $2;
   `;
 
-  const result = await pool.query(
-    query,
-    [receiptId, organisationId],
-  );
+  const result = await pool.query(query, [receiptId, organisationId]);
 
   const receipt = result.rows[0] || null;
 
@@ -282,11 +290,7 @@ const getGoodsReceiptById = async (
    */
   if (receipt) {
     try {
-      await setCache(
-        cacheKey,
-        receipt,
-        GOODS_RECEIPT_CACHE_TTL,
-      );
+      await setCache(cacheKey, receipt, GOODS_RECEIPT_CACHE_TTL);
     } catch (cacheError) {
       console.error(
         "Cache write failed for getGoodsReceiptById:",
@@ -310,10 +314,7 @@ const getGoodsReceiptById = async (
  *
  * @returns {Object[]} Goods receipt items
  */
-const getGoodsReceiptItems = async (
-  organisationId,
-  receiptId,
-) => {
+const getGoodsReceiptItems = async (organisationId, receiptId) => {
   const query = `
     SELECT
         gri.id,
@@ -346,10 +347,7 @@ const getGoodsReceiptItems = async (
     ORDER BY p.medicine_name ASC, gri.id ASC;
   `;
 
-  const result = await pool.query(
-    query,
-    [receiptId, organisationId],
-  );
+  const result = await pool.query(query, [receiptId, organisationId]);
 
   return result.rows;
 };
@@ -410,15 +408,12 @@ const getGoodsReceiptsByPurchase = async (
     OFFSET $4;
   `;
 
-  const result = await pool.query(
-    query,
-    [
-      organisationId,
-      purchaseId,
-      limit,
-      offset,
-    ],
-  );
+  const result = await pool.query(query, [
+    organisationId,
+    purchaseId,
+    limit,
+    offset,
+  ]);
 
   return result.rows;
 };
@@ -472,14 +467,7 @@ const getGoodsReceiptsByOrganisation = async (
     OFFSET $3;
   `;
 
-  const result = await pool.query(
-    query,
-    [
-      organisationId,
-      limit,
-      offset,
-    ],
-  );
+  const result = await pool.query(query, [organisationId, limit, offset]);
 
   return result.rows;
 };
@@ -539,15 +527,12 @@ const getGoodsReceiptsByBranch = async (
     OFFSET $4;
   `;
 
-  const result = await pool.query(
-    query,
-    [
-      organisationId,
-      branchId,
-      limit,
-      offset,
-    ],
-  );
+  const result = await pool.query(query, [
+    organisationId,
+    branchId,
+    limit,
+    offset,
+  ]);
 
   return result.rows;
 };
@@ -618,15 +603,12 @@ const searchGoodsReceipts = async (
 
   const searchPattern = `%${searchTerm}%`;
 
-  const result = await pool.query(
-    query,
-    [
-      organisationId,
-      searchPattern,
-      limit,
-      offset,
-    ],
-  );
+  const result = await pool.query(query, [
+    organisationId,
+    searchPattern,
+    limit,
+    offset,
+  ]);
 
   return result.rows;
 };
@@ -652,11 +634,7 @@ const searchGoodsReceipts = async (
  *
  * @returns {Object|null} Updated goods receipt
  */
-const updateGoodsReceiptStatus = async (
-  organisationId,
-  receiptId,
-  status,
-) => {
+const updateGoodsReceiptStatus = async (organisationId, receiptId, status) => {
   const query = `
     UPDATE goods_receipts
     SET
@@ -679,28 +657,16 @@ const updateGoodsReceiptStatus = async (
         updated_at;
   `;
 
-  const result = await pool.query(
-    query,
-    [
-      status,
-      receiptId,
-      organisationId,
-    ],
-  );
+  const result = await pool.query(query, [status, receiptId, organisationId]);
 
-  const updatedReceipt =
-    result.rows[0] || null;
+  const updatedReceipt = result.rows[0] || null;
 
   /*
    * Invalidate the old cached receipt only after the database
    * update succeeds.
    */
   if (updatedReceipt) {
-    const cacheKey =
-      buildGoodsReceiptCacheKey(
-        organisationId,
-        receiptId,
-      );
+    const cacheKey = buildGoodsReceiptCacheKey(organisationId, receiptId);
 
     try {
       await deleteCache(cacheKey);
@@ -730,10 +696,7 @@ const updateGoodsReceiptStatus = async (
  *
  * @returns {boolean} True if deleted
  */
-const deleteGoodsReceipt = async (
-  organisationId,
-  receiptId,
-) => {
+const deleteGoodsReceipt = async (organisationId, receiptId) => {
   const query = `
     DELETE FROM goods_receipts
     WHERE id = $1
@@ -741,27 +704,16 @@ const deleteGoodsReceipt = async (
     RETURNING id;
   `;
 
-  const result = await pool.query(
-    query,
-    [
-      receiptId,
-      organisationId,
-    ],
-  );
+  const result = await pool.query(query, [receiptId, organisationId]);
 
-  const deleted =
-    result.rowCount > 0;
+  const deleted = result.rowCount > 0;
 
   /*
    * Remove the cached representation only when PostgreSQL
    * actually deleted the receipt.
    */
   if (deleted) {
-    const cacheKey =
-      buildGoodsReceiptCacheKey(
-        organisationId,
-        receiptId,
-      );
+    const cacheKey = buildGoodsReceiptCacheKey(organisationId, receiptId);
 
     try {
       await deleteCache(cacheKey);

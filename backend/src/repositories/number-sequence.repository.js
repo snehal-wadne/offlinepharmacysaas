@@ -64,6 +64,11 @@ const NUMBER_PREFIXES = {
   INVOICE: "INV",
   RECEIPT: "REC",
   RETURN: "RET",
+  BRANCH: "BR",
+  STAFF: "EMP",
+  PURCHASE: "PO",
+  STOCK_TRANSFER: "TR",
+  GOODS_RECEIPT: "GRN",
 };
 
 /**
@@ -75,7 +80,15 @@ const NUMBER_PREFIXES = {
  *
  * in number_sequences.
  */
-const ORGANISATION_SCOPED_TYPES = new Set(["CUSTOMER", "PRESCRIPTION"]);
+const ORGANISATION_SCOPED_TYPES = new Set([
+  "CUSTOMER",
+  "PRESCRIPTION",
+  "BRANCH",
+  "STAFF",
+  "PURCHASE",
+  "STOCK_TRANSFER",
+  "GOODS_RECEIPT",
+]);
 
 /**
  * Branch-scoped sequence types.
