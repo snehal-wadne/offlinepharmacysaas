@@ -62,7 +62,6 @@ export default function StockStatusScreen({ onNavigate, onShowToast, isMultiBran
   const [selectedItemForAction, setSelectedItemForAction] = useState(null);
   const [actionItemType, setActionItemType] = useState('low-stock');
   const [actionMenuModalOpen, setActionMenuModalOpen] = useState(false);
-  const [devGuideModalOpen, setDevGuideModalOpen] = useState(false);
 
   // Quick Toggles
   const [criticalOnly, setCriticalOnly] = useState(false);
@@ -199,10 +198,6 @@ export default function StockStatusScreen({ onNavigate, onShowToast, isMultiBran
     setActionMenuModalOpen(false);
     if (!item) return;
 
-    if (actionKey === 'dev-guide') {
-      setDevGuideModalOpen(true);
-      return;
-    }
 
     if (actionKey === 'reorder') {
       if (onShowToast) {
@@ -372,16 +367,6 @@ export default function StockStatusScreen({ onNavigate, onShowToast, isMultiBran
               </Text>
             </Pressable>
 
-            {/* Backend & DB Guide Button */}
-            <Pressable
-              onPress={() => setDevGuideModalOpen(true)}
-              style={styles.devGuideTopBtn}
-              accessibilityRole="button"
-              accessibilityLabel="Backend & DB Guide"
-            >
-              <Text style={styles.devGuideTopBtnIcon}>🔌</Text>
-              <Text style={styles.devGuideTopBtnText}>Backend & DB Guide</Text>
-            </Pressable>
           </View>
         </View>
 
@@ -766,135 +751,6 @@ export default function StockStatusScreen({ onNavigate, onShowToast, isMultiBran
                 </View>
               </Pressable>
 
-              <Pressable
-                onPress={() => handleExecuteAction('dev-guide')}
-                style={[styles.actionOptionRow, styles.actionOptionRowDev]}
-              >
-                <Text style={styles.actionOptionIcon}>🔌</Text>
-                <View style={styles.actionOptionTextCol}>
-                  <Text style={[styles.actionOptionTitle, { color: '#0F766E' }]}>
-                    Backend & Database Guide (For Developers)
-                  </Text>
-                  <Text style={styles.actionOptionDesc}>
-                    View API endpoints, JSON payloads, and DB schemas for stock alerts
-                  </Text>
-                </View>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* 2. BACKEND & DATABASE DEVELOPER GUIDE MODAL */}
-      <Modal
-        visible={devGuideModalOpen}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setDevGuideModalOpen(false)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.devGuideModalCard, isMobile && styles.devGuideModalCardMobile]}>
-            <View style={styles.devGuideModalHeader}>
-              <View style={styles.devGuideTitleRow}>
-                <View style={styles.devGuideIconBadge}>
-                  <Text style={styles.devGuideIconText}>🔌</Text>
-                </View>
-                <View>
-                  <Text style={styles.devGuideModalTitle}>Stock Alerts & Expiry Backend / DB Guide</Text>
-                  <Text style={styles.devGuideModalSubtitle}>
-                    Specification for automated PO generation and expiry write-off audit
-                  </Text>
-                </View>
-              </View>
-              <Pressable onPress={() => setDevGuideModalOpen(false)} style={styles.closeActionBtn}>
-                <Text style={styles.closeActionText}>✕</Text>
-              </Pressable>
-            </View>
-
-            <ScrollView style={styles.devGuideModalBody} showsVerticalScrollIndicator={true}>
-              <View style={styles.guideSec}>
-                <Text style={styles.guideSecTitle}>1. Required REST API Endpoints</Text>
-
-                <View style={styles.endpointCard}>
-                  <View style={styles.endpointHeader}>
-                    <View style={styles.methodPost}><Text style={styles.methodText}>POST</Text></View>
-                    <Text style={styles.endpointRoute}>/api/purchase-orders</Text>
-                  </View>
-                  <Text style={styles.endpointDesc}>
-                    Triggered by "+ Reorder" or Auto-Reorder Engine when stock drops below reorder_level.
-                  </Text>
-                  <View style={styles.codeSnippet}>
-                    <Text style={styles.codeSnippetText}>
-{`// Payload: POST /api/purchase-orders
-{
-  "supplier_name": "Cipla Ltd",
-  "branch_id": "FIT Main Campus",
-  "items": [
-    { "item_id": "stk-101", "reorder_qty": 200, "unit_cost": 4.20 }
-  ],
-  "status": "Submitted"
-}`}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.endpointCard}>
-                  <View style={styles.endpointHeader}>
-                    <View style={styles.methodPost}><Text style={styles.methodText}>POST</Text></View>
-                    <Text style={styles.endpointRoute}>/api/inventory/write-off</Text>
-                  </View>
-                  <Text style={styles.endpointDesc}>
-                    Deducts quantity for expired or damaged medicines with accounting loss reason.
-                  </Text>
-                  <View style={styles.codeSnippet}>
-                    <Text style={styles.codeSnippetText}>
-{`// Payload: POST /api/inventory/write-off
-{
-  "batch_id": "BCH-8921",
-  "reason": "EXPIRED_BATCH",
-  "quantity": 15,
-  "approved_by": "USR-102"
-}`}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.guideSec}>
-                <Text style={styles.guideSecTitle}>2. PostgreSQL Schema & Cron Query</Text>
-                <View style={styles.codeSnippet}>
-                  <Text style={styles.codeSnippetText}>
-{`-- Low stock detection query for automated reorder notification:
-SELECT 
-  i.id, i.sku, i.brand_name,
-  COALESCE(SUM(b.quantity), 0) AS current_stock,
-  i.minimum_stock, i.reorder_level
-FROM inventory_items i
-LEFT JOIN inventory_batches b ON i.id = b.item_id
-GROUP BY i.id, i.sku, i.brand_name, i.minimum_stock, i.reorder_level
-HAVING COALESCE(SUM(b.quantity), 0) <= i.reorder_level;
-
--- Write-off audit log table:
-CREATE TABLE IF NOT EXISTS stock_writeoffs (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  batch_id UUID REFERENCES inventory_batches(id),
-  quantity INT NOT NULL,
-  reason VARCHAR(100) NOT NULL,
-  loss_amount NUMERIC(10,2),
-  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-);`}
-                  </Text>
-                </View>
-              </View>
-            </ScrollView>
-
-            <View style={styles.devGuideModalFooter}>
-              <Pressable
-                onPress={() => setDevGuideModalOpen(false)}
-                style={styles.closeDevGuideModalBtn}
-              >
-                <Text style={styles.closeDevGuideModalBtnText}>Close Developer Guide</Text>
-              </Pressable>
             </View>
           </View>
         </View>

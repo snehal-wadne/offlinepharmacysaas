@@ -4,72 +4,118 @@
  * Business logic for inventory stock adjustments and batch management.
  */
 
-const { pool } = require('../db/connection');
+const { pool, isDbOnline } = require('../db/connection');
+const localStore = require('../db/localStore');
 
 const getInventory = async ({ organisationId, search, limit = 100, offset = 0 }) => {
-  if (!organisationId) {
-    throw new Error('organisationId is required');
+  if (!isDbOnline()) {
+    return localStore.getProducts(search).map((p) => ({
+      id: p.id,
+      productId: p.id,
+      medicineName: p.name,
+      brandName: p.name,
+      genericName: p.generic,
+      strength: '',
+      packSize: p.pack || '',
+      manufacturer: 'Pharma Lab',
+      supplierName: 'Direct',
+      sku: p.sku,
+      batchNo: p.batch,
+      quantity: Number(p.stock),
+      amount: `₹${parseFloat(p.mrp || 0).toFixed(2)}`,
+      branchId: 'Main Store',
+      shelfLocation: 'A-1',
+      updatedBy: 'Offline System',
+      updatedAt: 'Recently',
+    }));
   }
 
-  const query = `
-    SELECT
-      ib.id,
-      ib.batch_number AS "batchNo",
-      ib.quantity,
-      ib.mrp,
-      ib.shelf_location AS "shelfLocation",
-      ib.created_at,
-      ib.updated_at,
-      p.id AS "productId",
-      p.medicine_name AS "medicineName",
-      p.brand_name AS "brandName",
-      p.strength,
-      p.pack_size AS "packSize",
-      p.manufacturer,
-      p.sku,
-      s.name AS "supplierName",
-      b.name AS "branchName",
-      u.name AS "updatedBy"
-    FROM inventory_batches ib
-    INNER JOIN products p ON p.id = ib.product_id
-    INNER JOIN branches b ON b.id = ib.branch_id
-    INNER JOIN suppliers s ON s.id = ib.supplier_id
-    LEFT JOIN users u ON u.id = ib.updated_by
-    WHERE p.organisation_id = $1
-      ${search ? `AND (p.medicine_name ILIKE $4 OR p.brand_name ILIKE $4 OR p.sku ILIKE $4 OR ib.batch_number ILIKE $4 OR s.name ILIKE $4)` : ''}
-    ORDER BY ib.updated_at DESC, ib.created_at DESC
-    LIMIT $2 OFFSET $3;
-  `;
+  try {
+    const query = `
+      SELECT
+        ib.id,
+        ib.batch_number AS "batchNo",
+        ib.quantity,
+        ib.mrp,
+        ib.shelf_location AS "shelfLocation",
+        ib.created_at,
+        ib.updated_at,
+        p.id AS "productId",
+        p.medicine_name AS "medicineName",
+        p.brand_name AS "brandName",
+        p.strength,
+        p.pack_size AS "packSize",
+        p.manufacturer,
+        p.sku,
+        s.name AS "supplierName",
+        b.name AS "branchName",
+        u.name AS "updatedBy"
+      FROM inventory_batches ib
+      INNER JOIN products p ON p.id = ib.product_id
+      INNER JOIN branches b ON b.id = ib.branch_id
+      INNER JOIN suppliers s ON s.id = ib.supplier_id
+      LEFT JOIN users u ON u.id = ib.updated_by
+      WHERE p.organisation_id = $1
+        ${search ? `AND (p.medicine_name ILIKE $4 OR p.brand_name ILIKE $4 OR p.sku ILIKE $4 OR ib.batch_number ILIKE $4 OR s.name ILIKE $4)` : ''}
+      ORDER BY ib.updated_at DESC, ib.created_at DESC
+      LIMIT $2 OFFSET $3;
+    `;
 
-  const values = search
-    ? [organisationId, limit, offset, `%${search}%`]
-    : [organisationId, limit, offset];
+    const values = search
+      ? [organisationId, limit, offset, `%${search}%`]
+      : [organisationId, limit, offset];
 
-  const result = await pool.query(query, values);
-  return result.rows.map((row) => ({
-    id: row.id,
-    productId: row.productId,
-    medicineName: row.medicineName,
-    brandName: row.brandName,
-    genericName: row.medicineName,
-    strength: row.strength || '',
-    packSize: row.packSize || '',
-    manufacturer: row.manufacturer || '',
-    supplierName: row.supplierName || '',
-    sku: row.sku,
-    batchNo: row.batchNo,
-    quantity: Number(row.quantity),
-    amount: `₹${parseFloat(row.mrp || 0).toFixed(2)}`,
-    branchId: row.branchName || 'Main Store',
-    shelfLocation: row.shelfLocation || '',
-    updatedBy: row.updatedBy || 'Manager',
-    lastUpdated: row.updated_at
-      ? new Date(row.updated_at).toISOString().split('T')[0]
-      : new Date().toISOString().split('T')[0],
-    status: Number(row.quantity) < 50 ? 'Low Stock' : 'In Stock',
-    isActive: true,
-    rxRequired: false,
-  }));
+    const result = await pool.query(query, values);
+    return result.rows.map((row) => ({
+      id: row.id,
+      productId: row.productId,
+      medicineName: row.medicineName,
+      brandName: row.brandName,
+      genericName: row.medicineName,
+      strength: row.strength || '',
+      packSize: row.packSize || '',
+      manufacturer: row.manufacturer || '',
+      supplierName: row.supplierName || '',
+      sku: row.sku,
+      batchNo: row.batchNo,
+      quantity: Number(row.quantity),
+      amount: `₹${parseFloat(row.mrp || 0).toFixed(2)}`,
+      branchId: row.branchName || 'Main Store',
+      shelfLocation: row.shelfLocation || '',
+      updatedBy: row.updatedBy || 'Manager',
+      lastUpdated: row.updated_at
+        ? new Date(row.updated_at).toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0],
+      status: Number(row.quantity) < 50 ? 'Low Stock' : 'In Stock',
+      isActive: true,
+      rxRequired: false,
+    }));
+  } catch (err) {
+    console.warn('Inventory query failed on PostgreSQL, falling back to local store:', err.message);
+    return localStore.getProducts(search).map((p) => ({
+      id: p.id,
+      productId: p.id,
+      medicineName: p.name,
+      brandName: p.name,
+      genericName: p.generic,
+      strength: '',
+      packSize: p.pack || '',
+      manufacturer: 'Pharma Lab',
+      supplierName: 'Direct',
+      sku: p.sku,
+      batchNo: p.batch,
+      quantity: Number(p.stock),
+      amount: `₹${parseFloat(p.mrp || 0).toFixed(2)}`,
+      branchId: 'Main Store',
+      shelfLocation: 'A-1',
+      updatedBy: 'Offline System',
+      updatedAt: 'Recently',
+      lastUpdated: new Date().toISOString().split('T')[0],
+      status: Number(p.stock) < 50 ? 'Low Stock' : 'In Stock',
+      isActive: true,
+      rxRequired: false,
+    }));
+  }
 };
 
 const saveOrUpdateInventory = async (organisationId, itemData) => {

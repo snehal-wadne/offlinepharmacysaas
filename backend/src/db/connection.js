@@ -1,15 +1,10 @@
 /**
- * PostgreSQL Database Connection
+ * PostgreSQL Database Connection (Offline-First Resilient)
  *
  * Purpose:
- * This module creates and manages the PostgreSQL connection pool
- * used by the backend application.
- *
- * Other parts of the application, such as repositories, should
- * use this module instead of creating their own PostgreSQL
- * connections.
- *
- * Database structure is maintained separately in schema.sql.
+ * Manages the PostgreSQL connection pool with automatic offline detection.
+ * If PostgreSQL or the network is unavailable, the backend gracefully
+ * continues running in offline mode without crashing.
  */
 
 const { Pool } = require("pg");
@@ -17,65 +12,121 @@ require("dotenv").config();
 
 /**
  * PostgreSQL connection configuration.
- *
- * Values are read from environment variables so database
- * credentials are not hard-coded in the source code.
  */
 const dbConfig = {
-  host: process.env.DB_HOST,
+  host: process.env.DB_HOST || "localhost",
   port: Number(process.env.DB_PORT || 5432),
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_DATABASE,
+  user: process.env.DB_USER || "postgres",
+  password: process.env.DB_PASSWORD || "Snehal",
+  database: process.env.DB_DATABASE || "falah_pharmacy",
+  connectionTimeoutMillis: 3000, // Quick timeout to avoid blocking offline requests
 };
 
-/**
- * Shared PostgreSQL connection pool.
- *
- * The pool maintains reusable database connections so that
- * multiple backend requests can access PostgreSQL efficiently.
- */
 const pool = new Pool(dbConfig);
+
+// Internal state tracking
+let isOnline = false;
+let lastCheckTime = null;
+let lastError = null;
+let reconnectTimer = null;
 
 /**
  * Handle unexpected errors on idle connections in the pool.
  */
 pool.on("error", (error) => {
-  console.error("Unexpected PostgreSQL pool error:", error);
+  // Catch idle client errors so the application does not crash
+  isOnline = false;
+  lastError = error.message;
 });
 
 /**
- * Test the PostgreSQL connection.
- *
- * This function is useful during application startup or
- * development testing. It does not modify database data.
+ * Check if PostgreSQL is currently reachable.
+ * Never throws an unhandled error.
+ */
+const checkDbConnection = async () => {
+  lastCheckTime = new Date().toISOString();
+  try {
+    const client = await pool.connect();
+    try {
+      await client.query("SELECT 1;");
+      if (!isOnline) {
+        console.log("✅ PostgreSQL is ONLINE and reachable.");
+      }
+      isOnline = true;
+      lastError = null;
+      return true;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    if (isOnline) {
+      console.warn("⚠️ PostgreSQL connection lost. Running in OFFLINE local mode.");
+    }
+    isOnline = false;
+    lastError = error.message;
+    return false;
+  }
+};
+
+/**
+ * Start background reconnect watcher
+ */
+const startReconnectWatcher = (intervalMs = 20000) => {
+  if (reconnectTimer) return;
+  reconnectTimer = setInterval(async () => {
+    const wasOnline = isOnline;
+    const nowOnline = await checkDbConnection();
+    if (!wasOnline && nowOnline) {
+      console.log("🔄 PostgreSQL reconnected. Ready to synchronize offline transactions.");
+    }
+  }, intervalMs);
+
+  // Do not keep Node process alive solely for this timer
+  if (reconnectTimer.unref) {
+    reconnectTimer.unref();
+  }
+};
+
+/**
+ * Test connection during startup.
+ * Non-fatal: returns boolean instead of crashing.
  */
 const testConnection = async () => {
-  const client = await pool.connect();
+  const connected = await checkDbConnection();
+  startReconnectWatcher();
+  return connected;
+};
 
+/**
+ * Safe query executor: tries PostgreSQL if online, returns null or throws caught error
+ */
+const safeQuery = async (text, params) => {
+  if (!isOnline) {
+    return null;
+  }
   try {
-    const result = await client.query(`
-            SELECT
-                current_database() AS database_name,
-                current_user AS database_user,
-                NOW() AS current_time;
-        `);
-
-    console.log("PostgreSQL connection successful.");
-    console.log(`Database: ${result.rows[0].database_name}`);
-    console.log(`User: ${result.rows[0].database_user}`);
-    console.log(`Server time: ${result.rows[0].current_time}`);
-  } finally {
-    /*
-     * Return the connection to the pool.
-     * We do not close it here because the pool is shared
-     * by the application.
-     */
-    client.release();
+    return await pool.query(text, params);
+  } catch (err) {
+    console.warn("Query failed on PostgreSQL, marking offline:", err.message);
+    isOnline = false;
+    lastError = err.message;
+    return null;
   }
 };
 
 module.exports = {
   pool,
   testConnection,
+  checkDbConnection,
+  startReconnectWatcher,
+  safeQuery,
+  isDbOnline: () => isOnline,
+  getDbStatus: () => ({
+    online: isOnline,
+    mode: isOnline ? "online" : "offline_local",
+    lastChecked: lastCheckTime,
+    error: lastError,
+    database: process.env.DB_DATABASE || "falah_pharmacy",
+  }),
 };
+

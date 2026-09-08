@@ -21,7 +21,10 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
   const isCompact = width < 1024;
 
   // Active Session State
-  const [session, setSession] = useState(DEFAULT_REGISTER_SESSION);
+  const [session, setSession] = useState({
+    ...DEFAULT_REGISTER_SESSION,
+    expectedCash: 10780.0, // 2000 (Opening) + 8750 (Cash Sales) - 350 (Cash Refunds) + 500 (Float In) - 120 (Expenses Out)
+  });
 
   // Form State for "Open Register" (Image 1 & 2)
   const [openingBalanceInput, setOpeningBalanceInput] = useState('2000.00');
@@ -29,7 +32,7 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
 
   // Modal 1: Close Register Modal (Image 3)
   const [closeModalVisible, setCloseModalVisible] = useState(false);
-  const [countedCashInput, setCountedCashInput] = useState('10400.00');
+  const [countedCashInput, setCountedCashInput] = useState('10780.00');
   const [closingNotes, setClosingNotes] = useState('');
 
   // Modal 2: View Register History Modal
@@ -42,6 +45,37 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
   const [movementType, setMovementType] = useState('OUT'); // 'IN' | 'OUT'
   const [movementAmount, setMovementAmount] = useState('');
   const [movementReason, setMovementReason] = useState('');
+  const [movementError, setMovementError] = useState('');
+  const [lastAddedMovementId, setLastAddedMovementId] = useState(null);
+
+  // Persistent Petty Cash Movements Log for current session
+  const [pettyCashMovements, setPettyCashMovements] = useState([
+    {
+      id: 'PC-1001',
+      type: 'OUT',
+      amount: 120.0,
+      reason: 'Courier / delivery service charges',
+      time: '29 Aug 2026, 09:45 AM',
+      cashier: 'Cashier 01',
+    },
+    {
+      id: 'PC-1002',
+      type: 'IN',
+      amount: 500.0,
+      reason: 'Change float coins replenishment',
+      time: '29 Aug 2026, 10:15 AM',
+      cashier: 'Cashier 01',
+    },
+  ]);
+
+  // Calculate totals
+  const totalPettyCashIn = pettyCashMovements
+    .filter((m) => m.type === 'IN')
+    .reduce((sum, m) => sum + m.amount, 0);
+
+  const totalPettyCashOut = pettyCashMovements
+    .filter((m) => m.type === 'OUT')
+    .reduce((sum, m) => sum + m.amount, 0);
 
   // Calculate live variance in Close Modal
   const countedNum = parseFloat(countedCashInput) || 0;
@@ -58,6 +92,7 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
 
     const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const dateStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    const initialExpected = balanceNum + 8750.0 - 350.0 + totalPettyCashIn - totalPettyCashOut;
 
     setSession((prev) => ({
       ...prev,
@@ -69,13 +104,13 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
       creditSales: 1500.0,
       cashRefunds: 350.0,
       totalDiscounts: 420.0,
-      expectedCash: balanceNum + 8750.0 - 350.0,
+      expectedCash: initialExpected,
       openedAt: `${dateStr}, ${nowStr}`,
       sessionTime: 'Just started',
       notes: openingNote || 'Opening shift float recorded.',
     }));
 
-    setCountedCashInput((balanceNum + 8750.0 - 350.0).toFixed(2));
+    setCountedCashInput(initialExpected.toFixed(2));
     if (onShowToast) {
       onShowToast(`✓ Cash Register opened with float ₹${balanceNum.toFixed(2)} (CASH-01)`);
     }
@@ -100,11 +135,14 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
       openingBalance: session.openingBalance,
       cashSales: session.cashSales,
       cashRefunds: session.cashRefunds,
+      pettyCashIn: totalPettyCashIn,
+      pettyCashOut: totalPettyCashOut,
       expectedCash: session.expectedCash,
       countedCash: countedVal,
       variance: varVal,
       status: varStatus,
       notes: closingNotes || 'Shift closed and drawer reconciled.',
+      movements: [...pettyCashMovements],
     };
 
     setHistoryList([closedRecord, ...historyList]);
@@ -124,32 +162,70 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
   // Handler: Add Cash Movement (CASH-03)
   const handleAddMovement = () => {
     const amt = parseFloat(movementAmount);
-    if (!amt || amt <= 0) {
-      if (onShowToast) onShowToast('⚠️ Please enter a valid movement amount.');
+    if (!amt || amt <= 0 || isNaN(amt)) {
+      setMovementError('⚠️ Please enter a valid movement amount greater than ₹0.');
       return;
     }
-    if (!movementReason.trim()) {
-      if (onShowToast) onShowToast('⚠️ Please enter a reason for cash entry/payout.');
-      return;
-    }
+
+    // Default reason if cashier leaves it blank so it never fails to record!
+    const defaultReason = movementType === 'IN' ? 'Cash Float Addition' : 'General Store Expense';
+    const finalReason = movementReason.trim() || defaultReason;
+
+    const nowTimeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const nowDateStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+
+    const newId = `PC-${Math.floor(1000 + Math.random() * 9000)}`;
+    const newMovement = {
+      id: newId,
+      type: movementType, // 'IN' or 'OUT'
+      amount: amt,
+      reason: finalReason,
+      time: `${nowDateStr}, ${nowTimeStr}`,
+      cashier: session.openedBy || 'Cashier 01',
+      isNew: true,
+    };
+
+    setPettyCashMovements((prev) => [newMovement, ...prev]);
+    setLastAddedMovementId(newId);
 
     if (movementType === 'IN') {
       setSession((prev) => ({
         ...prev,
         expectedCash: prev.expectedCash + amt,
       }));
-      if (onShowToast) onShowToast(`✓ Added ₹${amt.toFixed(2)} cash into register.`);
+      if (onShowToast) {
+        onShowToast(`✓ Recorded Cash In: +₹${amt.toFixed(2)} (${finalReason})`);
+      }
     } else {
       setSession((prev) => ({
         ...prev,
         expectedCash: prev.expectedCash - amt,
       }));
-      if (onShowToast) onShowToast(`✓ Paid out ₹${amt.toFixed(2)} from register (${movementReason}).`);
+      if (onShowToast) {
+        onShowToast(`✓ Recorded Expense Payout: -₹${amt.toFixed(2)} (${finalReason})`);
+      }
     }
 
     setMovementAmount('');
     setMovementReason('');
+    setMovementError('');
     setCashMovementModalVisible(false);
+  };
+
+  // Handler: Delete Movement
+  const handleDeleteMovement = (id) => {
+    const item = pettyCashMovements.find((m) => m.id === id);
+    if (!item) return;
+
+    setPettyCashMovements((prev) => prev.filter((m) => m.id !== id));
+    setSession((prev) => ({
+      ...prev,
+      expectedCash: item.type === 'IN' ? prev.expectedCash - item.amount : prev.expectedCash + item.amount,
+    }));
+
+    if (onShowToast) {
+      onShowToast(`✓ Removed petty cash movement ${item.id}`);
+    }
   };
 
   return (
@@ -307,16 +383,10 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
               <Text style={styles.sectionTitle}>Sales & Payment Summary</Text>
               <View style={styles.quickHeaderActions}>
                 <Pressable
-                  onPress={() => onNavigate && onNavigate('new-sale')}
+                  onPress={() => onNavigate && onNavigate('sales')}
                   style={styles.newSaleSmallBtn}
                 >
                   <Text style={styles.newSaleSmallBtnText}>+ Start New Sale</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => setCashMovementModalVisible(true)}
-                  style={styles.pettyCashBtn}
-                >
-                  <Text style={styles.pettyCashBtnText}>± Petty Cash Entry</Text>
                 </Pressable>
               </View>
             </View>
@@ -397,6 +467,24 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
                   </Text>
                 </View>
 
+                {totalPettyCashIn > 0 && (
+                  <View style={styles.reconRow}>
+                    <Text style={styles.reconLabel}>Petty Cash In (Float Added)</Text>
+                    <Text style={[styles.reconValue, styles.reconPositive]}>
+                      +₹{totalPettyCashIn.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </Text>
+                  </View>
+                )}
+
+                {totalPettyCashOut > 0 && (
+                  <View style={styles.reconRow}>
+                    <Text style={styles.reconLabel}>Petty Cash Out (Expenses/Payouts)</Text>
+                    <Text style={[styles.reconValue, styles.reconNegative]}>
+                      -₹{totalPettyCashOut.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </Text>
+                  </View>
+                )}
+
                 <View style={styles.reconDivider} />
 
                 <View style={styles.reconTotalRow}>
@@ -434,6 +522,169 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
               </Pressable>
             </View>
           </View>
+
+          {/* Section: Petty Cash & Expense Movements Log (CASH-03) */}
+          <View style={styles.pettyCashSectionCard}>
+            <View style={[styles.pettyCashSectionHeader, isMobile && styles.pettyCashSectionHeaderMobile]}>
+              <View style={{ flex: 1 }}>
+                <View style={styles.pettyCashTitleBadgeRow}>
+                  <Text style={styles.pettyCashSectionTitle}>Petty Cash & Expense Movements Log</Text>
+                  <View style={styles.cashBadge}>
+                    <Text style={styles.cashBadgeText}>CASH-03</Text>
+                  </View>
+                </View>
+                <Text style={styles.pettyCashSectionSubtitle}>
+                  Real-time audit log of cash float additions and expense payouts for this shift
+                </Text>
+              </View>
+
+              <View style={[styles.pettyCashHeaderRight, isMobile && styles.pettyCashHeaderRightMobile]}>
+                {/* Live Movement Stat Badges */}
+                <View style={styles.pettyCashSummaryChipRow}>
+                  <View style={[styles.pettySummaryChip, styles.pettySummaryIn]}>
+                    <Text style={styles.pettySummaryChipLabel}>Cash In:</Text>
+                    <Text style={styles.pettySummaryChipValueIn}>+₹{totalPettyCashIn.toFixed(2)}</Text>
+                  </View>
+                  <View style={[styles.pettySummaryChip, styles.pettySummaryOut]}>
+                    <Text style={styles.pettySummaryChipLabel}>Expenses Out:</Text>
+                    <Text style={styles.pettySummaryChipValueOut}>-₹{totalPettyCashOut.toFixed(2)}</Text>
+                  </View>
+                </View>
+
+                <Pressable
+                  onPress={() => setCashMovementModalVisible(true)}
+                  style={({ hovered }) => [
+                    styles.recordMovementBtn,
+                    hovered && styles.recordMovementBtnHovered,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Record Movement"
+                >
+                  <Text style={styles.recordMovementBtnIcon}>±</Text>
+                  <Text style={styles.recordMovementBtnText}>+ Record Movement</Text>
+                </Pressable>
+              </View>
+            </View>
+
+            {/* Recent Addition Banner */}
+            {lastAddedMovementId && (
+              <View style={styles.justAddedBanner}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                  <Text style={{ fontSize: 16 }}>🎉</Text>
+                  <Text style={styles.justAddedBannerText}>
+                    Movement <Text style={{ fontWeight: '800' }}>{lastAddedMovementId}</Text> successfully recorded! Added as the top row below & drawer balance updated.
+                  </Text>
+                </View>
+                <Pressable onPress={() => setLastAddedMovementId(null)} style={{ padding: 4, cursor: 'pointer' }}>
+                  <Text style={{ fontSize: 12, color: '#0F766E', fontWeight: '700' }}>✕ Dismiss</Text>
+                </Pressable>
+              </View>
+            )}
+
+            {/* Table of Movements */}
+            {pettyCashMovements.length === 0 ? (
+              <View style={styles.emptyMovementsBox}>
+                <Text style={styles.emptyMovementsIcon}>🧾</Text>
+                <Text style={styles.emptyMovementsTitle}>No Cash Movements Recorded Yet</Text>
+                <Text style={styles.emptyMovementsSubtitle}>
+                  All cash float additions (cash in) and expense payouts (cash out) will be stored and logged here.
+                </Text>
+                <Pressable
+                  onPress={() => setCashMovementModalVisible(true)}
+                  style={styles.emptyRecordBtn}
+                >
+                  <Text style={styles.emptyRecordBtnText}>+ Record First Movement</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <ScrollView horizontal={true} showsHorizontalScrollIndicator={false} style={{ width: '100%' }}>
+                <View style={styles.movementsTable}>
+                  <View style={styles.movementsTableHeader}>
+                    <Text style={[styles.movementsTh, { width: 120 }]}>MOVEMENT ID</Text>
+                    <Text style={[styles.movementsTh, { width: 180 }]}>DATE & TIME</Text>
+                    <Text style={[styles.movementsTh, { width: 170 }]}>TYPE</Text>
+                    <Text style={[styles.movementsTh, { minWidth: 220, flex: 1 }]}>REASON / CATEGORY</Text>
+                    <Text style={[styles.movementsTh, { width: 120 }]}>CASHIER</Text>
+                    <Text style={[styles.movementsTh, { width: 130, textAlign: 'right' }]}>AMOUNT (₹)</Text>
+                    <Text style={[styles.movementsTh, { width: 70, textAlign: 'center' }]}>ACTION</Text>
+                  </View>
+
+                  {pettyCashMovements.map((mov, idx) => {
+                    const isIn = mov.type === 'IN';
+                    const isHighlighted = mov.id === lastAddedMovementId || mov.isNew;
+                    return (
+                      <View
+                        key={mov.id || idx}
+                        style={[
+                          styles.movementsTableRow,
+                          idx === pettyCashMovements.length - 1 && styles.movementsTableRowLast,
+                          isHighlighted && styles.movementsTableRowHighlight,
+                        ]}
+                      >
+                        <View style={{ width: 120, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={styles.movIdText}>{mov.id}</Text>
+                          {isHighlighted && (
+                            <View style={styles.justAddedBadge}>
+                              <Text style={styles.justAddedBadgeText}>NEW</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={[styles.movementsTd, { width: 180, color: '#64748B' }]}>
+                          {mov.time}
+                        </Text>
+                        <View style={{ width: 170 }}>
+                          <View
+                            style={[
+                              styles.movementTypeBadge,
+                              isIn ? styles.badgeCashIn : styles.badgeCashOut,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.movementTypeBadgeText,
+                                isIn ? styles.badgeTextCashIn : styles.badgeTextCashOut,
+                              ]}
+                            >
+                              {isIn ? '+ Cash In (Float)' : '− Cash Out (Expense)'}
+                            </Text>
+                          </View>
+                        </View>
+                        <Text style={[styles.movementsTd, { minWidth: 220, flex: 1, color: '#0F172A', fontWeight: '500' }]}>
+                          {mov.reason}
+                        </Text>
+                        <Text style={[styles.movementsTd, { width: 120, color: '#475569' }]}>
+                          {mov.cashier}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.movementsTd,
+                            {
+                              width: 130,
+                              textAlign: 'right',
+                              fontWeight: '700',
+                              color: isIn ? '#059669' : '#DC2626',
+                            },
+                          ]}
+                        >
+                          {isIn ? '+' : '-'}₹{mov.amount.toFixed(2)}
+                        </Text>
+                        <View style={{ width: 70, alignItems: 'center' }}>
+                          <Pressable
+                            onPress={() => handleDeleteMovement(mov.id)}
+                            style={styles.deleteMovBtn}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Delete movement ${mov.id}`}
+                          >
+                            <Text style={styles.deleteMovBtnText}>✕</Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              </ScrollView>
+            )}
+          </View>
         </View>
       )}
 
@@ -467,6 +718,13 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
             {/* Breakdown Rows */}
             <View style={styles.modalBreakdownSection}>
               <View style={styles.modalBreakdownRow}>
+                <Text style={styles.modalBreakdownLabel}>Opening Balance / Float</Text>
+                <Text style={styles.modalBreakdownValue}>
+                  ₹{session.openingBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </Text>
+              </View>
+
+              <View style={styles.modalBreakdownRow}>
                 <Text style={styles.modalBreakdownLabel}>Cash Sales (This Session)</Text>
                 <Text style={styles.modalBreakdownValue}>
                   ₹{session.cashSales.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
@@ -479,6 +737,24 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
                   -₹{session.cashRefunds.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                 </Text>
               </View>
+
+              {totalPettyCashIn > 0 && (
+                <View style={styles.modalBreakdownRow}>
+                  <Text style={styles.modalBreakdownLabel}>Petty Cash In (Float Added)</Text>
+                  <Text style={[styles.modalBreakdownValue, { color: '#059669', fontWeight: '600' }]}>
+                    +₹{totalPettyCashIn.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </Text>
+                </View>
+              )}
+
+              {totalPettyCashOut > 0 && (
+                <View style={styles.modalBreakdownRow}>
+                  <Text style={styles.modalBreakdownLabel}>Petty Cash Out (Expenses / Payouts)</Text>
+                  <Text style={[styles.modalBreakdownValue, styles.modalRefundsText]}>
+                    -₹{totalPettyCashOut.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </Text>
+                </View>
+              )}
 
               <View style={styles.modalBreakdownDivider} />
 
@@ -600,47 +876,56 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
                 </View>
 
                 {historyList.map((item) => (
-                  <View key={item.id} style={styles.historyTableRow}>
-                    <View style={{ flex: 1.2 }}>
-                      <Text style={styles.historySessionId}>{item.id}</Text>
-                      <Text style={styles.historyDate}>{item.date} • {item.closedAt}</Text>
-                    </View>
-                    <Text style={[styles.historyTd, { flex: 1 }]}>{item.cashier}</Text>
-                    <Text style={[styles.historyTd, { flex: 0.8 }]}>{item.shift}</Text>
-                    <Text style={[styles.historyTd, { flex: 1, textAlign: 'right' }]}>
-                      ₹{item.openingBalance.toFixed(2)}
-                    </Text>
-                    <Text style={[styles.historyTd, { flex: 1, textAlign: 'right' }]}>
-                      ₹{item.expectedCash.toFixed(2)}
-                    </Text>
-                    <Text style={[styles.historyTd, { flex: 1, textAlign: 'right', fontWeight: '700' }]}>
-                      ₹{item.countedCash.toFixed(2)}
-                    </Text>
-                    <View style={{ flex: 1, alignItems: 'center' }}>
-                      <View
-                        style={[
-                          styles.varianceBadge,
-                          item.status === 'Shortage'
-                            ? styles.varBadgeShortage
-                            : item.status === 'Overage'
-                            ? styles.varBadgeOverage
-                            : styles.varBadgeBalanced,
-                        ]}
-                      >
-                        <Text
+                  <View key={item.id}>
+                    <View style={styles.historyTableRow}>
+                      <View style={{ flex: 1.2 }}>
+                        <Text style={styles.historySessionId}>{item.id}</Text>
+                        <Text style={styles.historyDate}>{item.date} • {item.closedAt}</Text>
+                      </View>
+                      <Text style={[styles.historyTd, { flex: 1 }]}>{item.cashier}</Text>
+                      <Text style={[styles.historyTd, { flex: 0.8 }]}>{item.shift}</Text>
+                      <Text style={[styles.historyTd, { flex: 1, textAlign: 'right' }]}>
+                        ₹{item.openingBalance.toFixed(2)}
+                      </Text>
+                      <Text style={[styles.historyTd, { flex: 1, textAlign: 'right' }]}>
+                        ₹{item.expectedCash.toFixed(2)}
+                      </Text>
+                      <Text style={[styles.historyTd, { flex: 1, textAlign: 'right', fontWeight: '700' }]}>
+                        ₹{item.countedCash.toFixed(2)}
+                      </Text>
+                      <View style={{ flex: 1, alignItems: 'center' }}>
+                        <View
                           style={[
-                            styles.varianceBadgeText,
+                            styles.varianceBadge,
                             item.status === 'Shortage'
-                              ? styles.varTextShortage
+                              ? styles.varBadgeShortage
                               : item.status === 'Overage'
-                              ? styles.varTextOverage
-                              : styles.varTextBalanced,
+                              ? styles.varBadgeOverage
+                              : styles.varBadgeBalanced,
                           ]}
                         >
-                          {item.variance === 0 ? '✓ Balanced' : `${item.variance > 0 ? '+' : ''}₹${item.variance.toFixed(2)}`}
-                        </Text>
+                          <Text
+                            style={[
+                              styles.varianceBadgeText,
+                              item.status === 'Shortage'
+                                ? styles.varTextShortage
+                                : item.status === 'Overage'
+                                ? styles.varTextOverage
+                                : styles.varTextBalanced,
+                            ]}
+                          >
+                            {item.variance === 0 ? '✓ Balanced' : `${item.variance > 0 ? '+' : ''}₹${item.variance.toFixed(2)}`}
+                          </Text>
+                        </View>
                       </View>
                     </View>
+                    {item.movements && item.movements.length > 0 && (
+                      <View style={styles.historyMovementsRow}>
+                        <Text style={styles.historyMovementsSummaryText}>
+                          📋 Includes {item.movements.length} Petty Cash Movement(s): Float In: +₹{(item.pettyCashIn || 0).toFixed(2)}, Expenses: -₹{(item.pettyCashOut || 0).toFixed(2)}
+                        </Text>
+                      </View>
+                    )}
                   </View>
                 ))}
               </View>
@@ -684,7 +969,10 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
 
             <View style={styles.movementTypeSelector}>
               <Pressable
-                onPress={() => setMovementType('OUT')}
+                onPress={() => {
+                  setMovementType('OUT');
+                  setMovementError('');
+                }}
                 style={[
                   styles.movementTypeBtn,
                   movementType === 'OUT' && styles.movementTypeBtnActiveOut,
@@ -700,7 +988,10 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
                 </Text>
               </Pressable>
               <Pressable
-                onPress={() => setMovementType('IN')}
+                onPress={() => {
+                  setMovementType('IN');
+                  setMovementError('');
+                }}
                 style={[
                   styles.movementTypeBtn,
                   movementType === 'IN' && styles.movementTypeBtnActiveIn,
@@ -717,6 +1008,13 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
               </Pressable>
             </View>
 
+            {/* In-Modal Error Banner */}
+            {movementError ? (
+              <View style={styles.modalErrorBox}>
+                <Text style={styles.modalErrorText}>{movementError}</Text>
+              </View>
+            ) : null}
+
             <View style={styles.formGroup}>
               <Text style={styles.fieldLabel}>Amount (₹) *</Text>
               <View style={styles.currencyInputRow}>
@@ -724,8 +1022,12 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
                 <TextInput
                   style={styles.currencyInput}
                   value={movementAmount}
-                  onChangeText={setMovementAmount}
+                  onChangeText={(val) => {
+                    setMovementAmount(val);
+                    if (movementError) setMovementError('');
+                  }}
                   placeholder="0.00"
+                  placeholderTextColor="#94A3B8"
                   keyboardType="numeric"
                   autoFocus={true}
                 />
@@ -733,18 +1035,81 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={styles.fieldLabel}>Reason / Expense Category *</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <Text style={styles.fieldLabel}>Reason / Expense Category</Text>
+                <Text style={{ fontSize: 11, color: '#64748B' }}>
+                  {movementReason.trim() ? '✓ Reason set' : '(Optional - auto-defaults if blank)'}
+                </Text>
+              </View>
+
+              {/* Quick suggestion chips */}
+              <View style={styles.quickChipsRow}>
+                {movementType === 'IN' ? (
+                  <>
+                    {['Change Float', 'Opening Top-up', 'Bank Withdrawal', 'Cash Deposit'].map((chip) => (
+                      <Pressable
+                        key={chip}
+                        onPress={() => setMovementReason(chip)}
+                        style={[
+                          styles.quickChipBtn,
+                          movementReason === chip && styles.quickChipBtnActiveIn,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.quickChipText,
+                            movementReason === chip && styles.quickChipTextActiveIn,
+                          ]}
+                        >
+                          + {chip}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </>
+                ) : (
+                  <>
+                    {['Courier / Delivery', 'Tea & Refreshments', 'Cleaning & Supplies', 'Repairs / Misc'].map((chip) => (
+                      <Pressable
+                        key={chip}
+                        onPress={() => setMovementReason(chip)}
+                        style={[
+                          styles.quickChipBtn,
+                          movementReason === chip && styles.quickChipBtnActiveOut,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.quickChipText,
+                            movementReason === chip && styles.quickChipTextActiveOut,
+                          ]}
+                        >
+                          − {chip}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </>
+                )}
+              </View>
+
               <TextInput
                 style={styles.currencyInput}
                 value={movementReason}
                 onChangeText={setMovementReason}
-                placeholder="e.g. Courier charges, Tea/Water expenses, Change float"
+                placeholder={movementType === 'IN' ? 'e.g. Cash float addition (or leave blank for default)' : 'e.g. Courier charges (or leave blank for default)'}
+                placeholderTextColor="#94A3B8"
               />
             </View>
 
+            <Text style={styles.modalSubmitHint}>
+              💡 Entry will be logged to the Petty Cash table below and adjust drawer expected cash.
+            </Text>
+
             <View style={styles.modalFooterRow}>
               <Pressable
-                onPress={() => setCashMovementModalVisible(false)}
+                onPress={() => {
+                  setCashMovementModalVisible(false);
+                  setMovementError('');
+                }}
                 style={styles.cancelBtn}
               >
                 <Text style={styles.cancelBtnText}>Cancel</Text>
@@ -1614,5 +1979,351 @@ const styles = StyleSheet.create({
   movementTypeBtnTextActive: {
     color: '#0F172A',
     fontWeight: '800',
+  },
+
+  // PETTY CASH MOVEMENTS SECTION (CASH-03)
+  pettyCashSectionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 20,
+    marginTop: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.02,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  pettyCashSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    marginBottom: 16,
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  pettyCashSectionHeaderMobile: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+  },
+  pettyCashTitleBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  pettyCashSectionTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  cashBadge: {
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  cashBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0284C7',
+  },
+  pettyCashSectionSubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+  },
+  pettyCashHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  pettyCashHeaderRightMobile: {
+    width: '100%',
+    justifyContent: 'space-between',
+  },
+  pettyCashSummaryChipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  pettySummaryChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  pettySummaryIn: {
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  pettySummaryOut: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  pettySummaryChipLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  pettySummaryChipValueIn: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#059669',
+  },
+  pettySummaryChipValueOut: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#DC2626',
+  },
+  recordMovementBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#0F766E',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    cursor: 'pointer',
+  },
+  recordMovementBtnHovered: {
+    backgroundColor: '#115E59',
+  },
+  recordMovementBtnIcon: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  recordMovementBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  emptyMovementsBox: {
+    paddingVertical: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyMovementsIcon: {
+    fontSize: 32,
+    marginBottom: 8,
+  },
+  emptyMovementsTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#334155',
+    marginBottom: 4,
+  },
+  emptyMovementsSubtitle: {
+    fontSize: 13,
+    color: '#94A3B8',
+    textAlign: 'center',
+    maxWidth: 420,
+    marginBottom: 16,
+  },
+  emptyRecordBtn: {
+    backgroundColor: '#0F766E',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    cursor: 'pointer',
+  },
+  emptyRecordBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  movementsTable: {
+    width: '100%',
+    minWidth: 900,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  movementsTableHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  movementsTh: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+    letterSpacing: 0.5,
+  },
+  movementsTableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    backgroundColor: '#FFFFFF',
+  },
+  movementsTableRowLast: {
+    borderBottomWidth: 0,
+  },
+  movIdText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0F766E',
+    backgroundColor: '#F0FDFA',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  movementsTd: {
+    fontSize: 13,
+  },
+  movementTypeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  badgeCashIn: {
+    backgroundColor: '#ECFDF5',
+  },
+  badgeCashOut: {
+    backgroundColor: '#FEF2F2',
+  },
+  movementTypeBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  badgeTextCashIn: {
+    color: '#059669',
+  },
+  badgeTextCashOut: {
+    color: '#DC2626',
+  },
+  deleteMovBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+  },
+  deleteMovBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  historyMovementsRow: {
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  historyMovementsSummaryText: {
+    fontSize: 12,
+    color: '#0F766E',
+    fontWeight: '600',
+  },
+
+  // Highlight & Banner
+  justAddedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#6EE7B7',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 14,
+  },
+  justAddedBannerText: {
+    fontSize: 13,
+    color: '#065F46',
+    fontWeight: '600',
+  },
+  movementsTableRowHighlight: {
+    backgroundColor: '#F0FDF4',
+    borderLeftWidth: 4,
+    borderLeftColor: '#059669',
+  },
+  justAddedBadge: {
+    backgroundColor: '#059669',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  justAddedBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  modalErrorBox: {
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 14,
+  },
+  modalErrorText: {
+    color: '#991B1B',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  quickChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 8,
+  },
+  quickChipBtn: {
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    cursor: 'pointer',
+  },
+  quickChipBtnActiveIn: {
+    backgroundColor: '#CCFBF1',
+    borderColor: '#0F766E',
+  },
+  quickChipBtnActiveOut: {
+    backgroundColor: '#FEE2E2',
+    borderColor: '#DC2626',
+  },
+  quickChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  quickChipTextActiveIn: {
+    color: '#0F766E',
+    fontWeight: '700',
+  },
+  quickChipTextActiveOut: {
+    color: '#DC2626',
+    fontWeight: '700',
+  },
+  modalSubmitHint: {
+    fontSize: 11,
+    color: '#64748B',
+    lineHeight: 16,
+    marginBottom: 14,
   },
 });

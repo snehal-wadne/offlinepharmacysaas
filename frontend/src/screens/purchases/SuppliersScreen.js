@@ -39,8 +39,6 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
   const [actionMenuModalOpen, setActionMenuModalOpen] = useState(false);
   const [selectedSupplierForAction, setSelectedSupplierForAction] = useState(null);
 
-  // Developer Backend & DB Guide Modal State
-  const [devGuideModalOpen, setDevGuideModalOpen] = useState(false);
 
   // Suppliers List State
   const [suppliers, setSuppliers] = useState([]);
@@ -375,15 +373,6 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
           </Text>
         </View>
         <View style={styles.headerRightActions}>
-          <Pressable
-            onPress={() => setDevGuideModalOpen(true)}
-            style={styles.devGuideTopBtn}
-            accessibilityRole="button"
-            accessibilityLabel="Backend and Database Guide"
-          >
-            <Text style={styles.devGuideTopBtnIcon}>🔌</Text>
-            <Text style={styles.devGuideTopBtnText}>Backend & DB Guide</Text>
-          </Pressable>
 
           <Pressable
             onPress={handleOpenModalForAdd}
@@ -932,116 +921,6 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
                 </View>
               </Pressable>
 
-              {/* Option 6: Developer Guide */}
-              <Pressable
-                onPress={() => {
-                  setActionMenuModalOpen(false);
-                  setDevGuideModalOpen(true);
-                }}
-                style={[styles.actionOptionRow, styles.actionOptionRowDev]}
-              >
-                <Text style={styles.actionOptionIcon}>🔌</Text>
-                <View style={styles.actionOptionTextCol}>
-                  <Text style={[styles.actionOptionTitle, { color: '#0F766E' }]}>
-                    Backend & Database Guide (For Developers)
-                  </Text>
-                  <Text style={styles.actionOptionDesc}>
-                    Supplier REST API endpoints and PostgreSQL DDL schema
-                  </Text>
-                </View>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Developer Backend & DB Guide Modal */}
-      <Modal
-        visible={devGuideModalOpen}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setDevGuideModalOpen(false)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.devGuideModalCard, isMobile && styles.devGuideModalCardMobile]}>
-            <View style={styles.devGuideModalHeader}>
-              <View style={styles.devGuideTitleRow}>
-                <View style={styles.devGuideIconBadge}>
-                  <Text style={styles.devGuideIconText}>🔌</Text>
-                </View>
-                <View>
-                  <Text style={styles.devGuideModalTitle}>Suppliers Directory Backend Guide</Text>
-                  <Text style={styles.devGuideModalSubtitle}>
-                    Specification for Backend Engineers & DB Integrators
-                  </Text>
-                </View>
-              </View>
-              <Pressable onPress={() => setDevGuideModalOpen(false)} style={styles.closeActionBtn}>
-                <Text style={styles.closeActionText}>✕</Text>
-              </Pressable>
-            </View>
-
-            <ScrollView style={styles.devGuideModalBody}>
-              {/* Section 1 */}
-              <View style={styles.guideSec}>
-                <Text style={styles.guideSecTitle}>1. REST API Endpoints</Text>
-                <View style={styles.endpointCard}>
-                  <View style={styles.endpointHeader}>
-                    <View style={styles.methodPost}>
-                      <Text style={styles.methodText}>GET</Text>
-                    </View>
-                    <Text style={styles.endpointRoute}>/api/suppliers</Text>
-                  </View>
-                  <Text style={styles.endpointDesc}>
-                    Lists all verified pharmaceutical suppliers with GSTIN, credit balances, and active state.
-                  </Text>
-                </View>
-
-                <View style={styles.endpointCard}>
-                  <View style={styles.endpointHeader}>
-                    <View style={[styles.methodPost, { backgroundColor: '#D97706' }]}>
-                      <Text style={styles.methodText}>PATCH</Text>
-                    </View>
-                    <Text style={styles.endpointRoute}>/api/suppliers/:id/status</Text>
-                  </View>
-                  <Text style={styles.endpointDesc}>
-                    Toggles supplier Active vs Inactive state in database.
-                  </Text>
-                </View>
-              </View>
-
-              {/* Section 2 */}
-              <View style={styles.guideSec}>
-                <Text style={styles.guideSecTitle}>2. PostgreSQL Database Schema</Text>
-                <Text style={styles.guideSecDesc}>Suppliers table definition:</Text>
-                <View style={styles.codeSnippet}>
-                  <Text style={styles.codeSnippetText}>
-{`CREATE TABLE suppliers (
-  id VARCHAR(50) PRIMARY KEY, -- e.g. 'SUP-101'
-  organization_id UUID REFERENCES organizations(id),
-  company_name TEXT NOT NULL,
-  category VARCHAR(100),
-  contact_person TEXT,
-  phone VARCHAR(20) NOT NULL,
-  email TEXT,
-  city VARCHAR(100),
-  gstin VARCHAR(15), -- 15-digit GSTIN
-  balance_due NUMERIC(10,2) DEFAULT 0.00,
-  is_active BOOLEAN DEFAULT true,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);`}
-                  </Text>
-                </View>
-              </View>
-            </ScrollView>
-
-            <View style={styles.devGuideModalFooter}>
-              <Pressable
-                onPress={() => setDevGuideModalOpen(false)}
-                style={styles.closeDevGuideModalBtn}
-              >
-                <Text style={styles.closeDevGuideModalBtnText}>Done / Close Guide</Text>
-              </Pressable>
             </View>
           </View>
         </View>

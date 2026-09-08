@@ -95,64 +95,8 @@ export default function Header({
           </Pressable>
         )}
 
-        {/* Branch / Store Mode Selector: Single Shop vs Multi-Branch */}
-        {!isMobile && (
-          <View style={styles.modeSegmentContainer}>
-            <Pressable
-              onPress={() => {
-                if (isMultiBranch) {
-                  if (onSetPharmacyMode) onSetPharmacyMode(false);
-                  else if (onTogglePharmacyMode) onTogglePharmacyMode();
-                }
-              }}
-              style={[
-                styles.modeSegmentBtn,
-                !isMultiBranch && styles.modeSegmentBtnActive,
-              ]}
-              accessibilityRole="button"
-              accessibilityState={{ selected: !isMultiBranch }}
-              accessibilityLabel="Select Single Shop Mode"
-            >
-              <Text
-                style={[
-                  styles.modeSegmentText,
-                  !isMultiBranch && styles.modeSegmentTextActive,
-                ]}
-              >
-                Single Shop
-              </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => {
-                if (!isMultiBranch) {
-                  if (onSetPharmacyMode) onSetPharmacyMode(true);
-                  else if (onTogglePharmacyMode) onTogglePharmacyMode();
-                }
-              }}
-              style={[
-                styles.modeSegmentBtn,
-                isMultiBranch && styles.modeSegmentBtnActive,
-              ]}
-              accessibilityRole="button"
-              accessibilityState={{ selected: isMultiBranch }}
-              accessibilityLabel="Select Multi-Branch Mode"
-            >
-              <Text
-                style={[
-                  styles.modeSegmentText,
-                  isMultiBranch && styles.modeSegmentTextActive,
-                ]}
-              >
-                Multi-Branch
-              </Text>
-            </Pressable>
-          </View>
-        )}
-
-        {/* If in Multi-Branch mode, display Active Branch Switcher Dropdown */}
-        {isMultiBranch ? (
-          <View style={styles.branchSelectorRow}>
+        {/* Active Branch Switcher Dropdown */}
+        <View style={styles.branchSelectorRow}>
             {!isMobile && <Text style={styles.branchLabel}>Branch</Text>}
             <View style={styles.branchAnchorContainer}>
               <Pressable
@@ -208,7 +152,6 @@ export default function Header({
               )}
             </View>
           </View>
-        ) : null}
       </View>
 
       {/* Middle: Global Search Input */}
@@ -353,41 +296,6 @@ const styles = StyleSheet.create({
   chevron: {
     fontSize: 12,
     color: "#64748B",
-  },
-  modeSegmentContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F1F5F9",
-    borderRadius: 8,
-    padding: 3,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    gap: 3,
-  },
-  modeSegmentBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-    cursor: "pointer",
-  },
-  modeSegmentBtnActive: {
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#CBD5E1",
-    ...Platform.select({
-      web: {
-        boxShadow: "0 1px 3px rgba(0, 0, 0, 0.08)",
-      },
-    }),
-  },
-  modeSegmentText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#64748B",
-  },
-  modeSegmentTextActive: {
-    color: "#0F766E",
-    fontWeight: "700",
   },
   rightSection: {
     flexDirection: "row",

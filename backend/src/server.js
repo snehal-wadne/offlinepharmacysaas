@@ -15,8 +15,9 @@ const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
 
-const { pool } = require("./db/connection");
+const { pool, testConnection, isDbOnline, getDbStatus } = require("./db/connection");
 const { connectRedis, disconnectRedis } = require("./cache/redis");
+const localStore = require("./db/localStore");
 
 const app = express();
 const PORT = Number(process.env.PORT || 5000);
@@ -26,158 +27,114 @@ const PORT = Number(process.env.PORT || 5000);
  * MIDDLEWARE
  * ------------------------------------------------------------
  */
-
-/*
- * Allow requests from the frontend application.
- *
- * During development, the Expo web application normally runs
- * on a different port from the backend API, so CORS is required.
- */
 app.use(cors());
-
-/*
- * Parse incoming JSON request bodies.
- *
- * After this middleware, JSON request data is available through
- * req.body.
- */
 app.use(express.json());
 
 /**
  * ------------------------------------------------------------
- * HEALTH CHECK
+ * HEALTH & CONNECTIVITY CHECKS
  * ------------------------------------------------------------
  */
 
 /**
  * GET /health
- *
- * Basic application health check.
- *
- * This confirms that the Express server is running.
- * It does not verify database connectivity.
+ * Basic application health & offline capability status.
  */
 app.get("/health", (req, res) => {
   res.status(200).json({
     status: "OK",
+    mode: isDbOnline() ? "online" : "offline_local",
+    offlineReady: true,
+    system: "Pharmacy Billing SaaS",
+    storeStats: localStore.getStats(),
+    timestamp: new Date().toISOString(),
+  });
+});
+
+/**
+ * GET /health/db
+ * Returns database status without breaking when offline.
+ */
+app.get("/health/db", async (req, res) => {
+  const dbStatus = getDbStatus();
+  res.status(200).json({
+    status: "OK",
+    database: dbStatus.online ? "connected" : "offline_local",
+    details: dbStatus,
   });
 });
 
 /**
  * ------------------------------------------------------------
- * DATABASE HEALTH CHECK
+ * ROUTE REGISTRATION
  * ------------------------------------------------------------
  */
-
-/**
- * GET /health/db
- *
- * Checks whether the backend can currently communicate with
- * PostgreSQL.
- *
- * This is useful during development and can also be used by
- * deployment infrastructure for database connectivity checks.
- */
-app.get("/health/db", async (req, res) => {
-  try {
-    await pool.query("SELECT 1");
-
-    res.status(200).json({
-      status: "OK",
-      database: "connected",
-    });
-  } catch (error) {
-    console.error("Database health check failed:", error);
-
-    res.status(503).json({
-      status: "ERROR",
-      database: "unavailable",
-    });
-  }
-});
-
 const purchaseRoutes = require('./routes/purchase.routes');
 const goodsReceiptRoutes = require('./routes/goods-receipt.routes');
 const supplierRoutes = require('./routes/supplier.routes');
 const inventoryRoutes = require('./routes/inventory.routes');
+const cashierRoutes = require('./routes/cashier.routes');
+const syncRoutes = require('./routes/sync.routes');
+const authRoutes = require('./routes/auth.routes');
+const authController = require('./controllers/auth.controller');
 
 app.use('/api/purchases', purchaseRoutes);
 app.use('/api/goods-receipts', goodsReceiptRoutes);
 app.use('/api/suppliers', supplierRoutes);
 app.use('/api/inventory', inventoryRoutes);
-
-
+app.use('/api/cashier', cashierRoutes);
+app.use('/api/sync', syncRoutes);
+app.use('/api/auth', authRoutes);
+app.post('/api/login', authController.login);
 
 
 /**
  * ------------------------------------------------------------
- * START SERVER
+ * START SERVER (OFFLINE-FIRST INSTANT START)
  * ------------------------------------------------------------
  *
- * Verify all required infrastructure before accepting API
- * traffic.
- *
- * PostgreSQL is the application's authoritative database.
- * Redis is used as the server-side cache.
- *
- * The API should not start if either required dependency
- * cannot be initialized successfully.
+ * Starts the HTTP server IMMEDIATELY so localhost:5000 is reachable
+ * within milliseconds, then probes PostgreSQL and Redis in the background.
  */
-const startServer = async () => {
-  try {
-    // --------------------------------------------------------
-    // 1. Verify PostgreSQL
-    // --------------------------------------------------------
-    //
-    // Run a lightweight query to make sure the database is
-    // reachable before the server starts accepting requests.
-    //
-    await pool.query("SELECT 1");
+const startServer = () => {
+  console.log("=================================================");
+  console.log("  🚀 PHARMACY BILLING SAAS - BACKEND STARTING");
+  console.log("=================================================");
 
-    console.log("PostgreSQL connection successful.");
-    console.log(`Database: ${process.env.DB_DATABASE}`);
+  // 1. Start HTTP Server immediately (listen on all interfaces)
+  const server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`✨ Backend server is listening on port ${PORT}`);
+    console.log(`📡 Local Offline Engine: ACTIVE (Zero internet dependency)`);
+    console.log(`🏪 Cashier API: http://localhost:${PORT}/api/cashier`);
+    console.log(`🔄 Sync API:    http://localhost:${PORT}/api/sync`);
+    console.log(`🩺 Health API:  http://localhost:${PORT}/health`);
+    console.log("=================================================");
+  });
 
-    // --------------------------------------------------------
-    // 2. Connect to Redis
-    // --------------------------------------------------------
-    //
-    // Redis is our server-side cache. PostgreSQL remains the
-    // source of truth, but the application needs Redis
-    // available before we begin handling API traffic.
-    //
-    await connectRedis();
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`❌ Port ${PORT} is already in use by another process.`);
+      console.error(`Close the existing process on port ${PORT} or change PORT in .env`);
+    } else {
+      console.error(`❌ Server startup error:`, err.message);
+    }
+  });
 
-    // --------------------------------------------------------
-    // 3. Start the HTTP server
-    // --------------------------------------------------------
-    //
-    // Only start accepting API requests after both
-    // PostgreSQL and Redis are ready.
-    //
-    app.listen(PORT, () => {
-      console.log(`Backend server is running on port ${PORT}`);
-    });
-  } catch (error) {
-    console.error("Backend startup failed.");
-    console.error(error);
+  // 2. Probe PostgreSQL in background without blocking API
+  testConnection()
+    .then((connected) => {
+      if (connected) {
+        console.log(`✅ PostgreSQL connected: ${process.env.DB_DATABASE || 'falah_pharmacy'}`);
+      } else {
+        console.log("ℹ️  PostgreSQL offline: Running seamlessly in LocalStore offline mode.");
+      }
+    })
+    .catch(() => {});
 
-    /**
-     * Redis may already be connected if PostgreSQL succeeded
-     * but a later startup step failed.
-     *
-     * disconnectRedis() safely does nothing when Redis is
-     * already disconnected.
-     */
-    await disconnectRedis();
-
-    /**
-     * Do not start the API in a partially working state.
-     *
-     * The process manager/development environment can restart
-     * the backend after the underlying problem is fixed.
-     */
-    process.exit(1);
-  }
+  // 3. Connect Redis in background if available
+  connectRedis().catch(() => {});
 };
 
 startServer();
+
+

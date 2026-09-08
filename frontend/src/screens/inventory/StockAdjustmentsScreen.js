@@ -76,8 +76,6 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
   const [selectedItemForAction, setSelectedItemForAction] = useState(null);
   const [actionMenuModalOpen, setActionMenuModalOpen] = useState(false);
 
-  // Developer Backend & DB Guide Modal State
-  const [devGuideModalOpen, setDevGuideModalOpen] = useState(false);
 
   // Quick Quantity Adjustment Modal State
   const [adjustModalOpen, setAdjustModalOpen] = useState(false);
@@ -158,10 +156,6 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
     setActionMenuModalOpen(false);
     if (!item) return;
 
-    if (actionKey === 'dev-guide') {
-      setDevGuideModalOpen(true);
-      return;
-    }
 
     if (actionKey === 'adjust') {
       setAdjustDelta('10');
@@ -611,16 +605,6 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
               </Text>
             </Pressable>
 
-            {/* Backend & DB Guide Button */}
-            <Pressable
-              onPress={() => setDevGuideModalOpen(true)}
-              style={styles.devGuideHeaderBtn}
-              accessibilityRole="button"
-              accessibilityLabel="Backend & Database Guide"
-            >
-              <Text style={styles.devGuideHeaderBtnIcon}>🔌</Text>
-              <Text style={styles.devGuideHeaderBtnText}>Backend & DB Guide</Text>
-            </Pressable>
           </View>
         </View>
 
@@ -1181,20 +1165,6 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
                 </View>
               </Pressable>
 
-              <Pressable
-                onPress={() => handleExecuteAction('dev-guide')}
-                style={[styles.actionOptionRow, styles.actionOptionRowDev]}
-              >
-                <Text style={styles.actionOptionIcon}>🔌</Text>
-                <View style={styles.actionOptionTextCol}>
-                  <Text style={[styles.actionOptionTitle, { color: '#0F766E' }]}>
-                    Backend & Database Guide (For Developers)
-                  </Text>
-                  <Text style={styles.actionOptionDesc}>
-                    View HTTP API endpoints, JSON payloads, and SQL queries to connect backend & DB
-                  </Text>
-                </View>
-              </Pressable>
             </View>
           </View>
         </View>
@@ -1296,168 +1266,7 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
         </View>
       </Modal>
 
-      {/* 3. BACKEND & DATABASE DEVELOPER GUIDE MODAL */}
-      <Modal
-        visible={devGuideModalOpen}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setDevGuideModalOpen(false)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.devGuideModalCard, isMobile && styles.devGuideModalCardMobile]}>
-            <View style={styles.devGuideModalHeader}>
-              <View style={styles.devGuideTitleRow}>
-                <View style={styles.devGuideIconBadge}>
-                  <Text style={styles.devGuideIconText}>🔌</Text>
-                </View>
-                <View>
-                  <Text style={styles.devGuideModalTitle}>Inventory Backend & Database Integration Guide</Text>
-                  <Text style={styles.devGuideModalSubtitle}>
-                    Specification for backend team to connect APIs and PostgreSQL tables
-                  </Text>
-                </View>
-              </View>
-              <Pressable onPress={() => setDevGuideModalOpen(false)} style={styles.closeActionBtn}>
-                <Text style={styles.closeActionText}>✕</Text>
-              </Pressable>
-            </View>
 
-            <ScrollView style={styles.devGuideModalBody} showsVerticalScrollIndicator={true}>
-              {/* Section 1: Endpoints */}
-              <View style={styles.guideSec}>
-                <Text style={styles.guideSecTitle}>1. Required REST API Endpoints</Text>
-
-                <View style={styles.endpointCard}>
-                  <View style={styles.endpointHeader}>
-                    <View style={styles.methodPatch}><Text style={styles.methodText}>PATCH</Text></View>
-                    <Text style={styles.endpointRoute}>/api/inventory/:id/status</Text>
-                  </View>
-                  <Text style={styles.endpointDesc}>
-                    Triggered by the table row switch toggle. Toggles active/inactive catalog state.
-                  </Text>
-                  <View style={styles.codeSnippet}>
-                    <Text style={styles.codeSnippetText}>
-{`// Request: PATCH /api/inventory/SKU-PARA500/status
-{ "is_active": false }
-// Response: 200 OK { "status": "success", "is_active": false }`}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.endpointCard}>
-                  <View style={styles.endpointHeader}>
-                    <View style={styles.methodPost}><Text style={styles.methodText}>POST</Text></View>
-                    <Text style={styles.endpointRoute}>/api/inventory/adjustments</Text>
-                  </View>
-                  <Text style={styles.endpointDesc}>
-                    Triggered when adjusting stock quantity (+/- units) from the 3-dots action menu.
-                  </Text>
-                  <View style={styles.codeSnippet}>
-                    <Text style={styles.codeSnippetText}>
-{`// Request: POST /api/inventory/adjustments
-{
-  "item_id": "adj-stk-101",
-  "batch_no": "BCH-8921",
-  "adjustment_type": "CYCLE_COUNT",
-  "quantity_delta": 10,
-  "reason": "Physical count audit adjustment",
-  "branch_id": "BR-01",
-  "adjusted_by": "USR-102"
-}
-// Response: 200 OK { "new_quantity": 410, "movement_id": "mov-5592" }`}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-
-              {/* Section 2: PostgreSQL Schema */}
-              <View style={styles.guideSec}>
-                <Text style={styles.guideSecTitle}>2. PostgreSQL Database Schema</Text>
-                <Text style={styles.guideSecDesc}>
-                  The backend team should ensure these tables and relationships are created in PostgreSQL:
-                </Text>
-                <View style={styles.codeSnippet}>
-                  <Text style={styles.codeSnippetText}>
-{`-- Inventory Items / Master Catalog
-CREATE TABLE IF NOT EXISTS inventory_items (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
-  sku VARCHAR(50) UNIQUE NOT NULL,
-  medicine_name TEXT NOT NULL,
-  brand_name TEXT NOT NULL,
-  generic_name TEXT,
-  strength TEXT,
-  pack_size TEXT,
-  manufacturer TEXT,
-  is_active BOOLEAN DEFAULT true,
-  rx_required BOOLEAN DEFAULT false,
-  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-);
-
--- Stock Batches (Per Branch)
-CREATE TABLE IF NOT EXISTS inventory_batches (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  item_id UUID REFERENCES inventory_items(id) ON DELETE CASCADE,
-  branch_id UUID REFERENCES branches(id) ON DELETE CASCADE,
-  batch_no VARCHAR(50) NOT NULL,
-  quantity INT NOT NULL DEFAULT 0,
-  mrp_amount NUMERIC(10,2) NOT NULL,
-  expiry_date DATE NOT NULL,
-  shelf_location VARCHAR(50),
-  supplier_name TEXT,
-  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-);
-
--- Stock Movement Audit Log
-CREATE TABLE IF NOT EXISTS stock_movements (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  batch_id UUID REFERENCES inventory_batches(id) ON DELETE CASCADE,
-  type VARCHAR(50) NOT NULL, -- 'ADJUSTMENT' | 'SALE' | 'PURCHASE' | 'TRANSFER'
-  qty_delta INT NOT NULL,
-  reason TEXT,
-  user_id UUID REFERENCES users(id),
-  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-);`}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Section 3: Atomic SQL Transaction */}
-              <View style={styles.guideSec}>
-                <Text style={styles.guideSecTitle}>3. SQL Query Transaction (With Row-Level Lock)</Text>
-                <View style={styles.codeSnippet}>
-                  <Text style={styles.codeSnippetText}>
-{`-- Execute in db.js / server.js
-BEGIN;
--- 1. Row-level lock to prevent concurrent adjustment race conditions
-SELECT quantity FROM inventory_batches WHERE id = $1 FOR UPDATE;
-
--- 2. Update stock quantity
-UPDATE inventory_batches 
-SET quantity = quantity + $2, updated_at = NOW() 
-WHERE id = $1;
-
--- 3. Log movement audit entry
-INSERT INTO stock_movements (batch_id, type, qty_delta, reason, user_id) 
-VALUES ($1, $3, $2, $4, $5);
-
-COMMIT;`}
-                  </Text>
-                </View>
-              </View>
-            </ScrollView>
-
-            <View style={styles.devGuideModalFooter}>
-              <Pressable
-                onPress={() => setDevGuideModalOpen(false)}
-                style={styles.closeDevGuideModalBtn}
-              >
-                <Text style={styles.closeDevGuideModalBtnText}>Done / Close Guide</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </ScrollView>
   );
 }
