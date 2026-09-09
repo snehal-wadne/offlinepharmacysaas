@@ -11,10 +11,11 @@ import {
 import Sidebar from '../components/layout/Sidebar';
 import Header from '../components/layout/Header';
 import LoginScreen from '../screens/auth/LoginScreen';
+import { PosProvider } from '../context/PosContext';
 
-// 0. Sales & Cashier Screens (New Sale / POS, Held Bills, Returns, Cash Register)
+// 0. Sales & Cashier Screens (Sales / POS Billing, Cash Register)
+import SalesScreen from '../screens/sales/SalesScreen';
 import CashRegisterScreen from '../screens/cashier/CashRegisterScreen';
-import PosBillingScreen from '../screens/cashier/PosBillingScreen';
 import HeldBillsScreen from '../screens/cashier/HeldBillsScreen';
 import SalesReturnsScreen from '../screens/cashier/SalesReturnsScreen';
 
@@ -131,18 +132,20 @@ export default function AppNavigator() {
             isMultiBranch={isMultiBranch}
           />
         );
-      case 'cash-register':
+      case 'sales':
+      case 'new-sale':
+      case 'pos-billing':
         return (
-          <CashRegisterScreen
+          <SalesScreen
             onNavigate={handleNavigate}
             onShowToast={showToast}
             isMultiBranch={isMultiBranch}
           />
         );
-      case 'new-sale':
-      case 'pos-billing':
+      case 'cash-register':
+      case 'cashier':
         return (
-          <PosBillingScreen
+          <CashRegisterScreen
             onNavigate={handleNavigate}
             onShowToast={showToast}
             isMultiBranch={isMultiBranch}
@@ -174,18 +177,13 @@ export default function AppNavigator() {
           />
         );
       case 'stock-transfer':
-        return isMultiBranch ? (
+        return (
           <StockTransferScreen
             onNavigate={handleNavigate}
             onShowToast={showToast}
           />
-        ) : (
-          <StockAdjustmentsScreen
-            onNavigate={handleNavigate}
-            onShowToast={showToast}
-            isMultiBranch={false}
-          />
         );
+      case 'inventory':
       case 'stock-status':
       case 'low-stock-expiry':
         return (
@@ -359,8 +357,9 @@ export default function AppNavigator() {
   }
 
   return (
-    <View style={styles.appContainer}>
-      {/* 1. Fixed Left Sidebar for Desktop */}
+    <PosProvider>
+      <View style={styles.appContainer}>
+        {/* 1. Fixed Left Sidebar for Desktop */}
       {!isMobile && (
         <Sidebar
           activeItem={currentRoute}
@@ -446,6 +445,7 @@ export default function AppNavigator() {
         <View style={styles.screenContainer}>{renderScreen()}</View>
       </View>
     </View>
+    </PosProvider>
   );
 }
 

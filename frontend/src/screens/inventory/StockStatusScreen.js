@@ -755,7 +755,6 @@ export default function StockStatusScreen({ onNavigate, onShowToast, isMultiBran
           </View>
         </View>
       </Modal>
-
     </ScrollView>
   );
 }

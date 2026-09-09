@@ -65,6 +65,8 @@ export default function InventoryDashboard({ onNavigate, onShowToast }) {
       if (onNavigate) onNavigate('goods-receiving');
     } else if (id === 'create-stocktake') {
       if (onNavigate) onNavigate('inventory-reports');
+    } else if (id === 'customer-ledger') {
+      if (onNavigate) onNavigate('customer-ledger');
     }
   };
 

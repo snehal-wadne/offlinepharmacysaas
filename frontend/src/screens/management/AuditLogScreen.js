@@ -12,11 +12,7 @@ import {
 } from 'react-native';
 import InventoryStatCard from '../../components/inventory/InventoryStatCard';
 import {
-  AUDIT_KPIS,
   MOCK_AUDIT_LOGS,
-  AUDIT_ACTION_TYPES,
-  AUDIT_SEVERITY_LEVELS,
-  MOCK_BRANCHES_LIST,
 } from '../../data/managementMockData';
 
 export default function AuditLogScreen({ onShowToast, onNavigate }) {
@@ -24,11 +20,9 @@ export default function AuditLogScreen({ onShowToast, onNavigate }) {
   const isCompact = width < 1100;
   const isMobile = width < 768;
 
-  // Search & Filter State
+  // Search & KPI Filter State
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedAction, setSelectedAction] = useState('All Actions');
-  const [selectedSeverity, setSelectedSeverity] = useState('All Severities');
-  const [selectedBranch, setSelectedBranch] = useState('All Branches');
+  const [activeKpiFilter, setActiveKpiFilter] = useState('ALL'); // 'ALL' | 'CRITICAL' | 'STOCK' | 'RX' | 'SECURITY'
 
   // Audit Logs State
   const [logs, setLogs] = useState(MOCK_AUDIT_LOGS);
@@ -37,28 +31,46 @@ export default function AuditLogScreen({ onShowToast, onNavigate }) {
   const [selectedLog, setSelectedLog] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
 
-  // Filtered Logs
+  // Dynamic KPI Counts
+  const totalCount = logs.length;
+  const criticalCount = logs.filter(
+    (l) => l.severity === 'Critical' || l.actionType === 'PRICE_OVERRIDE' || l.actionType === 'BILL_CANCELLED'
+  ).length;
+  const stockCount = logs.filter(
+    (l) => l.actionType === 'STOCK_ADJUSTMENT' || l.actionType === 'STOCK_TRANSFER'
+  ).length;
+  const rxCount = logs.filter(
+    (l) => l.actionType === 'RX_APPROVED' || l.severity === 'Success'
+  ).length;
+  const securityCount = logs.filter(
+    (l) => l.actionType === 'ROLE_MODIFIED' || l.actionType === 'USER_CREATED'
+  ).length;
+
+  // Filtered Logs based on Search and Selected Interactive KPI Card
   const filteredLogs = logs.filter((log) => {
-    const q = searchQuery.toLowerCase();
+    const q = searchQuery.toLowerCase().trim();
     const matchesSearch =
+      !q ||
       log.id.toLowerCase().includes(q) ||
       log.actor.name.toLowerCase().includes(q) ||
       log.actor.role.toLowerCase().includes(q) ||
       log.actionLabel.toLowerCase().includes(q) ||
+      log.actionType.toLowerCase().includes(q) ||
       log.entityRef.toLowerCase().includes(q) ||
       (log.reason && log.reason.toLowerCase().includes(q));
 
-    const matchesAction =
-      selectedAction === 'All Actions' || log.actionType === selectedAction;
+    let matchesKpi = true;
+    if (activeKpiFilter === 'CRITICAL') {
+      matchesKpi = log.severity === 'Critical' || log.actionType === 'PRICE_OVERRIDE' || log.actionType === 'BILL_CANCELLED';
+    } else if (activeKpiFilter === 'STOCK') {
+      matchesKpi = log.actionType === 'STOCK_ADJUSTMENT' || log.actionType === 'STOCK_TRANSFER';
+    } else if (activeKpiFilter === 'RX') {
+      matchesKpi = log.actionType === 'RX_APPROVED' || log.severity === 'Success';
+    } else if (activeKpiFilter === 'SECURITY') {
+      matchesKpi = log.actionType === 'ROLE_MODIFIED' || log.actionType === 'USER_CREATED';
+    }
 
-    const matchesSeverity =
-      selectedSeverity === 'All Severities' ||
-      log.severity === selectedSeverity;
-
-    const matchesBranch =
-      selectedBranch === 'All Branches' || log.branch === selectedBranch;
-
-    return matchesSearch && matchesAction && matchesSeverity && matchesBranch;
+    return matchesSearch && matchesKpi;
   });
 
   const handleOpenDetails = (log) => {
@@ -69,9 +81,39 @@ export default function AuditLogScreen({ onShowToast, onNavigate }) {
   const handleExportLogs = () => {
     if (onShowToast) {
       onShowToast(
-        `✓ Exported ${filteredLogs.length} audit records as signed CSV / Excel report.`
+        `✓ Exported ${filteredLogs.length} audit records as signed regulatory report.`
       );
     }
+  };
+
+  const handleNavigateToSource = (log) => {
+    let targetRoute = 'dashboard';
+    const mod = (log.module || '').toLowerCase();
+    const act = (log.actionType || '').toLowerCase();
+
+    if (mod.includes('user') || act.includes('user')) {
+      targetRoute = 'users';
+    } else if (mod.includes('role') || act.includes('role') || act.includes('permission')) {
+      targetRoute = 'roles';
+    } else if (mod.includes('branch') || act.includes('branch')) {
+      targetRoute = 'branches';
+    } else if (mod.includes('stock') || mod.includes('inventory') || act.includes('stock')) {
+      targetRoute = 'stock-adjustments';
+    } else if (mod.includes('sale') || mod.includes('pos') || mod.includes('billing') || act.includes('price')) {
+      targetRoute = 'new-sale';
+    } else if (mod.includes('customer') || mod.includes('khata')) {
+      targetRoute = 'customers-patients';
+    } else if (mod.includes('purchase') || mod.includes('receiving')) {
+      targetRoute = 'purchases';
+    }
+
+    if (onNavigate) {
+      onNavigate(targetRoute);
+    }
+    if (onShowToast) {
+      onShowToast(`✓ Opened source module [${log.module}] for ${log.entityRef}`);
+    }
+    setModalVisible(false);
   };
 
   const getActionBadgeStyle = (actionType) => {
@@ -121,7 +163,7 @@ export default function AuditLogScreen({ onShowToast, onNavigate }) {
         <View style={styles.titleWrapper}>
           <Text style={styles.pageTitle}>System & Compliance Audit Log</Text>
           <Text style={styles.pageSubtitle}>
-            Immutable regulatory tracking of billing discounts, price overrides, stock write-offs, user appointments, and Schedule H prescription validations.
+            Immutable regulatory tracking of billing discounts, price overrides, stock adjustments, and permission changes.
           </Text>
         </View>
         <Pressable
@@ -135,26 +177,66 @@ export default function AuditLogScreen({ onShowToast, onNavigate }) {
         </Pressable>
       </View>
 
-      {/* 2. Top KPI Cards */}
+      {/* 2. Interactive KPI Cards (Acts as clean, visual filter controllers) */}
       <View style={[styles.kpiRow, isCompact && styles.kpiRowCompact]}>
-        {AUDIT_KPIS.map((kpi) => (
+        <View style={[styles.kpiCardWrapper, activeKpiFilter === 'ALL' && styles.kpiCardActiveRing]}>
           <InventoryStatCard
-            key={kpi.id}
-            label={kpi.label}
-            value={kpi.value}
-            subtext={kpi.subtext}
-            variant={kpi.variant}
+            label="All Activity Stream"
+            value={String(totalCount)}
+            subtext="Click to view all audit events"
+            variant="teal"
+            onPress={() => setActiveKpiFilter('ALL')}
           />
-        ))}
+        </View>
+
+        <View style={[styles.kpiCardWrapper, activeKpiFilter === 'CRITICAL' && styles.kpiCardActiveRing]}>
+          <InventoryStatCard
+            label="Critical & Overrides"
+            value={`${criticalCount} Events`}
+            subtext="Discounts, price & bill edits"
+            variant="orange"
+            onPress={() => setActiveKpiFilter('CRITICAL')}
+          />
+        </View>
+
+        <View style={[styles.kpiCardWrapper, activeKpiFilter === 'STOCK' && styles.kpiCardActiveRing]}>
+          <InventoryStatCard
+            label="Stock Movements"
+            value={`${stockCount} Batches`}
+            subtext="Adjustments & store transfers"
+            variant="blue"
+            onPress={() => setActiveKpiFilter('STOCK')}
+          />
+        </View>
+
+        <View style={[styles.kpiCardWrapper, activeKpiFilter === 'RX' && styles.kpiCardActiveRing]}>
+          <InventoryStatCard
+            label="Rx Dispensations"
+            value={`${rxCount} Validated`}
+            subtext="Schedule H prescription signs"
+            variant="green"
+            onPress={() => setActiveKpiFilter('RX')}
+          />
+        </View>
+
+        <View style={[styles.kpiCardWrapper, activeKpiFilter === 'SECURITY' && styles.kpiCardActiveRing]}>
+          <InventoryStatCard
+            label="User & Security"
+            value={`${securityCount} Roles`}
+            subtext="Permissions & staff updates"
+            variant="amber"
+            onPress={() => setActiveKpiFilter('SECURITY')}
+          />
+        </View>
       </View>
 
-      {/* 3. Search and Filter Bar */}
-      <View style={styles.filterCard}>
+      {/* 3. Clean, Sleek Search Bar (Uncluttered without messy horizontal pills) */}
+      <View style={styles.cleanSearchCard}>
         <View style={styles.searchBox}>
           <Text style={styles.searchIcon}>🔍</Text>
           <TextInput
             style={styles.searchInput}
-            placeholder="Search by Event ID, Actor, Invoice, Medicine, Batch or justification reason..."
+            placeholder="Search by Event ID, User Name, Invoice #, Medicine, Batch or justification..."
             placeholderTextColor="#94A3B8"
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -166,63 +248,28 @@ export default function AuditLogScreen({ onShowToast, onNavigate }) {
           ) : null}
         </View>
 
-        {/* Action Type Filters */}
-        <View style={styles.filterControls}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.actionTabsContainer}
-          >
-            {AUDIT_ACTION_TYPES.map((action) => {
-              const isSelected = selectedAction === action;
-              return (
-                <Pressable
-                  key={action}
-                  onPress={() => setSelectedAction(action)}
-                  style={[
-                    styles.actionTab,
-                    isSelected && styles.actionTabSelected,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.actionTabText,
-                      isSelected && styles.actionTabTextSelected,
-                    ]}
-                  >
-                    {action.replace('_', ' ')}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-
-          {/* Severity Quick Filter */}
-          <View style={styles.severityToggleGroup}>
-            {AUDIT_SEVERITY_LEVELS.map((sev) => {
-              const isSelected = selectedSeverity === sev;
-              return (
-                <Pressable
-                  key={sev}
-                  onPress={() => setSelectedSeverity(sev)}
-                  style={[
-                    styles.sevPill,
-                    isSelected && styles.sevPillSelected,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.sevPillText,
-                      isSelected && styles.sevPillTextSelected,
-                    ]}
-                  >
-                    {sev}
-                  </Text>
-                </Pressable>
-              );
-            })}
+        {/* Active Filter Notice Pill */}
+        {activeKpiFilter !== 'ALL' || searchQuery ? (
+          <View style={styles.activeFilterPillRow}>
+            <Text style={styles.activeFilterPillText}>
+              Filtering by:{' '}
+              <Text style={{ fontWeight: '800', color: '#0F766E' }}>
+                {activeKpiFilter !== 'ALL' ? activeKpiFilter : ''}{' '}
+                {searchQuery ? `"${searchQuery}"` : ''}
+              </Text>{' '}
+              ({filteredLogs.length} matches)
+            </Text>
+            <Pressable
+              onPress={() => {
+                setActiveKpiFilter('ALL');
+                setSearchQuery('');
+              }}
+              style={styles.resetKpiFilterBtn}
+            >
+              <Text style={styles.resetKpiFilterBtnText}>Show All ✕</Text>
+            </Pressable>
           </View>
-        </View>
+        ) : null}
       </View>
 
       {/* 4. Audit Log Records Table */}
@@ -246,8 +293,17 @@ export default function AuditLogScreen({ onShowToast, onNavigate }) {
             <Text style={styles.emptyIcon}>📋</Text>
             <Text style={styles.emptyTitle}>No Audit Records Found</Text>
             <Text style={styles.emptySubtitle}>
-              No events match the selected filters or search terms.
+              No events match the selected filter criteria or search query.
             </Text>
+            <Pressable
+              onPress={() => {
+                setActiveKpiFilter('ALL');
+                setSearchQuery('');
+              }}
+              style={styles.emptyResetBtn}
+            >
+              <Text style={styles.emptyResetBtnText}>Reset Filter to All</Text>
+            </Pressable>
           </View>
         ) : (
           <ScrollView horizontal showsHorizontalScrollIndicator={true}>
@@ -260,7 +316,7 @@ export default function AuditLogScreen({ onShowToast, onNavigate }) {
                 <Text style={[styles.thText, styles.colEntity]}>Target Entity / Ref</Text>
                 <Text style={[styles.thText, styles.colBranch]}>Branch Location</Text>
                 <Text style={[styles.thText, styles.colSeverity]}>Severity</Text>
-                <Text style={[styles.thText, styles.colDetails]}>Details</Text>
+                <Text style={[styles.thText, styles.colDetails]}>Actions</Text>
               </View>
 
               {/* Body */}
@@ -358,15 +414,24 @@ export default function AuditLogScreen({ onShowToast, onNavigate }) {
                       </View>
                     </View>
 
-                    {/* Details Action */}
-                    <View style={styles.colDetails}>
+                    {/* Details Action Buttons */}
+                    <View style={[styles.colDetails, styles.actionsRow]}>
                       <Pressable
                         onPress={() => handleOpenDetails(log)}
                         style={styles.viewDiffBtn}
                         accessibilityRole="button"
                         accessibilityLabel={`View Diff for ${log.id}`}
                       >
-                        <Text style={styles.viewDiffBtnText}>View Diff ➔</Text>
+                        <Text style={styles.viewDiffBtnText}>Diff ➔</Text>
+                      </Pressable>
+
+                      <Pressable
+                        onPress={() => handleNavigateToSource(log)}
+                        style={styles.openModuleBtn}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Go to source module ${log.module}`}
+                      >
+                        <Text style={styles.openModuleBtnText}>Source ↗</Text>
                       </Pressable>
                     </View>
                   </View>
@@ -507,10 +572,19 @@ export default function AuditLogScreen({ onShowToast, onNavigate }) {
               {/* Footer */}
               <View style={styles.modalFooter}>
                 <Pressable
+                  onPress={() => handleNavigateToSource(selectedLog)}
+                  style={styles.openSourceBtn}
+                >
+                  <Text style={styles.openSourceBtnText}>
+                    Go to Source Module ({selectedLog.module}) ↗
+                  </Text>
+                </Pressable>
+
+                <Pressable
                   onPress={() => setModalVisible(false)}
                   style={styles.modalCloseBtnBottom}
                 >
-                  <Text style={styles.modalCloseBtnBottomText}>Close Audit Window</Text>
+                  <Text style={styles.modalCloseBtnBottomText}>Close</Text>
                 </Pressable>
               </View>
             </View>
@@ -583,20 +657,30 @@ const styles = StyleSheet.create({
   },
   kpiRow: {
     flexDirection: 'row',
-    gap: 16,
-    marginBottom: 20,
+    gap: 12,
+    marginBottom: 16,
   },
   kpiRowCompact: {
     flexWrap: 'wrap',
   },
-  filterCard: {
+  kpiCardWrapper: {
+    flex: 1,
+    minWidth: 160,
+    borderRadius: 12,
+  },
+  kpiCardActiveRing: {
+    borderWidth: 2,
+    borderColor: '#0F766E',
+    borderRadius: 12,
+  },
+  cleanSearchCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    padding: 16,
-    marginBottom: 20,
-    gap: 14,
+    padding: 14,
+    marginBottom: 16,
+    gap: 10,
   },
   searchBox: {
     flexDirection: 'row',
@@ -625,56 +709,31 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#94A3B8',
   },
-  filterControls: {
+  activeFilterPillRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  actionTabsContainer: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  actionTab: {
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1,
+    borderColor: '#CCFBF1',
+    paddingHorizontal: 12,
     paddingVertical: 6,
-    paddingHorizontal: 12,
     borderRadius: 6,
-    backgroundColor: '#F1F5F9',
+  },
+  activeFilterPillText: {
+    fontSize: 12,
+    color: '#334155',
+  },
+  resetKpiFilterBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    backgroundColor: '#CCFBF1',
+    borderRadius: 4,
     cursor: 'pointer',
   },
-  actionTabSelected: {
-    backgroundColor: '#0F766E',
-  },
-  actionTabText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  actionTabTextSelected: {
-    color: '#FFFFFF',
-  },
-  severityToggleGroup: {
-    flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
-    padding: 3,
-    borderRadius: 8,
-  },
-  sevPill: {
-    paddingVertical: 5,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-    cursor: 'pointer',
-  },
-  sevPillSelected: {
-    backgroundColor: '#FFFFFF',
-  },
-  sevPillText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  sevPillTextSelected: {
+  resetKpiFilterBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
     color: '#0F766E',
   },
   tableCard: {
@@ -686,7 +745,7 @@ const styles = StyleSheet.create({
   },
   tableHeaderSection: {
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
@@ -714,7 +773,7 @@ const styles = StyleSheet.create({
     color: '#0F766E',
   },
   tableSubtitle: {
-    fontSize: 12.5,
+    fontSize: 12,
     color: '#64748B',
     marginTop: 2,
   },
@@ -742,11 +801,11 @@ const styles = StyleSheet.create({
   colEntity: { width: 210 },
   colBranch: { width: 180 },
   colSeverity: { width: 110 },
-  colDetails: { width: 110 },
+  colDetails: { width: 140 },
   tableRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: 12,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
@@ -780,9 +839,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   actorAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: '#F1F5F9',
     borderWidth: 1,
     borderColor: '#CBD5E1',
@@ -790,7 +849,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   actorAvatarText: {
-    fontSize: 11.5,
+    fontSize: 11,
     fontWeight: '700',
     color: '#334155',
   },
@@ -805,48 +864,44 @@ const styles = StyleSheet.create({
   actorRole: {
     fontSize: 11,
     color: '#64748B',
-    marginTop: 1,
   },
   actionBadge: {
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-    borderWidth: 1,
     alignSelf: 'flex-start',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
   },
   actionBadgeText: {
     fontSize: 10.5,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   actionSubLabel: {
-    fontSize: 11.5,
+    fontSize: 11,
     color: '#64748B',
-    marginTop: 3,
+    marginTop: 2,
   },
   entityRefText: {
     fontSize: 12.5,
-    fontWeight: '600',
-    color: '#0F172A',
-    lineHeight: 16,
+    fontWeight: '700',
+    color: '#1E293B',
   },
   moduleNameText: {
     fontSize: 11,
-    color: '#0F766E',
-    fontWeight: '500',
-    marginTop: 2,
+    color: '#64748B',
+    marginTop: 1,
   },
   branchNameText: {
     fontSize: 12,
-    color: '#334155',
-    lineHeight: 15,
+    color: '#475569',
   },
   sevBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    borderRadius: 12,
     gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
     alignSelf: 'flex-start',
   },
   sevDot: {
@@ -858,83 +913,114 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
+  actionsRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
   viewDiffBtn: {
     backgroundColor: '#F0FDFA',
     borderWidth: 1,
     borderColor: '#99F6E4',
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 5,
     cursor: 'pointer',
   },
   viewDiffBtnText: {
-    fontSize: 11.5,
+    fontSize: 11,
     fontWeight: '700',
     color: '#0F766E',
   },
+  openModuleBtn: {
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 5,
+    cursor: 'pointer',
+  },
+  openModuleBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
   emptyContainer: {
-    padding: 40,
+    padding: 36,
     alignItems: 'center',
-    justifyContent: 'center',
   },
   emptyIcon: {
-    fontSize: 40,
-    marginBottom: 10,
+    fontSize: 32,
+    marginBottom: 6,
   },
   emptyTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: '#0F172A',
   },
   emptySubtitle: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#64748B',
-    marginTop: 4,
+    marginTop: 2,
   },
+  emptyResetBtn: {
+    marginTop: 10,
+    backgroundColor: '#0F766E',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 6,
+    cursor: 'pointer',
+  },
+  emptyResetBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  // Modal styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.5)',
-    justifyContent: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
     alignItems: 'center',
+    justifyContent: 'center',
     padding: 16,
   },
   detailModalCard: {
-    width: '100%',
-    maxWidth: 760,
-    maxHeight: '90%',
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
+    width: '100%',
+    maxWidth: 680,
+    maxHeight: '90%',
     overflow: 'hidden',
   },
   modalCardMobile: {
-    maxWidth: '96%',
-    maxHeight: '94%',
+    maxWidth: '100%',
   },
   detailHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 22,
-    paddingVertical: 18,
+    padding: 18,
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
-    backgroundColor: '#FAFCFF',
   },
   detailHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
   eventBadge: {
-    backgroundColor: '#0F766E',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
+    backgroundColor: '#F0FDFA',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#99F6E4',
   },
   eventBadgeText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
     fontSize: 12,
+    fontWeight: '800',
+    color: '#0F766E',
   },
   detailTitle: {
     fontSize: 16,
@@ -942,73 +1028,69 @@ const styles = StyleSheet.create({
     color: '#0F172A',
   },
   detailSubtitle: {
-    fontSize: 12,
+    fontSize: 11.5,
     color: '#64748B',
-    marginTop: 2,
   },
   modalCloseBtn: {
-    padding: 6,
+    padding: 4,
+    cursor: 'pointer',
   },
   modalCloseText: {
-    fontSize: 18,
-    color: '#64748B',
-    fontWeight: '700',
+    fontSize: 16,
+    color: '#94A3B8',
+    fontWeight: 'bold',
   },
   detailBody: {
-    padding: 22,
+    padding: 18,
   },
   metaSummaryGrid: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
+    marginBottom: 14,
     flexWrap: 'wrap',
-    marginBottom: 16,
   },
   metaCard: {
     flex: 1,
-    minWidth: 200,
+    minWidth: 180,
     backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    padding: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: 8,
-    padding: 12,
   },
   metaLabel: {
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 10.5,
     color: '#64748B',
-    textTransform: 'uppercase',
+    fontWeight: '700',
   },
   metaVal: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '700',
     color: '#0F172A',
-    marginTop: 3,
-  },
-  metaSubVal: {
-    fontSize: 11.5,
-    color: '#64748B',
     marginTop: 2,
   },
+  metaSubVal: {
+    fontSize: 10.5,
+    color: '#94A3B8',
+    marginTop: 1,
+  },
   reasonCard: {
-    backgroundColor: '#FFFBEB',
-    borderWidth: 1,
-    borderColor: '#FDE68A',
+    backgroundColor: '#EFF6FF',
     borderRadius: 8,
-    padding: 12,
-    marginBottom: 18,
+    padding: 10,
+    marginBottom: 14,
+    borderLeftWidth: 3,
+    borderLeftColor: '#3B82F6',
   },
   reasonTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#B45309',
-    textTransform: 'uppercase',
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#1E40AF',
   },
   reasonText: {
-    fontSize: 13,
-    color: '#78350F',
-    marginTop: 4,
-    lineHeight: 18,
-    fontWeight: '500',
+    fontSize: 12,
+    color: '#1E3A8A',
+    marginTop: 2,
   },
   diffSection: {
     marginTop: 6,
@@ -1017,21 +1099,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   diffSectionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '800',
     color: '#0F172A',
   },
   diffVerifiedBadge: {
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    backgroundColor: '#F0FDF4',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     borderRadius: 4,
   },
   diffVerifiedText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
     color: '#15803D',
   },
@@ -1044,94 +1126,100 @@ const styles = StyleSheet.create({
   diffTableHeader: {
     flexDirection: 'row',
     backgroundColor: '#F8FAFC',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
   },
   diffTh: {
-    fontSize: 11.5,
+    fontSize: 11,
     fontWeight: '700',
     color: '#64748B',
-    textTransform: 'uppercase',
   },
-  diffColField: { width: '34%' },
-  diffColOld: { width: '33%' },
-  diffColNew: { width: '33%' },
   diffTableRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
+  diffColField: { flex: 1.5 },
+  diffColOld: { flex: 1.2 },
+  diffColNew: { flex: 1.2 },
   diffFieldName: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
     color: '#0F172A',
   },
   diffFieldKey: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#94A3B8',
-    marginTop: 2,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   oldValPill: {
     backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FECACA',
-    borderRadius: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 4,
+    alignSelf: 'flex-start',
   },
   oldValText: {
-    fontSize: 12,
-    color: '#B91C1C',
+    fontSize: 11,
+    color: '#DC2626',
     fontWeight: '600',
   },
   newValPill: {
     backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-    borderRadius: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 4,
+    alignSelf: 'flex-start',
   },
   newValText: {
-    fontSize: 12,
-    color: '#15803D',
+    fontSize: 11,
+    color: '#16A34A',
     fontWeight: '700',
   },
   noDiffCard: {
-    padding: 20,
     backgroundColor: '#F8FAFC',
-    borderRadius: 8,
+    borderRadius: 6,
+    padding: 14,
     alignItems: 'center',
   },
   noDiffText: {
-    fontSize: 12.5,
+    fontSize: 12,
     color: '#64748B',
   },
   modalFooter: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    paddingHorizontal: 22,
-    paddingVertical: 14,
+    justifyContent: 'space-between',
+    padding: 14,
     borderTopWidth: 1,
     borderTopColor: '#E2E8F0',
     backgroundColor: '#F8FAFC',
   },
-  modalCloseBtnBottom: {
-    paddingVertical: 8,
-    paddingHorizontal: 18,
-    borderRadius: 8,
+  openSourceBtn: {
     backgroundColor: '#0F766E',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 6,
+    cursor: 'pointer',
+  },
+  openSourceBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  modalCloseBtnBottom: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
     cursor: 'pointer',
   },
   modalCloseBtnBottomText: {
-    color: '#FFFFFF',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
+    color: '#475569',
   },
 });

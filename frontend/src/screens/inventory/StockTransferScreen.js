@@ -37,7 +37,6 @@ export default function StockTransferScreen({ onShowToast }) {
   // Transfers List State
   const [transfers, setTransfers] = useState(MOCK_TRANSFERS);
 
-  // 3-Dots Action Menu & Backend Dev Guide Modal State
   const [selectedTransferForAction, setSelectedTransferForAction] = useState(null);
   const [actionMenuOpen, setActionMenuOpen] = useState(false);
 
@@ -623,7 +622,6 @@ export default function StockTransferScreen({ onShowToast }) {
           </View>
         </View>
       </Modal>
-
     </ScrollView>
   );
 }

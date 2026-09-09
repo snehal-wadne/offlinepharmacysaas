@@ -7,17 +7,21 @@ import {
   StyleSheet,
   Platform,
 } from 'react-native';
+import { usePos } from '../../context/PosContext';
 
 const SALES_SUBITEMS = [
-  { title: 'New Sale', key: 'new-sale', icon: '🛍️' },
-  { title: 'Held Bills', key: 'held-bills', icon: '⏸️' },
+  { title: 'New Sale', key: 'new-sale', icon: '⚡' },
+  { title: 'Hold Bill', key: 'held-bills', icon: '⏸️', hasBadge: true },
   { title: 'Returns', key: 'sales-returns', icon: '🔄' },
+];
+
+const CASHIER_SUBITEMS = [
   { title: 'Cash Register', key: 'cash-register', icon: '🗄️' },
 ];
 
 const ALL_INVENTORY_SUBITEMS = [
   { title: 'Stock Adjustments', key: 'stock-adjustments', icon: '📝' },
-  { title: 'Stock Transfer', key: 'stock-transfer', multiOnly: true, icon: '🔄' },
+  { title: 'Stock Transfer', key: 'stock-transfer', icon: '🔄' },
   { title: 'Stock Status', key: 'stock-status', icon: '⚠️' },
 ];
 
@@ -67,10 +71,16 @@ export default function Sidebar({
     roleName.includes('admin') ||
     accessLevel.includes('admin');
 
-  // Filter inventory subitems conditionally based on Single-Shop vs Multi-Branch
-  const inventorySubItems = ALL_INVENTORY_SUBITEMS.filter(
-    (item) => !item.multiOnly || isMultiBranch
-  );
+  let heldCount = 6;
+  try {
+    const posCtx = usePos();
+    if (posCtx && posCtx.heldBills) {
+      heldCount = posCtx.heldBills.length;
+    }
+  } catch (e) {}
+
+  // Inventory subitems (Stock Adjustments, Stock Transfer, Stock Status)
+  const inventorySubItems = ALL_INVENTORY_SUBITEMS;
 
   const settingsSubItems = SETTINGS_SUBITEMS.filter(
     (item) => !item.adminOnly || isAdmin
@@ -78,8 +88,17 @@ export default function Sidebar({
 
   const isSalesActive =
     SALES_SUBITEMS.some((item) => item.key === activeItem) ||
-    activeItem === 'pos-billing';
-  const isInventoryActive = inventorySubItems.some((item) => item.key === activeItem);
+    activeItem === 'sales' ||
+    activeItem === 'pos-billing' ||
+    activeItem === 'new-sale' ||
+    activeItem === 'held-bills' ||
+    activeItem === 'sales-returns' ||
+    activeItem === 'returns';
+  const isCashierActive = activeItem === 'cash-register';
+  const isInventoryActive =
+    inventorySubItems.some((item) => item.key === activeItem) ||
+    activeItem === 'inventory' ||
+    activeItem === 'low-stock-expiry';
   const isPurchasesActive = PURCHASES_SUBITEMS.some((item) => item.key === activeItem);
   const isCustomersActive = CUSTOMERS_SUBITEMS.some((item) => item.key === activeItem);
   const isManagementActive =
@@ -93,6 +112,7 @@ export default function Sidebar({
 
   // Default all sections to expanded, EXCEPT Management which is collapsed by default
   const [salesExpanded, setSalesExpanded] = useState(true);
+  const [cashierExpanded, setCashierExpanded] = useState(true);
   const [inventoryExpanded, setInventoryExpanded] = useState(true);
   const [purchasesExpanded, setPurchasesExpanded] = useState(true);
   const [customersExpanded, setCustomersExpanded] = useState(true);
@@ -118,6 +138,11 @@ export default function Sidebar({
   useEffect(() => {
     if (isSalesActive) setSalesExpanded(true);
   }, [activeItem, isSalesActive]);
+
+  // Ensure sections stay expanded when navigated
+  useEffect(() => {
+    if (isCashierActive) setCashierExpanded(true);
+  }, [activeItem, isCashierActive]);
 
   useEffect(() => {
     if (isInventoryActive) setInventoryExpanded(true);
@@ -153,6 +178,12 @@ export default function Sidebar({
     setSalesExpanded(!salesExpanded);
   };
 
+  const handleCashierClick = () => {
+    if (onNavigate) {
+      onNavigate('cash-register');
+    }
+  };
+
   const handleInventoryClick = () => {
     setInventoryExpanded(!inventoryExpanded);
   };
@@ -185,11 +216,11 @@ export default function Sidebar({
       {!isMobile && (
         <View style={styles.brandContainer}>
           <View style={styles.logoBadge}>
-            <Text style={styles.logoBadgeText}>PF</Text>
+            <Text style={styles.logoBadgeText}>+</Text>
           </View>
           <View style={styles.brandTextContainer}>
-            <Text style={styles.brandTitle}>PharmaFlow</Text>
-            <Text style={styles.brandSubtitle}>Pharmacy Billing & ERP</Text>
+            <Text style={styles.brandTitle}>FALAH</Text>
+            <Text style={styles.brandSubtitle}>PHARMACY POS</Text>
           </View>
         </View>
       )}
@@ -224,7 +255,7 @@ export default function Sidebar({
         {/* Section Divider */}
         <View style={styles.sectionDivider} />
 
-        {/* 1.5 Sales & Cashier Section */}
+        {/* 2. Sales Section (Expandable - New Sale, Held Bills, Refunds) */}
         <View style={styles.expandableSection}>
           <Pressable
             onPress={handleSalesClick}
@@ -233,7 +264,7 @@ export default function Sidebar({
               isSalesActive && styles.expandableHeaderSelected,
             ]}
             accessibilityRole="button"
-            accessibilityLabel="Sales & Cashier Menu"
+            accessibilityLabel="Sales Menu"
           >
             <Text
               style={[
@@ -241,7 +272,7 @@ export default function Sidebar({
                 isSalesActive && styles.expandableTextSelected,
               ]}
             >
-              Sales & Cashier
+              Sales
             </Text>
             <Text
               style={[
@@ -253,13 +284,11 @@ export default function Sidebar({
             </Text>
           </Pressable>
 
-          {/* Sales Submenu */}
+          {/* Submenu: New Sale, Hold Bill, Returns */}
           {salesExpanded && (
             <View style={styles.submenuContainer}>
               {SALES_SUBITEMS.map((subItem) => {
-                const isActive =
-                  activeItem === subItem.key ||
-                  (subItem.key === 'new-sale' && activeItem === 'pos-billing');
+                const isActive = activeItem === subItem.key;
                 return (
                   <Pressable
                     key={subItem.key}
@@ -276,16 +305,43 @@ export default function Sidebar({
                       style={[
                         styles.subNavText,
                         isActive && styles.subNavTextActive,
+                        { flex: 1 },
                       ]}
                     >
                       {subItem.title}
                     </Text>
+                    {subItem.hasBadge && heldCount > 0 ? (
+                      <View style={styles.orangeBadge}>
+                        <Text style={styles.orangeBadgeText}>{heldCount}</Text>
+                      </View>
+                    ) : null}
                   </Pressable>
                 );
               })}
             </View>
           )}
         </View>
+
+        {/* 3. Cashier (Cash Register Only) */}
+        <Pressable
+          onPress={handleCashierClick}
+          style={[
+            styles.mainNavItem,
+            isCashierActive && styles.mainNavItemActive,
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Cashier (Cash Register)"
+        >
+          {isCashierActive && <View style={styles.activeIndicator} />}
+          <Text
+            style={[
+              styles.mainNavText,
+              isCashierActive && styles.mainNavTextActive,
+            ]}
+          >
+            Cashier
+          </Text>
+        </Pressable>
 
         {/* 2. Inventory Section (Dynamic subitems) */}
         <View style={styles.expandableSection}>
@@ -654,10 +710,14 @@ export default function Sidebar({
         </View>
       </ScrollView>
 
-      {/* Footer Clock Badge */}
+      {/* Footer Status Badge (Matches Screenshot 1) */}
       <View style={styles.sidebarFooter}>
-        <View style={styles.timeBadge}>
-          <Text style={styles.timeBadgeText}>{currentTime || '12:42 PM'}</Text>
+        <View style={styles.onlineStatusRow}>
+          <View style={styles.onlineDot} />
+          <View>
+            <Text style={styles.onlineStatusText}>Online</Text>
+            <Text style={styles.lastSyncText}>Last sync: Just now</Text>
+          </View>
         </View>
       </View>
     </View>
@@ -710,23 +770,24 @@ const styles = StyleSheet.create({
   },
   logoBadgeText: {
     color: '#FFFFFF',
-    fontSize: 15,
+    fontSize: 20,
     fontWeight: '800',
-    letterSpacing: 0.5,
+    marginTop: -2,
   },
   brandTextContainer: {
     flexDirection: 'column',
   },
   brandTitle: {
     fontSize: 15,
-    fontWeight: '700',
-    color: '#0F172A',
-    letterSpacing: -0.2,
+    fontWeight: '800',
+    color: '#0F766E',
+    letterSpacing: 0.5,
   },
   brandSubtitle: {
-    fontSize: 10.5,
-    fontWeight: '500',
+    fontSize: 10,
+    fontWeight: '700',
     color: '#64748B',
+    letterSpacing: 0.5,
     marginTop: 1,
   },
   navScroll: {
@@ -785,14 +846,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 8,
     cursor: 'pointer',
-    backgroundColor: 'transparent',
   },
   expandableHeaderSelected: {
     backgroundColor: 'transparent',
   },
   expandableTextSelected: {
-    color: '#0F766E',
-    fontWeight: '700',
+    color: '#0F172A',
+    fontWeight: '800',
   },
   chevronText: {
     fontSize: 12,
@@ -809,6 +869,7 @@ const styles = StyleSheet.create({
   subNavItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingVertical: 8.5,
     paddingHorizontal: 12,
     borderRadius: 6,
@@ -818,7 +879,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   subNavItemActive: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#F0FDFA',
   },
   subActiveIndicator: {
     position: 'absolute',
@@ -838,23 +899,43 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0F766E',
   },
+  orangeBadge: {
+    backgroundColor: '#F59E0B',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  orangeBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+  },
   sidebarFooter: {
     padding: 16,
     borderTopWidth: 1,
     borderTopColor: '#E2E8F0',
-    alignItems: 'center',
   },
-  timeBadge: {
-    backgroundColor: '#EEF2F6',
-    borderRadius: 6,
-    paddingVertical: 7,
-    paddingHorizontal: 14,
-    width: '100%',
+  onlineStatusRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
   },
-  timeBadgeText: {
+  onlineDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: '#10B981',
+  },
+  onlineStatusText: {
     fontSize: 12.5,
     fontWeight: '700',
-    color: '#334155',
+    color: '#0F172A',
+  },
+  lastSyncText: {
+    fontSize: 10.5,
+    color: '#64748B',
   },
 });
