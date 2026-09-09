@@ -15,10 +15,12 @@
  *
  * PostgreSQL remains the source of truth.
  * Redis is used only as a short-lived read cache.
+ * Transaction clients bypass the Redis cache to ensure read-your-own-writes consistency.
  */
 
 const { pool } = require("../db/connection");
 const { getCache, setCache, deleteCache } = require("../cache/cache");
+const { PERMISSION_DOMAINS } = require("../db/permission-catalogue");
 
 const PERMISSION_CACHE_TTL = 60;
 
@@ -37,10 +39,11 @@ const PERMISSION_ALL_CACHE_KEY = "permission:all";
  * @param {Object} data
  * @param {string} data.name
  * @param {string} data.description
+ * @param {Object} [client=pool]
  *
- * @returns {Object} Created permission
+ * @returns {Promise<Object>} Created permission
  */
-const createPermission = async ({ name, description }) => {
+const createPermission = async ({ name, description }, client = pool) => {
   const query = `
     INSERT INTO permissions (
       name,
@@ -55,14 +58,14 @@ const createPermission = async ({ name, description }) => {
       updated_at;
   `;
 
-  const result = await pool.query(query, [name, description]);
+  const result = await client.query(query, [name, description]);
 
   const permission = result.rows[0];
 
   try {
     await deleteCache(PERMISSION_ALL_CACHE_KEY);
   } catch (error) {
-    console.error("Permission list cache invalidation failed:", error);
+    console.error("Permission list cache invalidation failed:", error.message);
   }
 
   return permission;
@@ -72,20 +75,24 @@ const createPermission = async ({ name, description }) => {
  * Get a permission by its ID.
  *
  * @param {string} permissionId
+ * @param {Object} [client=pool]
  *
- * @returns {Object|null} Permission or null if not found
+ * @returns {Promise<Object|null>} Permission or null if not found
  */
-const getPermissionById = async (permissionId) => {
+const getPermissionById = async (permissionId, client = pool) => {
   const cacheKey = buildPermissionCacheKey(permissionId);
+  const useCache = client === pool;
 
-  try {
-    const cachedPermission = await getCache(cacheKey);
+  if (useCache) {
+    try {
+      const cachedPermission = await getCache(cacheKey);
 
-    if (cachedPermission !== null) {
-      return cachedPermission;
+      if (cachedPermission !== null) {
+        return cachedPermission;
+      }
+    } catch (error) {
+      console.error("Permission cache read failed:", error.message);
     }
-  } catch (error) {
-    console.error("Permission cache read failed:", error);
   }
 
   const query = `
@@ -99,15 +106,15 @@ const getPermissionById = async (permissionId) => {
     WHERE id = $1;
   `;
 
-  const result = await pool.query(query, [permissionId]);
+  const result = await client.query(query, [permissionId]);
 
   const permission = result.rows[0] || null;
 
-  if (permission) {
+  if (useCache && permission) {
     try {
       await setCache(cacheKey, permission, PERMISSION_CACHE_TTL);
     } catch (error) {
-      console.error("Permission cache write failed:", error);
+      console.error("Permission cache write failed:", error.message);
     }
   }
 
@@ -118,20 +125,24 @@ const getPermissionById = async (permissionId) => {
  * Get a permission by its unique name.
  *
  * @param {string} name
+ * @param {Object} [client=pool]
  *
- * @returns {Object|null} Permission or null if not found
+ * @returns {Promise<Object|null>} Permission or null if not found
  */
-const getPermissionByName = async (name) => {
+const getPermissionByName = async (name, client = pool) => {
   const cacheKey = buildPermissionNameCacheKey(name);
+  const useCache = client === pool;
 
-  try {
-    const cachedPermission = await getCache(cacheKey);
+  if (useCache) {
+    try {
+      const cachedPermission = await getCache(cacheKey);
 
-    if (cachedPermission !== null) {
-      return cachedPermission;
+      if (cachedPermission !== null) {
+        return cachedPermission;
+      }
+    } catch (error) {
+      console.error("Permission name cache read failed:", error.message);
     }
-  } catch (error) {
-    console.error("Permission name cache read failed:", error);
   }
 
   const query = `
@@ -145,15 +156,15 @@ const getPermissionByName = async (name) => {
     WHERE name = $1;
   `;
 
-  const result = await pool.query(query, [name]);
+  const result = await client.query(query, [name]);
 
   const permission = result.rows[0] || null;
 
-  if (permission) {
+  if (useCache && permission) {
     try {
       await setCache(cacheKey, permission, PERMISSION_CACHE_TTL);
     } catch (error) {
-      console.error("Permission name cache write failed:", error);
+      console.error("Permission name cache write failed:", error.message);
     }
   }
 
@@ -165,17 +176,23 @@ const getPermissionByName = async (name) => {
  *
  * Permissions are global, so no organisation ID is required.
  *
- * @returns {Array} All permissions
+ * @param {Object} [client=pool]
+ *
+ * @returns {Promise<Array>} All permissions
  */
-const getAllPermissions = async () => {
-  try {
-    const cachedPermissions = await getCache(PERMISSION_ALL_CACHE_KEY);
+const getAllPermissions = async (client = pool) => {
+  const useCache = client === pool;
 
-    if (cachedPermissions !== null) {
-      return cachedPermissions;
+  if (useCache) {
+    try {
+      const cachedPermissions = await getCache(PERMISSION_ALL_CACHE_KEY);
+
+      if (cachedPermissions !== null) {
+        return cachedPermissions;
+      }
+    } catch (error) {
+      console.error("All permissions cache read failed:", error.message);
     }
-  } catch (error) {
-    console.error("All permissions cache read failed:", error);
   }
 
   const query = `
@@ -189,17 +206,93 @@ const getAllPermissions = async () => {
     ORDER BY name ASC;
   `;
 
-  const result = await pool.query(query);
+  const result = await client.query(query);
 
   const permissions = result.rows;
 
-  try {
-    await setCache(PERMISSION_ALL_CACHE_KEY, permissions, PERMISSION_CACHE_TTL);
-  } catch (error) {
-    console.error("All permissions cache write failed:", error);
+  if (useCache && permissions) {
+    try {
+      await setCache(
+        PERMISSION_ALL_CACHE_KEY,
+        permissions,
+        PERMISSION_CACHE_TTL,
+      );
+    } catch (error) {
+      console.error("All permissions cache write failed:", error.message);
+    }
   }
 
   return permissions;
+};
+
+/**
+ * Get permissions matching a list of unique names.
+ *
+ * @param {Array<string>} names
+ * @param {Object} [client=pool]
+ *
+ * @returns {Promise<Array>} Matching permissions
+ */
+const getPermissionsByNames = async (names, client = pool) => {
+  if (!names || names.length === 0) {
+    return [];
+  }
+
+  const query = `
+    SELECT
+      id,
+      name,
+      description,
+      created_at,
+      updated_at
+    FROM permissions
+    WHERE name = ANY($1::varchar[])
+    ORDER BY name ASC;
+  `;
+
+  const result = await client.query(query, [names]);
+  return result.rows;
+};
+
+/**
+ * Get permissions grouped by their functional domain for dashboard UI display.
+ *
+ * @param {Object} [client=pool]
+ *
+ * @returns {Promise<Object>} Object whose keys are domain names and values are permission arrays
+ */
+const getPermissionsGrouped = async (client = pool) => {
+  const allPermissions = await getAllPermissions(client);
+  const permMap = new Map(allPermissions.map((p) => [p.name, p]));
+
+  const grouped = {};
+  for (const [domain, permNames] of Object.entries(PERMISSION_DOMAINS)) {
+    grouped[domain] = permNames
+      .map((name) => {
+        const found = permMap.get(name);
+        return found ? { ...found, domain } : null;
+      })
+      .filter(Boolean);
+  }
+
+  return grouped;
+};
+
+/**
+ * Get permissions filtered by a specific domain.
+ *
+ * @param {string} domain
+ * @param {Object} [client=pool]
+ *
+ * @returns {Promise<Array>} Array of permissions in the given domain
+ */
+const getPermissionsByDomain = async (domain, client = pool) => {
+  const domainPermNames = PERMISSION_DOMAINS[domain];
+  if (!domainPermNames || domainPermNames.length === 0) {
+    return [];
+  }
+
+  return await getPermissionsByNames(domainPermNames, client);
 };
 
 /**
@@ -212,11 +305,16 @@ const getAllPermissions = async () => {
  * @param {Object} data
  * @param {string} data.name
  * @param {string} data.description
+ * @param {Object} [client=pool]
  *
- * @returns {Object|null} Updated permission
+ * @returns {Promise<Object|null>} Updated permission
  */
-const updatePermission = async (permissionId, { name, description }) => {
-  const existingPermission = await getPermissionById(permissionId);
+const updatePermission = async (
+  permissionId,
+  { name, description },
+  client = pool,
+) => {
+  const existingPermission = await getPermissionById(permissionId, client);
 
   const query = `
     UPDATE permissions
@@ -233,7 +331,7 @@ const updatePermission = async (permissionId, { name, description }) => {
       updated_at;
   `;
 
-  const result = await pool.query(query, [name, description, permissionId]);
+  const result = await client.query(query, [name, description, permissionId]);
 
   const permission = result.rows[0] || null;
 
@@ -253,7 +351,7 @@ const updatePermission = async (permissionId, { name, description }) => {
 
       await Promise.all(keys);
     } catch (error) {
-      console.error("Permission cache invalidation failed:", error);
+      console.error("Permission cache invalidation failed:", error.message);
     }
   }
 
@@ -267,11 +365,12 @@ const updatePermission = async (permissionId, { name, description }) => {
  * cache entries can be invalidated after deletion.
  *
  * @param {string} permissionId
+ * @param {Object} [client=pool]
  *
- * @returns {boolean} True if the permission was deleted
+ * @returns {Promise<boolean>} True if the permission was deleted
  */
-const deletePermission = async (permissionId) => {
-  const existingPermission = await getPermissionById(permissionId);
+const deletePermission = async (permissionId, client = pool) => {
+  const existingPermission = await getPermissionById(permissionId, client);
 
   const query = `
     DELETE FROM permissions
@@ -279,7 +378,7 @@ const deletePermission = async (permissionId) => {
     RETURNING id;
   `;
 
-  const result = await pool.query(query, [permissionId]);
+  const result = await client.query(query, [permissionId]);
 
   if (result.rowCount > 0 && existingPermission) {
     try {
@@ -289,7 +388,7 @@ const deletePermission = async (permissionId) => {
         deleteCache(PERMISSION_ALL_CACHE_KEY),
       ]);
     } catch (error) {
-      console.error("Permission cache invalidation failed:", error);
+      console.error("Permission cache invalidation failed:", error.message);
     }
   }
 
@@ -301,6 +400,9 @@ module.exports = {
   getPermissionById,
   getPermissionByName,
   getAllPermissions,
+  getPermissionsByNames,
+  getPermissionsGrouped,
+  getPermissionsByDomain,
   updatePermission,
   deletePermission,
 };

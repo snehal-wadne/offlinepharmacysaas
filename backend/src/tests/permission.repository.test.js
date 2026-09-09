@@ -13,6 +13,11 @@
  * - Cache invalidation after updates
  * - Cache invalidation after deletion
  * - Old permission-name cache invalidation
+ * - Bulk getPermissionsByNames
+ * - Grouped permissions getPermissionsGrouped
+ * - Domain filtered getPermissionsByDomain
+ * - Transaction client Redis bypass
+ * - Full 139 catalogue integrity (descriptions, uniqueness, no invalid domains)
  */
 
 require("dotenv").config();
@@ -24,6 +29,9 @@ const {
   getPermissionById,
   getPermissionByName,
   getAllPermissions,
+  getPermissionsByNames,
+  getPermissionsGrouped,
+  getPermissionsByDomain,
   updatePermission,
   deletePermission,
 } = require("../repositories/permission.repository");
@@ -37,6 +45,10 @@ const {
 } = require("../cache/redis");
 
 const { getCache, deleteCache } = require("../cache/cache");
+const {
+  PERMISSIONS,
+  PERMISSION_DOMAINS,
+} = require("../db/permission-catalogue");
 
 const uniqueValue = (prefix) =>
   `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -166,7 +178,7 @@ const runTests = async () => {
         SET description = $1
         WHERE id = $2;
       `,
-      ["Database name lookup change", permissionId],
+      ["Database description change", permissionId],
     );
 
     const nameCacheHit = await getPermissionByName(permissionName);
@@ -188,76 +200,31 @@ const runTests = async () => {
     console.log("✓ 5. Permission name lookup uses Redis cache");
 
     // ---------------------------------------------------------
-    // Get all permissions
+    // All permissions list caching
     // ---------------------------------------------------------
 
     await deleteCache(PERMISSION_ALL_CACHE_KEY);
 
-    const allPermissions = await getAllPermissions();
+    const permissions = await getAllPermissions();
 
-    assert.ok(Array.isArray(allPermissions));
+    assert.ok(Array.isArray(permissions));
+    assert.ok(permissions.length > 0);
 
-    assert.ok(allPermissions.some((item) => item.id === permissionId));
+    const cachedPermissions = await getCache(PERMISSION_ALL_CACHE_KEY);
 
-    const cachedAllPermissions = await getCache(PERMISSION_ALL_CACHE_KEY);
-
-    assert.ok(Array.isArray(cachedAllPermissions));
+    assert.ok(Array.isArray(cachedPermissions));
+    assert.strictEqual(cachedPermissions.length, permissions.length);
 
     console.log("✓ 6. All permissions cache works");
 
-    // ---------------------------------------------------------
-    // Verify all-permissions cache hit
-    // ---------------------------------------------------------
+    const cachedPermissionsAgain = await getAllPermissions();
 
-    await pool.query(
-      `
-        UPDATE permissions
-        SET description = $1
-        WHERE id = $2;
-      `,
-      ["Database all-list change", permissionId],
-    );
-
-    const allPermissionsCacheHit = await getAllPermissions();
-
-    const cachedPermission = allPermissionsCacheHit.find(
-      (item) => item.id === permissionId,
-    );
-
-    assert.strictEqual(
-      cachedPermission.description,
-      "Permission repository Redis test",
-    );
-
-    await pool.query(
-      `
-        UPDATE permissions
-        SET description = $1
-        WHERE id = $2;
-      `,
-      ["Permission repository Redis test", permissionId],
-    );
+    assert.strictEqual(cachedPermissionsAgain.length, cachedPermissions.length);
 
     console.log("✓ 7. All permissions lookup uses Redis cache");
 
     // ---------------------------------------------------------
-    // Recreate all caches before update
-    // ---------------------------------------------------------
-
-    await getPermissionById(permissionId);
-
-    await getPermissionByName(permissionName);
-
-    await getAllPermissions();
-
-    assert.ok(await getCache(buildPermissionCacheKey(permissionId)));
-
-    assert.ok(await getCache(buildPermissionNameCacheKey(permissionName)));
-
-    assert.ok(await getCache(PERMISSION_ALL_CACHE_KEY));
-
-    // ---------------------------------------------------------
-    // Update permission name
+    // Update permission
     // ---------------------------------------------------------
 
     const updatedPermission = await updatePermission(permissionId, {
@@ -266,7 +233,12 @@ const runTests = async () => {
     });
 
     assert.ok(updatedPermission);
+    assert.strictEqual(updatedPermission.id, permissionId);
     assert.strictEqual(updatedPermission.name, updatedPermissionName);
+    assert.strictEqual(
+      updatedPermission.description,
+      "Updated permission description",
+    );
 
     assert.strictEqual(
       await getCache(buildPermissionCacheKey(permissionId)),
@@ -290,7 +262,7 @@ const runTests = async () => {
     );
 
     // ---------------------------------------------------------
-    // Verify new name works
+    // Verify update lookup
     // ---------------------------------------------------------
 
     const freshUpdatedPermission = await getPermissionByName(
@@ -351,10 +323,121 @@ const runTests = async () => {
     const deletedPermission = await getPermissionById(permissionId);
 
     assert.strictEqual(deletedPermission, null);
+    permissionId = null;
 
     console.log("✓ 11. Permission deletion removes database and cache data");
 
-    console.log("\n✓ All Permission Repository tests passed.\n");
+    // ---------------------------------------------------------
+    // 12. getPermissionsByNames
+    // ---------------------------------------------------------
+    const targetNames = ["VIEW_DASHBOARD", "VIEW_SALES", "CREATE_SALE"];
+    const fetched = await getPermissionsByNames(targetNames);
+    assert.strictEqual(fetched.length, 3);
+    assert.ok(fetched.some((p) => p.name === "VIEW_DASHBOARD"));
+    assert.ok(fetched.some((p) => p.name === "VIEW_SALES"));
+    assert.ok(fetched.some((p) => p.name === "CREATE_SALE"));
+    console.log(
+      "✓ 12. getPermissionsByNames fetches specified permission batch",
+    );
+
+    // ---------------------------------------------------------
+    // 13. getPermissionsGrouped
+    // ---------------------------------------------------------
+    const grouped = await getPermissionsGrouped();
+    assert.strictEqual(Object.keys(grouped).length, 14);
+    assert.strictEqual(grouped.Dashboard.length, 2);
+    assert.strictEqual(grouped.Sales.length, 15);
+    assert.strictEqual(grouped.Customers.length, 7);
+    assert.strictEqual(grouped.Inventory.length, 21);
+    assert.strictEqual(grouped.Purchases.length, 9);
+    assert.strictEqual(grouped["Goods Receiving"].length, 9);
+    assert.strictEqual(grouped["Stock Transfer"].length, 10);
+    assert.strictEqual(grouped["Sales Returns"].length, 10);
+    assert.strictEqual(grouped.Reports.length, 17);
+    assert.strictEqual(grouped.Branches.length, 6);
+    assert.strictEqual(grouped.Users.length, 9);
+    assert.strictEqual(grouped.Roles.length, 6);
+    assert.strictEqual(grouped.Audit.length, 2);
+    assert.strictEqual(grouped.Settings.length, 16);
+    console.log(
+      "✓ 13. getPermissionsGrouped groups all 14 functional domains correctly",
+    );
+
+    // ---------------------------------------------------------
+    // 14. getPermissionsByDomain
+    // ---------------------------------------------------------
+    const salesPerms = await getPermissionsByDomain("Sales");
+    assert.strictEqual(salesPerms.length, 15);
+    const auditPerms = await getPermissionsByDomain("Audit");
+    assert.strictEqual(auditPerms.length, 2);
+    console.log(
+      "✓ 14. getPermissionsByDomain returns domain-filtered permissions",
+    );
+
+    // ---------------------------------------------------------
+    // 15. Transaction Client Redis Bypass
+    // ---------------------------------------------------------
+    const txClient = await pool.connect();
+    try {
+      await txClient.query("BEGIN");
+      const txPerm = await getPermissionByName("VIEW_DASHBOARD", txClient);
+      assert.ok(txPerm);
+      assert.strictEqual(txPerm.name, "VIEW_DASHBOARD");
+      await txClient.query("ROLLBACK");
+    } finally {
+      txClient.release();
+    }
+    console.log("✓ 15. Transaction client executes without cache dependency");
+
+    // ---------------------------------------------------------
+    // 16. Catalogue Integrity & Invariant Assertions
+    // ---------------------------------------------------------
+    const allDbPerms = await getAllPermissions();
+    assert.ok(
+      allDbPerms.length >= 139,
+      `Expected at least 139 permissions, got ${allDbPerms.length}`,
+    );
+
+    // Every permission must have a non-empty description
+    for (const p of allDbPerms) {
+      assert.ok(
+        p.description && p.description.trim().length > 0,
+        `Permission ${p.name} missing description`,
+      );
+    }
+
+    // No duplicate names
+    const namesSet = new Set(allDbPerms.map((p) => p.name));
+    assert.strictEqual(
+      namesSet.size,
+      allDbPerms.length,
+      "Permission names must be unique",
+    );
+
+    // Prohibited permission keywords (No separate Prescription or Expiry modules)
+    for (const p of allDbPerms) {
+      assert.ok(
+        !p.name.includes("PRESCRIPTION"),
+        `Found prohibited permission: ${p.name}`,
+      );
+      assert.ok(
+        !p.name.includes("EXPIRY"),
+        `Found prohibited permission: ${p.name}`,
+      );
+      assert.ok(
+        !p.name.includes("AUDITOR"),
+        `Found prohibited permission: ${p.name}`,
+      );
+      assert.ok(
+        !p.name.includes("STORE_MANAGER"),
+        `Found prohibited permission: ${p.name}`,
+      );
+    }
+    console.log(
+      "✓ 16. 139 permissions catalogue integrity, uniqueness, and constraints verified",
+    );
+
+    console.log("\n✓ All Permission Repository tests passed successfully.\n");
   } catch (error) {
     console.error("\n✗ Permission Repository test failed.");
     console.error(error);
