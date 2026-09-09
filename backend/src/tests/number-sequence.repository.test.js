@@ -1041,6 +1041,177 @@ const runTests = async () => {
       "GOODS_RECEIPT next_number should be 1003 after 2 issues.",
     );
 
+    // --------------------------------------------------------
+    // 21. TEST REGISTER_SESSION SEQUENCE (REG)
+    // --------------------------------------------------------
+
+    console.log("--- Testing REGISTER_SESSION sequence (REG) ---");
+
+    const regClient = await pool.connect();
+    let regNumber1, regNumber2;
+    try {
+      await regClient.query("BEGIN");
+      regNumber1 = await getNextBusinessNumber({
+        organisationId: testOrganisationId,
+        branchId: testBranchId,
+        sequenceType: "REGISTER_SESSION",
+        client: regClient,
+      });
+      regNumber2 = await getNextBusinessNumber({
+        organisationId: testOrganisationId,
+        branchId: testBranchId,
+        sequenceType: "REGISTER_SESSION",
+        client: regClient,
+      });
+      await regClient.query("COMMIT");
+    } catch (err) {
+      await rollbackSafely(regClient);
+      throw err;
+    } finally {
+      regClient.release();
+    }
+
+    console.log({ regNumber1, regNumber2 });
+    assert(
+      regNumber1 === "REG-1001",
+      "First REGISTER_SESSION should be REG-1001",
+    );
+    assert(
+      regNumber2 === "REG-1002",
+      "Second REGISTER_SESSION should be REG-1002",
+    );
+
+    // Invalid scope test: REGISTER_SESSION requires branchId
+    const invalidRegClient = await pool.connect();
+    try {
+      await invalidRegClient.query("BEGIN");
+      await getNextBusinessNumber({
+        organisationId: testOrganisationId,
+        branchId: null,
+        sequenceType: "REGISTER_SESSION",
+        client: invalidRegClient,
+      });
+      assert(false, "Should have failed without branchId for REGISTER_SESSION");
+    } catch (err) {
+      assert(
+        err.message.includes("REGISTER_SESSION sequences require a branchId"),
+        "Should require branchId for REGISTER_SESSION",
+      );
+    } finally {
+      await rollbackSafely(invalidRegClient);
+      invalidRegClient.release();
+    }
+
+    // --------------------------------------------------------
+    // 22. TEST CASH_MOVEMENT SEQUENCE (PC)
+    // --------------------------------------------------------
+
+    console.log("--- Testing CASH_MOVEMENT sequence (PC) ---");
+
+    const pcClient = await pool.connect();
+    let pcNumber1, pcNumber2;
+    try {
+      await pcClient.query("BEGIN");
+      pcNumber1 = await getNextBusinessNumber({
+        organisationId: testOrganisationId,
+        branchId: testBranchId,
+        sequenceType: "CASH_MOVEMENT",
+        client: pcClient,
+      });
+      pcNumber2 = await getNextBusinessNumber({
+        organisationId: testOrganisationId,
+        branchId: testBranchId,
+        sequenceType: "CASH_MOVEMENT",
+        client: pcClient,
+      });
+      await pcClient.query("COMMIT");
+    } catch (err) {
+      await rollbackSafely(pcClient);
+      throw err;
+    } finally {
+      pcClient.release();
+    }
+
+    console.log({ pcNumber1, pcNumber2 });
+    assert(pcNumber1 === "PC-1001", "First CASH_MOVEMENT should be PC-1001");
+    assert(pcNumber2 === "PC-1002", "Second CASH_MOVEMENT should be PC-1002");
+
+    // Invalid scope test: CASH_MOVEMENT requires branchId
+    const invalidPcClient = await pool.connect();
+    try {
+      await invalidPcClient.query("BEGIN");
+      await getNextBusinessNumber({
+        organisationId: testOrganisationId,
+        branchId: null,
+        sequenceType: "CASH_MOVEMENT",
+        client: invalidPcClient,
+      });
+      assert(false, "Should have failed without branchId for CASH_MOVEMENT");
+    } catch (err) {
+      assert(
+        err.message.includes("CASH_MOVEMENT sequences require a branchId"),
+        "Should require branchId for CASH_MOVEMENT",
+      );
+    } finally {
+      await rollbackSafely(invalidPcClient);
+      invalidPcClient.release();
+    }
+
+    // --------------------------------------------------------
+    // 23. TEST HELD_BILL SEQUENCE (HB)
+    // --------------------------------------------------------
+
+    console.log("--- Testing HELD_BILL sequence (HB) ---");
+
+    const hbClient = await pool.connect();
+    let hbNumber1, hbNumber2;
+    try {
+      await hbClient.query("BEGIN");
+      hbNumber1 = await getNextBusinessNumber({
+        organisationId: testOrganisationId,
+        branchId: testBranchId,
+        sequenceType: "HELD_BILL",
+        client: hbClient,
+      });
+      hbNumber2 = await getNextBusinessNumber({
+        organisationId: testOrganisationId,
+        branchId: testBranchId,
+        sequenceType: "HELD_BILL",
+        client: hbClient,
+      });
+      await hbClient.query("COMMIT");
+    } catch (err) {
+      await rollbackSafely(hbClient);
+      throw err;
+    } finally {
+      hbClient.release();
+    }
+
+    console.log({ hbNumber1, hbNumber2 });
+    assert(hbNumber1 === "HB-1001", "First HELD_BILL should be HB-1001");
+    assert(hbNumber2 === "HB-1002", "Second HELD_BILL should be HB-1002");
+
+    // Invalid scope test: HELD_BILL requires branchId
+    const invalidHbClient = await pool.connect();
+    try {
+      await invalidHbClient.query("BEGIN");
+      await getNextBusinessNumber({
+        organisationId: testOrganisationId,
+        branchId: null,
+        sequenceType: "HELD_BILL",
+        client: invalidHbClient,
+      });
+      assert(false, "Should have failed without branchId for HELD_BILL");
+    } catch (err) {
+      assert(
+        err.message.includes("HELD_BILL sequences require a branchId"),
+        "Should require branchId for HELD_BILL",
+      );
+    } finally {
+      await rollbackSafely(invalidHbClient);
+      invalidHbClient.release();
+    }
+
     console.log("");
     console.log("Number sequence repository tests completed successfully.");
   } catch (error) {

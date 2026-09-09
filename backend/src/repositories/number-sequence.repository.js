@@ -69,6 +69,9 @@ const NUMBER_PREFIXES = {
   PURCHASE: "PO",
   STOCK_TRANSFER: "TR",
   GOODS_RECEIPT: "GRN",
+  REGISTER_SESSION: "REG",
+  CASH_MOVEMENT: "PC",
+  HELD_BILL: "HB",
 };
 
 /**
@@ -95,7 +98,14 @@ const ORGANISATION_SCOPED_TYPES = new Set([
  *
  * These sequences have a branch_id.
  */
-const BRANCH_SCOPED_TYPES = new Set(["INVOICE", "RECEIPT", "RETURN"]);
+const BRANCH_SCOPED_TYPES = new Set([
+  "INVOICE",
+  "RECEIPT",
+  "RETURN",
+  "REGISTER_SESSION",
+  "CASH_MOVEMENT",
+  "HELD_BILL",
+]);
 
 /**
  * Validate sequence scope.

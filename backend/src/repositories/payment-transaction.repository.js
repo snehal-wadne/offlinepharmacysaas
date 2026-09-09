@@ -73,6 +73,9 @@
  */
 
 const { pool } = require("../db/connection");
+const {
+  invalidateSessionReconciliationCache,
+} = require("./cash-register-dashboard.repository");
 
 /**
  * Columns returned by payment transaction queries.
@@ -108,7 +111,8 @@ const validatePaymentOwnership = async (db, organisationId, paymentId) => {
           p.organisation_id,
           p.branch_id,
           p.customer_id,
-          p.receipt_number
+          p.receipt_number,
+          p.cash_register_session_id
       FROM payments p
       WHERE p.id = $1
         AND p.organisation_id = $2;
@@ -212,7 +216,11 @@ const createPaymentTransaction = async ({
      * Validate parent payment ownership before inserting
      * the child record.
      */
-    await validatePaymentOwnership(dbClient, organisationId, paymentId);
+    const parentPayment = await validatePaymentOwnership(
+      dbClient,
+      organisationId,
+      paymentId,
+    );
 
     const result = await dbClient.query(
       `
@@ -238,7 +246,16 @@ const createPaymentTransaction = async ({
       await dbClient.query("COMMIT");
     }
 
-    return result.rows[0];
+    const createdTx = result.rows[0];
+    if (parentPayment && parentPayment.cash_register_session_id) {
+      await invalidateSessionReconciliationCache(
+        organisationId,
+        parentPayment.cash_register_session_id,
+        ownsTransaction ? null : dbClient,
+      );
+    }
+
+    return createdTx;
   } catch (error) {
     if (ownsTransaction) {
       try {
@@ -473,7 +490,8 @@ const updatePaymentTransaction = async (
           SELECT
               pt.id,
               pt.payment_id,
-              p.organisation_id
+              p.organisation_id,
+              p.cash_register_session_id
           FROM payment_transactions pt
           INNER JOIN payments p
               ON p.id = pt.payment_id
@@ -517,7 +535,12 @@ const updatePaymentTransaction = async (
       const currentTransaction = await dbClient.query(
         `
             SELECT
-                ${PAYMENT_TRANSACTION_COLUMNS}
+                pt.id,
+                pt.payment_id,
+                pt.payment_method,
+                pt.amount,
+                pt.transaction_reference,
+                pt.created_at
             FROM payment_transactions pt
             INNER JOIN payments p
                 ON p.id = pt.payment_id
@@ -574,7 +597,19 @@ const updatePaymentTransaction = async (
       await dbClient.query("COMMIT");
     }
 
-    return result.rows[0] || null;
+    const updatedTx = result.rows[0] || null;
+    if (
+      currentResult.rows[0] &&
+      currentResult.rows[0].cash_register_session_id
+    ) {
+      await invalidateSessionReconciliationCache(
+        organisationId,
+        currentResult.rows[0].cash_register_session_id,
+        ownsTransaction ? null : dbClient,
+      );
+    }
+
+    return updatedTx;
   } catch (error) {
     if (ownsTransaction) {
       try {
@@ -628,13 +663,23 @@ const deletePaymentTransaction = async (
           WHERE pt.id = $1
             AND pt.payment_id = p.id
             AND p.organisation_id = $2
-          RETURNING pt.id;
+          RETURNING pt.id, p.cash_register_session_id;
         `,
       [paymentTransactionId, organisationId],
     );
 
+    const deletedRow = result.rows[0];
+
     if (ownsTransaction) {
       await dbClient.query("COMMIT");
+    }
+
+    if (deletedRow && deletedRow.cash_register_session_id) {
+      await invalidateSessionReconciliationCache(
+        organisationId,
+        deletedRow.cash_register_session_id,
+        ownsTransaction ? null : dbClient,
+      );
     }
 
     return result.rowCount === 1;

@@ -50,6 +50,7 @@ const { pool } = require("../db/connection");
 const { getCache, setCache, deleteCache } = require("../cache/cache");
 
 const { getNextBusinessNumber } = require("./number-sequence.repository");
+const { invalidateSessionReconciliationCache } = require("./cash-register-dashboard.repository");
 
 /**
  * Branch-scoped sequence used by payments.
@@ -93,6 +94,7 @@ const PAYMENT_COLUMNS = `
     status,
     notes,
     received_by,
+    cash_register_session_id,
     created_at,
     updated_at
 `;
@@ -203,6 +205,38 @@ const validateReceivedBy = async (db, organisationId, receivedBy) => {
 };
 
 /**
+ * Validate that the session exists and belongs to the specified organisation and branch.
+ *
+ * @param {Object} db
+ * @param {string} organisationId
+ * @param {string} branchId
+ * @param {string|null} sessionId
+ */
+const validateSession = async (db, organisationId, branchId, sessionId) => {
+  if (!sessionId) {
+    return;
+  }
+
+  const result = await db.query(
+    `
+      SELECT
+          id
+      FROM cash_register_sessions
+      WHERE id = $1
+        AND organisation_id = $2
+        AND branch_id = $3;
+    `,
+    [sessionId, organisationId, branchId],
+  );
+
+  if (result.rowCount === 0) {
+    throw new Error(
+      "Cash register session not found in the specified organisation and branch.",
+    );
+  }
+};
+
+/**
  * Validate all payment parent references.
  *
  * @param {Object} db
@@ -210,6 +244,7 @@ const validateReceivedBy = async (db, organisationId, receivedBy) => {
  * @param {string} branchId
  * @param {string} customerId
  * @param {string|null} receivedBy
+ * @param {string|null} cashRegisterSessionId
  */
 const validatePaymentContext = async (
   db,
@@ -217,12 +252,15 @@ const validatePaymentContext = async (
   branchId,
   customerId,
   receivedBy,
+  cashRegisterSessionId = null,
 ) => {
   await validateBranch(db, organisationId, branchId);
 
   await validateCustomer(db, organisationId, customerId);
 
   await validateReceivedBy(db, organisationId, receivedBy);
+
+  await validateSession(db, organisationId, branchId, cashRegisterSessionId);
 };
 
 /**
@@ -252,6 +290,7 @@ const validatePaymentContext = async (
  * @param {string} [payment.status="COMPLETED"]
  * @param {string|null} [payment.notes=null]
  * @param {string|null} [payment.receivedBy=null]
+ * @param {string|null} [payment.cashRegisterSessionId=null]
  * @param {Object} [payment.client]
  *
  * @returns {Promise<Object>}
@@ -265,6 +304,7 @@ const createPayment = async ({
   status = "COMPLETED",
   notes = null,
   receivedBy = null,
+  cashRegisterSessionId = null,
   client = null,
 }) => {
   const dbClient = client || (await pool.connect());
@@ -282,6 +322,7 @@ const createPayment = async ({
       branchId,
       customerId,
       receivedBy,
+      cashRegisterSessionId,
     );
 
     const receiptNumber = await getNextBusinessNumber({
@@ -302,7 +343,8 @@ const createPayment = async ({
             total_amount,
             status,
             notes,
-            received_by
+            received_by,
+            cash_register_session_id
         )
         VALUES (
             $1,
@@ -313,7 +355,8 @@ const createPayment = async ({
             $6,
             $7,
             $8,
-            $9
+            $9,
+            $10
         )
         RETURNING
             ${PAYMENT_COLUMNS};
@@ -328,6 +371,7 @@ const createPayment = async ({
         status,
         notes,
         receivedBy,
+        cashRegisterSessionId,
       ],
     );
 
@@ -335,7 +379,17 @@ const createPayment = async ({
       await dbClient.query("COMMIT");
     }
 
-    return result.rows[0];
+    const createdPayment = result.rows[0];
+
+    if (createdPayment && createdPayment.cash_register_session_id) {
+      await invalidateSessionReconciliationCache(
+        organisationId,
+        createdPayment.cash_register_session_id,
+        ownsTransaction ? null : dbClient,
+      );
+    }
+
+    return createdPayment;
   } catch (error) {
     if (ownsTransaction) {
       try {
@@ -727,7 +781,8 @@ const updatePayment = async (
       `
           SELECT
               id,
-              organisation_id
+              organisation_id,
+              cash_register_session_id
           FROM payments
           WHERE id = $1
             AND organisation_id = $2
@@ -840,6 +895,15 @@ const updatePayment = async (
           cacheError.message,
         );
       }
+
+      const oldSessionId = currentResult.rows[0] && currentResult.rows[0].cash_register_session_id;
+      const newSessionId = updatedPayment.cash_register_session_id;
+      if (oldSessionId) {
+        await invalidateSessionReconciliationCache(organisationId, oldSessionId, ownsTransaction ? null : dbClient);
+      }
+      if (newSessionId && newSessionId !== oldSessionId) {
+        await invalidateSessionReconciliationCache(organisationId, newSessionId, ownsTransaction ? null : dbClient);
+      }
     }
 
     return updatedPayment;
@@ -903,7 +967,7 @@ const deletePayment = async (organisationId, paymentId, client = null) => {
           DELETE FROM payments
           WHERE id = $1
             AND organisation_id = $2
-          RETURNING id;
+          RETURNING id, cash_register_session_id;
         `,
       [paymentId, organisationId],
     );
@@ -929,6 +993,15 @@ const deletePayment = async (organisationId, paymentId, client = null) => {
           cacheError.message,
         );
       }
+
+      const deletedRow = result.rows[0];
+      if (deletedRow && deletedRow.cash_register_session_id) {
+        await invalidateSessionReconciliationCache(
+          organisationId,
+          deletedRow.cash_register_session_id,
+          ownsTransaction ? null : dbClient,
+        );
+      }
     }
 
     return deleted;
@@ -950,6 +1023,55 @@ const deletePayment = async (organisationId, paymentId, client = null) => {
 };
 
 /**
+ * List payments associated with a cash register session.
+ *
+ * @param {Object} params
+ * @param {string} params.organisationId
+ * @param {string} params.branchId
+ * @param {string} params.sessionId
+ * @param {number} [params.limit=50]
+ * @param {number} [params.offset=0]
+ * @param {Object|null} [params.client=null]
+ *
+ * @returns {Promise<Array<Object>>}
+ */
+const listPaymentsBySession = async ({
+  organisationId,
+  branchId,
+  sessionId,
+  limit = 50,
+  offset = 0,
+  client = null,
+}) => {
+  if (!organisationId) throw new Error("organisationId is required.");
+  if (!branchId) throw new Error("branchId is required.");
+  if (!sessionId) throw new Error("sessionId is required.");
+
+  const dbClient = client || pool;
+
+  const query = `
+    SELECT
+      ${PAYMENT_COLUMNS}
+    FROM payments
+    WHERE organisation_id = $1
+      AND branch_id = $2
+      AND cash_register_session_id = $3
+    ORDER BY created_at DESC
+    LIMIT $4 OFFSET $5;
+  `;
+
+  const result = await dbClient.query(query, [
+    organisationId,
+    branchId,
+    sessionId,
+    limit,
+    offset,
+  ]);
+
+  return result.rows;
+};
+
+/**
  * Export repository functions.
  */
 module.exports = {
@@ -959,6 +1081,7 @@ module.exports = {
   getPaymentsByCustomer,
   getPaymentsByBranch,
   getPaymentsByOrganisation,
+  listPaymentsBySession,
   searchPayments,
   updatePayment,
   deletePayment,

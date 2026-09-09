@@ -217,6 +217,7 @@ CREATE TABLE IF NOT EXISTS branches (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT branches_organisation_name_unique UNIQUE (organisation_id, name),
     CONSTRAINT branches_organisation_code_unique UNIQUE (organisation_id, branch_code),
+    CONSTRAINT branches_id_org_unique UNIQUE (id, organisation_id),
     CONSTRAINT branches_facility_type_check CHECK (
         facility_type IN (
             'HOSPITAL_PHARMACY',
@@ -649,7 +650,10 @@ next_number BIGINT NOT NULL DEFAULT 1001,
                 'STAFF',
                 'PURCHASE',
                 'STOCK_TRANSFER',
-                'GOODS_RECEIPT'
+                'GOODS_RECEIPT',
+                'REGISTER_SESSION',
+                'CASH_MOVEMENT',
+                'HELD_BILL'
             )
         ),
 
@@ -928,6 +932,199 @@ CONSTRAINT customer_credit_accounts_customer_unique
 CREATE INDEX IF NOT EXISTS idx_customer_credit_accounts_organisation ON customer_credit_accounts (organisation_id);
 
 -- ============================================================
+-- CASH REGISTERS (WORKSTATIONS / TERMINALS)
+-- ============================================================
+-- Represents a physical cash drawer / counter terminal within a branch.
+
+CREATE TABLE IF NOT EXISTS cash_registers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
+    organisation_id UUID NOT NULL REFERENCES organisations (id) ON DELETE CASCADE,
+    branch_id UUID NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    identifier VARCHAR(50) NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT cash_registers_branch_identifier_unique UNIQUE (branch_id, identifier),
+    CONSTRAINT cash_registers_branch_org_fk FOREIGN KEY (branch_id, organisation_id) REFERENCES branches (id, organisation_id) ON DELETE CASCADE,
+    CONSTRAINT cash_registers_id_branch_org_unique UNIQUE (
+        id,
+        branch_id,
+        organisation_id
+    )
+);
+
+CREATE INDEX IF NOT EXISTS idx_cash_registers_org_branch ON cash_registers (organisation_id, branch_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_cash_registers_branch_identifier_lower ON cash_registers (branch_id, LOWER(identifier));
+
+-- ============================================================
+-- CASH REGISTER SESSIONS (SHIFTS)
+-- ============================================================
+-- Represents an operational cashier shift session from opening float to drawer reconciliation.
+
+CREATE TABLE IF NOT EXISTS cash_register_sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
+    organisation_id UUID NOT NULL REFERENCES organisations (id) ON DELETE CASCADE,
+    branch_id UUID NOT NULL,
+    cash_register_id UUID NOT NULL,
+    cashier_id UUID NOT NULL REFERENCES users (id) ON DELETE RESTRICT,
+    session_number VARCHAR(50) NOT NULL,
+    shift_name VARCHAR(50) DEFAULT 'Day Shift',
+    opened_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    closed_at TIMESTAMPTZ,
+    opening_balance NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    counted_cash NUMERIC(12, 2),
+    expected_cash NUMERIC(12, 2),
+    variance NUMERIC(12, 2),
+    status VARCHAR(30) NOT NULL DEFAULT 'OPEN',
+    variance_status VARCHAR(30),
+    opening_notes TEXT,
+    closing_notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT cash_register_sessions_opening_balance_check CHECK (opening_balance >= 0),
+    CONSTRAINT cash_register_sessions_status_check CHECK (status IN ('OPEN', 'CLOSED')),
+    CONSTRAINT cash_register_sessions_variance_status_check CHECK (
+        variance_status IS NULL
+        OR variance_status IN (
+            'BALANCED',
+            'SHORTAGE',
+            'OVERAGE'
+        )
+    ),
+    CONSTRAINT cash_register_sessions_branch_org_fk FOREIGN KEY (branch_id, organisation_id) REFERENCES branches (id, organisation_id) ON DELETE RESTRICT,
+    CONSTRAINT cash_register_sessions_register_branch_org_fk FOREIGN KEY (cash_register_id, branch_id, organisation_id) REFERENCES cash_registers (id, branch_id, organisation_id) ON DELETE RESTRICT,
+    CONSTRAINT cash_register_sessions_id_branch_org_unique UNIQUE (id, branch_id, organisation_id),
+    CONSTRAINT cash_register_sessions_id_org_unique UNIQUE (id, organisation_id)
+);
+
+-- Partial unique index ensuring only one OPEN session per physical cash register
+CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_open_session_per_register ON cash_register_sessions (cash_register_id)
+WHERE
+    status = 'OPEN';
+
+CREATE INDEX IF NOT EXISTS idx_register_sessions_org_branch ON cash_register_sessions (
+    organisation_id,
+    branch_id,
+    status
+);
+
+CREATE INDEX IF NOT EXISTS idx_register_sessions_cashier ON cash_register_sessions (cashier_id);
+
+CREATE INDEX IF NOT EXISTS idx_register_sessions_register ON cash_register_sessions (cash_register_id);
+
+-- ============================================================
+-- CASH MOVEMENTS (PETTY CASH FLOAT IN / EXPENSES OUT)
+-- ============================================================
+-- Auditable record of cash float additions and expense payouts outside regular sales.
+
+CREATE TABLE IF NOT EXISTS cash_movements (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
+    organisation_id UUID NOT NULL REFERENCES organisations (id) ON DELETE CASCADE,
+    branch_id UUID NOT NULL,
+    cash_register_session_id UUID NOT NULL,
+    cashier_id UUID NOT NULL REFERENCES users (id) ON DELETE RESTRICT,
+    movement_number VARCHAR(50) NOT NULL,
+    movement_type VARCHAR(10) NOT NULL,
+    amount NUMERIC(12, 2) NOT NULL,
+    reason VARCHAR(255) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT cash_movements_type_check CHECK (
+        movement_type IN ('IN', 'OUT')
+    ),
+    CONSTRAINT cash_movements_amount_check CHECK (amount > 0),
+    CONSTRAINT cash_movements_branch_org_fk FOREIGN KEY (branch_id, organisation_id) REFERENCES branches (id, organisation_id) ON DELETE RESTRICT,
+    CONSTRAINT cash_movements_session_branch_org_fk FOREIGN KEY (
+        cash_register_session_id,
+        branch_id,
+        organisation_id
+    ) REFERENCES cash_register_sessions (
+        id,
+        branch_id,
+        organisation_id
+    ) ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS idx_cash_movements_session ON cash_movements (cash_register_session_id);
+
+CREATE INDEX IF NOT EXISTS idx_cash_movements_org_branch ON cash_movements (organisation_id, branch_id);
+
+-- ============================================================
+-- CASH DENOMINATIONS (CLOSING CASH COUNT BREAKDOWN)
+-- ============================================================
+-- Stores currency note/coin counts entered during register drawer closure.
+
+CREATE TABLE IF NOT EXISTS cash_denominations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
+    organisation_id UUID NOT NULL REFERENCES organisations (id) ON DELETE CASCADE,
+    cash_register_session_id UUID NOT NULL,
+    denomination_value NUMERIC(10, 2) NOT NULL,
+    denomination_count INTEGER NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT cash_denominations_value_check CHECK (denomination_value > 0),
+    CONSTRAINT cash_denominations_count_check CHECK (denomination_count >= 0),
+    CONSTRAINT cash_denominations_session_val_unique UNIQUE (
+        cash_register_session_id,
+        denomination_value
+    ),
+    CONSTRAINT cash_denominations_session_org_fk FOREIGN KEY (cash_register_session_id, organisation_id) REFERENCES cash_register_sessions (id, organisation_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_cash_denominations_session ON cash_denominations (cash_register_session_id);
+
+-- ============================================================
+-- HELD BILLS (PARKED POS CARTS)
+-- ============================================================
+-- Persists parked draft sales with full cart data (JSONB) and sequential hold tokens.
+
+CREATE TABLE IF NOT EXISTS held_bills (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
+    organisation_id UUID NOT NULL REFERENCES organisations (id) ON DELETE CASCADE,
+    branch_id UUID NOT NULL,
+    cash_register_session_id UUID,
+    held_by UUID NOT NULL REFERENCES users (id) ON DELETE RESTRICT,
+    hold_token VARCHAR(50) NOT NULL,
+    customer_id UUID REFERENCES customers (id) ON DELETE SET NULL,
+    customer_name VARCHAR(150) NOT NULL DEFAULT 'Walk-in Customer',
+    customer_phone VARCHAR(50),
+    items_count INTEGER NOT NULL DEFAULT 0,
+    items_summary TEXT,
+    subtotal NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    tax_amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    discount_percent NUMERIC(5, 2) NOT NULL DEFAULT 0.00,
+    total_amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    cart_data JSONB NOT NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'HOLD',
+    notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT held_bills_items_count_check CHECK (items_count >= 0),
+    CONSTRAINT held_bills_total_amount_check CHECK (total_amount >= 0),
+    CONSTRAINT held_bills_status_check CHECK (
+        status IN (
+            'HOLD',
+            'PENDING_PRESCRIPTION',
+            'AWAITING_PAYMENT',
+            'RESUMED',
+            'DISCARDED'
+        )
+    ),
+    CONSTRAINT held_bills_branch_org_fk FOREIGN KEY (branch_id, organisation_id) REFERENCES branches (id, organisation_id) ON DELETE RESTRICT,
+    CONSTRAINT held_bills_session_branch_org_fk FOREIGN KEY (cash_register_session_id, branch_id, organisation_id) REFERENCES cash_register_sessions (id, branch_id, organisation_id) ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS idx_held_bills_org_branch_status ON held_bills (
+    organisation_id,
+    branch_id,
+    status
+);
+
+CREATE INDEX IF NOT EXISTS idx_held_bills_token ON held_bills (organisation_id, hold_token);
+
+CREATE INDEX IF NOT EXISTS idx_held_bills_customer ON held_bills (customer_id);
+
+-- ============================================================
 -- 23. INVOICES
 -- ============================================================
 --
@@ -1007,14 +1204,20 @@ notes TEXT,
 
 -- User who created the invoice.
 
+created_by UUID REFERENCES users (id) ON DELETE SET NULL,
 
-created_by UUID
-        REFERENCES users (id)
-        ON DELETE SET NULL,
+-- Optional cash register session during which the sale was recorded.
+
+cash_register_session_id UUID,
 
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT invoices_session_branch_org_fk
+        FOREIGN KEY (cash_register_session_id, branch_id, organisation_id)
+        REFERENCES cash_register_sessions (id, branch_id, organisation_id)
+        ON DELETE RESTRICT,
 
     CONSTRAINT invoices_number_unique
         UNIQUE (branch_id, invoice_number),
@@ -1049,6 +1252,9 @@ CREATE INDEX IF NOT EXISTS idx_invoices_customer_date ON invoices (
     customer_id,
     invoice_date DESC
 );
+
+-- Index for session sales queries.
+CREATE INDEX IF NOT EXISTS idx_invoices_cash_register_session_id ON invoices (cash_register_session_id);
 
 -- Branch billing history.
 CREATE INDEX IF NOT EXISTS idx_invoices_branch_date ON invoices (branch_id, invoice_date DESC);
@@ -1206,14 +1412,20 @@ notes TEXT,
 
 -- User/cashier who recorded the payment.
 
+received_by UUID REFERENCES users (id) ON DELETE SET NULL,
 
-received_by UUID
-        REFERENCES users (id)
-        ON DELETE SET NULL,
+-- Optional cash register session during which the payment was received.
+
+cash_register_session_id UUID,
 
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT payments_session_branch_org_fk
+        FOREIGN KEY (cash_register_session_id, branch_id, organisation_id)
+        REFERENCES cash_register_sessions (id, branch_id, organisation_id)
+        ON DELETE RESTRICT,
 
     CONSTRAINT payments_receipt_unique
         UNIQUE (branch_id, receipt_number),
@@ -1237,6 +1449,9 @@ CREATE INDEX IF NOT EXISTS idx_payments_customer_date ON payments (
     customer_id,
     payment_date DESC
 );
+
+-- Index for session payments queries.
+CREATE INDEX IF NOT EXISTS idx_payments_cash_register_session_id ON payments (cash_register_session_id);
 
 -- Branch payment history.
 CREATE INDEX IF NOT EXISTS idx_payments_branch_date ON payments (branch_id, payment_date DESC);
@@ -1651,14 +1866,20 @@ created_by UUID REFERENCES users (id) ON DELETE SET NULL,
 
 -- User who processed the return.
 
+processed_by UUID REFERENCES users (id) ON DELETE SET NULL,
 
-processed_by UUID
-        REFERENCES users(id)
-        ON DELETE SET NULL,
+-- Optional cash register session during which the cash refund was issued.
+
+cash_register_session_id UUID,
 
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT returns_session_branch_org_fk
+        FOREIGN KEY (cash_register_session_id, branch_id, organisation_id)
+        REFERENCES cash_register_sessions (id, branch_id, organisation_id)
+        ON DELETE RESTRICT,
 
     CONSTRAINT returns_number_unique
         UNIQUE (branch_id, return_number),
@@ -1685,6 +1906,8 @@ processed_by UUID
             )
         )
 );
+
+CREATE INDEX IF NOT EXISTS idx_returns_cash_register_session_id ON returns (cash_register_session_id);
 
 -- ============================================================
 -- 32. RETURN ITEMS

@@ -69,6 +69,7 @@ const INVOICE_COLUMNS = `
     status,
     notes,
     created_by,
+    cash_register_session_id,
     created_at,
     updated_at
 `;
@@ -125,6 +126,7 @@ const createInvoice = async ({
   status = "DRAFT",
   notes = null,
   createdBy = null,
+  cashRegisterSessionId = null,
   client = null,
 }) => {
   let dbClient = client;
@@ -192,7 +194,18 @@ const createInvoice = async ({
                     FROM users
                     WHERE id = $5
                 )
-            END AS creator_exists;
+            END AS creator_exists,
+
+            CASE
+                WHEN $6::UUID IS NULL THEN TRUE
+                ELSE EXISTS (
+                    SELECT 1
+                    FROM cash_register_sessions
+                    WHERE id = $6
+                      AND organisation_id = $3
+                      AND branch_id = $1
+                )
+            END AS session_exists;
     `;
 
     const validationResult = await dbClient.query(validationQuery, [
@@ -201,6 +214,7 @@ const createInvoice = async ({
       organisationId,
       prescriptionId,
       createdBy,
+      cashRegisterSessionId,
     ]);
 
     const validation = validationResult.rows[0];
@@ -219,6 +233,12 @@ const createInvoice = async ({
 
     if (!validation.creator_exists) {
       throw new Error("Creating user not found.");
+    }
+
+    if (!validation.session_exists) {
+      throw new Error(
+        "Cash register session not found in the specified organisation and branch.",
+      );
     }
 
     /**
@@ -290,7 +310,8 @@ const createInvoice = async ({
             total_amount,
             status,
             notes,
-            created_by
+            created_by,
+            cash_register_session_id
         )
         VALUES (
             $1,
@@ -305,7 +326,8 @@ const createInvoice = async ({
             $10,
             $11,
             $12,
-            $13
+            $13,
+            $14
         )
         RETURNING
             ${INVOICE_COLUMNS};
@@ -325,6 +347,7 @@ const createInvoice = async ({
       status,
       notes,
       createdBy,
+      cashRegisterSessionId,
     ];
 
     const result = await dbClient.query(query, values);
@@ -756,6 +779,55 @@ const deleteInvoice = async (organisationId, invoiceId) => {
   return deleted;
 };
 
+/**
+ * List invoices associated with a cash register session.
+ *
+ * @param {Object} params
+ * @param {string} params.organisationId
+ * @param {string} params.branchId
+ * @param {string} params.sessionId
+ * @param {number} [params.limit=50]
+ * @param {number} [params.offset=0]
+ * @param {Object|null} [params.client=null]
+ *
+ * @returns {Promise<Array<Object>>}
+ */
+const listInvoicesBySession = async ({
+  organisationId,
+  branchId,
+  sessionId,
+  limit = 50,
+  offset = 0,
+  client = null,
+}) => {
+  if (!organisationId) throw new Error("organisationId is required.");
+  if (!branchId) throw new Error("branchId is required.");
+  if (!sessionId) throw new Error("sessionId is required.");
+
+  const dbClient = client || pool;
+
+  const query = `
+    SELECT
+      ${INVOICE_COLUMNS}
+    FROM invoices
+    WHERE organisation_id = $1
+      AND branch_id = $2
+      AND cash_register_session_id = $3
+    ORDER BY created_at DESC
+    LIMIT $4 OFFSET $5;
+  `;
+
+  const result = await dbClient.query(query, [
+    organisationId,
+    branchId,
+    sessionId,
+    limit,
+    offset,
+  ]);
+
+  return result.rows;
+};
+
 module.exports = {
   createInvoice,
   getInvoiceById,
@@ -763,6 +835,7 @@ module.exports = {
   getInvoicesByCustomer,
   getInvoicesByBranch,
   getInvoicesByOrganisation,
+  listInvoicesBySession,
   searchInvoices,
   updateInvoice,
   deleteInvoice,

@@ -55,6 +55,9 @@
 const { pool } = require("../db/connection");
 
 const { getNextBusinessNumber } = require("./number-sequence.repository");
+const {
+  invalidateSessionReconciliationCache,
+} = require("./cash-register-dashboard.repository");
 
 /**
  * Return business-number sequence type.
@@ -84,6 +87,7 @@ const RETURN_COLUMNS = `
     notes,
     created_by,
     processed_by,
+    cash_register_session_id,
     created_at,
     updated_at
 `;
@@ -266,6 +270,38 @@ const validateOrganisationUser = async (
 };
 
 /**
+ * Validate that the session exists and belongs to the specified organisation and branch.
+ *
+ * @param {Object} db
+ * @param {string} organisationId
+ * @param {string} branchId
+ * @param {string|null} sessionId
+ */
+const validateSession = async (db, organisationId, branchId, sessionId) => {
+  if (!sessionId) {
+    return;
+  }
+
+  const result = await db.query(
+    `
+      SELECT
+          id
+      FROM cash_register_sessions
+      WHERE id = $1
+        AND organisation_id = $2
+        AND branch_id = $3;
+    `,
+    [sessionId, organisationId, branchId],
+  );
+
+  if (result.rowCount === 0) {
+    throw new Error(
+      "Cash register session not found in the specified organisation and branch.",
+    );
+  }
+};
+
+/**
  * Validate the complete return context.
  *
  * @param {Object} db
@@ -275,6 +311,7 @@ const validateOrganisationUser = async (
  * @param {string} invoiceId
  * @param {string|null} createdBy
  * @param {string|null} processedBy
+ * @param {string|null} cashRegisterSessionId
  */
 const validateReturnContext = async (
   db,
@@ -284,6 +321,7 @@ const validateReturnContext = async (
   invoiceId,
   createdBy,
   processedBy,
+  cashRegisterSessionId = null,
 ) => {
   await validateBranch(db, organisationId, branchId);
 
@@ -299,6 +337,8 @@ const validateReturnContext = async (
     processedBy,
     "Processed-by",
   );
+
+  await validateSession(db, organisationId, branchId, cashRegisterSessionId);
 };
 
 /**
@@ -323,6 +363,7 @@ const validateReturnContext = async (
  * @param {string|null} [returnData.notes=null]
  * @param {string|null} [returnData.createdBy=null]
  * @param {string|null} [returnData.processedBy=null]
+ * @param {string|null} [returnData.cashRegisterSessionId=null]
  * @param {Object} [returnData.client]
  *
  * @returns {Promise<Object>}
@@ -340,6 +381,7 @@ const createReturn = async ({
   notes = null,
   createdBy = null,
   processedBy = null,
+  cashRegisterSessionId = null,
   client = null,
 }) => {
   const dbClient = client || (await pool.connect());
@@ -359,6 +401,7 @@ const createReturn = async ({
       invoiceId,
       createdBy,
       processedBy,
+      cashRegisterSessionId,
     );
 
     /**
@@ -392,7 +435,8 @@ const createReturn = async ({
               reason,
               notes,
               created_by,
-              processed_by
+              processed_by,
+              cash_register_session_id
           )
           VALUES (
               $1,
@@ -407,7 +451,8 @@ const createReturn = async ({
               $10,
               $11,
               $12,
-              $13
+              $13,
+              $14
           )
           RETURNING
               ${RETURN_COLUMNS};
@@ -426,6 +471,7 @@ const createReturn = async ({
         notes,
         createdBy,
         processedBy,
+        cashRegisterSessionId,
       ],
     );
 
@@ -433,7 +479,17 @@ const createReturn = async ({
       await dbClient.query("COMMIT");
     }
 
-    return result.rows[0];
+    const createdReturn = result.rows[0];
+
+    if (createdReturn && createdReturn.cash_register_session_id) {
+      await invalidateSessionReconciliationCache(
+        organisationId,
+        createdReturn.cash_register_session_id,
+        ownsTransaction ? null : dbClient,
+      );
+    }
+
+    return createdReturn;
   } catch (error) {
     if (ownsTransaction) {
       try {
@@ -770,7 +826,8 @@ const updateReturn = async (
               customer_id,
               invoice_id,
               return_number,
-              created_by
+              created_by,
+              cash_register_session_id
           FROM returns
           WHERE id = $1
             AND organisation_id = $2
@@ -865,7 +922,28 @@ const updateReturn = async (
       await dbClient.query("COMMIT");
     }
 
-    return result.rows[0] || null;
+    const updatedReturn = result.rows[0] || null;
+    const oldSessionId =
+      currentResult.rows[0] && currentResult.rows[0].cash_register_session_id;
+    const newSessionId =
+      updatedReturn && updatedReturn.cash_register_session_id;
+
+    if (oldSessionId) {
+      await invalidateSessionReconciliationCache(
+        organisationId,
+        oldSessionId,
+        ownsTransaction ? null : dbClient,
+      );
+    }
+    if (newSessionId && newSessionId !== oldSessionId) {
+      await invalidateSessionReconciliationCache(
+        organisationId,
+        newSessionId,
+        ownsTransaction ? null : dbClient,
+      );
+    }
+
+    return updatedReturn;
   } catch (error) {
     if (ownsTransaction) {
       try {
@@ -919,13 +997,23 @@ const deleteReturn = async (organisationId, returnId, client = null) => {
           DELETE FROM returns
           WHERE id = $1
             AND organisation_id = $2
-          RETURNING id;
+          RETURNING id, cash_register_session_id;
         `,
       [returnId, organisationId],
     );
 
+    const deletedRow = result.rows[0];
+
     if (ownsTransaction) {
       await dbClient.query("COMMIT");
+    }
+
+    if (deletedRow && deletedRow.cash_register_session_id) {
+      await invalidateSessionReconciliationCache(
+        organisationId,
+        deletedRow.cash_register_session_id,
+        ownsTransaction ? null : dbClient,
+      );
     }
 
     return result.rowCount === 1;
@@ -946,6 +1034,55 @@ const deleteReturn = async (organisationId, returnId, client = null) => {
   }
 };
 
+/**
+ * List returns associated with a cash register session.
+ *
+ * @param {Object} params
+ * @param {string} params.organisationId
+ * @param {string} params.branchId
+ * @param {string} params.sessionId
+ * @param {number} [params.limit=50]
+ * @param {number} [params.offset=0]
+ * @param {Object|null} [params.client=null]
+ *
+ * @returns {Promise<Array<Object>>}
+ */
+const listReturnsBySession = async ({
+  organisationId,
+  branchId,
+  sessionId,
+  limit = 50,
+  offset = 0,
+  client = null,
+}) => {
+  if (!organisationId) throw new Error("organisationId is required.");
+  if (!branchId) throw new Error("branchId is required.");
+  if (!sessionId) throw new Error("sessionId is required.");
+
+  const dbClient = client || pool;
+
+  const query = `
+    SELECT
+      ${RETURN_COLUMNS}
+    FROM returns
+    WHERE organisation_id = $1
+      AND branch_id = $2
+      AND cash_register_session_id = $3
+    ORDER BY created_at DESC
+    LIMIT $4 OFFSET $5;
+  `;
+
+  const result = await dbClient.query(query, [
+    organisationId,
+    branchId,
+    sessionId,
+    limit,
+    offset,
+  ]);
+
+  return result.rows;
+};
+
 module.exports = {
   createReturn,
   getReturnById,
@@ -954,6 +1091,7 @@ module.exports = {
   getReturnsByInvoice,
   getReturnsByBranch,
   getReturnsByOrganisation,
+  listReturnsBySession,
   searchReturns,
   updateReturn,
   deleteReturn,

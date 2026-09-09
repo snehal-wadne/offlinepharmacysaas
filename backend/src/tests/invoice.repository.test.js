@@ -28,10 +28,18 @@ const {
   getInvoicesByCustomer,
   getInvoicesByBranch,
   getInvoicesByOrganisation,
+  listInvoicesBySession,
   searchInvoices,
   updateInvoice,
   deleteInvoice,
 } = require("../repositories/invoice.repository");
+
+const {
+  createCashRegister,
+} = require("../repositories/cash-register.repository");
+const {
+  openSession,
+} = require("../repositories/cash-register-session.repository");
 
 const { pool } = require("../db/connection");
 
@@ -1196,7 +1204,61 @@ const runTests = async () => {
     console.log("Organisation B invoice sequence state verified.");
 
     // ========================================================
-    // 37. SUCCESS
+    // 37. CASH REGISTER SESSION LINKAGE AND QUERY
+    // ========================================================
+
+    console.log("--- Testing invoice cash register session linkage ---");
+
+    const testRegister = await createCashRegister({
+      organisationId: organisationA.organisationId,
+      branchId: branchA1,
+      name: "Invoice Test Terminal",
+      identifier: "INV-TERM-01",
+    });
+
+    const testSession = await openSession({
+      organisationId: organisationA.organisationId,
+      branchId: branchA1,
+      cashRegisterId: testRegister.id,
+      cashierId: organisationA.userId,
+      openingBalance: 500,
+    });
+
+    const sessionInvoice = await createInvoice({
+      organisationId: organisationA.organisationId,
+      branchId: branchA1,
+      customerId: customerA.id,
+      subtotal: 1500,
+      totalAmount: 1500,
+      status: "COMPLETED",
+      createdBy: organisationA.userId,
+      cashRegisterSessionId: testSession.id,
+    });
+
+    assert(
+      sessionInvoice.cash_register_session_id === testSession.id,
+      "Invoice must be linked to the cash register session.",
+    );
+
+    const sessionInvoices = await listInvoicesBySession({
+      organisationId: organisationA.organisationId,
+      branchId: branchA1,
+      sessionId: testSession.id,
+    });
+
+    assert(
+      sessionInvoices.length === 1,
+      "Should find exactly 1 invoice for this session.",
+    );
+    assert(
+      sessionInvoices[0].id === sessionInvoice.id,
+      "Invoice returned from session query must match created invoice.",
+    );
+
+    console.log("Invoice cash register session linkage verified.");
+
+    // ========================================================
+    // 38. SUCCESS
     // ========================================================
 
     console.log("");
