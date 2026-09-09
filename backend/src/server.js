@@ -79,6 +79,7 @@ const syncRoutes = require('./routes/sync.routes');
 const authRoutes = require('./routes/auth.routes');
 const authController = require('./controllers/auth.controller');
 const branchRoutes = require('./routes/branch.routes');
+const customerRoutes = require('./routes/customer.routes');
 
 app.use('/api/purchases', purchaseRoutes);
 app.use('/api/goods-receipts', goodsReceiptRoutes);
@@ -88,6 +89,9 @@ app.use('/api/cashier', cashierRoutes);
 app.use('/api/sync', syncRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/branches', branchRoutes);
+app.use('/branches', branchRoutes);
+app.use('/api/customers', customerRoutes);
+app.use('/customers', customerRoutes);
 app.post('/api/login', authController.login);
 
 /**

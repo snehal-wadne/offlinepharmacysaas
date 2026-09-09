@@ -1133,7 +1133,9 @@ const styles = StyleSheet.create({
     borderColor: '#FFFFFF',
     ...Platform.select({
       web: {
-        outline: '2px solid #0F766E',
+        outlineColor: '#0F766E',
+        outlineStyle: 'solid',
+        outlineWidth: 2,
       },
     }),
   },

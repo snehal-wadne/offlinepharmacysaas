@@ -18,20 +18,27 @@ import {
   MOCK_RECENT_MOVEMENTS,
 } from '../../data/inventoryDashboardMockData';
 import { fetchPurchases } from '../../api/purchaseApi';
+import { fetchInventory, fetchInventorySummary, fetchStockMovements } from '../../api/inventoryApi';
 
 export default function InventoryDashboard({ onNavigate, onShowToast }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
 
   const [pendingOrders, setPendingOrders] = useState(MOCK_PURCHASE_ORDERS || []);
+  const [inventoryItems, setInventoryItems] = useState([]);
+  const [summaryData, setSummaryData] = useState(null);
+  const [recentMovements, setRecentMovements] = useState(MOCK_RECENT_MOVEMENTS || []);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
-    async function loadPendingPOs() {
+
+    async function loadDashboardData() {
       try {
-        const response = await fetchPurchases({ status: 'PENDING' });
-        if (isMounted && response && Array.isArray(response.data) && response.data.length > 0) {
-          const formatted = response.data.map((po) => ({
+        // Load Pending Purchase Orders
+        const poRes = await fetchPurchases({ status: 'PENDING' });
+        if (isMounted && poRes && Array.isArray(poRes.data) && poRes.data.length > 0) {
+          const formatted = poRes.data.map((po) => ({
             id: po.purchase_number || po.purchaseNumber || po.id,
             rawId: po.id,
             supplierName: po.supplier_name || po.supplierName || po.supplier || 'Supplier',
@@ -47,22 +54,63 @@ export default function InventoryDashboard({ onNavigate, onShowToast }) {
           setPendingOrders(formatted);
         }
       } catch (err) {
-        console.log('[InventoryDashboard] Backend offline or using fallback mock pending POs');
+        console.log('[InventoryDashboard] Backend pending POs fetch fallback');
+      }
+
+      try {
+        // Load Summary KPI statistics
+        const summaryRes = await fetchInventorySummary();
+        if (isMounted && summaryRes && summaryRes.data) {
+          setSummaryData(summaryRes.data);
+        }
+      } catch (err) {
+        console.log('[InventoryDashboard] Summary API fallback');
+      }
+
+      try {
+        // Load Recent Stock Movements from backend
+        const movementsRes = await fetchStockMovements();
+        if (isMounted && movementsRes && Array.isArray(movementsRes.data) && movementsRes.data.length > 0) {
+          setRecentMovements(movementsRes.data);
+        }
+      } catch (err) {
+        console.log('[InventoryDashboard] Stock movements API fallback');
+      }
+
+      try {
+        // Load Inventory Batches for dynamic calculation
+        const invRes = await fetchInventory();
+        if (isMounted && invRes && Array.isArray(invRes.data)) {
+          setInventoryItems(invRes.data);
+        }
+      } catch (err) {
+        console.log('[InventoryDashboard] Inventory API fallback');
+      } finally {
+        if (isMounted) setLoading(false);
       }
     }
-    loadPendingPOs();
+
+    loadDashboardData();
     return () => {
       isMounted = false;
     };
   }, []);
 
   const handleQuickAction = (id, label) => {
-    if (id === 'stock-adjustment') {
+    if (id === 'view-stock') {
       if (onNavigate) onNavigate('stock-adjustments');
-    } else if (id === 'stock-transfer') {
-      if (onNavigate) onNavigate('stock-transfer');
+    } else if (id === 'stock-adjustment') {
+      if (onNavigate) onNavigate('stock-adjustments');
+    } else if (id === 'add-customer') {
+      if (onNavigate) onNavigate('customers-patients');
+      if (onShowToast) onShowToast('Redirecting to Customers & Patients Directory...');
     } else if (id === 'receive-stock') {
       if (onNavigate) onNavigate('goods-receiving');
+    } else if (id === 'customer-ledger') {
+      if (onNavigate) onNavigate('customer-ledger');
+      if (onShowToast) onShowToast('Redirecting to Customer Ledger Statement...');
+    } else if (id === 'stock-transfer') {
+      if (onNavigate) onNavigate('stock-transfer');
     } else if (id === 'create-stocktake') {
       if (onNavigate) onNavigate('inventory-reports');
     } else if (id === 'customer-ledger') {
@@ -103,6 +151,111 @@ export default function InventoryDashboard({ onNavigate, onShowToast }) {
     }
   };
 
+  // Compute Dynamic 4 KPI Stat Cards
+  const totalProductsVal = summaryData?.totalProducts != null
+    ? summaryData.totalProducts
+    : inventoryItems.length > 0
+    ? new Set(inventoryItems.map((i) => i.productId || i.brandName || i.medicineName || i.id)).size
+    : 11;
+
+  const lowStockVal = summaryData?.lowStockCount != null
+    ? summaryData.lowStockCount
+    : inventoryItems.length > 0
+    ? inventoryItems.filter((i) => Number(i.quantity) < 50 && Number(i.quantity) > 0).length
+    : 28;
+
+  const nearExpiryVal = summaryData?.nearExpiryCount != null
+    ? summaryData.nearExpiryCount
+    : inventoryItems.length > 0
+    ? inventoryItems.filter((i) => {
+        if (i.expiryDate) {
+          const diffDays = (new Date(i.expiryDate) - new Date()) / (1000 * 60 * 60 * 24);
+          return diffDays >= 0 && diffDays <= 60;
+        }
+        return false;
+      }).length
+    : 14;
+
+  const expiredVal = summaryData?.expiredCount != null
+    ? summaryData.expiredCount
+    : inventoryItems.length > 0
+    ? inventoryItems.filter((i) => {
+        if (i.expiryDate) return new Date(i.expiryDate) < new Date();
+        return Number(i.quantity) === 0;
+      }).length
+    : 3;
+
+  const dynamicKpiData = [
+    {
+      id: 'kpi-1',
+      label: 'TOTAL PRODUCTS',
+      value: Number(totalProductsVal).toLocaleString(),
+      subtext: summaryData || inventoryItems.length > 0 ? 'Live database count' : '+24 new this month',
+      variant: 'teal',
+    },
+    {
+      id: 'kpi-2',
+      label: 'LOW STOCK ALERTS',
+      value: Number(lowStockVal).toLocaleString(),
+      subtext: 'Requires reorder soon',
+      variant: 'amber',
+    },
+    {
+      id: 'kpi-3',
+      label: 'NEAR EXPIRY (< 60D)',
+      value: Number(nearExpiryVal).toLocaleString(),
+      subtext: 'Discount or return',
+      variant: 'blue',
+    },
+    {
+      id: 'kpi-4',
+      label: 'EXPIRED STOCK',
+      value: Number(expiredVal).toLocaleString(),
+      subtext: 'Pending disposal/return',
+      variant: 'red',
+    },
+  ];
+
+  // Compute Categorized Stock Summary dynamically
+  const categorySummaryData = React.useMemo(() => {
+    if (!inventoryItems || inventoryItems.length === 0) {
+      return MOCK_STOCK_SUMMARY;
+    }
+
+    const categoryMap = {
+      'Pain Relief & Analgesics': { id: 'cat-1', category: 'Pain Relief & Analgesics', totalItems: 0, inStock: 0, lowStock: 0, outOfStock: 0 },
+      'Antibiotics & Antibacterials': { id: 'cat-2', category: 'Antibiotics & Antibacterials', totalItems: 0, inStock: 0, lowStock: 0, outOfStock: 0 },
+      'Respiratory & Anti-Allergy': { id: 'cat-3', category: 'Respiratory & Anti-Allergy', totalItems: 0, inStock: 0, lowStock: 0, outOfStock: 0 },
+      'Gastrointestinal & Acid Relief': { id: 'cat-4', category: 'Gastrointestinal & Acid Relief', totalItems: 0, inStock: 0, lowStock: 0, outOfStock: 0 },
+      'General Health & Others': { id: 'cat-5', category: 'General Health & Others', totalItems: 0, inStock: 0, lowStock: 0, outOfStock: 0 },
+    };
+
+    inventoryItems.forEach((item) => {
+      const med = (item.medicineName || item.brandName || '').toLowerCase();
+      let catKey = 'General Health & Others';
+
+      if (med.includes('paracetamol') || med.includes('dolo') || med.includes('brufen') || med.includes('ibuprofen') || med.includes('advil') || med.includes('calpol') || med.includes('suraj')) {
+        catKey = 'Pain Relief & Analgesics';
+      } else if (med.includes('amox') || med.includes('mox') || med.includes('antibiotic') || med.includes('azithro')) {
+        catKey = 'Antibiotics & Antibacterials';
+      } else if (med.includes('cetirizine') || med.includes('cetcip') || med.includes('zyrtec') || med.includes('cough')) {
+        catKey = 'Respiratory & Anti-Allergy';
+      } else if (med.includes('omeprazole') || med.includes('omez') || med.includes('razole') || med.includes('antacid')) {
+        catKey = 'Gastrointestinal & Acid Relief';
+      }
+
+      const cat = categoryMap[catKey];
+      const qty = Number(item.quantity || 0);
+
+      cat.totalItems += 1;
+      if (qty >= 50) cat.inStock += 1;
+      else if (qty > 0) cat.lowStock += 1;
+      else cat.outOfStock += 1;
+    });
+
+    return Object.values(categoryMap).filter((c) => c.totalItems > 0);
+  }, [inventoryItems]);
+
   return (
     <ScrollView
       style={styles.scrollBody}
@@ -117,9 +270,9 @@ export default function InventoryDashboard({ onNavigate, onShowToast }) {
         </Text>
       </View>
 
-      {/* Section 1: KPI Cards */}
+      {/* Section 1: Dynamic KPI Cards */}
       <View style={[styles.kpiRow, isCompact && styles.kpiRowCompact]}>
-        {(MOCK_KPI_DATA || []).map((kpi) => (
+        {dynamicKpiData.map((kpi) => (
           <InventoryStatCard
             key={kpi.id}
             label={kpi.label || kpi.title}
@@ -143,7 +296,7 @@ export default function InventoryDashboard({ onNavigate, onShowToast }) {
       <View style={[styles.gridRow, isCompact && styles.gridRowStacked]}>
         <View style={[styles.gridColLeft, isCompact && styles.gridColFull]}>
           <StockSummary
-            data={MOCK_STOCK_SUMMARY || []}
+            data={categorySummaryData}
             onViewAll={handleViewAllStock}
           />
         </View>
@@ -160,7 +313,7 @@ export default function InventoryDashboard({ onNavigate, onShowToast }) {
       <View style={[styles.gridRow, isCompact && styles.gridRowStacked]}>
         <View style={[styles.gridColLeft, isCompact && styles.gridColFull]}>
           <RecentStockMovements
-            movements={MOCK_RECENT_MOVEMENTS || []}
+            movements={recentMovements || []}
             onViewAll={handleViewAllMovements}
             onMovementPress={handleMovementPress}
           />

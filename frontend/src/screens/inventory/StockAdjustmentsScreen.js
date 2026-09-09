@@ -19,6 +19,7 @@ import {
   saveInventoryEntry,
   updateInventoryEntry,
   deleteInventoryEntry,
+  recordStockMovementApi,
 } from '../../api/inventoryApi';
 import { API_URL } from '../../config';
 
@@ -206,6 +207,10 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
     }
 
     if (actionKey === 'transfer') {
+      if (!isMultiBranch) {
+        if (onShowToast) onShowToast('Inter-branch transfers are only available in Multi-Branch mode.');
+        return;
+      }
       const currentBranch = item.branchId || 'FIT Main Campus Hospital Pharmacy';
       setFromBranch(currentBranch);
 
@@ -290,6 +295,15 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
 
     try {
       await updateInventoryEntry(selectedItemForAction.id, updatedPayload);
+      recordStockMovementApi({
+        branchName: selectedItemForAction.branchId || 'Main Branch',
+        type: 'Adjustment',
+        item: selectedItemForAction.brandName || selectedItemForAction.medicineName || 'Medicine Item',
+        quantity: deltaNum > 0 ? `+${deltaNum}` : `${deltaNum}`,
+        reference: selectedItemForAction.batchNo || 'ADJ-1001',
+        status: 'Completed',
+      }).catch(() => {});
+
       setStockItems((prev) =>
         prev.map((i) => {
           if (i.id === selectedItemForAction.id) {
@@ -1359,16 +1373,18 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
                 </View>
               </Pressable>
 
-              <Pressable
-                onPress={() => handleExecuteAction('transfer')}
-                style={styles.actionOptionRow}
-              >
-                <Text style={styles.actionOptionIcon}>🔄</Text>
-                <View style={styles.actionOptionTextCol}>
-                  <Text style={styles.actionOptionTitle}>Initiate Inter-Branch Transfer</Text>
-                  <Text style={styles.actionOptionDesc}>Send stock to another store or hospital dispensary</Text>
-                </View>
-              </Pressable>
+              {isMultiBranch && (
+                <Pressable
+                  onPress={() => handleExecuteAction('transfer')}
+                  style={styles.actionOptionRow}
+                >
+                  <Text style={styles.actionOptionIcon}>🔄</Text>
+                  <View style={styles.actionOptionTextCol}>
+                    <Text style={styles.actionOptionTitle}>Initiate Inter-Branch Transfer</Text>
+                    <Text style={styles.actionOptionDesc}>Send stock to another store or hospital dispensary</Text>
+                  </View>
+                </Pressable>
+              )}
 
               <Pressable
                 onPress={() => handleExecuteAction('barcode')}

@@ -49,6 +49,7 @@ const createSupplier = async ({
   city = null,
   gstin = null,
   status = "ACTIVE",
+  category = "Medicines & Injections",
 }) => {
   const query = `
         INSERT INTO suppliers (
@@ -308,6 +309,7 @@ const updateSupplier = async (
     city = null,
     gstin = null,
     status = "ACTIVE",
+    category = null,
   },
 ) => {
   const query = `
@@ -320,9 +322,10 @@ const updateSupplier = async (
             city = $5,
             gstin = $6,
             status = $7,
+            category = COALESCE($8, category),
             updated_at = CURRENT_TIMESTAMP
-        WHERE id = $8
-          AND organisation_id = $9
+        WHERE id = $9
+          AND organisation_id = $10
         RETURNING
             id,
             organisation_id,
@@ -333,6 +336,7 @@ const updateSupplier = async (
             city,
             gstin,
             status,
+            category,
             created_at,
             updated_at;
     `;
@@ -345,6 +349,7 @@ const updateSupplier = async (
     city,
     gstin,
     status,
+    category,
     supplierId,
     organisationId,
   ];

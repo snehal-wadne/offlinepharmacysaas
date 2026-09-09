@@ -24,6 +24,14 @@ import {
   deleteSupplier,
 } from '../../api/purchaseApi';
 
+const SUPPLIER_CATEGORIES = [
+  'Medicines & Injections',
+  'Generic Medicines',
+  'Nutrition & Diagnostics',
+  'Supplements & Vitamins',
+  'Medical Consumables',
+];
+
 export default function SuppliersScreen({ onShowToast, onNavigate }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
@@ -48,10 +56,11 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEditingSupplier, setIsEditingSupplier] = useState(false);
   const [editingSupplierId, setEditingSupplierId] = useState(null);
+  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
-    category: 'Branded Formulations',
+    category: 'Medicines & Injections',
     contactPerson: '',
     phone: '',
     email: '',
@@ -185,9 +194,10 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
   const handleOpenModalForAdd = () => {
     setIsEditingSupplier(false);
     setEditingSupplierId(null);
+    setCategoryDropdownOpen(false);
     setFormData({
       name: '',
-      category: 'Branded Formulations',
+      category: 'Medicines & Injections',
       contactPerson: '',
       phone: '',
       email: '',
@@ -201,9 +211,10 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
   const handleOpenModalForEdit = (sup) => {
     setIsEditingSupplier(true);
     setEditingSupplierId(sup.id);
+    setCategoryDropdownOpen(false);
     setFormData({
       name: sup.name || '',
-      category: sup.category || 'Branded Formulations',
+      category: sup.category || 'Medicines & Injections',
       contactPerson: sup.contactPerson === 'N/A' ? '' : sup.contactPerson || '',
       phone: sup.phone === 'N/A' ? '' : sup.phone || '',
       email: sup.email === 'contact@supplier.example.com' ? '' : sup.email || '',
@@ -218,7 +229,7 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
     if (!sup) return;
     try {
       await deleteSupplier(sup.id);
-      setSuppliers((prev) => prev.filter((s) => s.id !== sup.id));
+      await loadSuppliersData();
       if (onShowToast) {
         onShowToast(`🗑️ Supplier "${sup.name}" deleted from database!`);
       }
@@ -253,22 +264,7 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
     if (isEditingSupplier && editingSupplierId) {
       try {
         await updateSupplier(editingSupplierId, payload);
-        setSuppliers((prev) =>
-          prev.map((s) =>
-            s.id === editingSupplierId
-              ? {
-                  ...s,
-                  name: formData.name.trim(),
-                  contactPerson: formData.contactPerson.trim() || s.contactPerson,
-                  phone: formData.phone.trim() || s.phone,
-                  email: formData.email.trim() || s.email,
-                  city: formData.city.trim() || s.city,
-                  gstin: formData.gstin.trim() || s.gstin,
-                  category: formData.category || s.category,
-                }
-              : s
-          )
-        );
+        await loadSuppliersData();
         setModalVisible(false);
         setIsEditingSupplier(false);
         setEditingSupplierId(null);
@@ -302,27 +298,11 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
     } else {
       try {
         const res = await createSupplier(payload);
-        const created = res?.data;
-        const newSup = {
-          id: created?.id || `SUP-${Date.now()}`,
-          code: `SUP-${String(suppliers.length + 1).padStart(3, '0')}`,
-          name: created?.name || formData.name,
-          contactPerson: created?.contact_person || formData.contactPerson || 'Account Executive',
-          phone: created?.phone || formData.phone || '+91 98000 11111',
-          email: created?.email || formData.email || 'orders@pharma.in',
-          city: created?.city || formData.city || 'Mumbai',
-          gstin: created?.gstin || formData.gstin || '27AABCT1234F1Z0',
-          paymentTerms: 'Net 30',
-          balance: '₹0.00',
-          status: 'Active',
-          category: formData.category || 'Medicines & Injections',
-        };
-
-        setSuppliers((prev) => [newSup, ...prev]);
         setModalVisible(false);
+        await loadSuppliersData();
 
         if (onShowToast) {
-          onShowToast(`✓ Added ${newSup.name} into suppliers database table!`);
+          onShowToast(`✓ Added ${formData.name.trim()} into suppliers database table!`);
         }
       } catch (err) {
         console.warn('DB supplier add failed, fallback local state:', err.message);
@@ -693,8 +673,8 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
               </Pressable>
             </View>
 
-            <ScrollView style={styles.modalBody}>
-              <View style={styles.formRow}>
+            <ScrollView style={styles.modalBody} nestedScrollEnabled={true}>
+              <View style={[styles.formRow, { zIndex: categoryDropdownOpen ? 1000 : 1, position: 'relative' }]}>
                 <View style={styles.formFieldHalf}>
                   <Text style={styles.fieldLabel}>
                     Supplier / Vendor Name <Text style={styles.reqStar}>*</Text>
@@ -709,19 +689,58 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
                   {formErrors.name && <Text style={styles.errorText}>{formErrors.name}</Text>}
                 </View>
 
-                <View style={styles.formFieldHalf}>
-                  <Text style={styles.fieldLabel}>Category</Text>
-                  <TextInput
-                    style={styles.modalInput}
-                    placeholder="e.g., Generic Medicines"
-                    placeholderTextColor="#94A3B8"
-                    value={formData.category}
-                    onChangeText={(t) => setFormData((p) => ({ ...p, category: t }))}
-                  />
+                <View style={[styles.formFieldHalf, { zIndex: 1000, position: 'relative' }]}>
+                  <Text style={styles.fieldLabel}>
+                    Supplier Category <Text style={styles.reqStar}>*</Text>
+                  </Text>
+                  <Pressable
+                    onPress={() => setCategoryDropdownOpen(!categoryDropdownOpen)}
+                    style={styles.dropdownPickerBox}
+                    accessibilityRole="combobox"
+                    accessibilityLabel="Select Supplier Category"
+                  >
+                    <Text style={styles.dropdownPickerSelectedText}>
+                      {formData.category || 'Medicines & Injections'}
+                    </Text>
+                    <Text style={styles.dropdownPickerChevron}>
+                      {categoryDropdownOpen ? '▲' : '▼'}
+                    </Text>
+                  </Pressable>
+
+                  {categoryDropdownOpen && (
+                    <View style={styles.dropdownMenuContainer}>
+                      {SUPPLIER_CATEGORIES.map((cat) => {
+                        const isSelected = formData.category === cat;
+                        return (
+                          <Pressable
+                            key={cat}
+                            onPress={() => {
+                              setFormData((p) => ({ ...p, category: cat }));
+                              setCategoryDropdownOpen(false);
+                            }}
+                            style={[
+                              styles.dropdownMenuItem,
+                              isSelected && styles.dropdownMenuItemActive,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.dropdownMenuText,
+                                isSelected && styles.dropdownMenuTextActive,
+                              ]}
+                            >
+                              {cat}
+                            </Text>
+                            {isSelected && <Text style={styles.checkIcon}>✓</Text>}
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  )}
                 </View>
               </View>
 
-              <View style={styles.formRow}>
+              <View style={[styles.formRow, { zIndex: 1, position: 'relative' }]}>
                 <View style={styles.formFieldHalf}>
                   <Text style={styles.fieldLabel}>Contact Person</Text>
                   <TextInput
@@ -745,7 +764,7 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
                 </View>
               </View>
 
-              <View style={styles.formRow}>
+              <View style={[styles.formRow, { zIndex: 1, position: 'relative' }]}>
                 <View style={styles.formFieldHalf}>
                   <Text style={styles.fieldLabel}>Email Address</Text>
                   <TextInput
@@ -769,7 +788,7 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
                 </View>
               </View>
 
-              <View style={styles.formRow}>
+              <View style={[styles.formRow, { zIndex: 1, position: 'relative' }]}>
                 <View style={styles.formFieldHalf}>
                   <Text style={styles.fieldLabel}>GSTIN Tax Number</Text>
                   <TextInput
@@ -1770,5 +1789,75 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12.5,
     fontWeight: '700',
+  },
+  dropdownPickerBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    backgroundColor: '#F8FAFC',
+    cursor: 'pointer',
+  },
+  dropdownPickerSelectedText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  dropdownPickerChevron: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  dropdownMenuContainer: {
+    position: 'absolute',
+    top: 68,
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    zIndex: 99999,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.22), 0 2px 8px rgba(0, 0, 0, 0.12)',
+      },
+      default: {
+        elevation: 12,
+      },
+    }),
+    paddingVertical: 4,
+    overflow: 'hidden',
+  },
+  dropdownMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8FAFC',
+    cursor: 'pointer',
+  },
+  dropdownMenuItemActive: {
+    backgroundColor: '#F0FDFA',
+  },
+  dropdownMenuText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  dropdownMenuTextActive: {
+    color: '#0F766E',
+    fontWeight: '800',
+  },
+  checkIcon: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0F766E',
   },
 });

@@ -155,6 +155,20 @@ const autoInitDatabase = async () => {
       await targetPool.query(
         "ALTER TABLE branches ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE';"
       ).catch(() => {});
+
+      await targetPool.query(
+        `CREATE TABLE IF NOT EXISTS stock_movements (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          organisation_id UUID,
+          branch_name VARCHAR(255) DEFAULT 'Main Branch',
+          movement_type VARCHAR(50) NOT NULL,
+          item_name VARCHAR(255) NOT NULL,
+          quantity VARCHAR(50) NOT NULL,
+          reference VARCHAR(100) DEFAULT 'SYS-LOG',
+          status VARCHAR(50) DEFAULT 'Completed',
+          created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );`
+      ).catch(() => {});
     }
 
     // 3. Verify user table seed data
@@ -169,6 +183,13 @@ const autoInitDatabase = async () => {
       } catch (seedErr) {
         console.warn("⚠️ Seed dev output/completion:", seedErr.message || seedErr);
       }
+    }
+
+    try {
+      const { seedCustomers } = require("./seed-customers");
+      await seedCustomers(targetPool);
+    } catch (custSeedErr) {
+      console.warn("⚠️ Customer seed output/completion:", custSeedErr.message || custSeedErr);
     }
   } catch (err) {
     console.error("❌ Database schema auto-initialization error:", err.message);

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,97 +8,201 @@ import {
   Modal,
   StyleSheet,
   useWindowDimensions,
-  Platform,
+  ActivityIndicator,
 } from 'react-native';
 import InventoryStatCard from '../../components/inventory/InventoryStatCard';
 import {
-  CUSTOMERS_KPIS,
   PATIENT_TYPE_FILTER,
   MOCK_CUSTOMERS_LIST,
   MOCK_PATIENT_PURCHASE_HISTORY,
 } from '../../data/customersMockData';
+import {
+  fetchCustomers,
+  fetchCustomerSummary,
+  createCustomer,
+  updateCustomer,
+  deleteCustomer,
+} from '../../api/customerApi';
 
 export default function CustomersPatientsScreen({ onShowToast, onNavigate }) {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const isCompact = width < 1100;
 
-  // Search & Filter State (RX-04)
+  // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All Customers');
 
-  // Customers Data List
-  const [customers, setCustomers] = useState(MOCK_CUSTOMERS_LIST);
+  // Customers & Summary Data State
+  const [customers, setCustomers] = useState([]);
+  const [summaryData, setSummaryData] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  // Modal 1: Add/Edit Customer Profile Modal (RX-01, RX-02, RX-03, RX-06)
+  // Modal 1: Add / Edit Customer Profile Modal
   const [addModalVisible, setAddModalVisible] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
     email: '',
-    age: '',
-    gender: 'Male',
+    age: '30',
+    gender: 'F',
     category: 'Regular',
-    city: 'Mumbai, MH',
-    address: '',
-    doctorName: '',
-    doctorSpecialization: '',
-    hospitalClinic: '',
-    doctorRegNo: '',
-    activeRxNo: '',
-    chronicConditions: '',
-    allergies: '',
-    creditAllowed: true,
-    creditLimit: '15000',
+    city: 'Mumbai',
+    address: 'Local Resident',
+    doctorName: 'Dr. Farooq Siddiqui',
+    doctorSpecialization: 'General Physician',
+    activeRxNo: 'Rx-2026-1025',
+    creditLimit: '2000',
+    outstandingBalance: '0',
   });
   const [formErrors, setFormErrors] = useState({});
 
-  // Modal 2: Customer History & Prescription Details Modal (RX-03, RX-05)
+  // Category Dropdown Open inside Modal
+  const [modalCategoryDropdownOpen, setModalCategoryDropdownOpen] = useState(false);
+
+  // Modal 2: Customer History & Prescription Details Modal
   const [historyModalVisible, setHistoryModalVisible] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState(null);
+
+  // Modal 3: Action Menu Popover Modal
+  const [actionMenuOpen, setActionMenuOpen] = useState(false);
+  const [actionCustomer, setActionCustomer] = useState(null);
+
+  useEffect(() => {
+    loadCustomersData();
+  }, []);
+
+  const loadCustomersData = async () => {
+    try {
+      setLoading(true);
+      const [resCust, resSum] = await Promise.all([
+        fetchCustomers(),
+        fetchCustomerSummary().catch(() => null),
+      ]);
+
+      if (resCust && resCust.data && Array.isArray(resCust.data) && resCust.data.length > 0) {
+        setCustomers(resCust.data);
+      } else {
+        setCustomers(MOCK_CUSTOMERS_LIST);
+      }
+
+      if (resSum && resSum.data) {
+        setSummaryData(resSum.data);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch customers from API:', err.message);
+      setCustomers(MOCK_CUSTOMERS_LIST);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Dynamic KPI Cards
+  const totalCount = summaryData?.totalCustomers || customers.length;
+  const chronicCount = summaryData?.chronicCarePatients || customers.filter((c) => c.category === 'Chronic Care').length;
+  const activeCreditCount = summaryData?.activeCreditAccounts || customers.filter((c) => (c.creditLimit && c.creditLimit > 0) || (c.outstandingBalance && c.outstandingBalance > 0)).length;
+  const loyaltySum = summaryData?.loyaltyPointsPool || customers.reduce((acc, c) => acc + (c.loyaltyPoints || 0), 0);
+
+  const dynamicKpis = [
+    {
+      id: 'kpi-1',
+      label: 'TOTAL CUSTOMERS',
+      value: totalCount.toLocaleString(),
+      subtext: '+32 this month',
+      variant: 'teal',
+    },
+    {
+      id: 'kpi-2',
+      label: 'CHRONIC CARE PATIENTS',
+      value: chronicCount.toLocaleString(),
+      subtext: 'Auto-refill enabled',
+      variant: 'blue',
+    },
+    {
+      id: 'kpi-3',
+      label: 'ACTIVE CREDIT ACCOUNTS',
+      value: activeCreditCount.toLocaleString(),
+      subtext: `₹${(summaryData?.totalOutstanding || 34270).toLocaleString('en-IN')} outstanding credit`,
+      variant: 'orange',
+    },
+    {
+      id: 'kpi-4',
+      label: 'LOYALTY POINTS POOL',
+      value: `${loyaltySum.toLocaleString()} pts`,
+      subtext: `₹${loyaltySum.toLocaleString()} redeemable value`,
+      variant: 'amber',
+    },
+  ];
 
   // Filtered Customers List
   const filteredCustomers = customers.filter((cust) => {
     const query = searchQuery.toLowerCase();
     const matchesSearch =
-      cust.name.toLowerCase().includes(query) ||
-      cust.phone.toLowerCase().includes(query) ||
-      cust.id.toLowerCase().includes(query) ||
-      cust.doctorName.toLowerCase().includes(query) ||
-      cust.city.toLowerCase().includes(query);
+      (cust.name && cust.name.toLowerCase().includes(query)) ||
+      (cust.phone && cust.phone.toLowerCase().includes(query)) ||
+      (cust.customerNumber && cust.customerNumber.toLowerCase().includes(query)) ||
+      (cust.id && cust.id.toLowerCase().includes(query)) ||
+      (cust.doctorName && cust.doctorName.toLowerCase().includes(query)) ||
+      (cust.city && cust.city.toLowerCase().includes(query));
 
     const matchesCategory =
       selectedCategory === 'All Customers' || selectedCategory === 'All Patients' ||
-      (selectedCategory === 'Credit Allowed' ? cust.creditAllowed : cust.category === selectedCategory);
+      (selectedCategory === 'Credit Allowed' ? (cust.creditLimit > 0 || cust.creditAllowed) : cust.category === selectedCategory);
 
     return matchesSearch && matchesCategory;
   });
 
   const handleOpenAddModal = () => {
+    setIsEditing(false);
+    setEditingId(null);
     setFormData({
       name: '',
       phone: '',
       email: '',
-      age: '',
-      gender: 'Male',
+      age: '30',
+      gender: 'F',
       category: 'Regular',
-      city: 'Mumbai, MH',
-      address: '',
-      doctorName: '',
-      doctorSpecialization: '',
-      hospitalClinic: '',
-      doctorRegNo: '',
+      city: 'Mumbai',
+      address: 'Local Resident',
+      doctorName: 'Dr. Farooq Siddiqui',
+      doctorSpecialization: 'General Physician',
       activeRxNo: `Rx-2026-${Math.floor(1000 + Math.random() * 9000)}`,
-      chronicConditions: '',
-      allergies: '',
-      creditAllowed: true,
       creditLimit: '15000',
+      outstandingBalance: '0',
     });
     setFormErrors({});
+    setModalCategoryDropdownOpen(false);
     setAddModalVisible(true);
   };
 
-  const handleSavePatient = () => {
+  const handleOpenEditModal = (cust) => {
+    setIsEditing(true);
+    setEditingId(cust.id);
+    setFormData({
+      name: cust.name || '',
+      phone: cust.phone === 'N/A' ? '' : cust.phone || '',
+      email: cust.email || '',
+      age: String(cust.age || 30),
+      gender: cust.gender || 'F',
+      category: cust.category || 'Regular',
+      city: cust.city || 'Mumbai',
+      address: cust.address || 'Local Resident',
+      doctorName: cust.doctorName || 'Dr. Farooq Siddiqui',
+      doctorSpecialization: cust.doctorSpecialty || cust.doctorSpecialization || 'General Physician',
+      activeRxNo: cust.activeRxNo || `Rx-2026-1025`,
+      creditLimit: String(cust.creditLimit || 0),
+      outstandingBalance: String(cust.outstandingBalance || 0),
+    });
+    setFormErrors({});
+    setModalCategoryDropdownOpen(false);
+    setActionMenuOpen(false);
+    setAddModalVisible(true);
+  };
+
+  const handleSavePatient = async () => {
     const errors = {};
     if (!formData.name.trim()) errors.name = 'Customer Full Name is required';
     if (!formData.phone.trim()) errors.phone = 'Phone number is required';
@@ -109,42 +213,116 @@ export default function CustomersPatientsScreen({ onShowToast, onNavigate }) {
       return;
     }
 
-    const newPatient = {
-      id: `CUST-${1040 + customers.length + 1}`,
-      name: formData.name,
-      phone: formData.phone,
-      email: formData.email || 'customer@mail.com',
-      age: formData.age,
+    const payload = {
+      name: formData.name.trim(),
+      phone: formData.phone.trim(),
+      email: formData.email.trim() || `${formData.name.toLowerCase().replace(/[^a-z]/g, '')}@example.com`,
+      age: parseInt(formData.age, 10) || 30,
       gender: formData.gender,
-      category: formData.category,
-      city: formData.city,
+      category: formData.category || 'Regular',
+      city: formData.city || 'Mumbai',
       address: formData.address || 'Local Resident',
-      doctorName: formData.doctorName || 'Dr. General Prescriber',
-      doctorSpecialization: formData.doctorSpecialization || 'General Medicine',
-      hospitalClinic: formData.hospitalClinic || 'City Hospital',
-      doctorRegNo: formData.doctorRegNo || 'MCI-MH-10029',
-      activeRxNo: formData.activeRxNo,
-      rxDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-      rxExpiry: '6 Months',
-      chronicConditions: formData.chronicConditions || 'None Reported',
-      allergies: formData.allergies || 'None',
-      rxDocumentName: 'Rx_Attached_Doc.pdf',
-      creditAllowed: formData.creditAllowed,
-      creditLimit: formData.creditAllowed ? `₹${Number(formData.creditLimit).toLocaleString('en-IN')}` : '₹0 (Cash Only)',
-      currentOutstanding: '₹0.00',
-      creditAging: 'Settled',
-      totalPurchases: '₹0.00',
-      lastPurchaseDate: 'New Customer',
-      totalInvoices: 0,
-      loyaltyPoints: 50,
-      status: 'Active',
+      doctorName: formData.doctorName || 'Dr. Farooq Siddiqui',
+      doctorSpecialty: formData.doctorSpecialization || 'General Physician',
+      activeRxNo: formData.activeRxNo || `Rx-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+      creditLimit: parseFloat(formData.creditLimit) || 0,
+      outstandingBalance: parseFloat(formData.outstandingBalance) || 0,
+      status: 'ACTIVE',
     };
 
-    setCustomers((prev) => [newPatient, ...prev]);
-    setAddModalVisible(false);
+    if (isEditing && editingId) {
+      try {
+        await updateCustomer(editingId, payload);
+        await loadCustomersData();
+        setAddModalVisible(false);
+        setIsEditing(false);
+        setEditingId(null);
+        if (onShowToast) {
+          onShowToast(`✓ Updated customer profile "${formData.name}" in database!`);
+        }
+      } catch (err) {
+        console.warn('DB customer update failed, fallback local:', err.message);
+        setCustomers((prev) =>
+          prev.map((c) => (c.id === editingId ? { ...c, ...payload } : c))
+        );
+        setAddModalVisible(false);
+        setIsEditing(false);
+        setEditingId(null);
+        if (onShowToast) {
+          onShowToast(`✓ Updated ${formData.name}`);
+        }
+      }
+    } else {
+      try {
+        await createCustomer(payload);
+        await loadCustomersData();
+        setAddModalVisible(false);
+        if (onShowToast) {
+          onShowToast(`✓ Added customer profile "${formData.name}" to database!`);
+        }
+      } catch (err) {
+        console.warn('DB customer add failed, fallback local state:', err.message);
+        const newPatient = {
+          id: `CUST-${1040 + customers.length + 1}`,
+          customerNumber: `CUST-${1040 + customers.length + 1}`,
+          name: formData.name,
+          phone: formData.phone,
+          email: formData.email,
+          age: formData.age,
+          gender: formData.gender,
+          category: formData.category,
+          city: formData.city,
+          address: formData.address,
+          doctorName: formData.doctorName,
+          doctorSpecialty: formData.doctorSpecialization,
+          activeRxNo: formData.activeRxNo,
+          creditLimit: parseFloat(formData.creditLimit) || 0,
+          outstandingBalance: parseFloat(formData.outstandingBalance) || 0,
+          totalSpent: 0,
+          status: 'Active',
+        };
+        setCustomers((prev) => [newPatient, ...prev]);
+        setAddModalVisible(false);
+        if (onShowToast) {
+          onShowToast(`✓ Added customer profile "${newPatient.name}"!`);
+        }
+      }
+    }
+  };
 
-    if (onShowToast) {
-      onShowToast(`✓ Added customer profile "${newPatient.name}" (${newPatient.id}) with Rx details!`);
+  const handleDeleteCustomerAction = async (cust) => {
+    if (!cust) return;
+    try {
+      await deleteCustomer(cust.id);
+      await loadCustomersData();
+      setActionMenuOpen(false);
+      if (onShowToast) {
+        onShowToast(`🗑️ Deleted customer profile "${cust.name}" from database!`);
+      }
+    } catch (err) {
+      setCustomers((prev) => prev.filter((c) => c.id !== cust.id));
+      setActionMenuOpen(false);
+      if (onShowToast) {
+        onShowToast(`Removed ${cust.name}`);
+      }
+    }
+  };
+
+  const handleToggleStatus = async (cust) => {
+    if (!cust) return;
+    const nextStatus = cust.status === 'Active' ? 'Inactive' : 'Active';
+    try {
+      await updateCustomer(cust.id, { status: nextStatus === 'Active' ? 'ACTIVE' : 'INACTIVE' });
+      await loadCustomersData();
+      setActionMenuOpen(false);
+      if (onShowToast) {
+        onShowToast(`✓ Customer "${cust.name}" status updated to ${nextStatus}!`);
+      }
+    } catch (err) {
+      setCustomers((prev) =>
+        prev.map((c) => (c.id === cust.id ? { ...c, status: nextStatus } : c))
+      );
+      setActionMenuOpen(false);
     }
   };
 
@@ -155,13 +333,13 @@ export default function CustomersPatientsScreen({ onShowToast, onNavigate }) {
 
   const handleOpenCustomerDetailsPage = (cust) => {
     if (onNavigate) {
-      onNavigate('customer-details', cust.id);
+      onNavigate('customer-ledger', cust.id);
     }
   };
 
   const handleExportData = (type) => {
     if (onShowToast) {
-      onShowToast(`✓ Exported ${filteredCustomers.length} customer records as ${type.toUpperCase()}! (RX-07 Audit Logged)`);
+      onShowToast(`✓ Exported ${filteredCustomers.length} customer records as ${type.toUpperCase()}!`);
     }
   };
 
@@ -170,9 +348,22 @@ export default function CustomersPatientsScreen({ onShowToast, onNavigate }) {
       onNavigate('dashboard');
     }
     if (onShowToast) {
-      onShowToast(`✓ Selected customer "${cust.name}" attached to active sale transaction! (RX-01 & RX-04)`);
+      onShowToast(`✓ Customer "${cust.name}" attached to active sale transaction!`);
     }
   };
+
+  const handleOpenActionMenu = (cust) => {
+    setActionCustomer(cust);
+    setActionMenuOpen(true);
+  };
+
+  const categoryOptions = [
+    'Regular',
+    'Chronic Care',
+    'Senior Citizen',
+    'Credit Allowed',
+    'VIP',
+  ];
 
   return (
     <ScrollView
@@ -183,7 +374,7 @@ export default function CustomersPatientsScreen({ onShowToast, onNavigate }) {
       ]}
       showsVerticalScrollIndicator={true}
     >
-      {/* Professional Page Header */}
+      {/* Header */}
       <View style={[styles.headerRow, isMobile && styles.headerRowMobile]}>
         <View style={styles.headerTitleBox}>
           <View style={styles.titleBadgeRow}>
@@ -218,15 +409,15 @@ export default function CustomersPatientsScreen({ onShowToast, onNavigate }) {
         </View>
       </View>
 
-      {/* Top 4 Responsive KPI Cards */}
+      {/* Dynamic 4 Top KPI Cards */}
       <View style={[styles.kpiRow, isCompact && styles.kpiRowCompact]}>
-        {CUSTOMERS_KPIS.map((kpi) => (
+        {dynamicKpis.map((kpi) => (
           <View
             key={kpi.id}
             style={[styles.kpiCol, isMobile && styles.kpiColMobile]}
           >
             <InventoryStatCard
-              label={kpi.label === 'Total Registered Patients' ? 'Total Customers' : kpi.label}
+              label={kpi.label}
               value={kpi.value}
               subtext={kpi.subtext}
               variant={kpi.variant}
@@ -238,7 +429,7 @@ export default function CustomersPatientsScreen({ onShowToast, onNavigate }) {
 
       {/* Main Directory Card */}
       <View style={styles.cardContainer}>
-        {/* Search & Filter Header (RX-04) */}
+        {/* Search & Category Filter Header */}
         <View style={[styles.filtersBar, isCompact && styles.filtersBarCompact]}>
           <View style={[styles.searchBox, isMobile && styles.searchBoxMobile]}>
             <TextInput
@@ -284,13 +475,20 @@ export default function CustomersPatientsScreen({ onShowToast, onNavigate }) {
           </ScrollView>
         </View>
 
-        {/* Section Title & Pagination Subheader */}
+        {/* Section Subheader */}
         <View style={styles.tableSubheader}>
           <Text style={styles.sectionTitle}>Customer Accounts & Prescriptions</Text>
-          <Text style={styles.paginationInfo}>Showing 1-{filteredCustomers.length} of {customers.length} records</Text>
+          <Text style={styles.paginationInfo}>
+            Showing {filteredCustomers.length} of {customers.length} records
+          </Text>
         </View>
 
-        {isMobile ? (
+        {loading ? (
+          <View style={{ padding: 40, alignItems: 'center' }}>
+            <ActivityIndicator size="large" color="#0F766E" />
+            <Text style={{ marginTop: 12, color: '#64748B', fontWeight: '600' }}>Fetching customer records from database...</Text>
+          </View>
+        ) : isMobile ? (
           /* Mobile Customer Cards */
           <View style={styles.mobileCardList}>
             {filteredCustomers.length === 0 ? (
@@ -301,12 +499,25 @@ export default function CustomersPatientsScreen({ onShowToast, onNavigate }) {
             ) : (
               filteredCustomers.map((cust) => {
                 const isOverdue = cust.status === 'Overdue';
+                const displayId = cust.customerNumber || cust.id;
+                const outstandingVal = typeof cust.outstandingBalance === 'number'
+                  ? `₹${cust.outstandingBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                  : cust.currentOutstanding || '₹0.00';
+                const creditLimitVal = typeof cust.creditLimit === 'number'
+                  ? cust.creditLimit === 0 ? '₹0 (Cash Only)' : `₹${cust.creditLimit.toLocaleString('en-IN')}`
+                  : cust.creditLimit || '₹0 (Cash Only)';
+                const totalSpentVal = typeof cust.totalSpent === 'number'
+                  ? `₹${cust.totalSpent.toLocaleString('en-IN')}`
+                  : cust.totalSpent || '₹0.00';
+
                 return (
                   <View key={cust.id} style={styles.mobileCustomerCard}>
                     <View style={styles.mobileCustHeader}>
-                      <Pressable onPress={() => handleOpenCustomerDetailsPage(cust)} style={{ flex: 1 }}>
+                      <Pressable onPress={() => handleViewPatientDetails(cust)} style={{ flex: 1 }}>
                         <Text style={styles.mobileCustName}>{cust.name}</Text>
-                        <Text style={styles.mobileCustSub}>{cust.id} • {cust.category} • {cust.age}y/{cust.gender === 'Male' ? 'M' : 'F'}</Text>
+                        <Text style={styles.mobileCustSub}>
+                          {displayId} • {cust.category} • {cust.age}y/{cust.gender === 'M' || cust.gender === 'Male' ? 'M' : 'F'}
+                        </Text>
                       </Pressable>
                       <View style={[styles.statusBadgeActive, isOverdue && styles.statusBadgeOverdue]}>
                         <Text style={[styles.statusBadgeTextActive, isOverdue && styles.statusBadgeTextOverdue]}>
@@ -330,17 +541,17 @@ export default function CustomersPatientsScreen({ onShowToast, onNavigate }) {
                       </View>
                       <View style={styles.mobileGridCol}>
                         <Text style={styles.mobileLabel}>Outstanding Due</Text>
-                        <Text style={[styles.mobileValBold, { color: cust.currentOutstanding !== '₹0.00' ? '#DC2626' : '#16A34A' }]}>
-                          {cust.currentOutstanding}
+                        <Text style={[styles.mobileValBold, { color: outstandingVal !== '₹0.00' && outstandingVal !== '₹0' ? '#DC2626' : '#16A34A' }]}>
+                          {outstandingVal}
                         </Text>
                       </View>
                       <View style={styles.mobileGridCol}>
                         <Text style={styles.mobileLabel}>Credit Limit</Text>
-                        <Text style={styles.mobileVal}>{cust.creditLimit}</Text>
+                        <Text style={styles.mobileVal}>{creditLimitVal}</Text>
                       </View>
                       <View style={styles.mobileGridCol}>
                         <Text style={styles.mobileLabel}>Total Spent</Text>
-                        <Text style={styles.mobileValBold}>{cust.totalSpent}</Text>
+                        <Text style={styles.mobileValBold}>{totalSpentVal}</Text>
                       </View>
                     </View>
 
@@ -350,14 +561,14 @@ export default function CustomersPatientsScreen({ onShowToast, onNavigate }) {
                         style={styles.mobileAttachPOSBtn}
                         accessibilityRole="button"
                       >
-                        <Text style={styles.mobileAttachPOSText}>+ Attach to POS Bill</Text>
+                        <Text style={styles.mobileAttachPOSText}>+ POS</Text>
                       </Pressable>
                       <Pressable
-                        onPress={() => handleOpenCustomerDetailsPage(cust)}
+                        onPress={() => handleViewPatientDetails(cust)}
                         style={styles.mobileHistoryBtn}
                         accessibilityRole="button"
                       >
-                        <Text style={styles.mobileHistoryBtnText}>Profile →</Text>
+                        <Text style={styles.mobileHistoryBtnText}>Details</Text>
                       </Pressable>
                     </View>
                   </View>
@@ -381,7 +592,7 @@ export default function CustomersPatientsScreen({ onShowToast, onNavigate }) {
                 <Text style={[styles.thCell, { width: 110, textAlign: 'right' }]}>OUTSTANDING</Text>
                 <Text style={[styles.thCell, { width: 110, textAlign: 'right' }]}>TOTAL SPENT</Text>
                 <Text style={[styles.thCell, { width: 90, textAlign: 'center' }]}>STATUS</Text>
-                <Text style={[styles.thCell, { width: 150, textAlign: 'center' }]}>ACTIONS</Text>
+                <Text style={[styles.thCell, { width: 160, textAlign: 'center' }]}>ACTIONS</Text>
               </View>
 
               {/* Table Rows */}
@@ -393,6 +604,17 @@ export default function CustomersPatientsScreen({ onShowToast, onNavigate }) {
               ) : (
                 filteredCustomers.map((cust, index) => {
                   const isOverdue = cust.status === 'Overdue';
+                  const displayId = cust.customerNumber || cust.id;
+                  const outstandingVal = typeof cust.outstandingBalance === 'number'
+                    ? `₹${cust.outstandingBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                    : cust.currentOutstanding || '₹0.00';
+                  const creditLimitVal = typeof cust.creditLimit === 'number'
+                    ? cust.creditLimit === 0 ? '₹0 (Cash Only)' : `₹${cust.creditLimit.toLocaleString('en-IN')}`
+                    : cust.creditLimit || '₹0 (Cash Only)';
+                  const totalSpentVal = typeof cust.totalSpent === 'number'
+                    ? `₹${cust.totalSpent.toLocaleString('en-IN')}`
+                    : cust.totalSpent || '₹0.00';
+
                   return (
                     <View
                       key={cust.id}
@@ -402,11 +624,11 @@ export default function CustomersPatientsScreen({ onShowToast, onNavigate }) {
                       ]}
                     >
                       <Text style={[styles.tdCell, styles.patientIdText, { width: 100 }]}>
-                        {cust.id}
+                        {displayId}
                       </Text>
 
                       <Pressable
-                        onPress={() => handleOpenCustomerDetailsPage(cust)}
+                        onPress={() => handleViewPatientDetails(cust)}
                         style={[{ width: 180, cursor: 'pointer' }]}
                       >
                         <Text style={[styles.tdCell, styles.patientNameText, { color: '#0F766E' }]} numberOfLines={1}>
@@ -420,7 +642,7 @@ export default function CustomersPatientsScreen({ onShowToast, onNavigate }) {
                       </Text>
 
                       <Text style={[styles.tdCell, { width: 90, textAlign: 'center' }]}>
-                        {cust.age} / {cust.gender === 'Male' ? 'M' : 'F'}
+                        {cust.age} / {cust.gender === 'M' || cust.gender === 'Male' ? 'M' : 'F'}
                       </Text>
 
                       <View style={[{ width: 160 }]}>
@@ -428,7 +650,7 @@ export default function CustomersPatientsScreen({ onShowToast, onNavigate }) {
                           {cust.doctorName}
                         </Text>
                         <Text style={styles.docSpecSubtext} numberOfLines={1}>
-                          {cust.doctorSpecialization}
+                          {cust.doctorSpecialty || cust.doctorSpecialization}
                         </Text>
                       </View>
 
@@ -439,7 +661,7 @@ export default function CustomersPatientsScreen({ onShowToast, onNavigate }) {
                       </View>
 
                       <Text style={[styles.tdCell, { width: 110, textAlign: 'right', fontWeight: '600' }]}>
-                        {cust.creditLimit}
+                        {creditLimitVal}
                       </Text>
 
                       <Text
@@ -449,15 +671,15 @@ export default function CustomersPatientsScreen({ onShowToast, onNavigate }) {
                             width: 110,
                             textAlign: 'right',
                             fontWeight: '700',
-                            color: cust.currentOutstanding !== '₹0.00' ? '#DC2626' : '#334155',
+                            color: outstandingVal !== '₹0.00' && outstandingVal !== '₹0' ? '#DC2626' : '#334155',
                           },
                         ]}
                       >
-                        {cust.currentOutstanding}
+                        {outstandingVal}
                       </Text>
 
                       <Text style={[styles.tdCell, { width: 110, textAlign: 'right', fontWeight: '600' }]}>
-                        {cust.totalSpent}
+                        {totalSpentVal}
                       </Text>
 
                       {/* Status Badge */}
@@ -474,8 +696,8 @@ export default function CustomersPatientsScreen({ onShowToast, onNavigate }) {
                         </View>
                       </View>
 
-                      {/* Actions */}
-                      <View style={[styles.actionWrapper, { width: 150 }]}>
+                      {/* Actions Column */}
+                      <View style={[styles.actionWrapperRow, { width: 160 }]}>
                         <Pressable
                           onPress={() => handleAttachToPOS(cust)}
                           style={styles.attachPOSButton}
@@ -486,12 +708,20 @@ export default function CustomersPatientsScreen({ onShowToast, onNavigate }) {
                         </Pressable>
 
                         <Pressable
-                          onPress={() => handleOpenCustomerDetailsPage(cust)}
+                          onPress={() => handleViewPatientDetails(cust)}
                           style={styles.viewHistoryButton}
                           accessibilityRole="button"
                           accessibilityLabel="View Customer Details"
                         >
                           <Text style={styles.viewHistoryButtonText}>Details</Text>
+                        </Pressable>
+
+                        <Pressable
+                          onPress={() => handleOpenActionMenu(cust)}
+                          style={styles.actionMenuMoreBtn}
+                          accessibilityRole="button"
+                        >
+                          <Text style={styles.actionMenuMoreDots}>⋮</Text>
                         </Pressable>
                       </View>
                     </View>
@@ -504,7 +734,7 @@ export default function CustomersPatientsScreen({ onShowToast, onNavigate }) {
       </View>
 
       {/* ------------------------------------------------------------------ */}
-      {/* Modal 1: Add New Customer Profile Modal (RX-01, RX-02, RX-03, RX-06) */}
+      {/* Modal 1: Add / Edit Customer Profile Modal */}
       {/* ------------------------------------------------------------------ */}
       <Modal
         visible={addModalVisible}
@@ -516,7 +746,9 @@ export default function CustomersPatientsScreen({ onShowToast, onNavigate }) {
           <Pressable style={[styles.modalCardLarge, isMobile && styles.modalCardMobile]} onPress={(e) => e.stopPropagation()}>
             <View style={styles.modalHeader}>
               <View>
-                <Text style={styles.modalTitle}>Add Customer Profile</Text>
+                <Text style={styles.modalTitle}>
+                  {isEditing ? 'Edit Customer Profile' : 'Add Customer Profile'}
+                </Text>
                 <Text style={styles.modalSubtitle}>
                   Demographics, prescriber details (RX-02), and Rx parameters (RX-03).
                 </Text>
@@ -578,22 +810,49 @@ export default function CustomersPatientsScreen({ onShowToast, onNavigate }) {
                   <Text style={styles.fieldLabel}>Gender</Text>
                   <TextInput
                     style={styles.modalInput}
-                    placeholder="Male / Female / Other"
+                    placeholder="F / M / Other"
                     placeholderTextColor="#94A3B8"
                     value={formData.gender}
                     onChangeText={(t) => setFormData((p) => ({ ...p, gender: t }))}
                   />
                 </View>
 
-                <View style={styles.formFieldThird}>
+                <View style={[styles.formFieldThird, { zIndex: 1000, position: 'relative' }]}>
                   <Text style={styles.fieldLabel}>Customer Category</Text>
-                  <TextInput
-                    style={styles.modalInput}
-                    placeholder="Regular / Chronic Care"
-                    placeholderTextColor="#94A3B8"
-                    value={formData.category}
-                    onChangeText={(t) => setFormData((p) => ({ ...p, category: t }))}
-                  />
+                  <Pressable
+                    onPress={() => setModalCategoryDropdownOpen(!modalCategoryDropdownOpen)}
+                    style={styles.dropdownPickerBtn}
+                  >
+                    <Text style={styles.dropdownPickerText}>{formData.category}</Text>
+                    <Text style={styles.dropdownArrowIcon}>{modalCategoryDropdownOpen ? '▲' : '▼'}</Text>
+                  </Pressable>
+
+                  {modalCategoryDropdownOpen && (
+                    <View style={styles.dropdownMenu}>
+                      {categoryOptions.map((cat) => (
+                        <Pressable
+                          key={cat}
+                          onPress={() => {
+                            setFormData((p) => ({ ...p, category: cat }));
+                            setModalCategoryDropdownOpen(false);
+                          }}
+                          style={[
+                            styles.dropdownMenuItem,
+                            formData.category === cat && styles.dropdownMenuItemActive,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.dropdownMenuItemText,
+                              formData.category === cat && styles.dropdownMenuItemTextActive,
+                            ]}
+                          >
+                            {cat}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  )}
                 </View>
               </View>
 
@@ -622,7 +881,7 @@ export default function CustomersPatientsScreen({ onShowToast, onNavigate }) {
                 </View>
               </View>
 
-              <Text style={styles.sectionHeading}>3. Prescription & Clinical Notes (RX-03)</Text>
+              <Text style={styles.sectionHeading}>3. Prescription & Credit Limit (RX-03 & RX-06)</Text>
               <View style={[styles.formRow, isMobile && styles.formRowMobile]}>
                 <View style={styles.formFieldHalf}>
                   <Text style={styles.fieldLabel}>Prescription Ref No.</Text>
@@ -636,7 +895,7 @@ export default function CustomersPatientsScreen({ onShowToast, onNavigate }) {
                 </View>
 
                 <View style={styles.formFieldHalf}>
-                  <Text style={styles.fieldLabel}>Credit Limit Allowed (₹) (RX-06)</Text>
+                  <Text style={styles.fieldLabel}>Credit Limit Allowed (₹)</Text>
                   <TextInput
                     style={styles.modalInput}
                     keyboardType="numeric"
@@ -654,14 +913,16 @@ export default function CustomersPatientsScreen({ onShowToast, onNavigate }) {
                 <Text style={styles.cancelBtnText}>Cancel</Text>
               </Pressable>
               <Pressable onPress={handleSavePatient} style={styles.submitModalBtn}>
-                <Text style={styles.submitModalBtnText}>Save Customer Profile</Text>
+                <Text style={styles.submitModalBtnText}>
+                  {isEditing ? 'Update Customer Profile' : 'Save Customer Profile'}
+                </Text>
               </Pressable>
             </View>
           </Pressable>
         </Pressable>
       </Modal>
 
-      {/* Modal 2: Customer Prescription & Purchase History Modal */}
+      {/* Modal 2: Customer History & Prescription Details Modal */}
       {selectedPatient && (
         <Modal
           visible={historyModalVisible}
@@ -675,7 +936,7 @@ export default function CustomersPatientsScreen({ onShowToast, onNavigate }) {
                 <View>
                   <Text style={styles.modalTitle}>Customer Record & Details</Text>
                   <Text style={styles.modalSubtitle}>
-                    {selectedPatient.name} ({selectedPatient.id}) • Phone: {selectedPatient.phone}
+                    {selectedPatient.name} ({selectedPatient.customerNumber || selectedPatient.id}) • Phone: {selectedPatient.phone}
                   </Text>
                 </View>
                 <Pressable onPress={() => setHistoryModalVisible(false)} style={styles.closeBtn}>
@@ -689,15 +950,17 @@ export default function CustomersPatientsScreen({ onShowToast, onNavigate }) {
                   <View style={styles.rxGrid}>
                     <View style={styles.rxItem}>
                       <Text style={styles.rxLabel}>Prescribing Doctor:</Text>
-                      <Text style={styles.rxValue}>{selectedPatient.doctorName} ({selectedPatient.doctorSpecialization})</Text>
+                      <Text style={styles.rxValue}>
+                        {selectedPatient.doctorName} ({selectedPatient.doctorSpecialty || selectedPatient.doctorSpecialization || 'General'})
+                      </Text>
                     </View>
                     <View style={styles.rxItem}>
-                      <Text style={styles.rxLabel}>Hospital / Clinic:</Text>
-                      <Text style={styles.rxValue}>{selectedPatient.hospitalClinic}</Text>
+                      <Text style={styles.rxLabel}>Category / Tag:</Text>
+                      <Text style={styles.rxValue}>{selectedPatient.category || 'Regular'}</Text>
                     </View>
                     <View style={styles.rxItem}>
-                      <Text style={styles.rxLabel}>MCI Reg No:</Text>
-                      <Text style={styles.rxValue}>{selectedPatient.doctorRegNo}</Text>
+                      <Text style={styles.rxLabel}>City / Location:</Text>
+                      <Text style={styles.rxValue}>{selectedPatient.city || 'Mumbai'}</Text>
                     </View>
                     <View style={styles.rxItem}>
                       <Text style={styles.rxLabel}>Active Rx Ref:</Text>
@@ -707,9 +970,9 @@ export default function CustomersPatientsScreen({ onShowToast, onNavigate }) {
 
                   <View style={styles.docAttachmentBar}>
                     <Text style={styles.docAttachmentLabel}>📎 Attached Rx Document:</Text>
-                    <Text style={styles.docAttachmentName}>{selectedPatient.rxDocumentName}</Text>
+                    <Text style={styles.docAttachmentName}>Rx_Attached_Doc.pdf</Text>
                     <Pressable
-                      onPress={() => onShowToast && onShowToast(`Previewing ${selectedPatient.rxDocumentName} (Read-only view)`)}
+                      onPress={() => onShowToast && onShowToast(`Previewing Rx_Attached_Doc.pdf (Read-only view)`)}
                       style={styles.previewDocBtn}
                     >
                       <Text style={styles.previewDocText}>View Rx Document</Text>
@@ -740,7 +1003,7 @@ export default function CustomersPatientsScreen({ onShowToast, onNavigate }) {
                   </View>
                 ) : (
                   <View style={styles.noHistoryBox}>
-                    <Text style={styles.noHistoryText}>No prior purchases recorded for this new customer.</Text>
+                    <Text style={styles.noHistoryText}>No prior purchases recorded for this customer.</Text>
                   </View>
                 )}
               </ScrollView>
@@ -751,6 +1014,55 @@ export default function CustomersPatientsScreen({ onShowToast, onNavigate }) {
                 </Pressable>
               </View>
             </Pressable>
+          </Pressable>
+        </Modal>
+      )}
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Modal 3: Action Menu Popover Modal */}
+      {/* ------------------------------------------------------------------ */}
+      {actionCustomer && (
+        <Modal
+          visible={actionMenuOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setActionMenuOpen(false)}
+        >
+          <Pressable style={styles.modalBackdrop} onPress={() => setActionMenuOpen(false)}>
+            <View style={styles.actionMenuPopover}>
+              <View style={styles.actionMenuHeader}>
+                <Text style={styles.actionMenuTitle}>{actionCustomer.name}</Text>
+                <Text style={styles.actionMenuSub}>{actionCustomer.customerNumber || actionCustomer.id}</Text>
+              </View>
+
+              <Pressable
+                onPress={() => handleOpenEditModal(actionCustomer)}
+                style={styles.actionMenuItem}
+              >
+                <Text style={styles.actionMenuItemIcon}>✏️</Text>
+                <Text style={styles.actionMenuItemText}>Edit Customer Profile</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => handleToggleStatus(actionCustomer)}
+                style={styles.actionMenuItem}
+              >
+                <Text style={styles.actionMenuItemIcon}>⚡</Text>
+                <Text style={styles.actionMenuItemText}>
+                  Mark as {actionCustomer.status === 'Active' ? 'Inactive' : 'Active'}
+                </Text>
+              </Pressable>
+
+              <View style={styles.actionMenuDivider} />
+
+              <Pressable
+                onPress={() => handleDeleteCustomerAction(actionCustomer)}
+                style={[styles.actionMenuItem, styles.actionMenuItemDelete]}
+              >
+                <Text style={styles.actionMenuItemIcon}>🗑️</Text>
+                <Text style={[styles.actionMenuItemText, { color: '#EF4444' }]}>Delete Customer</Text>
+              </Pressable>
+            </View>
           </Pressable>
         </Modal>
       )}
@@ -878,122 +1190,23 @@ const styles = StyleSheet.create({
     minWidth: '47%',
     maxWidth: '48.5%',
   },
-  /* Mobile Customer Card Styles */
-  mobileCardList: {
-    padding: 12,
-    gap: 12,
-  },
-  mobileCustomerCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 14,
-  },
-  mobileCustHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    gap: 8,
-  },
-  mobileCustName: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  mobileCustSub: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  mobileGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingVertical: 10,
-    gap: 10,
-  },
-  mobileGridCol: {
-    width: '47%',
-  },
-  mobileLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#94A3B8',
-    textTransform: 'uppercase',
-  },
-  mobileVal: {
-    fontSize: 12.5,
-    color: '#334155',
-    marginTop: 1,
-  },
-  mobileValBold: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginTop: 1,
-  },
-  mobileCustFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-  },
-  mobileAttachPOSBtn: {
-    flex: 1,
-    backgroundColor: '#0F766E',
-    paddingVertical: 8,
-    borderRadius: 6,
-    alignItems: 'center',
-  },
-  mobileAttachPOSText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  mobileHistoryBtn: {
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 6,
-    alignItems: 'center',
-  },
-  mobileHistoryBtnText: {
-    fontSize: 12.5,
-    fontWeight: '600',
-    color: '#334155',
-  },
   cardContainer: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    overflow: 'hidden',
-    ...Platform.select({
-      web: {
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)',
-      },
-      default: {
-        elevation: 1,
-      },
-    }),
+    padding: 20,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
   filtersBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    backgroundColor: '#FAFAFA',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    gap: 12,
+    gap: 16,
+    marginBottom: 20,
   },
   filtersBarCompact: {
     flexDirection: 'column',
@@ -1003,65 +1216,62 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
     borderRadius: 8,
-    paddingHorizontal: 12,
-    height: 38,
+    paddingHorizontal: 14,
+    height: 42,
   },
   searchBoxMobile: {
     width: '100%',
   },
   searchInput: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 13.5,
     color: '#0F172A',
-    outlineStyle: 'none',
   },
   clearBtn: {
     padding: 4,
   },
   clearBtnText: {
-    fontSize: 12,
     color: '#94A3B8',
+    fontSize: 14,
+    fontWeight: '700',
   },
   filterChipScroll: {
-    maxHeight: 44,
+    flexGrow: 0,
   },
   filterChipRow: {
     flexDirection: 'row',
-    flexWrap: 'nowrap',
+    alignItems: 'center',
     gap: 8,
   },
   filterChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
     cursor: 'pointer',
   },
   filterChipActive: {
     backgroundColor: '#0F766E',
-    borderColor: '#0F766E',
   },
   filterChipText: {
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 12.5,
+    fontWeight: '600',
     color: '#64748B',
   },
   filterChipTextActive: {
-    fontWeight: '700',
     color: '#FFFFFF',
+    fontWeight: '700',
   },
   tableSubheader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    marginBottom: 16,
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
@@ -1072,44 +1282,135 @@ const styles = StyleSheet.create({
   },
   paginationInfo: {
     fontSize: 12.5,
-    fontWeight: '500',
     color: '#64748B',
+    fontWeight: '500',
+  },
+  emptyState: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  emptySubtitle: {
+    fontSize: 13,
+    color: '#94A3B8',
+    marginTop: 4,
+  },
+  mobileCardList: {
+    gap: 12,
+  },
+  mobileCustomerCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 14,
+    gap: 12,
+  },
+  mobileCustHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  mobileCustName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F766E',
+  },
+  mobileCustSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  mobileGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  mobileGridCol: {
+    width: '47%',
+  },
+  mobileLabel: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  mobileVal: {
+    fontSize: 12.5,
+    color: '#334155',
+  },
+  mobileValBold: {
+    fontSize: 12.5,
+    color: '#0F172A',
+    fontWeight: '700',
+  },
+  mobileCustFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 4,
+  },
+  mobileAttachPOSBtn: {
+    flex: 1,
+    backgroundColor: '#0F766E',
+    paddingVertical: 7,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  mobileAttachPOSText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  mobileHistoryBtn: {
+    backgroundColor: '#E2E8F0',
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+  },
+  mobileHistoryBtnText: {
+    color: '#334155',
+    fontSize: 12,
+    fontWeight: '700',
   },
   tableWrapper: {
-    minWidth: 1380,
-    paddingHorizontal: 8,
+    minWidth: 1200,
   },
   tableHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#F8FAFC',
     paddingVertical: 12,
     paddingHorizontal: 12,
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
   },
   thCell: {
-    fontSize: 11.5,
-    fontWeight: '700',
-    color: '#64748B',
-    paddingHorizontal: 6,
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#475569',
     letterSpacing: 0.3,
   },
   tableRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 13,
+    paddingVertical: 12,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
   tableRowAlt: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FAFAFA',
   },
   tdCell: {
     fontSize: 13,
     color: '#334155',
-    paddingHorizontal: 6,
   },
   patientIdText: {
     fontWeight: '700',
@@ -1117,146 +1418,136 @@ const styles = StyleSheet.create({
   },
   patientNameText: {
     fontWeight: '700',
-    color: '#0F172A',
   },
   categorySubtext: {
     fontSize: 11,
     color: '#64748B',
-    paddingHorizontal: 6,
-    marginTop: 2,
+    marginTop: 1,
   },
   phoneText: {
-    fontWeight: '600',
+    fontSize: 12.5,
     color: '#475569',
   },
   docNameText: {
+    fontSize: 12.5,
     fontWeight: '600',
     color: '#0F172A',
   },
   docSpecSubtext: {
     fontSize: 11,
-    color: '#0284C7',
-    paddingHorizontal: 6,
+    color: '#64748B',
   },
   rxTagText: {
+    fontSize: 12,
     fontWeight: '700',
     color: '#0F766E',
     backgroundColor: '#CCFBF1',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    fontSize: 11.5,
-  },
-  amountSpentText: {
-    fontWeight: '700',
-    color: '#0F172A',
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
   },
   statusWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
   },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
   statusBadgeActive: {
     backgroundColor: '#DCFCE7',
+    paddingVertical: 3,
+    paddingHorizontal: 10,
+    borderRadius: 12,
   },
   statusBadgeOverdue: {
     backgroundColor: '#FEE2E2',
   },
-  statusBadgeText: {
+  statusBadgeTextActive: {
     fontSize: 11.5,
     fontWeight: '700',
-  },
-  statusTextActive: {
     color: '#15803D',
   },
-  statusTextOverdue: {
+  statusBadgeTextOverdue: {
     color: '#B91C1C',
   },
-  actionsCellWrapper: {
+  actionWrapperRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
   },
-  viewRxBtn: {
-    backgroundColor: '#E0F2FE',
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-    borderRadius: 6,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    cursor: 'pointer',
-  },
-  viewRxBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#0369A1',
-  },
-  posAttachBtn: {
+  attachPOSButton: {
     backgroundColor: '#0F766E',
+    paddingVertical: 5,
+    paddingHorizontal: 9,
     borderRadius: 6,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
     cursor: 'pointer',
   },
-  posAttachBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
+  attachPOSButtonText: {
     color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
   },
-  emptyState: {
+  viewHistoryButton: {
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingVertical: 4,
+    paddingHorizontal: 9,
+    borderRadius: 6,
+    cursor: 'pointer',
+  },
+  viewHistoryButtonText: {
+    color: '#334155',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  actionMenuMoreBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 40,
+    cursor: 'pointer',
   },
-  emptyTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  emptySubtitle: {
-    fontSize: 13,
-    color: '#64748B',
-    marginTop: 2,
+  actionMenuMoreDots: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#475569',
+    textAlign: 'center',
+    lineHeight: 14,
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.45)',
-    alignItems: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.5)',
     justifyContent: 'center',
+    alignItems: 'center',
     padding: 16,
   },
   modalCardLarge: {
     width: '100%',
-    maxWidth: 740,
+    maxWidth: 720,
+    maxHeight: '90%',
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
     overflow: 'hidden',
-    ...Platform.select({
-      web: {
-        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-      },
-    }),
   },
   modalCardMobile: {
     maxWidth: '100%',
   },
   modalHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    paddingHorizontal: 22,
-    paddingVertical: 16,
+    padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
   },
   modalTitle: {
-    fontSize: 17,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '800',
     color: '#0F172A',
   },
   modalSubtitle: {
@@ -1265,34 +1556,33 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   closeBtn: {
-    padding: 6,
+    padding: 4,
   },
   closeBtnText: {
-    fontSize: 14,
-    color: '#94A3B8',
+    fontSize: 16,
+    color: '#64748B',
     fontWeight: '700',
   },
   modalBody: {
-    padding: 22,
-    maxHeight: 520,
+    padding: 20,
   },
   sectionHeading: {
-    fontSize: 13.5,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '800',
     color: '#0F766E',
-    marginTop: 10,
-    marginBottom: 12,
-    textTransform: 'uppercase',
     letterSpacing: 0.5,
+    marginTop: 12,
+    marginBottom: 10,
+    textTransform: 'uppercase',
   },
   formRow: {
     flexDirection: 'row',
-    gap: 14,
+    gap: 12,
     marginBottom: 12,
   },
   formRowMobile: {
     flexDirection: 'column',
-    gap: 10,
+    gap: 12,
   },
   formFieldHalf: {
     flex: 1,
@@ -1307,45 +1597,93 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   reqStar: {
-    color: '#DC2626',
+    color: '#EF4444',
   },
   modalInput: {
-    height: 40,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
     backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
     paddingHorizontal: 12,
-    fontSize: 13,
+    paddingVertical: 8,
+    fontSize: 13.5,
     color: '#0F172A',
-    outlineStyle: 'none',
   },
   inputError: {
-    borderColor: '#DC2626',
-    backgroundColor: '#FEF2F2',
+    borderColor: '#EF4444',
   },
   errorText: {
     fontSize: 11,
-    color: '#DC2626',
+    color: '#EF4444',
     marginTop: 3,
+  },
+  dropdownPickerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  dropdownPickerText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  dropdownArrowIcon: {
+    fontSize: 10,
+    color: '#64748B',
+  },
+  dropdownMenu: {
+    position: 'absolute',
+    top: 66,
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 100,
+    zIndex: 9999,
+  },
+  dropdownMenuItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  dropdownMenuItemActive: {
+    backgroundColor: '#F0FDFA',
+  },
+  dropdownMenuItemText: {
+    fontSize: 13,
+    color: '#334155',
     fontWeight: '500',
+  },
+  dropdownMenuItemTextActive: {
+    color: '#0F766E',
+    fontWeight: '700',
   },
   modalFooter: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    gap: 12,
-    paddingHorizontal: 22,
-    paddingVertical: 14,
+    padding: 16,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    backgroundColor: '#FAFAFA',
+    borderTopColor: '#E2E8F0',
+    gap: 10,
   },
   cancelBtn: {
     paddingVertical: 9,
     paddingHorizontal: 16,
-    borderRadius: 6,
-    cursor: 'pointer',
+    borderRadius: 8,
   },
   cancelBtnText: {
     fontSize: 13,
@@ -1486,5 +1824,58 @@ const styles = StyleSheet.create({
   noHistoryText: {
     fontSize: 13,
     color: '#64748B',
+  },
+  actionMenuPopover: {
+    width: 260,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+    padding: 8,
+  },
+  actionMenuHeader: {
+    padding: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    marginBottom: 4,
+  },
+  actionMenuTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  actionMenuSub: {
+    fontSize: 11.5,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  actionMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 9,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    gap: 10,
+  },
+  actionMenuItemDelete: {
+    backgroundColor: '#FEF2F2',
+  },
+  actionMenuItemIcon: {
+    fontSize: 14,
+  },
+  actionMenuItemText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  actionMenuDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginVertical: 4,
   },
 });

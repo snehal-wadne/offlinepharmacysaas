@@ -35,6 +35,7 @@ const getInventory = async ({ organisationId, search, limit = 100, offset = 0 })
       SELECT
         ib.id,
         ib.batch_number AS "batchNo",
+        ib.expiry_date AS "expiryDate",
         ib.quantity,
         ib.mrp,
         ib.shelf_location AS "shelfLocation",
@@ -78,6 +79,7 @@ const getInventory = async ({ organisationId, search, limit = 100, offset = 0 })
       supplierName: row.supplierName || '',
       sku: row.sku,
       batchNo: row.batchNo,
+      expiryDate: row.expiryDate ? new Date(row.expiryDate).toISOString().split('T')[0] : null,
       quantity: Number(row.quantity),
       amount: `₹${parseFloat(row.mrp || 0).toFixed(2)}`,
       branchId: row.branchName || 'Main Store',
@@ -247,6 +249,18 @@ const saveOrUpdateInventory = async (organisationId, itemData) => {
     batchRecord = inserted.rows[0];
   }
 
+  // Record activity in stock_movements table
+  const movementType = id ? 'Adjustment' : 'Purchase';
+  const qtyDisplay = numQty >= 0 ? `+${numQty}` : `${numQty}`;
+  recordStockMovement(organisationId, {
+    branchName: branchId || 'Main Branch',
+    type: movementType,
+    item: `${brdName} (${strength})`,
+    quantity: qtyDisplay,
+    reference: batchNo || 'ADJ-1001',
+    status: 'Completed',
+  });
+
   return {
     id: batchRecord.id,
     productId: productId,
@@ -286,8 +300,94 @@ const deleteInventoryEntry = async (organisationId, batchId) => {
   return res.rowCount > 0;
 };
 
+const getInventorySummary = async (organisationId) => {
+  if (!organisationId) {
+    throw new Error('organisationId is required');
+  }
+
+  const kpiQuery = `
+    SELECT
+      COUNT(DISTINCT p.id) AS "totalProducts",
+      COUNT(ib.id) AS "totalBatches",
+      COUNT(CASE WHEN ib.quantity < 50 AND ib.quantity > 0 THEN 1 END) AS "lowStockCount",
+      COUNT(CASE WHEN ib.quantity = 0 THEN 1 END) AS "outOfStockCount",
+      COUNT(CASE WHEN ib.expiry_date >= CURRENT_DATE AND ib.expiry_date <= CURRENT_DATE + INTERVAL '60 days' THEN 1 END) AS "nearExpiryCount",
+      COUNT(CASE WHEN ib.expiry_date < CURRENT_DATE THEN 1 END) AS "expiredCount"
+    FROM inventory_batches ib
+    INNER JOIN products p ON p.id = ib.product_id
+    WHERE p.organisation_id = $1;
+  `;
+
+  const kpiRes = await pool.query(kpiQuery, [organisationId]);
+  const row = kpiRes.rows[0] || {};
+
+  return {
+    totalProducts: Number(row.totalProducts || 0),
+    totalBatches: Number(row.totalBatches || 0),
+    lowStockCount: Number(row.lowStockCount || 0),
+    outOfStockCount: Number(row.outOfStockCount || 0),
+    nearExpiryCount: Number(row.nearExpiryCount || 0),
+    expiredCount: Number(row.expiredCount || 0),
+  };
+};
+
+const recordStockMovement = async (organisationId, { branchName = 'Main Branch', type, item, quantity, reference = 'ADJ-1001', status = 'Completed' }) => {
+  try {
+    await pool.query(
+      `INSERT INTO stock_movements (organisation_id, branch_name, movement_type, item_name, quantity, reference, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7);`,
+      [organisationId, branchName, type, item, String(quantity), reference, status]
+    );
+  } catch (err) {
+    console.warn('Failed to record stock movement:', err.message);
+  }
+};
+
+const getStockMovements = async (organisationId, limit = 10) => {
+  try {
+    const res = await pool.query(
+      `SELECT
+         id,
+         branch_name AS "branchName",
+         movement_type AS "type",
+         item_name AS "item",
+         quantity,
+         reference,
+         status,
+         created_at
+       FROM stock_movements
+       ORDER BY created_at DESC
+       LIMIT $1;`,
+      [limit]
+    );
+
+    if (res.rows.length > 0) {
+      return res.rows.map((r) => {
+        const d = new Date(r.created_at);
+        const dateStr = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+        const timeStr = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+        return {
+          id: r.id,
+          date: `${dateStr}, ${timeStr}`,
+          type: r.type,
+          item: r.item,
+          quantity: r.quantity,
+          reference: r.reference,
+          status: r.status || 'Completed',
+        };
+      });
+    }
+  } catch (e) {
+    console.warn('Failed to fetch stock_movements from DB:', e.message);
+  }
+  return null;
+};
+
 module.exports = {
   getInventory,
+  getInventorySummary,
   saveOrUpdateInventory,
   deleteInventoryEntry,
+  recordStockMovement,
+  getStockMovements,
 };

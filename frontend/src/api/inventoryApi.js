@@ -44,6 +44,33 @@ export async function fetchInventory(params = {}) {
 }
 
 /**
+ * GET /api/inventory/summary
+ */
+export async function fetchInventorySummary() {
+  return apiRequest('/inventory/summary', { method: 'GET' });
+}
+
+/**
+ * GET /api/inventory/movements
+ */
+export async function fetchStockMovements(params = {}) {
+  const query = new URLSearchParams();
+  if (params.limit) query.append('limit', params.limit);
+  const queryString = query.toString() ? `?${query.toString()}` : '';
+  return apiRequest(`/inventory/movements${queryString}`, { method: 'GET' });
+}
+
+/**
+ * POST /api/inventory/movements
+ */
+export async function recordStockMovementApi(movementData) {
+  return apiRequest('/inventory/movements', {
+    method: 'POST',
+    body: JSON.stringify(movementData),
+  });
+}
+
+/**
  * POST /api/inventory
  */
 export async function saveInventoryEntry(itemData) {

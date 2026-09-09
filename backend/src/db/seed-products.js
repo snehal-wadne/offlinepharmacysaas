@@ -238,13 +238,18 @@ const seedProducts = async () => {
 
       // Upsert inventory_batches
       let ibRes = await client.query(
-        `SELECT id FROM inventory_batches WHERE product_id = $1 AND batch_number = $2;`,
+        `SELECT id FROM inventory_batches WHERE product_id = $1 AND batch_number = $2 ORDER BY created_at ASC;`,
         [productId, item.batchNo]
       );
       if (ibRes.rows.length > 0) {
+        const keepId = ibRes.rows[0].id;
+        if (ibRes.rows.length > 1) {
+          const deleteIds = ibRes.rows.slice(1).map((r) => r.id);
+          await client.query(`DELETE FROM inventory_batches WHERE id = ANY($1);`, [deleteIds]);
+        }
         await client.query(
           `UPDATE inventory_batches SET supplier_id = $1, mrp = $2, quantity = $3, shelf_location = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5;`,
-          [supplierId, item.mrp, item.quantity, item.shelfLocation, ibRes.rows[0].id]
+          [supplierId, item.mrp, item.quantity, item.shelfLocation, keepId]
         );
       } else {
         const expiryDate = new Date();

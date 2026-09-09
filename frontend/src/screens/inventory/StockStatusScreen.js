@@ -110,7 +110,7 @@ export default function StockStatusScreen({ onNavigate, onShowToast, isMultiBran
       brandName: item.brandName,
       genericName: item.genericName || item.medicineName,
       batchNo: item.batchNo || 'B-1001',
-      expiryDate: item.lastUpdated ? `${new Date(item.lastUpdated).getFullYear() + 2}-12-31` : '2028-12-31',
+      expiryDate: item.expiryDate || item.expiry_date || (item.lastUpdated ? `${new Date(item.lastUpdated).getFullYear() + 2}-12-31` : '2028-12-31'),
       quantity: qty,
       mrp: item.amount || '₹15.00',
       shelfLocation: item.shelfLocation || 'A1-S1',

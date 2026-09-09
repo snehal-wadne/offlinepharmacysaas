@@ -105,8 +105,75 @@ const deleteInventory = async (req, res) => {
   }
 };
 
+const getInventorySummary = async (req, res) => {
+  try {
+    const organisationId = await getOrgId(req);
+    const summary = await inventoryService.getInventorySummary(organisationId);
+
+    res.status(200).json({
+      success: true,
+      data: summary,
+    });
+  } catch (error) {
+    console.error('Error fetching inventory summary:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch inventory summary',
+    });
+  }
+};
+
+const getRecentStockMovements = async (req, res) => {
+  try {
+    const organisationId = await getOrgId(req);
+    const limit = Number(req.query.limit) || 10;
+    const movements = await inventoryService.getStockMovements(organisationId, limit);
+
+    res.status(200).json({
+      success: true,
+      data: movements,
+    });
+  } catch (error) {
+    console.error('Error fetching stock movements:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch stock movements',
+    });
+  }
+};
+
+const recordMovement = async (req, res) => {
+  try {
+    const organisationId = await getOrgId(req);
+    const { branchName, type, item, quantity, reference, status } = req.body;
+
+    await inventoryService.recordStockMovement(organisationId, {
+      branchName,
+      type,
+      item,
+      quantity,
+      reference,
+      status,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Stock movement recorded successfully',
+    });
+  } catch (error) {
+    console.error('Error recording stock movement:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to record stock movement',
+    });
+  }
+};
+
 module.exports = {
   getInventory,
+  getInventorySummary,
+  getRecentStockMovements,
+  recordMovement,
   saveInventory,
   updateInventory,
   deleteInventory,

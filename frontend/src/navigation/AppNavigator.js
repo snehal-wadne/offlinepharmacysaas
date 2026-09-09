@@ -210,6 +210,8 @@ export default function AppNavigator() {
           />
         );
       case 'customers-patients':
+      case 'customers':
+      case 'add-customer':
         return (
           <CustomersPatientsScreen
             onNavigate={handleNavigate}

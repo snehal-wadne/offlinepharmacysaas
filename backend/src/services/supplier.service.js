@@ -40,7 +40,7 @@ const getCategoryForSupplier = (name, index) => {
   return DEFAULT_CATEGORIES[index % DEFAULT_CATEGORIES.length];
 };
 
-const getSuppliers = async ({ organisationId, search, limit = 50, offset = 0 }) => {
+const getSuppliers = async ({ organisationId, search, limit = 100, offset = 0 }) => {
   if (!organisationId) {
     throw new Error('organisationId is required');
   }
@@ -49,10 +49,7 @@ const getSuppliers = async ({ organisationId, search, limit = 50, offset = 0 }) 
     ? await supplierRepo.searchSuppliers(organisationId, search, limit, offset)
     : await supplierRepo.getSuppliersByOrganisation(organisationId, limit, offset);
 
-  const invalidNames = ['more', 'vbc', 'sd,bfs', 'al gloa', 'suraj more'];
-  const cleanRows = rows.filter((s) => !invalidNames.includes(s.name.toLowerCase().trim()) && s.name.trim().length >= 3);
-
-  return cleanRows.map((s, index) => ({
+  return rows.map((s, index) => ({
     id: s.id,
     code: `SUP-${String(index + 1).padStart(3, '0')}`,
     name: s.name,
