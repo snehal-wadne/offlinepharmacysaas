@@ -64,13 +64,15 @@ const styles = StyleSheet.create({
   cardContainer: {
     flex: 1,
     minWidth: 200,
+    minHeight: 115,
+    justifyContent: 'space-between',
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     borderLeftWidth: 4,
-    paddingVertical: 18,
-    paddingHorizontal: 20,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
     cursor: 'pointer',
     ...Platform.select({
       web: {
@@ -82,8 +84,12 @@ const styles = StyleSheet.create({
     }),
   },
   cardContainerMobile: {
+    flexGrow: 1,
+    flexShrink: 0,
     minWidth: '47%',
     maxWidth: '48.5%',
+    minHeight: 105,
+    justifyContent: 'space-between',
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderRadius: 10,
@@ -110,15 +116,15 @@ const styles = StyleSheet.create({
     marginLeft: 6,
   },
   cardValue: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '800',
     color: '#0F172A',
     letterSpacing: -0.5,
-    marginBottom: 2,
+    marginVertical: 2,
   },
   cardSubtext: {
-    fontSize: 11.5,
+    fontSize: 11,
     fontWeight: '500',
-    color: '#94A3B8',
+    color: '#64748B',
   },
 });

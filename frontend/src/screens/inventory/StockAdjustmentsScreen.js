@@ -11,6 +11,8 @@ import {
   Modal,
 } from 'react-native';
 import InventoryStatCard from '../../components/inventory/InventoryStatCard';
+import { SkeletonKpiCard, SkeletonTableRow, SkeletonItemCard } from '../../components/common/SkeletonLoader';
+import PaginationControls from '../../components/common/PaginationControls';
 import { CURRENT_STOCK_KPIS, MOCK_STOCK_ITEMS } from '../../data/currentStockMockData';
 import {
   fetchInventory,
@@ -29,6 +31,7 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
   const [stockItems, setStockItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingItemId, setEditingItemId] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     loadInventoryData();
@@ -517,8 +520,43 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
     }
     if (filterLowStockOnly && Number(item.quantity) >= 50) return false;
     if (filterActiveOnly && item.isActive === false) return false;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase().trim();
+      const matchName = (item.medicine || item.brandName || item.medicineName || '').toLowerCase().includes(q);
+      const matchBatch = (item.batchNo || item.batch || '').toLowerCase().includes(q);
+      const matchSku = (item.sku || '').toLowerCase().includes(q);
+      if (!matchName && !matchBatch && !matchSku) return false;
+    }
     return true;
   });
+
+  // Pagination State
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [isPageLoading, setIsPageLoading] = useState(false);
+
+  // Reset page on filter changes
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, activeKpiFilter, filterLowStockOnly, filterActiveOnly]);
+
+  const totalItems = displayedStockItems.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const startIndex = (page - 1) * pageSize;
+  const paginatedStockItems = displayedStockItems.slice(startIndex, startIndex + pageSize);
+
+  const handlePageChange = (newPage) => {
+    setIsPageLoading(true);
+    setPage(newPage);
+    setTimeout(() => setIsPageLoading(false), 200);
+  };
+
+  const handlePageSizeChange = (newSize) => {
+    setIsPageLoading(true);
+    setPageSize(newSize);
+    setPage(1);
+    setTimeout(() => setIsPageLoading(false), 200);
+  };
 
   const handleAddOrUpdateMedicine = async () => {
     const errors = {};
@@ -674,16 +712,25 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
     >
       {/* Top 4 KPI Cards */}
       <View style={[styles.kpiRow, isCompact && styles.kpiRowCompact]}>
-        {dynamicKpis.map((kpi) => (
-          <InventoryStatCard
-            key={kpi.id}
-            label={kpi.label}
-            value={kpi.value}
-            subtext={kpi.subtext}
-            variant={kpi.variant}
-            onPress={() => handleKpiCardPress(kpi.key, kpi.label)}
-          />
-        ))}
+        {loading ? (
+          <>
+            <SkeletonKpiCard />
+            <SkeletonKpiCard />
+            <SkeletonKpiCard />
+            <SkeletonKpiCard />
+          </>
+        ) : (
+          dynamicKpis.map((kpi) => (
+            <InventoryStatCard
+              key={kpi.id}
+              label={kpi.label}
+              value={kpi.value}
+              subtext={kpi.subtext}
+              variant={kpi.variant}
+              onPress={() => handleKpiCardPress(kpi.key, kpi.label)}
+            />
+          ))
+        )}
       </View>
 
       {/* Stock Information / Adjustments Table Card */}
@@ -696,8 +743,24 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
             </Text>
           </View>
 
-          {/* Quick Filter Toggles & Backend Guide Button */}
+          {/* Quick Filter Toggles & Search */}
           <View style={styles.headerControlsRow}>
+            {/* Search Input */}
+            <View style={[styles.stockSearchBox, isMobile && styles.stockSearchBoxMobile]}>
+              <Text style={styles.stockSearchIcon}>🔍</Text>
+              <TextInput
+                style={styles.stockSearchInput}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder="Search product, SKU, batch..."
+                placeholderTextColor="#94A3B8"
+              />
+              {searchQuery ? (
+                <Pressable onPress={() => setSearchQuery('')} style={{ padding: 4 }}>
+                  <Text style={{ color: '#94A3B8', fontSize: 13 }}>✕</Text>
+                </Pressable>
+              ) : null}
+            </View>
             {/* Toggle: Low Stock Only */}
             <Pressable
               onPress={() => setFilterLowStockOnly(!filterLowStockOnly)}
@@ -755,10 +818,26 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
           </View>
         </View>
 
-        {isMobile ? (
+        {loading || isPageLoading ? (
+          isMobile ? (
+            <View style={styles.mobileCardList}>
+              <SkeletonItemCard />
+              <SkeletonItemCard />
+              <SkeletonItemCard />
+            </View>
+          ) : (
+            <View style={{ padding: 16 }}>
+              <SkeletonTableRow columns={12} />
+              <SkeletonTableRow columns={12} />
+              <SkeletonTableRow columns={12} />
+              <SkeletonTableRow columns={12} />
+              <SkeletonTableRow columns={12} />
+            </View>
+          )
+        ) : isMobile ? (
           /* Mobile Card List View (No horizontal scrolling on phone screen) */
           <View style={styles.mobileCardList}>
-            {displayedStockItems.map((item) => (
+            {paginatedStockItems.map((item) => (
               <View
                 key={item.id}
                 style={[
@@ -903,7 +982,7 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
               </View>
 
               {/* Table Rows */}
-              {displayedStockItems.map((item, index) => (
+              {paginatedStockItems.map((item, index) => (
                 <View
                   key={item.id}
                   style={[
@@ -1027,6 +1106,18 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
             </View>
           </ScrollView>
         )}
+
+        {/* Pagination Controls */}
+        <PaginationControls
+          currentPage={page}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          pageSize={pageSize}
+          onPageChange={handlePageChange}
+          onPageSizeChange={handlePageSizeChange}
+          isMobile={isMobile}
+          isLoading={isPageLoading}
+        />
       </View>
 
       {/* Add / Edit Medicine Entry Form Card */}
@@ -2051,6 +2142,32 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#334155',
+  },
+  stockSearchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    height: 36,
+    minWidth: 220,
+  },
+  stockSearchBoxMobile: {
+    width: '100%',
+    minWidth: '100%',
+  },
+  stockSearchIcon: {
+    fontSize: 12,
+    marginRight: 6,
+    color: '#64748B',
+  },
+  stockSearchInput: {
+    flex: 1,
+    fontSize: 12.5,
+    color: '#0F172A',
+    ...Platform.select({ web: { outlineStyle: 'none' } }),
   },
   cardHeaderMobile: {
     flexDirection: 'column',

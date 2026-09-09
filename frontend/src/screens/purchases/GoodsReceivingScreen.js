@@ -30,6 +30,7 @@ const GRN_STATUS_BADGES = {
 export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
+  const isMobile = width < 768;
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('All Statuses');
@@ -319,31 +320,16 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
           </View>
         </View>
 
-        {/* GRN Table */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-          <View style={styles.tableWrapper}>
-            {/* Table Header */}
-            <View style={styles.tableHeader}>
-              <Text style={[styles.thCell, { width: 130 }]}>GRN NUMBER</Text>
-              <Text style={[styles.thCell, { width: 100 }]}>PO REF</Text>
-              <Text style={[styles.thCell, { width: 160 }]}>SUPPLIER</Text>
-              <Text style={[styles.thCell, { width: 120 }]}>RECEIVED DATE</Text>
-              <Text style={[styles.thCell, { width: 120 }]}>RECEIVED BY</Text>
-              <Text style={[styles.thCell, { width: 70, textAlign: 'center' }]}>ITEMS</Text>
-              <Text style={[styles.thCell, { width: 90, textAlign: 'center' }]}>PACKAGES</Text>
-              <Text style={[styles.thCell, { width: 120 }]}>INVOICE NO</Text>
-              <Text style={[styles.thCell, { width: 140, textAlign: 'center' }]}>STATUS</Text>
-              <Text style={[styles.thCell, { width: 60, textAlign: 'center' }]}>ACTION</Text>
-            </View>
-
-            {/* Table Rows */}
+        {/* GRN Content (Mobile Cards vs Desktop Table) */}
+        {isMobile ? (
+          <View style={styles.mobileCardsList}>
             {filteredGRNs.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyTitle}>No goods received records found</Text>
                 <Text style={styles.emptySubtitle}>Try changing your search or status filter.</Text>
               </View>
             ) : (
-              filteredGRNs.map((grn, index) => {
+              filteredGRNs.map((grn) => {
                 const badge =
                   GRN_STATUS_BADGES[grn.status] || GRN_STATUS_BADGES.Verified;
                 const isMenuOpen = activeMenuId === grn.id;
@@ -352,139 +338,302 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
                   <View
                     key={grn.id}
                     style={[
-                      styles.tableRow,
-                      index % 2 === 1 && styles.tableRowAlt,
+                      styles.mobileGrnCard,
                       { zIndex: isMenuOpen ? 999 : 1 },
                     ]}
                   >
-                    <Text style={[styles.tdCell, styles.grnId, { width: 130 }]}>
-                      {grn.id}
-                    </Text>
-                    <Text style={[styles.tdCell, styles.poRef, { width: 100 }]}>
-                      {grn.poReference}
-                    </Text>
-                    <Text
-                      style={[styles.tdCell, styles.supplierText, { width: 160 }]}
-                      numberOfLines={1}
-                    >
-                      {grn.supplier}
-                    </Text>
-                    <Text style={[styles.tdCell, { width: 120 }]}>
-                      {grn.receivedDate}
-                    </Text>
-                    <Text style={[styles.tdCell, { width: 120 }]}>
-                      {grn.receivedBy}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.tdCell,
-                        { width: 70, textAlign: 'center', fontWeight: '600' },
-                      ]}
-                    >
-                      {grn.itemsCount}
-                    </Text>
-                    <Text style={[styles.tdCell, { width: 90, textAlign: 'center' }]}>
-                      {grn.packagesCount}
-                    </Text>
-                    <Text style={[styles.tdCell, { width: 120 }]}>
-                      {grn.invoiceNo}
-                    </Text>
+                    {/* Header Row: ID + Status + Action menu */}
+                    <View style={styles.mobileCardTopRow}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <Text style={styles.grnId}>{grn.id}</Text>
+                        <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
+                          <Text style={[styles.statusBadgeText, { color: badge.text }]}>
+                            {grn.status}
+                          </Text>
+                        </View>
+                      </View>
 
-                    {/* Status Badge */}
-                    <View style={[styles.statusWrapper, { width: 140 }]}>
-                      <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
-                        <Text style={[styles.statusBadgeText, { color: badge.text }]}>
-                          {grn.status}
-                        </Text>
+                      <View style={styles.actionWrapper}>
+                        <Pressable
+                          onPress={() =>
+                            setActiveMenuId((prev) => (prev === grn.id ? null : grn.id))
+                          }
+                          style={styles.threeDotsBtn}
+                          accessibilityRole="button"
+                          accessibilityLabel="Action menu"
+                        >
+                          <Text style={styles.threeDotsText}>⋮</Text>
+                        </Pressable>
+
+                        {isMenuOpen && (
+                          <View style={[styles.menuPopover, styles.menuPopoverMobile]}>
+                            <Text style={styles.menuHeaderTitle}>Update Status</Text>
+
+                            <Pressable
+                              style={styles.menuItem}
+                              onPress={() => handleStatusChange(grn, 'Verified')}
+                            >
+                              <View
+                                style={[
+                                  styles.menuDot,
+                                  { backgroundColor: GRN_STATUS_BADGES['Verified'].dot },
+                                ]}
+                              />
+                              <Text
+                                style={[
+                                  styles.menuItemText,
+                                  grn.status === 'Verified' && styles.menuItemTextActive,
+                                ]}
+                              >
+                                Verified
+                              </Text>
+                            </Pressable>
+
+                            <Pressable
+                              style={styles.menuItem}
+                              onPress={() => handleStatusChange(grn, 'Pending Inspection')}
+                            >
+                              <View
+                                style={[
+                                  styles.menuDot,
+                                  { backgroundColor: GRN_STATUS_BADGES['Pending Inspection'].dot },
+                                ]}
+                              />
+                              <Text
+                                style={[
+                                  styles.menuItemText,
+                                  grn.status === 'Pending Inspection' && styles.menuItemTextActive,
+                                ]}
+                              >
+                                Pending Inspection
+                              </Text>
+                            </Pressable>
+
+                            <Pressable
+                              style={styles.menuItem}
+                              onPress={() => handleStatusChange(grn, 'Discrepancy')}
+                            >
+                              <View
+                                style={[
+                                  styles.menuDot,
+                                  { backgroundColor: GRN_STATUS_BADGES['Discrepancy'].dot },
+                                ]}
+                              />
+                              <Text
+                                style={[
+                                  styles.menuItemText,
+                                  grn.status === 'Discrepancy' && styles.menuItemTextActive,
+                                ]}
+                              >
+                                Discrepancy
+                              </Text>
+                            </Pressable>
+                          </View>
+                        )}
                       </View>
                     </View>
 
-                    {/* 3-Dots Action Column */}
-                    <View style={[styles.actionWrapper, { width: 60 }]}>
-                      <Pressable
-                        onPress={() =>
-                          setActiveMenuId((prev) => (prev === grn.id ? null : grn.id))
-                        }
-                        style={styles.threeDotsBtn}
-                        accessibilityRole="button"
-                        accessibilityLabel="Action menu"
-                      >
-                        <Text style={styles.threeDotsText}>⋮</Text>
-                      </Pressable>
+                    {/* Supplier Name */}
+                    <Text style={styles.mobileSupplierName}>{grn.supplier}</Text>
 
-                      {/* Dropdown Menu */}
-                      {isMenuOpen && (
-                        <View style={styles.menuPopover}>
-                          <Text style={styles.menuHeaderTitle}>Update Status</Text>
+                    {/* Key-Value Details Grid */}
+                    <View style={styles.mobileDetailsGrid}>
+                      <View style={styles.mobileDetailItem}>
+                        <Text style={styles.mobileDetailLabel}>PO REF</Text>
+                        <Text style={styles.poRef}>{grn.poReference}</Text>
+                      </View>
+                      <View style={styles.mobileDetailItem}>
+                        <Text style={styles.mobileDetailLabel}>INVOICE NO</Text>
+                        <Text style={styles.mobileDetailVal}>{grn.invoiceNo}</Text>
+                      </View>
+                      <View style={styles.mobileDetailItem}>
+                        <Text style={styles.mobileDetailLabel}>RECEIVED DATE</Text>
+                        <Text style={styles.mobileDetailVal}>{grn.receivedDate}</Text>
+                      </View>
+                      <View style={styles.mobileDetailItem}>
+                        <Text style={styles.mobileDetailLabel}>ITEMS / PACKAGES</Text>
+                        <Text style={styles.mobileDetailVal}>{grn.itemsCount} items ({grn.packagesCount} pkgs)</Text>
+                      </View>
+                    </View>
 
-                          <Pressable
-                            style={styles.menuItem}
-                            onPress={() => handleStatusChange(grn, 'Verified')}
-                          >
-                            <View
-                              style={[
-                                styles.menuDot,
-                                { backgroundColor: GRN_STATUS_BADGES['Verified'].dot },
-                              ]}
-                            />
-                            <Text
-                              style={[
-                                styles.menuItemText,
-                                grn.status === 'Verified' && styles.menuItemTextActive,
-                              ]}
-                            >
-                              Verified
-                            </Text>
-                          </Pressable>
-
-                          <Pressable
-                            style={styles.menuItem}
-                            onPress={() => handleStatusChange(grn, 'Pending Inspection')}
-                          >
-                            <View
-                              style={[
-                                styles.menuDot,
-                                { backgroundColor: GRN_STATUS_BADGES['Pending Inspection'].dot },
-                              ]}
-                            />
-                            <Text
-                              style={[
-                                styles.menuItemText,
-                                grn.status === 'Pending Inspection' && styles.menuItemTextActive,
-                              ]}
-                            >
-                              Pending Inspection
-                            </Text>
-                          </Pressable>
-
-                          <Pressable
-                            style={styles.menuItem}
-                            onPress={() => handleStatusChange(grn, 'Discrepancy')}
-                          >
-                            <View
-                              style={[
-                                styles.menuDot,
-                                { backgroundColor: GRN_STATUS_BADGES['Discrepancy'].dot },
-                              ]}
-                            />
-                            <Text
-                              style={[
-                                styles.menuItemText,
-                                grn.status === 'Discrepancy' && styles.menuItemTextActive,
-                              ]}
-                            >
-                              Discrepancy
-                            </Text>
-                          </Pressable>
-                        </View>
-                      )}
+                    {/* Footer */}
+                    <View style={styles.mobileCardFooter}>
+                      <Text style={styles.mobileReceivedByText}>
+                        👤 Received by: <Text style={{ fontWeight: '600', color: '#0F172A' }}>{grn.receivedBy}</Text>
+                      </Text>
                     </View>
                   </View>
                 );
               })
             )}
           </View>
-        </ScrollView>
+        ) : (
+          <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+            <View style={styles.tableWrapper}>
+              {/* Table Header */}
+              <View style={styles.tableHeader}>
+                <Text style={[styles.thCell, { width: 130 }]}>GRN NUMBER</Text>
+                <Text style={[styles.thCell, { width: 100 }]}>PO REF</Text>
+                <Text style={[styles.thCell, { width: 160 }]}>SUPPLIER</Text>
+                <Text style={[styles.thCell, { width: 120 }]}>RECEIVED DATE</Text>
+                <Text style={[styles.thCell, { width: 120 }]}>RECEIVED BY</Text>
+                <Text style={[styles.thCell, { width: 70, textAlign: 'center' }]}>ITEMS</Text>
+                <Text style={[styles.thCell, { width: 90, textAlign: 'center' }]}>PACKAGES</Text>
+                <Text style={[styles.thCell, { width: 120 }]}>INVOICE NO</Text>
+                <Text style={[styles.thCell, { width: 140, textAlign: 'center' }]}>STATUS</Text>
+                <Text style={[styles.thCell, { width: 60, textAlign: 'center' }]}>ACTION</Text>
+              </View>
+
+              {/* Table Rows */}
+              {filteredGRNs.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyTitle}>No goods received records found</Text>
+                  <Text style={styles.emptySubtitle}>Try changing your search or status filter.</Text>
+                </View>
+              ) : (
+                filteredGRNs.map((grn, index) => {
+                  const badge =
+                    GRN_STATUS_BADGES[grn.status] || GRN_STATUS_BADGES.Verified;
+                  const isMenuOpen = activeMenuId === grn.id;
+
+                  return (
+                    <View
+                      key={grn.id}
+                      style={[
+                        styles.tableRow,
+                        index % 2 === 1 && styles.tableRowAlt,
+                        { zIndex: isMenuOpen ? 999 : 1 },
+                      ]}
+                    >
+                      <Text style={[styles.tdCell, styles.grnId, { width: 130 }]}>
+                        {grn.id}
+                      </Text>
+                      <Text style={[styles.tdCell, styles.poRef, { width: 100 }]}>
+                        {grn.poReference}
+                      </Text>
+                      <Text
+                        style={[styles.tdCell, styles.supplierText, { width: 160 }]}
+                        numberOfLines={1}
+                      >
+                        {grn.supplier}
+                      </Text>
+                      <Text style={[styles.tdCell, { width: 120 }]}>
+                        {grn.receivedDate}
+                      </Text>
+                      <Text style={[styles.tdCell, { width: 120 }]}>
+                        {grn.receivedBy}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.tdCell,
+                          { width: 70, textAlign: 'center', fontWeight: '600' },
+                        ]}
+                      >
+                        {grn.itemsCount}
+                      </Text>
+                      <Text style={[styles.tdCell, { width: 90, textAlign: 'center' }]}>
+                        {grn.packagesCount}
+                      </Text>
+                      <Text style={[styles.tdCell, { width: 120 }]}>
+                        {grn.invoiceNo}
+                      </Text>
+
+                      {/* Status Badge */}
+                      <View style={[styles.statusWrapper, { width: 140 }]}>
+                        <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
+                          <Text style={[styles.statusBadgeText, { color: badge.text }]}>
+                            {grn.status}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* 3-Dots Action Column */}
+                      <View style={[styles.actionWrapper, { width: 60 }]}>
+                        <Pressable
+                          onPress={() =>
+                            setActiveMenuId((prev) => (prev === grn.id ? null : grn.id))
+                          }
+                          style={styles.threeDotsBtn}
+                          accessibilityRole="button"
+                          accessibilityLabel="Action menu"
+                        >
+                          <Text style={styles.threeDotsText}>⋮</Text>
+                        </Pressable>
+
+                        {/* Dropdown Menu */}
+                        {isMenuOpen && (
+                          <View style={styles.menuPopover}>
+                            <Text style={styles.menuHeaderTitle}>Update Status</Text>
+
+                            <Pressable
+                              style={styles.menuItem}
+                              onPress={() => handleStatusChange(grn, 'Verified')}
+                            >
+                              <View
+                                style={[
+                                  styles.menuDot,
+                                  { backgroundColor: GRN_STATUS_BADGES['Verified'].dot },
+                                ]}
+                              />
+                              <Text
+                                style={[
+                                  styles.menuItemText,
+                                  grn.status === 'Verified' && styles.menuItemTextActive,
+                                ]}
+                              >
+                                Verified
+                              </Text>
+                            </Pressable>
+
+                            <Pressable
+                              style={styles.menuItem}
+                              onPress={() => handleStatusChange(grn, 'Pending Inspection')}
+                            >
+                              <View
+                                style={[
+                                  styles.menuDot,
+                                  { backgroundColor: GRN_STATUS_BADGES['Pending Inspection'].dot },
+                                ]}
+                              />
+                              <Text
+                                style={[
+                                  styles.menuItemText,
+                                  grn.status === 'Pending Inspection' && styles.menuItemTextActive,
+                                ]}
+                              >
+                                Pending Inspection
+                              </Text>
+                            </Pressable>
+
+                            <Pressable
+                              style={styles.menuItem}
+                              onPress={() => handleStatusChange(grn, 'Discrepancy')}
+                            >
+                              <View
+                                style={[
+                                  styles.menuDot,
+                                  { backgroundColor: GRN_STATUS_BADGES['Discrepancy'].dot },
+                                ]}
+                              />
+                              <Text
+                                style={[
+                                  styles.menuItemText,
+                                  grn.status === 'Discrepancy' && styles.menuItemTextActive,
+                                ]}
+                              >
+                                Discrepancy
+                              </Text>
+                            </Pressable>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  );
+                })
+              )}
+            </View>
+          </ScrollView>
+        )}
       </View>
 
       {/* Receive Shipment Modal */}
@@ -989,6 +1138,73 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  // Mobile GRN KPI Cards
+  mobileCardsList: {
+    padding: 12,
+    gap: 12,
+  },
+  mobileGrnCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 14,
+    ...Platform.select({
+      web: { boxShadow: '0 1px 3px rgba(0,0,0,0.04)' },
+      default: { elevation: 1 },
+    }),
+  },
+  mobileCardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  menuPopoverMobile: {
+    right: 0,
+    top: 30,
+    width: 170,
+  },
+  mobileSupplierName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 12,
+  },
+  mobileDetailsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 10,
+  },
+  mobileDetailItem: {
+    minWidth: '46%',
+    flex: 1,
+  },
+  mobileDetailLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+    marginBottom: 2,
+    letterSpacing: 0.3,
+  },
+  mobileDetailVal: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  mobileCardFooter: {
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    paddingTop: 8,
+  },
+  mobileReceivedByText: {
+    fontSize: 11.5,
+    color: '#64748B',
   },
 });
 

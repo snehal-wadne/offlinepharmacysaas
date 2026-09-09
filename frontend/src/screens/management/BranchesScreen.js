@@ -459,6 +459,110 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
               <Text style={styles.emptyAddButtonText}>+ Add First Branch</Text>
             </Pressable>
           </View>
+        ) : isMobile ? (
+          <View style={styles.mobileBranchList}>
+            {filteredBranches.map((branch) => {
+              const isActive = branch.status === 'Active';
+
+              return (
+                <View key={branch.id} style={styles.mobileBranchCard}>
+                  {/* Top Row: Code + Hub badge + Status Switch */}
+                  <View style={styles.mobileBranchTopRow}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <View style={styles.codeBadge}>
+                        <Text style={styles.codeBadgeText}>{branch.code}</Text>
+                      </View>
+                      {branch.isMainHub && (
+                        <View style={styles.mainHubPill}>
+                          <Text style={styles.mainHubText}>Primary Hub</Text>
+                        </View>
+                      )}
+                    </View>
+
+                    <Pressable
+                      onPress={() => handleToggleStatus(branch)}
+                      style={styles.toggleSwitchRow}
+                      accessibilityRole="switch"
+                      accessibilityState={{ checked: isActive }}
+                      accessibilityLabel={`Branch status: ${branch.status}`}
+                    >
+                      <View
+                        style={[
+                          styles.toggleTrack,
+                          isActive
+                            ? styles.toggleTrackActive
+                            : styles.toggleTrackInactive,
+                        ]}
+                      >
+                        <View
+                          style={[
+                            styles.toggleThumb,
+                            isActive
+                              ? styles.toggleThumbActive
+                              : styles.toggleThumbInactive,
+                          ]}
+                        />
+                      </View>
+                      <Text
+                        style={[
+                          styles.toggleLabelText,
+                          isActive
+                            ? styles.toggleLabelActive
+                            : styles.toggleLabelInactive,
+                        ]}
+                      >
+                        {branch.status}
+                      </Text>
+                    </Pressable>
+                  </View>
+
+                  {/* Branch Name */}
+                  <Text style={styles.mobileBranchName}>{branch.name}</Text>
+                  <Text style={styles.mobileBranchType}>{branch.type} • {branch.staffCount} Staff Members</Text>
+
+                  {/* Details Grid */}
+                  <View style={styles.mobileBranchDetailsGrid}>
+                    <View style={styles.mobileBranchDetailItem}>
+                      <Text style={styles.mobileBranchDetailLabel}>CONTACT PERSON</Text>
+                      <Text style={styles.mobileBranchDetailVal}>{branch.contactPerson}</Text>
+                      <Text style={styles.mobileBranchDetailSub}>{branch.phone}</Text>
+                    </View>
+                    <View style={styles.mobileBranchDetailItem}>
+                      <Text style={styles.mobileBranchDetailLabel}>LOCATION</Text>
+                      <Text style={styles.mobileBranchDetailVal}>{branch.city}, {branch.state}</Text>
+                      <Text style={styles.mobileBranchDetailSub}>Pin: {branch.pincode}</Text>
+                    </View>
+                  </View>
+
+                  {/* Footer: Tax/Prefix & Action Buttons */}
+                  <View style={styles.mobileBranchFooter}>
+                    <View>
+                      <Text style={styles.invoicePrefixText}>Prefix: {branch.invoicePrefix}</Text>
+                      <Text style={styles.taxRateText}>Tax: {branch.defaultTaxRate}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <Pressable
+                        onPress={() => handleViewDetails(branch)}
+                        style={styles.actionViewBtn}
+                        accessibilityRole="button"
+                        accessibilityLabel="View Details"
+                      >
+                        <Text style={styles.actionViewBtnText}>View</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => handleOpenEditModal(branch)}
+                        style={styles.actionEditBtn}
+                        accessibilityRole="button"
+                        accessibilityLabel="Edit Branch"
+                      >
+                        <Text style={styles.actionEditBtnText}>Edit</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
         ) : (
           <ScrollView horizontal showsHorizontalScrollIndicator={true}>
             <View style={styles.tableWrapper}>
@@ -1833,5 +1937,74 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     maxWidth: '65%',
     textAlign: 'right',
+  },
+  // Mobile Branch KPI Cards
+  mobileBranchList: {
+    padding: 12,
+    gap: 12,
+  },
+  mobileBranchCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 14,
+    ...Platform.select({
+      web: { boxShadow: '0 1px 3px rgba(0,0,0,0.04)' },
+      default: { elevation: 1 },
+    }),
+  },
+  mobileBranchTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  mobileBranchName: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 2,
+  },
+  mobileBranchType: {
+    fontSize: 12,
+    color: '#64748B',
+    marginBottom: 10,
+  },
+  mobileBranchDetailsGrid: {
+    flexDirection: 'row',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    padding: 10,
+    gap: 10,
+    marginBottom: 10,
+  },
+  mobileBranchDetailItem: {
+    flex: 1,
+  },
+  mobileBranchDetailLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+    marginBottom: 2,
+    letterSpacing: 0.3,
+  },
+  mobileBranchDetailVal: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  mobileBranchDetailSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  mobileBranchFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    paddingTop: 10,
   },
 });

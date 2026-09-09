@@ -26,6 +26,7 @@ const RISK_BADGES = {
 export default function ExpiryReportsScreen({ onShowToast, onNavigate }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
+  const isMobile = width < 768;
 
   const [searchQuery, setSearchQuery] = useState('');
   const [riskItems, setRiskItems] = useState(MOCK_EXPIRY_RISK_ITEMS);
@@ -165,65 +166,30 @@ export default function ExpiryReportsScreen({ onShowToast, onNavigate }) {
           </View>
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-          <View style={styles.tableWrapper}>
-            <View style={styles.tableHeader}>
-              <Text style={[styles.thCell, { width: 110 }]}>BATCH NO.</Text>
-              <Text style={[styles.thCell, { width: 180 }]}>MEDICINE NAME</Text>
-              <Text style={[styles.thCell, { width: 160 }]}>SUPPLIER</Text>
-              <Text style={[styles.thCell, { width: 120 }]}>EXPIRY DATE</Text>
-              <Text style={[styles.thCell, { width: 130, textAlign: 'center' }]}>DAYS REMAINING</Text>
-              <Text style={[styles.thCell, { width: 90, textAlign: 'center' }]}>QUANTITY</Text>
-              <Text style={[styles.thCell, { width: 130, textAlign: 'right' }]}>COST VALUE (₹)</Text>
-              <Text style={[styles.thCell, { width: 120, textAlign: 'center' }]}>RISK LEVEL</Text>
-              <Text style={[styles.thCell, { width: 200 }]}>RECOMMENDED ACTION</Text>
-            </View>
-
+        {isMobile ? (
+          <View style={styles.mobileCardsList}>
             {filteredItems.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyTitle}>No expiring batches found</Text>
                 <Text style={styles.emptySubtitle}>Try changing your search terms.</Text>
               </View>
             ) : (
-              filteredItems.map((item, index) => {
+              filteredItems.map((item) => {
                 const badge = RISK_BADGES[item.riskLevel] || RISK_BADGES.Critical;
-                return (
-                  <View
-                    key={item.batchNo}
-                    style={[
-                      styles.tableRow,
-                      index % 2 === 1 && styles.tableRowAlt,
-                    ]}
-                  >
-                    <Text style={[styles.tdCell, styles.batchText, { width: 110 }]}>
-                      {item.batchNo}
-                    </Text>
-                    <Text style={[styles.tdCell, styles.medName, { width: 180 }]} numberOfLines={1}>
-                      {item.medicine}
-                    </Text>
-                    <Text style={[styles.tdCell, { width: 160 }]} numberOfLines={1}>
-                      {item.supplier}
-                    </Text>
-                    <Text style={[styles.tdCell, { width: 120 }]}>{item.expiryDate}</Text>
-                    <Text
-                      style={[
-                        styles.tdCell,
-                        styles.daysText,
-                        item.daysRemaining === 'Expired' && styles.expiredText,
-                        { width: 130, textAlign: 'center' },
-                      ]}
-                    >
-                      {item.daysRemaining}
-                    </Text>
-                    <Text style={[styles.tdCell, { width: 90, textAlign: 'center', fontWeight: '600' }]}>
-                      {item.quantity}
-                    </Text>
-                    <Text style={[styles.tdCell, styles.costText, { width: 130, textAlign: 'right' }]}>
-                      {item.costValue}
-                    </Text>
+                const isCriticalOrExpired = item.riskLevel === 'Critical' || item.riskLevel === 'Expired';
 
-                    {/* Risk Badge */}
-                    <View style={[styles.statusWrapper, { width: 120 }]}>
+                return (
+                  <View key={item.batchNo} style={styles.mobileExpiryCard}>
+                    {/* Header Row: Batch No + Days countdown + Risk badge */}
+                    <View style={styles.mobileExpiryTopRow}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <Text style={styles.batchText}>{item.batchNo}</Text>
+                        <View style={[styles.mobileDaysPill, isCriticalOrExpired && styles.daysPillUrgent]}>
+                          <Text style={[styles.mobileDaysText, isCriticalOrExpired && styles.daysTextUrgent]}>
+                            ⏳ {item.daysRemaining}
+                          </Text>
+                        </View>
+                      </View>
                       <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
                         <Text style={[styles.statusBadgeText, { color: badge.text }]}>
                           {item.riskLevel}
@@ -231,23 +197,122 @@ export default function ExpiryReportsScreen({ onShowToast, onNavigate }) {
                       </View>
                     </View>
 
-                    {/* Action Trigger */}
-                    <View style={[{ width: 200 }]}>
-                      <Pressable
-                        onPress={() => handleExecuteAction(item)}
-                        style={styles.actionPillBtn}
-                      >
-                        <Text style={styles.actionPillText} numberOfLines={1}>
-                          {item.recommendedAction}
-                        </Text>
-                      </Pressable>
+                    {/* Medicine & Supplier */}
+                    <Text style={styles.mobileMedName}>{item.medicine}</Text>
+                    <Text style={styles.mobileSupplierText}>Supplier: {item.supplier} • Exp: {item.expiryDate}</Text>
+
+                    {/* Quantity & Cost */}
+                    <View style={styles.mobileExpiryDetailsGrid}>
+                      <View style={styles.mobileExpiryDetailItem}>
+                        <Text style={styles.mobileExpiryDetailLabel}>QUANTITY</Text>
+                        <Text style={styles.mobileExpiryDetailVal}>{item.quantity} units</Text>
+                      </View>
+                      <View style={styles.mobileExpiryDetailItem}>
+                        <Text style={styles.mobileExpiryDetailLabel}>FINANCIAL EXPOSURE</Text>
+                        <Text style={[styles.mobileExpiryDetailVal, { color: '#DC2626' }]}>{item.costValue}</Text>
+                      </View>
                     </View>
+
+                    {/* Action Trigger Footer */}
+                    <Pressable
+                      onPress={() => handleExecuteAction(item)}
+                      style={styles.mobileActionBtn}
+                      accessibilityRole="button"
+                    >
+                      <Text style={styles.mobileActionBtnText} numberOfLines={1}>
+                        ⚡ {item.recommendedAction} ➔
+                      </Text>
+                    </Pressable>
                   </View>
                 );
               })
             )}
           </View>
-        </ScrollView>
+        ) : (
+          <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+            <View style={styles.tableWrapper}>
+              <View style={styles.tableHeader}>
+                <Text style={[styles.thCell, { width: 110 }]}>BATCH NO.</Text>
+                <Text style={[styles.thCell, { width: 180 }]}>MEDICINE NAME</Text>
+                <Text style={[styles.thCell, { width: 160 }]}>SUPPLIER</Text>
+                <Text style={[styles.thCell, { width: 120 }]}>EXPIRY DATE</Text>
+                <Text style={[styles.thCell, { width: 130, textAlign: 'center' }]}>DAYS REMAINING</Text>
+                <Text style={[styles.thCell, { width: 90, textAlign: 'center' }]}>QUANTITY</Text>
+                <Text style={[styles.thCell, { width: 130, textAlign: 'right' }]}>COST VALUE (₹)</Text>
+                <Text style={[styles.thCell, { width: 120, textAlign: 'center' }]}>RISK LEVEL</Text>
+                <Text style={[styles.thCell, { width: 200 }]}>RECOMMENDED ACTION</Text>
+              </View>
+
+              {filteredItems.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyTitle}>No expiring batches found</Text>
+                  <Text style={styles.emptySubtitle}>Try changing your search terms.</Text>
+                </View>
+              ) : (
+                filteredItems.map((item, index) => {
+                  const badge = RISK_BADGES[item.riskLevel] || RISK_BADGES.Critical;
+                  return (
+                    <View
+                      key={item.batchNo}
+                      style={[
+                        styles.tableRow,
+                        index % 2 === 1 && styles.tableRowAlt,
+                      ]}
+                    >
+                      <Text style={[styles.tdCell, styles.batchText, { width: 110 }]}>
+                        {item.batchNo}
+                      </Text>
+                      <Text style={[styles.tdCell, styles.medName, { width: 180 }]} numberOfLines={1}>
+                        {item.medicine}
+                      </Text>
+                      <Text style={[styles.tdCell, { width: 160 }]} numberOfLines={1}>
+                        {item.supplier}
+                      </Text>
+                      <Text style={[styles.tdCell, { width: 120 }]}>{item.expiryDate}</Text>
+                      <Text
+                        style={[
+                          styles.tdCell,
+                          styles.daysText,
+                          item.daysRemaining === 'Expired' && styles.expiredText,
+                          { width: 130, textAlign: 'center' },
+                        ]}
+                      >
+                        {item.daysRemaining}
+                      </Text>
+                      <Text style={[styles.tdCell, { width: 90, textAlign: 'center', fontWeight: '600' }]}>
+                        {item.quantity}
+                      </Text>
+                      <Text style={[styles.tdCell, styles.costText, { width: 130, textAlign: 'right' }]}>
+                        {item.costValue}
+                      </Text>
+
+                      {/* Risk Badge */}
+                      <View style={[styles.statusWrapper, { width: 120 }]}>
+                        <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
+                          <Text style={[styles.statusBadgeText, { color: badge.text }]}>
+                            {item.riskLevel}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Action Trigger */}
+                      <View style={[{ width: 200 }]}>
+                        <Pressable
+                          onPress={() => handleExecuteAction(item)}
+                          style={styles.actionPillBtn}
+                        >
+                          <Text style={styles.actionPillText} numberOfLines={1}>
+                            {item.recommendedAction}
+                          </Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  );
+                })
+              )}
+            </View>
+          </ScrollView>
+        )}
       </View>
     </ScrollView>
   );
@@ -477,5 +542,91 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#64748B',
     marginTop: 2,
+  },
+  // Mobile Batch Expiry KPI Cards
+  mobileCardsList: {
+    padding: 12,
+    gap: 12,
+  },
+  mobileExpiryCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 14,
+    ...Platform.select({
+      web: { boxShadow: '0 1px 3px rgba(0,0,0,0.04)' },
+      default: { elevation: 1 },
+    }),
+  },
+  mobileExpiryTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  mobileDaysPill: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  daysPillUrgent: {
+    backgroundColor: '#FEE2E2',
+  },
+  mobileDaysText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#B45309',
+  },
+  daysTextUrgent: {
+    color: '#B91C1C',
+  },
+  mobileMedName: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 3,
+  },
+  mobileSupplierText: {
+    fontSize: 12,
+    color: '#64748B',
+    marginBottom: 10,
+  },
+  mobileExpiryDetailsGrid: {
+    flexDirection: 'row',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    padding: 10,
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  mobileExpiryDetailItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  mobileExpiryDetailLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+    marginBottom: 2,
+    letterSpacing: 0.3,
+  },
+  mobileExpiryDetailVal: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  mobileActionBtn: {
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  mobileActionBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#2563EB',
   },
 });

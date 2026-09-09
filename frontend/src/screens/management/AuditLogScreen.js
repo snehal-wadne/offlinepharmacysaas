@@ -305,6 +305,71 @@ export default function AuditLogScreen({ onShowToast, onNavigate }) {
               <Text style={styles.emptyResetBtnText}>Reset Filter to All</Text>
             </Pressable>
           </View>
+        ) : isMobile ? (
+          <View style={styles.mobileAuditList}>
+            {filteredLogs.map((log) => {
+              const actionBadge = getActionBadgeStyle(log.actionType);
+              const sevStyle = getSeverityStyle(log.severity);
+
+              return (
+                <View key={log.id} style={styles.mobileAuditCard}>
+                  {/* Top: Timestamp, ID, Severity */}
+                  <View style={styles.mobileAuditTop}>
+                    <View>
+                      <Text style={styles.timestampText}>{log.timestamp}</Text>
+                      <Text style={styles.relativeTimeText}>{log.id} • {log.relativeTime}</Text>
+                    </View>
+                    <View style={[styles.sevBadge, { backgroundColor: sevStyle.bg }]}>
+                      <View style={[styles.sevDot, { backgroundColor: sevStyle.dot }]} />
+                      <Text style={[styles.sevText, { color: sevStyle.text }]}>{log.severity}</Text>
+                    </View>
+                  </View>
+
+                  {/* Actor & Action */}
+                  <View style={styles.mobileAuditActorRow}>
+                    <View style={styles.actorAvatar}>
+                      <Text style={styles.actorAvatarText}>{log.actor.avatarInitials}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.actorName}>{log.actor.name}</Text>
+                      <Text style={styles.actorRole}>{log.actor.role} • {log.branch}</Text>
+                    </View>
+                    <View style={[styles.actionBadge, { backgroundColor: actionBadge.bg, borderColor: actionBadge.border }]}>
+                      <Text style={[styles.actionBadgeText, { color: actionBadge.text }]}>{log.actionType}</Text>
+                    </View>
+                  </View>
+
+                  {/* Entity & Details */}
+                  <View style={styles.mobileAuditEntityBox}>
+                    <Text style={styles.mobileAuditEntityLabel}>Target Entity [{log.module}]:</Text>
+                    <Text style={styles.entityRefText}>{log.entityRef}</Text>
+                    <Text style={styles.actionSubLabel}>{log.actionLabel}</Text>
+                  </View>
+
+                  {/* Actions footer */}
+                  <View style={styles.mobileAuditFooter}>
+                    <Pressable
+                      onPress={() => handleOpenDetails(log)}
+                      style={styles.viewDiffBtn}
+                      accessibilityRole="button"
+                      accessibilityLabel={`View Diff for ${log.id}`}
+                    >
+                      <Text style={styles.viewDiffBtnText}>View Diff ➔</Text>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => handleNavigateToSource(log)}
+                      style={styles.openModuleBtn}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Go to source module ${log.module}`}
+                    >
+                      <Text style={styles.openModuleBtnText}>Source Module ↗</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
         ) : (
           <ScrollView horizontal showsHorizontalScrollIndicator={true}>
             <View style={styles.tableWrapper}>
@@ -1221,5 +1286,55 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#475569',
+  },
+  // Mobile Audit Log Cards
+  mobileAuditList: {
+    padding: 12,
+    gap: 12,
+  },
+  mobileAuditCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 14,
+    ...Platform.select({
+      web: { boxShadow: '0 1px 3px rgba(0,0,0,0.04)' },
+      default: { elevation: 1 },
+    }),
+  },
+  mobileAuditTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
+  mobileAuditActorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  mobileAuditEntityBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 10,
+  },
+  mobileAuditEntityLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+    marginBottom: 3,
+    textTransform: 'uppercase',
+  },
+  mobileAuditFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
   },
 });

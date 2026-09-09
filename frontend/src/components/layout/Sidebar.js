@@ -743,11 +743,15 @@ const styles = StyleSheet.create({
   sidebarContainerMobile: {
     width: '100%',
     borderRightWidth: 0,
+    flex: 1,
     height: '100%',
+    overflow: 'hidden',
     ...Platform.select({
       web: {
         height: '100%',
         position: 'relative',
+        display: 'flex',
+        flexDirection: 'column',
       },
     }),
   },
@@ -796,6 +800,7 @@ const styles = StyleSheet.create({
   navContent: {
     paddingVertical: 16,
     paddingHorizontal: 12,
+    paddingBottom: 90,
   },
   sectionDivider: {
     height: 1,

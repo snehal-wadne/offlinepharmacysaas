@@ -310,14 +310,19 @@ export default function BarcodeScannerModal({
               <View style={styles.headerIconBadge}>
                 <Text style={styles.headerIcon}>📷</Text>
               </View>
-              <View>
-                <Text style={styles.modalTitle}>{title}</Text>
-                <Text style={styles.modalSubtitle}>
-                  Supports QR Code, 1D/2D Barcodes, and Hardware Scanners
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle} numberOfLines={1}>{title}</Text>
+                <Text style={styles.modalSubtitle} numberOfLines={1}>
+                  Supports QR Code, 1D/2D Barcodes & Hardware Scanners
                 </Text>
               </View>
             </View>
-            <Pressable onPress={onClose} style={styles.closeBtn}>
+            <Pressable
+              onPress={onClose}
+              style={styles.closeBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Close scanner"
+            >
               <Text style={styles.closeBtnText}>✕</Text>
             </Pressable>
           </View>
@@ -484,8 +489,8 @@ export default function BarcodeScannerModal({
 
           {/* Footer */}
           <View style={styles.modalFooter}>
-            <Pressable onPress={onClose} style={styles.doneBtn}>
-              <Text style={styles.doneBtnText}>Done / Close</Text>
+            <Pressable onPress={onClose} style={styles.doneBtn} accessibilityRole="button" accessibilityLabel="Close Scanner">
+              <Text style={styles.doneBtnText}>✕ Close Scanner</Text>
             </Pressable>
           </View>
         </View>
@@ -506,9 +511,10 @@ const styles = StyleSheet.create({
   modalCard: {
     width: '100%',
     maxWidth: 540,
+    maxHeight: '92%',
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 20,
+    padding: 18,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.25,
@@ -520,11 +526,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
+    gap: 10,
   },
   headerLeft: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
+    minWidth: 0,
   },
   headerIconBadge: {
     width: 38,
@@ -533,32 +542,38 @@ const styles = StyleSheet.create({
     backgroundColor: '#E6F4F1',
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   headerIcon: {
     fontSize: 18,
   },
   modalTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '800',
     color: '#0F172A',
   },
   modalSubtitle: {
-    fontSize: 11.5,
+    fontSize: 11,
     color: '#64748B',
     marginTop: 1,
   },
   closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    cursor: 'pointer',
+    zIndex: 99,
   },
   closeBtnText: {
-    fontSize: 14,
-    color: '#64748B',
-    fontWeight: '700',
+    fontSize: 16,
+    color: '#1E293B',
+    fontWeight: '800',
   },
 
   // Unified Scanner Feature Banner

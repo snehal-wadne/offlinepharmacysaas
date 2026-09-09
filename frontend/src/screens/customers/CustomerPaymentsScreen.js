@@ -568,6 +568,22 @@ export default function CustomerPaymentsScreen({ onShowToast, onNavigate }) {
                   <Text style={styles.vouchBrand}>PHARMAFLOW PHARMACY ERP</Text>
                   <Text style={styles.vouchSub}>Official Payment Receipt</Text>
 
+                  {/* Top Voucher Summary Badges */}
+                  <View style={styles.voucherTopKpiRow}>
+                    <View style={styles.voucherKpiPill}>
+                      <Text style={styles.voucherKpiPillLabel}>AMOUNT PAID</Text>
+                      <Text style={styles.voucherKpiPillVal}>{selectedReceipt.amount}</Text>
+                    </View>
+                    <View style={styles.voucherKpiPill}>
+                      <Text style={styles.voucherKpiPillLabel}>PAYMENT MODE</Text>
+                      <Text style={styles.voucherKpiPillVal}>{selectedReceipt.paymentMode}</Text>
+                    </View>
+                    <View style={styles.voucherKpiPill}>
+                      <Text style={styles.voucherKpiPillLabel}>STATUS</Text>
+                      <Text style={[styles.voucherKpiPillVal, { color: '#166534' }]}>✓ Completed</Text>
+                    </View>
+                  </View>
+
                   <View style={styles.vouchDivider} />
 
                   <View style={styles.vouchRow}>
@@ -1199,6 +1215,33 @@ const styles = StyleSheet.create({
     color: '#64748B',
     textAlign: 'center',
     marginTop: 2,
+  },
+  voucherTopKpiRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginVertical: 12,
+  },
+  voucherKpiPill: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+  },
+  voucherKpiPillLabel: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#64748B',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  voucherKpiPillVal: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0F172A',
   },
   vouchDivider: {
     height: 1,

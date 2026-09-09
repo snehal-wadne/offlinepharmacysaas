@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,8 @@ import {
   Platform,
 } from 'react-native';
 import { usePos } from '../../context/PosContext';
+import PaginationControls from '../../components/common/PaginationControls';
+import { SkeletonTableRow, SkeletonItemCard } from '../../components/common/SkeletonLoader';
 
 export default function HeldBillsScreen({ onNavigate, onShowToast, isMultiBranch = true }) {
   const { width } = useWindowDimensions();
@@ -101,6 +103,34 @@ export default function HeldBillsScreen({ onNavigate, onShowToast, isMultiBranch
     return matchSearch && matchStatus && matchDate;
   });
 
+  // Pagination State
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [isPageLoading, setIsPageLoading] = useState(false);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, selectedDateFilter, selectedStatusFilter]);
+
+  const totalItems = filteredBills.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const startIndex = (page - 1) * pageSize;
+  const paginatedBills = filteredBills.slice(startIndex, startIndex + pageSize);
+
+  const handlePageChange = (newPage) => {
+    setIsPageLoading(true);
+    setPage(newPage);
+    setTimeout(() => setIsPageLoading(false), 150);
+  };
+
+  const handlePageSizeChange = (newSize) => {
+    setIsPageLoading(true);
+    setPageSize(newSize);
+    setPage(1);
+    setTimeout(() => setIsPageLoading(false), 150);
+  };
+
   // Calculate Metrics
   const totalDraftBills = heldBills.length;
   const pendingDraftValue = heldBills.reduce((acc, b) => acc + (b.total || 0), 0);
@@ -169,15 +199,15 @@ export default function HeldBillsScreen({ onNavigate, onShowToast, isMultiBranch
       </View>
 
       {/* 2. Top Metric Cards (Matches Image 2 cards) */}
-      <View style={styles.metricsCardsGrid}>
+      <View style={[styles.metricsCardsGrid, isMobile && styles.metricsCardsGridMobile]}>
         {/* Card 1: Total Draft Bills */}
-        <View style={styles.metricCard}>
+        <View style={[styles.metricCard, isMobile && styles.metricCardMobile]}>
           <Text style={styles.metricLabel}>Total Draft Bills</Text>
           <Text style={styles.metricValueLarge}>{totalDraftBills}</Text>
         </View>
 
         {/* Card 2: Pending Draft Value */}
-        <View style={styles.metricCard}>
+        <View style={[styles.metricCard, isMobile && styles.metricCardMobile]}>
           <Text style={styles.metricLabel}>Pending Draft Value</Text>
           <Text style={[styles.metricValueLarge, styles.valueGreen]}>
             ₹{pendingDraftValue.toFixed(2)}
@@ -185,16 +215,16 @@ export default function HeldBillsScreen({ onNavigate, onShowToast, isMultiBranch
         </View>
 
         {/* Card 3: Active Branch */}
-        <View style={styles.metricCard}>
+        <View style={[styles.metricCard, isMobile && styles.metricCardMobileWide]}>
           <Text style={styles.metricLabel}>Active Branch</Text>
           <Text style={styles.metricValueText}>Main Branch</Text>
         </View>
       </View>
 
       {/* 3. Search and Filters Row (Matches Image 2) */}
-      <View style={styles.searchAndFiltersRow}>
+      <View style={[styles.searchAndFiltersRow, isMobile && styles.searchAndFiltersRowMobile]}>
         {/* Search Box */}
-        <View style={styles.searchBarBox}>
+        <View style={[styles.searchBarBox, isMobile && styles.searchBarBoxMobile]}>
           <Text style={styles.searchIcon}>🔍</Text>
           <TextInput
             style={styles.searchInput}
@@ -399,164 +429,290 @@ export default function HeldBillsScreen({ onNavigate, onShowToast, isMultiBranch
         )}
       </View>
 
-      {/* 4. Held Bills Table (Matches Image 2) */}
+      {/* 4. Held Bills Table / Mobile Cards */}
       <View style={styles.tableCard}>
-        {/* Table Header */}
-        <View style={styles.tableHeaderRow}>
-          <Text style={[styles.thText, { flex: 1.1 }]}>BILL NO</Text>
-          <Text style={[styles.thText, { flex: 1.8 }]}>CUSTOMER</Text>
-          <Text style={[styles.thText, { flex: 2.8 }]}>ITEMS</Text>
-          <Text style={[styles.thText, { flex: 1.2, textAlign: 'right' }]}>AMOUNT (₹)</Text>
-          <Text style={[styles.thText, { flex: 1.8, textAlign: 'center' }]}>HELD ON</Text>
-          <Text style={[styles.thText, { flex: 1.1, textAlign: 'center' }]}>STATUS</Text>
-          <Text style={[styles.thText, { flex: 1.3, textAlign: 'center' }]}>ACTION</Text>
-        </View>
+        {isMobile ? (
+          /* Mobile Card List */
+          <View style={styles.mobileCardList}>
+            {isPageLoading ? (
+              <>
+                <SkeletonItemCard />
+                <SkeletonItemCard />
+                <SkeletonItemCard />
+              </>
+            ) : paginatedBills.length === 0 ? (
+              <View style={styles.emptyTableBox}>
+                <Text style={styles.emptyTableIcon}>⏸️</Text>
+                <Text style={styles.emptyTableTitle}>No Draft Bills Found</Text>
+                <Text style={styles.emptyTableSubtitle}>
+                  Unpaid carts parked during POS billing will appear here like email drafts.
+                </Text>
+              </View>
+            ) : (
+              paginatedBills.map((bill) => {
+                const billId = bill.billNo || bill.holdId;
+                return (
+                  <View key={billId} style={styles.mobileBillCard}>
+                    {/* Header Row: Bill No & Status */}
+                    <View style={styles.mobileCardHeader}>
+                      <View style={styles.mobileBillNoBadge}>
+                        <Text style={styles.mobileBillNoText}>{billId}</Text>
+                        <View style={styles.mobileDraftTag}>
+                          <Text style={styles.mobileDraftTagText}>Draft</Text>
+                        </View>
+                      </View>
+                      <View style={styles.holdBadge}>
+                        <Text style={styles.holdBadgeText}>{bill.status || 'Hold'}</Text>
+                      </View>
+                    </View>
 
-        {/* Table Rows */}
-        {filteredBills.length === 0 ? (
-          <View style={styles.emptyTableBox}>
-            <Text style={styles.emptyTableIcon}>⏸️</Text>
-            <Text style={styles.emptyTableTitle}>No Draft Bills Found</Text>
-            <Text style={styles.emptyTableSubtitle}>
-              Unpaid carts parked during POS billing will appear here like email drafts.
-            </Text>
+                    {/* Customer Row */}
+                    <View style={styles.mobileCustomerRow}>
+                      <Text style={styles.userIconSmall}>👤</Text>
+                      <Text style={styles.mobileCustName} numberOfLines={1}>
+                        {bill.customerName || 'Walk-in Customer'}
+                      </Text>
+                      {bill.customerPhone ? (
+                        <Text style={styles.mobileCustPhone}>• {bill.customerPhone}</Text>
+                      ) : null}
+                    </View>
+
+                    {/* Items Summary */}
+                    <View style={styles.mobileItemsRow}>
+                      <View style={styles.itemsCountBadge}>
+                        <Text style={styles.itemsCountBadgeText}>
+                          {bill.itemsCount || bill.items?.length || 1}
+                        </Text>
+                      </View>
+                      <Text style={styles.mobileItemsSummary} numberOfLines={2}>
+                        {bill.itemsSummary || (bill.items || []).map((i) => `${i.name} (${i.qty})`).join(', ')}
+                      </Text>
+                    </View>
+
+                    {/* Amount & Held Date Row */}
+                    <View style={styles.mobileAmountRow}>
+                      <View>
+                        <Text style={styles.mobileLabel}>HELD ON</Text>
+                        <Text style={styles.mobileDateVal}>{bill.heldAt || '29 Aug 2026, 10:20 AM'}</Text>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={styles.mobileLabel}>TOTAL AMOUNT</Text>
+                        <Text style={styles.mobileAmountVal}>₹{(bill.total || 0).toFixed(2)}</Text>
+                      </View>
+                    </View>
+
+                    {/* Action Footer */}
+                    <View style={styles.mobileActionFooter}>
+                      <Pressable
+                        onPress={() => handleResume(bill)}
+                        style={styles.mobileResumeBtn}
+                        accessibilityRole="button"
+                      >
+                        <Text style={styles.mobileResumeBtnText}>▶ Resume in POS</Text>
+                      </Pressable>
+                      <View style={styles.mobileSecondaryBtns}>
+                        <Pressable
+                          onPress={() => setSelectedBillForDetails(bill)}
+                          style={styles.mobileDetailsBtn}
+                          accessibilityRole="button"
+                        >
+                          <Text style={styles.mobileDetailsBtnText}>👁️ View</Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => handleDiscard(billId)}
+                          style={styles.mobileDiscardBtn}
+                          accessibilityRole="button"
+                        >
+                          <Text style={styles.mobileDiscardBtnText}>🗑️</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  </View>
+                );
+              })
+            )}
           </View>
         ) : (
-          filteredBills.map((bill, idx) => {
-            const isMenuOpen = menuBillId === (bill.billNo || bill.holdId);
-            return (
-              <View
-                key={bill.billNo || bill.holdId}
-                style={[
-                  styles.tableBodyRow,
-                  { zIndex: isMenuOpen ? 9999 : filteredBills.length - idx },
-                ]}
-              >
-                {/* Bill No */}
-                <View style={{ flex: 1.1 }}>
-                  <Text style={styles.billNoText}>{bill.billNo || bill.holdId}</Text>
-                  <Text style={styles.billDraftSub}>Draft</Text>
-                </View>
-
-                {/* Customer */}
-                <View style={{ flex: 1.8 }}>
-                  <View style={styles.customerRow}>
-                    <Text style={styles.userIconSmall}>👤</Text>
-                    <Text style={styles.custNameText} numberOfLines={1}>
-                      {bill.customerName}
-                    </Text>
-                  </View>
-                  <Text style={styles.custPhoneText}>{bill.customerPhone || '—'}</Text>
-                </View>
-
-                {/* Items */}
-                <View style={{ flex: 2.8 }}>
-                  <View style={styles.itemsPreviewRow}>
-                    <View style={styles.itemsCountBadge}>
-                      <Text style={styles.itemsCountBadgeText}>{bill.itemsCount || bill.items?.length || 1}</Text>
-                    </View>
-                    <Text style={styles.itemsSummaryDesc} numberOfLines={1}>
-                      {bill.itemsSummary || (bill.items || []).map((i) => `${i.name} (${i.qty})`).join(', ')}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Amount */}
-                <View style={{ flex: 1.2, alignItems: 'flex-end' }}>
-                  <Text style={styles.amountText}>{(bill.total || 0).toFixed(2)}</Text>
-                </View>
-
-                {/* Held On */}
-                <View style={{ flex: 1.8, alignItems: 'center' }}>
-                  <Text style={styles.heldOnDateText}>{bill.heldAt || '29 Aug 2026, 10:20 AM'}</Text>
-                </View>
-
-                {/* Status */}
-                <View style={{ flex: 1.1, alignItems: 'center' }}>
-                  <View style={styles.holdBadge}>
-                    <Text style={styles.holdBadgeText}>{bill.status || 'Hold'}</Text>
-                  </View>
-                </View>
-
-                {/* Action Column with correctly layered and positioned menu */}
-                <View
-                  style={[
-                    styles.actionCellContainer,
-                    { zIndex: isMenuOpen ? 9999 : 1 },
-                  ]}
-                >
-                  <Pressable
-                    onPress={() => handleResume(bill)}
-                    style={styles.resumeActionBtn}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Resume ${bill.billNo}`}
-                  >
-                    <Text style={styles.resumeActionBtnText}>Resume</Text>
-                  </Pressable>
-
-                  <View style={styles.moreOptionsAnchor}>
-                    <Pressable
-                      onPress={() =>
-                        setMenuBillId(isMenuOpen ? null : (bill.billNo || bill.holdId))
-                      }
-                      style={[styles.moreOptionsBtn, isMenuOpen && styles.moreOptionsBtnActive]}
-                      accessibilityRole="button"
-                      accessibilityLabel="Options"
-                    >
-                      <Text style={styles.moreOptionsText}>⋮</Text>
-                    </Pressable>
-
-                    {/* Popover options menu with click-outside backdrop */}
-                    {isMenuOpen && (
-                      <>
-                        {Platform.OS === 'web' && (
-                          <div
-                            onClick={() => setMenuBillId(null)}
-                            style={{
-                              position: 'fixed',
-                              top: 0,
-                              left: 0,
-                              right: 0,
-                              bottom: 0,
-                              zIndex: 9998,
-                              cursor: 'default',
-                            }}
-                          />
-                        )}
-                        <View style={styles.optionsMenuPopover}>
-                          <Pressable
-                            onPress={() => {
-                              setSelectedBillForDetails(bill);
-                              setMenuBillId(null);
-                            }}
-                            style={styles.menuItemRow}
-                          >
-                            <Text style={styles.menuItemText}>👁️ View Details</Text>
-                          </Pressable>
-                          <Pressable
-                            onPress={() => {
-                              handleResume(bill);
-                              setMenuBillId(null);
-                            }}
-                            style={styles.menuItemRow}
-                          >
-                            <Text style={styles.menuItemText}>▶ Resume in POS</Text>
-                          </Pressable>
-                          <Pressable
-                            onPress={() => handleDiscard(bill.billNo || bill.holdId)}
-                            style={[styles.menuItemRow, { borderBottomWidth: 0 }]}
-                          >
-                            <Text style={[styles.menuItemText, { color: '#DC2626' }]}>🗑️ Discard Draft</Text>
-                          </Pressable>
-                        </View>
-                      </>
-                    )}
-                  </View>
-                </View>
+          /* Desktop / Tablet Scrollable Table */
+          <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+            <View style={styles.tableWrapper}>
+              {/* Table Header */}
+              <View style={styles.tableHeaderRow}>
+                <Text style={[styles.thText, { flex: 1.1 }]}>BILL NO</Text>
+                <Text style={[styles.thText, { flex: 1.8 }]}>CUSTOMER</Text>
+                <Text style={[styles.thText, { flex: 2.8 }]}>ITEMS</Text>
+                <Text style={[styles.thText, { flex: 1.2, textAlign: 'right' }]}>AMOUNT (₹)</Text>
+                <Text style={[styles.thText, { flex: 1.8, textAlign: 'center' }]}>HELD ON</Text>
+                <Text style={[styles.thText, { flex: 1.1, textAlign: 'center' }]}>STATUS</Text>
+                <Text style={[styles.thText, { flex: 1.3, textAlign: 'center' }]}>ACTION</Text>
               </View>
-            );
-          })
+
+              {/* Table Rows */}
+              {isPageLoading ? (
+                <>
+                  <SkeletonTableRow columns={7} />
+                  <SkeletonTableRow columns={7} />
+                  <SkeletonTableRow columns={7} />
+                </>
+              ) : paginatedBills.length === 0 ? (
+                <View style={styles.emptyTableBox}>
+                  <Text style={styles.emptyTableIcon}>⏸️</Text>
+                  <Text style={styles.emptyTableTitle}>No Draft Bills Found</Text>
+                  <Text style={styles.emptyTableSubtitle}>
+                    Unpaid carts parked during POS billing will appear here like email drafts.
+                  </Text>
+                </View>
+              ) : (
+                paginatedBills.map((bill, idx) => {
+                  const isMenuOpen = menuBillId === (bill.billNo || bill.holdId);
+                  return (
+                    <View
+                      key={bill.billNo || bill.holdId}
+                      style={[
+                        styles.tableBodyRow,
+                        { zIndex: isMenuOpen ? 9999 : paginatedBills.length - idx },
+                      ]}
+                    >
+                      {/* Bill No */}
+                      <View style={{ flex: 1.1 }}>
+                        <Text style={styles.billNoText}>{bill.billNo || bill.holdId}</Text>
+                        <Text style={styles.billDraftSub}>Draft</Text>
+                      </View>
+
+                      {/* Customer */}
+                      <View style={{ flex: 1.8 }}>
+                        <View style={styles.customerRow}>
+                          <Text style={styles.userIconSmall}>👤</Text>
+                          <Text style={styles.custNameText} numberOfLines={1}>
+                            {bill.customerName}
+                          </Text>
+                        </View>
+                        <Text style={styles.custPhoneText}>{bill.customerPhone || '—'}</Text>
+                      </View>
+
+                      {/* Items */}
+                      <View style={{ flex: 2.8 }}>
+                        <View style={styles.itemsPreviewRow}>
+                          <View style={styles.itemsCountBadge}>
+                            <Text style={styles.itemsCountBadgeText}>{bill.itemsCount || bill.items?.length || 1}</Text>
+                          </View>
+                          <Text style={styles.itemsSummaryDesc} numberOfLines={1}>
+                            {bill.itemsSummary || (bill.items || []).map((i) => `${i.name} (${i.qty})`).join(', ')}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Amount */}
+                      <View style={{ flex: 1.2, alignItems: 'flex-end' }}>
+                        <Text style={styles.amountText}>{(bill.total || 0).toFixed(2)}</Text>
+                      </View>
+
+                      {/* Held On */}
+                      <View style={{ flex: 1.8, alignItems: 'center' }}>
+                        <Text style={styles.heldOnDateText}>{bill.heldAt || '29 Aug 2026, 10:20 AM'}</Text>
+                      </View>
+
+                      {/* Status */}
+                      <View style={{ flex: 1.1, alignItems: 'center' }}>
+                        <View style={styles.holdBadge}>
+                          <Text style={styles.holdBadgeText}>{bill.status || 'Hold'}</Text>
+                        </View>
+                      </View>
+
+                      {/* Action Column with correctly layered and positioned menu */}
+                      <View
+                        style={[
+                          styles.actionCellContainer,
+                          { zIndex: isMenuOpen ? 9999 : 1 },
+                        ]}
+                      >
+                        <Pressable
+                          onPress={() => handleResume(bill)}
+                          style={styles.resumeActionBtn}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Resume ${bill.billNo}`}
+                        >
+                          <Text style={styles.resumeActionBtnText}>Resume</Text>
+                        </Pressable>
+
+                        <View style={styles.moreOptionsAnchor}>
+                          <Pressable
+                            onPress={() =>
+                              setMenuBillId(isMenuOpen ? null : (bill.billNo || bill.holdId))
+                            }
+                            style={[styles.moreOptionsBtn, isMenuOpen && styles.moreOptionsBtnActive]}
+                            accessibilityRole="button"
+                            accessibilityLabel="Options"
+                          >
+                            <Text style={styles.moreOptionsText}>⋮</Text>
+                          </Pressable>
+
+                          {/* Popover options menu with click-outside backdrop */}
+                          {isMenuOpen && (
+                            <>
+                              {Platform.OS === 'web' && (
+                                <div
+                                  onClick={() => setMenuBillId(null)}
+                                  style={{
+                                    position: 'fixed',
+                                    top: 0,
+                                    left: 0,
+                                    right: 0,
+                                    bottom: 0,
+                                    zIndex: 9998,
+                                    cursor: 'default',
+                                  }}
+                                />
+                              )}
+                              <View style={styles.optionsMenuPopover}>
+                                <Pressable
+                                  onPress={() => {
+                                    setSelectedBillForDetails(bill);
+                                    setMenuBillId(null);
+                                  }}
+                                  style={styles.menuItemRow}
+                                >
+                                  <Text style={styles.menuItemText}>👁️ View Details</Text>
+                                </Pressable>
+                                <Pressable
+                                  onPress={() => {
+                                    handleResume(bill);
+                                    setMenuBillId(null);
+                                  }}
+                                  style={styles.menuItemRow}
+                                >
+                                  <Text style={styles.menuItemText}>▶ Resume in POS</Text>
+                                </Pressable>
+                                <Pressable
+                                  onPress={() => handleDiscard(bill.billNo || bill.holdId)}
+                                  style={[styles.menuItemRow, { borderBottomWidth: 0 }]}
+                                >
+                                  <Text style={[styles.menuItemText, { color: '#DC2626' }]}>🗑️ Discard Draft</Text>
+                                </Pressable>
+                              </View>
+                            </>
+                          )}
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })
+              )}
+            </View>
+          </ScrollView>
         )}
+
+        {/* Pagination Controls */}
+        <PaginationControls
+          currentPage={page}
+          totalPages={totalPages}
+          pageSize={pageSize}
+          totalItems={totalItems}
+          onPageChange={handlePageChange}
+          onPageSizeChange={handlePageSizeChange}
+          pageSizeOptions={[10, 25, 50]}
+          isLoading={isPageLoading}
+        />
       </View>
 
       {/* ========================================================================= */}
@@ -733,14 +889,37 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 16,
     marginBottom: 20,
+    flexWrap: 'wrap',
+  },
+  metricsCardsGridMobile: {
+    gap: 12,
   },
   metricCard: {
     flex: 1,
+    minWidth: 180,
+    minHeight: 105,
+    justifyContent: 'space-between',
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    padding: 20,
+    padding: 18,
+  },
+  metricCardMobile: {
+    flexGrow: 1,
+    flexShrink: 0,
+    minWidth: '47%',
+    maxWidth: '48.5%',
+    minHeight: 95,
+    padding: 14,
+  },
+  metricCardMobileWide: {
+    flexGrow: 1,
+    flexShrink: 0,
+    minWidth: '100%',
+    width: '100%',
+    minHeight: 85,
+    padding: 14,
   },
   metricLabel: {
     fontSize: 12,
@@ -771,6 +950,11 @@ const styles = StyleSheet.create({
     position: 'relative',
     zIndex: 100,
   },
+  searchAndFiltersRowMobile: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: 10,
+  },
   searchBarBox: {
     flex: 1,
     flexDirection: 'row',
@@ -781,6 +965,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 12,
     height: 40,
+  },
+  searchBarBoxMobile: {
+    width: '100%',
   },
   searchIcon: {
     fontSize: 13,
@@ -936,6 +1123,153 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
     position: 'relative',
     zIndex: 1,
+  },
+  tableWrapper: {
+    minWidth: 860,
+  },
+  // Mobile Bill Card Styles
+  mobileCardList: {
+    padding: 12,
+    gap: 12,
+  },
+  mobileBillCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 14,
+    gap: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
+  mobileCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  mobileBillNoBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  mobileBillNoText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  mobileDraftTag: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  mobileDraftTagText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+    textTransform: 'uppercase',
+  },
+  mobileCustomerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  mobileCustName: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  mobileCustPhone: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  mobileItemsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F8FAFC',
+    padding: 8,
+    borderRadius: 8,
+  },
+  mobileItemsSummary: {
+    fontSize: 12,
+    color: '#334155',
+    flex: 1,
+  },
+  mobileAmountRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  mobileLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  mobileDateVal: {
+    fontSize: 11.5,
+    color: '#334155',
+  },
+  mobileAmountVal: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F766E',
+  },
+  mobileActionFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  mobileResumeBtn: {
+    flex: 1,
+    backgroundColor: '#0F766E',
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mobileResumeBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  mobileSecondaryBtns: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  mobileDetailsBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F8FAFC',
+  },
+  mobileDetailsBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  mobileDiscardBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    backgroundColor: '#FEF2F2',
+  },
+  mobileDiscardBtnText: {
+    fontSize: 13,
   },
   tableHeaderRow: {
     flexDirection: 'row',

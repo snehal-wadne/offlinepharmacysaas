@@ -28,6 +28,9 @@ export default function SalesScreen({ onNavigate, onShowToast, isMultiBranch = t
     finalizeSale,
   } = usePos();
 
+  // Mobile Tab State: 'catalog' | 'bill'
+  const [mobileTab, setMobileTab] = useState('catalog');
+
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -381,11 +384,36 @@ export default function SalesScreen({ onNavigate, onShowToast, isMultiBranch = t
         </View>
       ) : null}
 
+      {/* Mobile Tab Switcher: Medicines vs Customer Bill */}
+      {isMobile && (
+        <View style={styles.mobilePosTabBar}>
+          <Pressable
+            onPress={() => setMobileTab('catalog')}
+            style={[styles.mobilePosTabBtn, mobileTab === 'catalog' && styles.mobilePosTabBtnActive]}
+            accessibilityRole="button"
+          >
+            <Text style={[styles.mobilePosTabText, mobileTab === 'catalog' && styles.mobilePosTabTextActive]}>
+              💊 Medicines ({filteredProducts.length})
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setMobileTab('bill')}
+            style={[styles.mobilePosTabBtn, mobileTab === 'bill' && styles.mobilePosTabBtnActive]}
+            accessibilityRole="button"
+          >
+            <Text style={[styles.mobilePosTabText, mobileTab === 'bill' && styles.mobilePosTabTextActive]}>
+              🛒 Customer Bill ({cart.length}) • ₹{totals.grandTotal.toFixed(2)}
+            </Text>
+          </Pressable>
+        </View>
+      )}
+
       {/* Main Dual-Pane POS Layout */}
       <View style={[styles.mainLayoutGrid, isCompact && styles.mainLayoutGridCompact]}>
         {/* ========================================================================= */}
         {/* LEFT PANE: Search, Popular Medicines, Search Results                     */}
         {/* ========================================================================= */}
+        {(!isMobile || mobileTab === 'catalog') && (
         <View style={styles.leftCatalogPane}>
           {/* Header Title */}
           <View style={styles.posHeaderBox}>
@@ -599,11 +627,22 @@ export default function SalesScreen({ onNavigate, onShowToast, isMultiBranch = t
             </View>
           </ScrollView>
         </View>
+        )}
 
         {/* ========================================================================= */}
         {/* RIGHT PANE: Current Bill / Draft Invoice (Cart & Checkout)               */}
         {/* ========================================================================= */}
-        <View style={styles.rightBillPane}>
+        {(!isMobile || mobileTab === 'bill') && (
+        <View style={[styles.rightBillPane, isMobile && styles.rightBillPaneMobile]}>
+          {isMobile && (
+            <Pressable
+              onPress={() => setMobileTab('catalog')}
+              style={styles.mobileBackToMedsBtn}
+              accessibilityRole="button"
+            >
+              <Text style={styles.mobileBackToMedsText}>← Back to Adding Medicines</Text>
+            </Pressable>
+          )}
           {/* Bill Header */}
           <View style={styles.billHeaderBar}>
             <View>
@@ -776,7 +815,29 @@ export default function SalesScreen({ onNavigate, onShowToast, isMultiBranch = t
             </Pressable>
           </View>
         </View>
+        )}
       </View>
+
+      {/* Floating Bottom Cart Bar on Mobile when in Catalog mode */}
+      {isMobile && mobileTab === 'catalog' && cart.length > 0 && (
+        <Pressable
+          onPress={() => setMobileTab('bill')}
+          style={styles.mobileFloatingCart}
+          accessibilityRole="button"
+          accessibilityLabel="View Customer Bill"
+        >
+          <View style={styles.floatingCartLeft}>
+            <View style={styles.floatingCartBadge}>
+              <Text style={styles.floatingCartBadgeText}>{cart.length}</Text>
+            </View>
+            <View>
+              <Text style={styles.floatingCartLabel}>Customer Bill</Text>
+              <Text style={styles.floatingCartTotal}>₹{totals.grandTotal.toFixed(2)}</Text>
+            </View>
+          </View>
+          <Text style={styles.floatingCartRightText}>View Bill ➔</Text>
+        </Pressable>
+      )}
 
       {/* ========================================================================= */}
       {/* CHECKOUT MODAL                                                            */}
@@ -1074,6 +1135,109 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#334155',
+  },
+
+  // Mobile POS Tab Bar
+  mobilePosTabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    padding: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    gap: 6,
+  },
+  mobilePosTabBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+  },
+  mobilePosTabBtnActive: {
+    backgroundColor: '#0F766E',
+    shadowColor: '#0F766E',
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  mobilePosTabText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  mobilePosTabTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  rightBillPaneMobile: {
+    width: '100%',
+    flex: 1,
+  },
+  mobileBackToMedsBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    backgroundColor: '#F0FDFA',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#CCFBF1',
+    alignSelf: 'flex-start',
+    marginBottom: 14,
+  },
+  mobileBackToMedsText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F766E',
+  },
+  mobileFloatingCart: {
+    position: 'absolute',
+    bottom: 16,
+    left: 16,
+    right: 16,
+    backgroundColor: '#0F766E',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#0F766E',
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 6,
+    zIndex: 999,
+  },
+  floatingCartLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  floatingCartBadge: {
+    backgroundColor: '#14B8A6',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  floatingCartBadgeText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 13,
+  },
+  floatingCartLabel: {
+    fontSize: 11,
+    color: '#CCFBF1',
+    fontWeight: '600',
+  },
+  floatingCartTotal: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  floatingCartRightText: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
 
   // Main Layout Grid

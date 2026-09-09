@@ -18,6 +18,9 @@ export default function PosBillingScreen({ onNavigate, onShowToast, isMultiBranc
   const isMobile = width < 768;
   const isCompact = width < 1100;
 
+  // Active Tab on Mobile: 'catalog' | 'cart'
+  const [mobileTab, setMobileTab] = useState('catalog');
+
   // Search & Catalog State
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -231,10 +234,33 @@ export default function PosBillingScreen({ onNavigate, onShowToast, isMultiBranc
         </Pressable>
       </View>
 
+      {/* Mobile Tab Switcher */}
+      {isMobile && (
+        <View style={styles.mobileTabRow}>
+          <Pressable
+            onPress={() => setMobileTab('catalog')}
+            style={[styles.mobileTabItem, mobileTab === 'catalog' && styles.mobileTabItemActive]}
+          >
+            <Text style={[styles.mobileTabItemText, mobileTab === 'catalog' && styles.mobileTabItemTextActive]}>
+              💊 Medicines ({filteredProducts.length})
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setMobileTab('cart')}
+            style={[styles.mobileTabItem, mobileTab === 'cart' && styles.mobileTabItemActive]}
+          >
+            <Text style={[styles.mobileTabItemText, mobileTab === 'cart' && styles.mobileTabItemTextActive]}>
+              🛒 Current Bill ({cart.length}) • ₹{totals.grandTotal.toFixed(2)}
+            </Text>
+          </Pressable>
+        </View>
+      )}
+
       {/* Main Dual-Pane Layout */}
       <View style={[styles.layoutGrid, isCompact && styles.layoutGridCompact]}>
         {/* LEFT PANE: Product Search & Catalog */}
-        <View style={styles.leftPane}>
+        {(!isMobile || mobileTab === 'catalog') && (
+          <View style={[styles.leftPane, isMobile && { flex: 1, paddingBottom: cart.length > 0 ? 80 : 20 }]}>
           {/* Search Input Bar */}
           <View style={styles.searchBarRow}>
             <Text style={styles.searchBarIcon}>🔍</Text>
@@ -320,9 +346,19 @@ export default function PosBillingScreen({ onNavigate, onShowToast, isMultiBranc
             </View>
           </ScrollView>
         </View>
+        )}
 
         {/* RIGHT PANE: Cart & Checkout Summary */}
-        <View style={styles.rightPane}>
+        {(!isMobile || mobileTab === 'cart') && (
+        <View style={[styles.rightPane, isMobile && { flex: 1 }]}>
+          {isMobile && (
+            <Pressable
+              onPress={() => setMobileTab('catalog')}
+              style={styles.mobileBackBtn}
+            >
+              <Text style={styles.mobileBackBtnText}>← Back to Adding Medicines</Text>
+            </Pressable>
+          )}
           {/* Cart Header */}
           <View style={styles.cartHeader}>
             <Text style={styles.cartTitle}>Active Cart ({cart.length} items)</Text>
@@ -428,7 +464,29 @@ export default function PosBillingScreen({ onNavigate, onShowToast, isMultiBranc
             </View>
           </View>
         </View>
+        )}
       </View>
+
+      {/* Floating Bottom Bar on Mobile when on Catalog Tab */}
+      {isMobile && mobileTab === 'catalog' && cart.length > 0 && (
+        <Pressable
+          onPress={() => setMobileTab('cart')}
+          style={styles.mobileFloatingCart}
+          accessibilityRole="button"
+          accessibilityLabel="View Current Bill"
+        >
+          <View style={styles.floatingCartLeft}>
+            <View style={styles.floatingCartBadge}>
+              <Text style={styles.floatingCartBadgeText}>{cart.length}</Text>
+            </View>
+            <Text style={styles.floatingCartTitle}>Current Bill</Text>
+          </View>
+          <View style={styles.floatingCartRight}>
+            <Text style={styles.floatingCartTotal}>₹{totals.grandTotal.toFixed(2)}</Text>
+            <Text style={styles.floatingCartArrow}>View Bill ➔</Text>
+          </View>
+        </Pressable>
+      )}
 
       {/* ========================================================================= */}
       {/* CHECKOUT MODAL (BIL-08, BIL-09 Split Payments)                           */}
@@ -709,6 +767,109 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     alignItems: 'flex-start',
     gap: 10,
+  },
+  mobileTabRow: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    gap: 8,
+  },
+  mobileTabItem: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  mobileTabItemActive: {
+    backgroundColor: '#0F766E',
+    borderColor: '#0F766E',
+  },
+  mobileTabItemText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  mobileTabItemTextActive: {
+    color: '#FFFFFF',
+  },
+  mobileBackBtn: {
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1,
+    borderColor: '#CCFBF1',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    marginBottom: 10,
+    alignItems: 'center',
+  },
+  mobileBackBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F766E',
+  },
+  mobileFloatingCart: {
+    position: 'absolute',
+    bottom: 16,
+    left: 16,
+    right: 16,
+    backgroundColor: '#0F766E',
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
+    zIndex: 100,
+  },
+  floatingCartLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  floatingCartBadge: {
+    backgroundColor: '#FFFFFF',
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  floatingCartBadgeText: {
+    color: '#0F766E',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  floatingCartTitle: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  floatingCartRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  floatingCartTotal: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  floatingCartArrow: {
+    color: '#CCFBF1',
+    fontSize: 13,
+    fontWeight: '700',
   },
   posTitleBox: {
     flex: 1,

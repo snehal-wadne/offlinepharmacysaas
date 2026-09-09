@@ -70,16 +70,8 @@ export default function AppNavigator() {
     setBranchRefreshKey((prev) => prev + 1);
   };
 
-  // Authenticated User State (Default mock logged in as Administrator)
-  const [currentUser, setCurrentUser] = useState({
-    id: 'USR-102',
-    display_name: 'Pooja Deshmukh',
-    name: 'Pooja Deshmukh',
-    role: 'Administrator',
-    accessLevel: 'Admin',
-    email: 'pooja.d@flora.edu.in',
-    branch: 'FIT Main Campus Hospital Pharmacy',
-  });
+  // Authenticated User State (Null by default to show Login & Sign-up screen)
+  const [currentUser, setCurrentUser] = useState(null);
 
   // Pharmacy Architecture Mode: Multi-Branch (true) vs Single-Shop (false)
   const [isMultiBranch, setIsMultiBranch] = useState(true);
@@ -511,6 +503,8 @@ const styles = StyleSheet.create({
     maxWidth: '82%',
     backgroundColor: '#FFFFFF',
     height: '100%',
+    flexDirection: 'column',
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 4, height: 0 },
     shadowOpacity: 0.25,

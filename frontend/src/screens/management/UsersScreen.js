@@ -605,6 +605,123 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
               </Pressable>
             )}
           </View>
+        ) : isMobile ? (
+          <View style={styles.mobileStaffList}>
+            {filteredUsers.map((user) => {
+              const isActive = user.status === 'Active';
+              const roleBadge = getRoleBadgeStyle(user.role);
+
+              return (
+                <View key={user.id} style={styles.mobileStaffCard}>
+                  {/* Top Row: Avatar + Name + Status Toggle */}
+                  <View style={styles.mobileStaffTopRow}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                      <View style={[styles.avatarCircle, { backgroundColor: roleBadge.text }]}>
+                        <Text style={styles.avatarText}>{user.avatarInitials}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.userNameText} numberOfLines={1}>{user.name}</Text>
+                        <Text style={styles.userJoinedText}>{user.lastActive || `Joined: ${user.joinedDate}`}</Text>
+                      </View>
+                    </View>
+
+                    <Pressable
+                      onPress={() => handleToggleStatus(user)}
+                      style={styles.toggleSwitchRow}
+                      accessibilityRole="switch"
+                      accessibilityState={{ checked: isActive }}
+                      accessibilityLabel={`User status: ${user.status}`}
+                    >
+                      <View
+                        style={[
+                          styles.toggleTrack,
+                          isActive
+                            ? styles.toggleTrackActive
+                            : styles.toggleTrackInactive,
+                        ]}
+                      >
+                        <View
+                          style={[
+                            styles.toggleThumb,
+                            isActive
+                              ? styles.toggleThumbActive
+                              : styles.toggleThumbInactive,
+                          ]}
+                        />
+                      </View>
+                      <Text
+                        style={[
+                          styles.toggleLabelText,
+                          isActive
+                            ? styles.toggleLabelActive
+                            : styles.toggleLabelInactive,
+                        ]}
+                      >
+                        {user.status}
+                      </Text>
+                    </Pressable>
+                  </View>
+
+                  {/* Badges row */}
+                  <View style={styles.mobileStaffBadgesRow}>
+                    <View style={[styles.roleBadge, { backgroundColor: roleBadge.bg, borderColor: roleBadge.border }]}>
+                      <Text style={[styles.roleBadgeText, { color: roleBadge.text }]}>{user.role}</Text>
+                    </View>
+                    <View style={styles.empIdBadge}>
+                      <Text style={styles.empIdText}>{user.employeeId}</Text>
+                    </View>
+                    {user.regNumber && user.regNumber !== 'N/A' && (
+                      <View style={styles.regNoPill}>
+                        <Text style={styles.regNoText} numberOfLines={1}>{user.regNumber}</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Branch & Contact Info */}
+                  <View style={styles.mobileStaffInfoBox}>
+                    <Text style={styles.mobileStaffInfoLabel}>BRANCH ASSIGNMENT</Text>
+                    <Text style={styles.branchNameText}>{user.primaryBranch}</Text>
+                    <Text style={[styles.contactEmail, { marginTop: 4 }]}>✉ {user.email}</Text>
+                    <Text style={styles.contactPhone}>📞 {user.phone}</Text>
+                  </View>
+
+                  {/* Actions footer */}
+                  <View style={styles.mobileStaffFooter}>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <Pressable
+                        onPress={() => handleOpenDetailModal(user)}
+                        style={styles.actionViewBtn}
+                        accessibilityRole="button"
+                        accessibilityLabel="View Profile"
+                      >
+                        <Text style={styles.actionViewBtnText}>View</Text>
+                      </Pressable>
+
+                      <Pressable
+                        onPress={() => handleOpenEditModal(user)}
+                        style={styles.actionEditBtn}
+                        accessibilityRole="button"
+                        accessibilityLabel="Edit User"
+                      >
+                        <Text style={styles.actionEditBtnText}>Edit</Text>
+                      </Pressable>
+                    </View>
+
+                    {user.status !== 'Active' && (
+                      <Pressable
+                        onPress={() => handleResendInvite(user)}
+                        style={styles.actionInviteBtn}
+                        accessibilityRole="button"
+                        accessibilityLabel="Resend Invite"
+                      >
+                        <Text style={styles.actionInviteBtnText}>Invite</Text>
+                      </Pressable>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
+          </View>
         ) : (
           <ScrollView horizontal showsHorizontalScrollIndicator={true}>
             <View style={styles.tableWrapper}>
@@ -2512,5 +2629,55 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#334155',
+  },
+  // Mobile Staff Member KPI Cards
+  mobileStaffList: {
+    padding: 12,
+    gap: 12,
+  },
+  mobileStaffCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 14,
+    ...Platform.select({
+      web: { boxShadow: '0 1px 3px rgba(0,0,0,0.04)' },
+      default: { elevation: 1 },
+    }),
+  },
+  mobileStaffTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  mobileStaffBadgesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 10,
+  },
+  mobileStaffInfoBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 10,
+  },
+  mobileStaffInfoLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+    marginBottom: 2,
+    letterSpacing: 0.3,
+  },
+  mobileStaffFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    paddingTop: 10,
   },
 });

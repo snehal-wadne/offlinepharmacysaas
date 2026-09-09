@@ -23,6 +23,9 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
   // Active Tab: 'find-invoice' | 'return-history'
   const [activeTab, setActiveTab] = useState('find-invoice');
 
+  // Mobile view mode: 'table' | 'details'
+  const [mobileView, setMobileView] = useState('table');
+
   // Search & Filter
   const [searchInvoice, setSearchInvoice] = useState('');
   const [selectedDateFilter, setSelectedDateFilter] = useState('All Dates');
@@ -96,6 +99,12 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
 
     return matchSearch && matchDate;
   });
+
+  // Dynamic Summary Metrics for Top KPI Cards
+  const totalInvoicesCount = invoices.length;
+  const totalBilledAmount = invoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
+  const returnsProcessedCount = returnHistory.length;
+  const totalRefundedAmount = returnHistory.reduce((sum, ret) => sum + (ret.amount || 0), 0);
 
   // Calculate return refund total
   const calculateRefundTotal = () => {
@@ -177,6 +186,7 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
       setSelectedInvoice(foundInvoice);
       setSearchInvoice(foundInvoice.invoiceNo);
       setScannerModalVisible(false);
+      if (isMobile) setMobileView('details');
       if (onShowToast) {
         onShowToast(`📷 Scanned: Found invoice ${foundInvoice.invoiceNo} for ${foundInvoice.customer}`);
       }
@@ -196,6 +206,7 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
       setSelectedInvoice(invoiceWithProduct);
       setSearchInvoice(invoiceWithProduct.invoiceNo);
       setScannerModalVisible(false);
+      if (isMobile) setMobileView('details');
       if (onShowToast) {
         onShowToast(`📷 Scanned Product: Located invoice ${invoiceWithProduct.invoiceNo}`);
       }
@@ -240,9 +251,56 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
       </View>
 
       {activeTab === 'find-invoice' ? (
-        <View style={styles.contentWrapper}>
+        <ScrollView
+          style={styles.contentScroll}
+          contentContainerStyle={[styles.contentWrapper, isMobile && styles.contentWrapperMobile]}
+          showsVerticalScrollIndicator={true}
+        >
+          {/* Top 4 Summary KPI Metric Cards */}
+          <View style={[styles.kpiCardsRow, isMobile && styles.kpiCardsRowMobile]}>
+            <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { borderLeftColor: '#0F766E' }]}>
+              <View style={styles.kpiHeader}>
+                <Text style={styles.kpiLabel}>TOTAL INVOICES</Text>
+                <View style={[styles.kpiDot, { backgroundColor: '#0F766E' }]} />
+              </View>
+              <Text style={styles.kpiValue}>{totalInvoicesCount}</Text>
+              <Text style={styles.kpiSubtext}>Completed transactions</Text>
+            </View>
+
+            <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { borderLeftColor: '#2563EB' }]}>
+              <View style={styles.kpiHeader}>
+                <Text style={styles.kpiLabel}>TOTAL BILLED</Text>
+                <View style={[styles.kpiDot, { backgroundColor: '#2563EB' }]} />
+              </View>
+              <Text style={[styles.kpiValue, { color: '#0F766E' }]}>
+                ₹{totalBilledAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+              </Text>
+              <Text style={styles.kpiSubtext}>Gross sales volume</Text>
+            </View>
+
+            <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { borderLeftColor: '#D97706' }]}>
+              <View style={styles.kpiHeader}>
+                <Text style={styles.kpiLabel}>RETURNS LOGGED</Text>
+                <View style={[styles.kpiDot, { backgroundColor: '#D97706' }]} />
+              </View>
+              <Text style={styles.kpiValue}>{returnsProcessedCount}</Text>
+              <Text style={styles.kpiSubtext}>Refund credit notes</Text>
+            </View>
+
+            <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { borderLeftColor: '#DC2626' }]}>
+              <View style={styles.kpiHeader}>
+                <Text style={styles.kpiLabel}>TOTAL REFUNDED</Text>
+                <View style={[styles.kpiDot, { backgroundColor: '#DC2626' }]} />
+              </View>
+              <Text style={[styles.kpiValue, { color: '#DC2626' }]}>
+                ₹{totalRefundedAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+              </Text>
+              <Text style={styles.kpiSubtext}>Processed refunds</Text>
+            </View>
+          </View>
+
           {/* Search Bar & Action Controls Row (Matches Image 3) */}
-          <View style={styles.searchAndActionsRow}>
+          <View style={[styles.searchAndActionsRow, isMobile && styles.searchAndActionsRowMobile]}>
             {/* Search Input */}
             <View style={styles.searchBarBox}>
               <Text style={styles.searchIcon}>🔍</Text>
@@ -368,77 +426,236 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
             </Pressable>
           </View>
 
+          {/* Mobile Tab Switcher: Invoices List vs Invoice Details */}
+          {isMobile && (
+            <View style={styles.mobileSegmentRow}>
+              <Pressable
+                onPress={() => setMobileView('table')}
+                style={[styles.mobileSegmentBtn, mobileView === 'table' && styles.mobileSegmentBtnActive]}
+                accessibilityRole="button"
+              >
+                <Text style={[styles.mobileSegmentText, mobileView === 'table' && styles.mobileSegmentTextActive]}>
+                  📋 Invoices ({filteredInvoices.length})
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setMobileView('details')}
+                style={[styles.mobileSegmentBtn, mobileView === 'details' && styles.mobileSegmentBtnActive]}
+                accessibilityRole="button"
+              >
+                <Text style={[styles.mobileSegmentText, mobileView === 'details' && styles.mobileSegmentTextActive]}>
+                  🧾 Details {selectedInvoice ? `(${selectedInvoice.invoiceNo})` : ''}
+                </Text>
+              </Pressable>
+            </View>
+          )}
+
           {/* Split-Screen Main Layout (Matches Image 3) */}
           <View style={[styles.splitLayout, isCompact && styles.splitLayoutCompact]}>
             {/* LEFT: Invoices Table */}
-            <View style={styles.leftTableCard}>
-              <View style={styles.tableHeaderRow}>
-                <Text style={[styles.th, { flex: 1.3 }]}>INVOICE NO.</Text>
-                <Text style={[styles.th, { flex: 1.8 }]}>CUSTOMER</Text>
-                <Text style={[styles.th, { flex: 1.6 }]}>DATE & TIME</Text>
-                <Text style={[styles.th, { flex: 1.2, textAlign: 'right' }]}>AMOUNT</Text>
-                <Text style={[styles.th, { flex: 1.2, textAlign: 'center' }]}>STATUS</Text>
-              </View>
+            {/* LEFT: Invoices Table (Desktop) / Invoice KPI Cards (Mobile) */}
+            {(!isMobile || mobileView === 'table') && (
+              <View style={[styles.leftTableCard, isMobile && styles.leftTableCardMobile]}>
+                {isMobile ? (
+                  /* Mobile: Responsive Invoice KPI Cards */
+                  <View style={styles.mobileCardsContainer}>
+                    <View style={styles.mobileCardsHeaderRow}>
+                      <Text style={styles.mobileCardsHeaderTitle}>
+                        Invoices ({filteredInvoices.length})
+                      </Text>
+                      <Text style={styles.mobileCardsHeaderHint}>
+                        Tap card to inspect & process return
+                      </Text>
+                    </View>
 
-              <ScrollView style={styles.tableBodyScroll} showsVerticalScrollIndicator={true}>
-                {filteredInvoices.length === 0 ? (
-                  <View style={styles.emptyTableBox}>
-                    <Text style={styles.emptyTableText}>No invoices found matching query.</Text>
+                    {filteredInvoices.length === 0 ? (
+                      <View style={styles.emptyTableBox}>
+                        <Text style={styles.emptyTableText}>No invoices found matching query.</Text>
+                      </View>
+                    ) : (
+                      filteredInvoices.map((inv) => {
+                        const isSelected = selectedInvoice?.invoiceNo === inv.invoiceNo;
+                        return (
+                          <Pressable
+                            key={inv.invoiceNo}
+                            onPress={() => {
+                              setSelectedInvoice(inv);
+                              setMobileView('details');
+                            }}
+                            style={[
+                              styles.invoiceKpiCard,
+                              isSelected && styles.invoiceKpiCardSelected,
+                            ]}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Invoice ${inv.invoiceNo} for ${inv.customer}`}
+                          >
+                            {/* Card Header: Invoice No + Status Badge */}
+                            <View style={styles.invoiceCardHeader}>
+                              <View style={styles.invoiceNoGroup}>
+                                <Text style={styles.invoiceIcon}>🧾</Text>
+                                <Text style={styles.invoiceCardNo}>{inv.invoiceNo}</Text>
+                              </View>
+                              <View style={styles.statusCompletedBadge}>
+                                <Text style={styles.statusCompletedText}>
+                                  {inv.status || 'Completed'}
+                                </Text>
+                              </View>
+                            </View>
+
+                            {/* Card Details Grid */}
+                            <View style={styles.invoiceCardGrid}>
+                              <View style={styles.invoiceGridCol}>
+                                <Text style={styles.invoiceCardLabel}>CUSTOMER</Text>
+                                <View style={styles.customerRow}>
+                                  <Text style={styles.custIconSmall}>👤</Text>
+                                  <Text style={styles.invoiceCustomerText} numberOfLines={1}>
+                                    {inv.customer}
+                                  </Text>
+                                </View>
+                              </View>
+                              <View style={styles.invoiceGridCol}>
+                                <Text style={styles.invoiceCardLabel}>DATE & TIME</Text>
+                                <Text style={styles.invoiceDateText} numberOfLines={1}>
+                                  📅 {inv.date}
+                                </Text>
+                              </View>
+                            </View>
+
+                            {/* Meta Badges */}
+                            <View style={styles.invoiceCardMetaRow}>
+                              <Text style={styles.invoiceMetaBadge}>
+                                📦 {inv.items?.length || 0} {inv.items?.length === 1 ? 'item' : 'items'}
+                              </Text>
+                              <Text style={styles.invoiceMetaBadge}>
+                                💳 {inv.paymentMode || 'Cash'}
+                              </Text>
+                              {inv.phone ? (
+                                <Text style={styles.invoiceMetaBadge}>
+                                  📞 {inv.phone}
+                                </Text>
+                              ) : null}
+                            </View>
+
+                            {/* Card Footer: Amount & Action Button */}
+                            <View style={styles.invoiceCardFooter}>
+                              <View>
+                                <Text style={styles.invoiceTotalLabel}>TOTAL AMOUNT</Text>
+                                <Text style={styles.invoiceTotalAmount}>
+                                  ₹{(inv.total || 0).toFixed(2)}
+                                </Text>
+                              </View>
+
+                              <View
+                                style={[
+                                  styles.selectInvoiceBtn,
+                                  isSelected && styles.selectInvoiceBtnActive,
+                                ]}
+                              >
+                                <Text
+                                  style={[
+                                    styles.selectInvoiceBtnText,
+                                    isSelected && styles.selectInvoiceBtnTextActive,
+                                  ]}
+                                >
+                                  {isSelected ? 'Selected ✓' : 'Process Return ➔'}
+                                </Text>
+                              </View>
+                            </View>
+                          </Pressable>
+                        );
+                      })
+                    )}
+
+                    <View style={styles.tableFooterRow}>
+                      <Text style={styles.showingCountText}>
+                        Showing {filteredInvoices.length} of {invoices.length} Invoices
+                      </Text>
+                    </View>
                   </View>
                 ) : (
-                  filteredInvoices.map((inv) => {
-                    const isSelected = selectedInvoice?.invoiceNo === inv.invoiceNo;
-                    return (
-                      <Pressable
-                        key={inv.invoiceNo}
-                        onPress={() => setSelectedInvoice(inv)}
-                        style={[
-                          styles.tableRow,
-                          isSelected && styles.tableRowSelected,
-                        ]}
-                      >
-                        <Text style={[styles.tdInvoiceNo, { flex: 1.3 }]}>
-                          {inv.invoiceNo}
-                        </Text>
+                  /* Desktop: High-density 5-column table */
+                  <View style={{ flex: 1 }}>
+                    <View style={styles.tableHeaderRow}>
+                      <Text style={[styles.th, { flex: 1.3 }]}>INVOICE NO.</Text>
+                      <Text style={[styles.th, { flex: 1.8 }]}>CUSTOMER</Text>
+                      <Text style={[styles.th, { flex: 1.6 }]}>DATE & TIME</Text>
+                      <Text style={[styles.th, { flex: 1.2, textAlign: 'right' }]}>AMOUNT</Text>
+                      <Text style={[styles.th, { flex: 1.2, textAlign: 'center' }]}>STATUS</Text>
+                    </View>
 
-                        <View style={{ flex: 1.8, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                          <Text style={styles.custIconSmall}>👤</Text>
-                          <Text style={styles.tdCustomer} numberOfLines={1}>
-                            {inv.customer}
-                          </Text>
+                    <ScrollView style={styles.tableBodyScroll} showsVerticalScrollIndicator={true}>
+                      {filteredInvoices.length === 0 ? (
+                        <View style={styles.emptyTableBox}>
+                          <Text style={styles.emptyTableText}>No invoices found matching query.</Text>
                         </View>
+                      ) : (
+                        filteredInvoices.map((inv) => {
+                          const isSelected = selectedInvoice?.invoiceNo === inv.invoiceNo;
+                          return (
+                            <Pressable
+                              key={inv.invoiceNo}
+                              onPress={() => setSelectedInvoice(inv)}
+                              style={[
+                                styles.tableRow,
+                                isSelected && styles.tableRowSelected,
+                              ]}
+                            >
+                              <Text style={[styles.tdInvoiceNo, { flex: 1.3 }]}>
+                                {inv.invoiceNo}
+                              </Text>
 
-                        <Text style={[styles.tdDateTime, { flex: 1.6 }]}>
-                          {inv.date}
-                        </Text>
+                              <View style={{ flex: 1.8, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                <Text style={styles.custIconSmall}>👤</Text>
+                                <Text style={styles.tdCustomer} numberOfLines={1}>
+                                  {inv.customer}
+                                </Text>
+                              </View>
 
-                        <Text style={[styles.tdAmount, { flex: 1.2, textAlign: 'right' }]}>
-                          ₹{(inv.total || 0).toFixed(2)}
-                        </Text>
+                              <Text style={[styles.tdDateTime, { flex: 1.6 }]}>
+                                {inv.date}
+                              </Text>
 
-                        <View style={{ flex: 1.2, alignItems: 'center' }}>
-                          <View style={styles.statusCompletedBadge}>
-                            <Text style={styles.statusCompletedText}>
-                              {inv.status || 'Completed'}
-                            </Text>
-                          </View>
-                        </View>
-                      </Pressable>
-                    );
-                  })
+                              <Text style={[styles.tdAmount, { flex: 1.2, textAlign: 'right' }]}>
+                                ₹{(inv.total || 0).toFixed(2)}
+                              </Text>
+
+                              <View style={{ flex: 1.2, alignItems: 'center' }}>
+                                <View style={styles.statusCompletedBadge}>
+                                  <Text style={styles.statusCompletedText}>
+                                    {inv.status || 'Completed'}
+                                  </Text>
+                                </View>
+                              </View>
+                            </Pressable>
+                          );
+                        })
+                      )}
+                    </ScrollView>
+
+                    <View style={styles.tableFooterRow}>
+                      <Text style={styles.showingCountText}>
+                        Showing {filteredInvoices.length} of {invoices.length} Invoices
+                      </Text>
+                    </View>
+                  </View>
                 )}
-              </ScrollView>
-
-              <View style={styles.tableFooterRow}>
-                <Text style={styles.showingCountText}>
-                  Showing {filteredInvoices.length} of {invoices.length} Invoices
-                </Text>
               </View>
-            </View>
+            )}
 
             {/* RIGHT: Invoice Details & Return Action (Matches Image 3) */}
-            <View style={styles.rightDetailsCard}>
-              {selectedInvoice ? (
+            {(!isMobile || mobileView === 'details') && (
+              <View style={[styles.rightDetailsCard, isMobile && styles.rightDetailsCardMobile]}>
+                {isMobile && (
+                  <Pressable
+                    onPress={() => setMobileView('table')}
+                    style={styles.mobileBackBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel="Back to Invoices List"
+                  >
+                    <Text style={styles.mobileBackBtnText}>← Back to Invoices List</Text>
+                  </Pressable>
+                )}
+                {selectedInvoice ? (
                 <>
                   <View style={styles.invoiceDetailsHeader}>
                     <Text style={styles.invoiceDetailsTitle}>Invoice Details</Text>
@@ -527,8 +744,9 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
                 </View>
               )}
             </View>
+            )}
           </View>
-        </View>
+        </ScrollView>
       ) : (
         /* TAB 2: Return History */
         <ScrollView style={styles.historyScroll} contentContainerStyle={styles.historyContent}>
@@ -876,9 +1094,279 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
+  contentScroll: {
+    flex: 1,
+  },
   contentWrapper: {
     flex: 1,
     padding: 24,
+  },
+  contentWrapperMobile: {
+    padding: 12,
+    paddingBottom: 80,
+  },
+  mobileSegmentRow: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 8,
+    padding: 4,
+    marginBottom: 14,
+    gap: 6,
+  },
+  mobileSegmentBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 6,
+  },
+  mobileSegmentBtnActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  mobileSegmentText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  mobileSegmentTextActive: {
+    color: '#0F766E',
+    fontWeight: '750',
+  },
+  mobileBackBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#F0FDFA',
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#CCFBF1',
+  },
+  mobileBackBtnText: {
+    color: '#0F766E',
+    fontSize: 12.5,
+    fontWeight: '700',
+  },
+  leftTableCardMobile: {
+    width: '100%',
+    minHeight: 200,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+  },
+  tableBodyScrollMobile: {
+    maxHeight: 360,
+  },
+  rightDetailsCardMobile: {
+    width: '100%',
+    padding: 14,
+  },
+
+  // Top 4 KPI Cards
+  kpiCardsRow: {
+    flexDirection: 'row',
+    gap: 14,
+    marginBottom: 16,
+    flexWrap: 'wrap',
+  },
+  kpiCardsRowMobile: {
+    gap: 10,
+    marginBottom: 14,
+  },
+  kpiCard: {
+    flex: 1,
+    minWidth: 170,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderLeftWidth: 4,
+    borderLeftColor: '#0F766E',
+    padding: 14,
+    justifyContent: 'space-between',
+    minHeight: 90,
+  },
+  kpiCardMobile: {
+    flexGrow: 1,
+    flexShrink: 0,
+    minWidth: '47%',
+    maxWidth: '48.5%',
+    minHeight: 85,
+    padding: 12,
+  },
+  kpiHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  kpiLabel: {
+    fontSize: 10.5,
+    fontWeight: '750',
+    color: '#64748B',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  kpiDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  kpiValue: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginVertical: 2,
+  },
+  kpiSubtext: {
+    fontSize: 10.5,
+    color: '#94A3B8',
+    fontWeight: '500',
+  },
+
+  // Mobile Invoices KPI Card List
+  mobileCardsContainer: {
+    padding: 2,
+  },
+  mobileCardsHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+    paddingHorizontal: 4,
+  },
+  mobileCardsHeaderTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  mobileCardsHeaderHint: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  invoiceKpiCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    padding: 14,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 2,
+    cursor: 'pointer',
+  },
+  invoiceKpiCardSelected: {
+    borderColor: '#0F766E',
+    backgroundColor: '#F0FDFA',
+  },
+  invoiceCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  invoiceNoGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  invoiceIcon: {
+    fontSize: 14,
+  },
+  invoiceCardNo: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  invoiceCardGrid: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 10,
+  },
+  invoiceGridCol: {
+    flex: 1,
+  },
+  invoiceCardLabel: {
+    fontSize: 10,
+    fontWeight: '750',
+    color: '#94A3B8',
+    letterSpacing: 0.5,
+    marginBottom: 3,
+  },
+  customerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  invoiceCustomerText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  invoiceDateText: {
+    fontSize: 12,
+    color: '#475569',
+  },
+  invoiceCardMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 12,
+  },
+  invoiceMetaBadge: {
+    fontSize: 11,
+    color: '#475569',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    fontWeight: '600',
+  },
+  invoiceCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  invoiceTotalLabel: {
+    fontSize: 10,
+    fontWeight: '750',
+    color: '#94A3B8',
+    letterSpacing: 0.5,
+  },
+  invoiceTotalAmount: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#0F766E',
+    marginTop: 1,
+  },
+  selectInvoiceBtn: {
+    backgroundColor: '#0F766E',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  selectInvoiceBtnActive: {
+    backgroundColor: '#047857',
+  },
+  selectInvoiceBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '750',
+  },
+  selectInvoiceBtnTextActive: {
+    color: '#FFFFFF',
   },
 
   // Search and Actions Row (Matches Image 3)
@@ -889,6 +1377,11 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     position: 'relative',
     zIndex: 100,
+  },
+  searchAndActionsRowMobile: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: 10,
   },
   searchBarBox: {
     flex: 1,

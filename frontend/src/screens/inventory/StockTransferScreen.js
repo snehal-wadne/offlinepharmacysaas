@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,9 @@ import {
   useWindowDimensions,
   Platform,
 } from 'react-native';
+import InventoryStatCard from '../../components/inventory/InventoryStatCard';
+import { SkeletonKpiCard, SkeletonTableRow, SkeletonItemCard } from '../../components/common/SkeletonLoader';
+import PaginationControls from '../../components/common/PaginationControls';
 import {
   MOCK_TRANSFERS,
   TRANSFER_STATUS_FILTER,
@@ -73,6 +76,48 @@ export default function StockTransferScreen({ onShowToast }) {
 
     return matchesSearch && matchesStatus && matchesFrom && matchesTo;
   });
+
+  // Loading & Pagination State
+  const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [isPageLoading, setIsPageLoading] = useState(false);
+
+  // Dynamic Transfer KPI summary metrics
+  const totalTransfers = transfers.length;
+  const inTransitCount = transfers.filter((t) => t.status === 'In Transit').length;
+  const completedCount = transfers.filter((t) => t.status === 'Completed').length;
+  const draftCount = transfers.filter((t) => t.status === 'Draft' || t.status === 'Cancelled').length;
+
+  const transferKpis = [
+    { id: 'kpi-1', label: 'TOTAL TRANSFERS', value: String(totalTransfers), subtext: 'Total stock movements', variant: 'default', statusFilter: 'All Statuses' },
+    { id: 'kpi-2', label: 'IN TRANSIT', value: String(inTransitCount), subtext: 'Dispatched & en route', variant: 'warning', statusFilter: 'In Transit' },
+    { id: 'kpi-3', label: 'COMPLETED', value: String(completedCount), subtext: 'Received at branch', variant: 'success', statusFilter: 'Completed' },
+    { id: 'kpi-4', label: 'DRAFT / OTHER', value: String(draftCount), subtext: 'Pending dispatch', variant: 'danger', statusFilter: 'Draft' },
+  ];
+
+  // Reset page on filter change
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, selectedStatus, fromBranch, toBranch]);
+
+  const totalItems = filteredTransfers.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const startIndex = (page - 1) * pageSize;
+  const paginatedTransfers = filteredTransfers.slice(startIndex, startIndex + pageSize);
+
+  const handlePageChange = (newPage) => {
+    setIsPageLoading(true);
+    setPage(newPage);
+    setTimeout(() => setIsPageLoading(false), 200);
+  };
+
+  const handlePageSizeChange = (newSize) => {
+    setIsPageLoading(true);
+    setPageSize(newSize);
+    setPage(1);
+    setTimeout(() => setIsPageLoading(false), 200);
+  };
 
   const handleOpenActionMenu = (tr) => {
     setSelectedTransferForAction(tr);
@@ -207,6 +252,32 @@ export default function StockTransferScreen({ onShowToast }) {
         </View>
       </View>
 
+      {/* Top 4 KPI Cards */}
+      <View style={[styles.kpiRow, isCompact && styles.kpiRowCompact]}>
+        {loading ? (
+          <>
+            <SkeletonKpiCard />
+            <SkeletonKpiCard />
+            <SkeletonKpiCard />
+            <SkeletonKpiCard />
+          </>
+        ) : (
+          transferKpis.map((kpi) => (
+            <InventoryStatCard
+              key={kpi.id}
+              label={kpi.label}
+              value={kpi.value}
+              subtext={kpi.subtext}
+              variant={kpi.variant}
+              onPress={() => {
+                setSelectedStatus(kpi.statusFilter);
+                if (onShowToast) onShowToast(`Filtered by: ${kpi.label}`);
+              }}
+            />
+          ))
+        )}
+      </View>
+
       {/* Main Table Card (Screenshot 3 style) */}
       <View style={styles.cardContainer}>
         {/* Search & Filter Header */}
@@ -253,19 +324,36 @@ export default function StockTransferScreen({ onShowToast }) {
         {/* Section Title & Pagination Subheader */}
         <View style={styles.tableSubheader}>
           <Text style={styles.sectionTitle}>Recent Transfers</Text>
-          <Text style={styles.paginationInfo}>Showing 1-{filteredTransfers.length} of 29</Text>
+          <Text style={styles.paginationInfo}>
+            Showing {totalItems > 0 ? startIndex + 1 : 0}–{Math.min(startIndex + pageSize, totalItems)} of {totalItems}
+          </Text>
         </View>
 
-        {isMobile ? (
+        {loading || isPageLoading ? (
+          isMobile ? (
+            <View style={styles.mobileCardList}>
+              <SkeletonItemCard />
+              <SkeletonItemCard />
+              <SkeletonItemCard />
+            </View>
+          ) : (
+            <View style={{ padding: 16 }}>
+              <SkeletonTableRow columns={9} />
+              <SkeletonTableRow columns={9} />
+              <SkeletonTableRow columns={9} />
+              <SkeletonTableRow columns={9} />
+            </View>
+          )
+        ) : isMobile ? (
           /* Mobile Transfer Cards */
           <View style={styles.mobileCardList}>
-            {filteredTransfers.length === 0 ? (
+            {paginatedTransfers.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyTitle}>No transfers found</Text>
                 <Text style={styles.emptySubtitle}>Try changing your search keywords or filters.</Text>
               </View>
             ) : (
-              filteredTransfers.map((tr) => {
+              paginatedTransfers.map((tr) => {
                 const pill = STATUS_PILLS[tr.status] || STATUS_PILLS.Draft;
                 return (
                   <View key={tr.id} style={styles.mobileTransferCard}>
@@ -335,13 +423,13 @@ export default function StockTransferScreen({ onShowToast }) {
               </View>
 
               {/* Table Rows */}
-              {filteredTransfers.length === 0 ? (
+              {paginatedTransfers.length === 0 ? (
                 <View style={styles.emptyState}>
                   <Text style={styles.emptyTitle}>No transfers found</Text>
                   <Text style={styles.emptySubtitle}>Try changing your search keywords or filters.</Text>
                 </View>
               ) : (
-                filteredTransfers.map((tr, index) => {
+                paginatedTransfers.map((tr, index) => {
                   const pill = STATUS_PILLS[tr.status] || STATUS_PILLS.Draft;
                   return (
                     <View
@@ -392,26 +480,17 @@ export default function StockTransferScreen({ onShowToast }) {
           </ScrollView>
         )}
 
-        {/* Bottom Pagination */}
-        <View style={styles.paginationFooter}>
-          <View style={styles.paginationRow}>
-            <Pressable style={styles.pageBtnDisabled}>
-              <Text style={styles.pageBtnTextDisabled}>‹</Text>
-            </Pressable>
-            <View style={styles.pageBtnActive}>
-              <Text style={styles.pageBtnTextActive}>1</Text>
-            </View>
-            <Pressable style={styles.pageBtn}>
-              <Text style={styles.pageBtnText}>2</Text>
-            </Pressable>
-            <Pressable style={styles.pageBtn}>
-              <Text style={styles.pageBtnText}>3</Text>
-            </Pressable>
-            <Pressable style={styles.pageBtn}>
-              <Text style={styles.pageBtnText}>›</Text>
-            </Pressable>
-          </View>
-        </View>
+        {/* Dynamic Pagination Controls */}
+        <PaginationControls
+          currentPage={page}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          pageSize={pageSize}
+          onPageChange={handlePageChange}
+          onPageSizeChange={handlePageSizeChange}
+          isMobile={isMobile}
+          isLoading={isPageLoading}
+        />
       </View>
 
       {/* New Transfer Modal */}

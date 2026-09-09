@@ -5,6 +5,7 @@ import {
   Pressable,
   StyleSheet,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { MOCK_RECENT_MOVEMENTS } from '../../data/inventoryDashboardMockData';
 
@@ -69,6 +70,9 @@ export default function RecentStockMovements({
   onViewAll,
   onMovementPress,
 }) {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
+
   const movementList = Array.isArray(movements)
     ? movements
     : Array.isArray(MOCK_RECENT_MOVEMENTS)
@@ -90,24 +94,14 @@ export default function RecentStockMovements({
         </Pressable>
       </View>
 
-      {/* Table Container */}
-      <View style={styles.tableContainer}>
-        {/* Table Header */}
-        <View style={styles.tableHeaderRow}>
-          <Text style={[styles.thCell, styles.colDate]}>Date</Text>
-          <Text style={[styles.thCell, styles.colType]}>Type</Text>
-          <Text style={[styles.thCell, styles.colItem]}>Item</Text>
-          <Text style={[styles.thCell, styles.colQty]}>Quantity</Text>
-          <Text style={[styles.thCell, styles.colRef]}>Reference</Text>
-          <Text style={[styles.thCell, styles.colStatus]}>Status</Text>
-        </View>
-
-        {/* Table Rows */}
+      {/* Content Container */}
+      <View style={[styles.tableContainer, isMobile && styles.mobileCardsContainer]}>
         {movementList.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>No recent stock movements recorded</Text>
           </View>
-        ) : (
+        ) : isMobile ? (
+          // Mobile Movement KPI Cards
           movementList.map((mov, index) => {
             const qtyStr = String(mov.quantity || '');
             const isPositive = qtyStr.startsWith('+');
@@ -119,82 +113,137 @@ export default function RecentStockMovements({
               <Pressable
                 key={mov.id || index}
                 onPress={() => onMovementPress && onMovementPress(mov)}
-                style={[
-                  styles.tableRow,
-                  index % 2 === 1 && styles.tableRowAlt,
-                ]}
+                style={styles.mobileCard}
               >
-                {/* Date */}
-                <Text style={[styles.tdCell, styles.colDate, styles.dateText]}>
-                  {mov.date || '-'}
-                </Text>
-
-                {/* Movement Type */}
-                <View style={[styles.colType, styles.badgeWrapper]}>
-                  <View
-                    style={[
-                      styles.badge,
-                      { backgroundColor: typeConf.bgColor },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.badgeText,
-                        { color: typeConf.textColor },
-                      ]}
-                    >
-                      {typeConf.label}
-                    </Text>
+                <View style={styles.mobileCardHeader}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={[styles.badge, { backgroundColor: typeConf.bgColor }]}>
+                      <Text style={[styles.badgeText, { color: typeConf.textColor }]}>
+                        {typeConf.label}
+                      </Text>
+                    </View>
+                    <View style={[styles.badge, { backgroundColor: statusConf.bgColor }]}>
+                      <Text style={[styles.badgeText, { color: statusConf.textColor }]}>
+                        {statusConf.label}
+                      </Text>
+                    </View>
                   </View>
+                  <Text style={styles.mobileDateText}>{mov.date || '-'}</Text>
                 </View>
 
-                {/* Item Name */}
-                <Text
-                  style={[styles.tdCell, styles.colItem, styles.itemText]}
-                  numberOfLines={1}
-                >
+                <Text style={styles.mobileItemName} numberOfLines={2}>
                   {mov.item || '-'}
                 </Text>
 
-                {/* Quantity */}
-                <Text
-                  style={[
-                    styles.tdCell,
-                    styles.colQty,
-                    styles.qtyText,
-                    isPositive && styles.qtyPositive,
-                    isNegative && styles.qtyNegative,
-                  ]}
-                >
-                  {mov.quantity || '0'}
-                </Text>
-
-                {/* Reference */}
-                <Text style={[styles.tdCell, styles.colRef, styles.refText]}>
-                  {mov.reference || '-'}
-                </Text>
-
-                {/* Status */}
-                <View style={[styles.colStatus, styles.badgeWrapper]}>
-                  <View
-                    style={[
-                      styles.badge,
-                      { backgroundColor: statusConf.bgColor },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.badgeText,
-                        { color: statusConf.textColor },
-                      ]}
-                    >
-                      {statusConf.label}
+                <View style={styles.mobileCardFooter}>
+                  <View style={styles.mobileRefPill}>
+                    <Text style={styles.mobileRefLabel}>Ref:</Text>
+                    <Text style={styles.mobileRefValue}>{mov.reference || '-'}</Text>
+                  </View>
+                  <View style={[
+                    styles.mobileQtyPill,
+                    isPositive ? styles.qtyPillPositive : isNegative ? styles.qtyPillNegative : styles.qtyPillNeutral
+                  ]}>
+                    <Text style={[
+                      styles.mobileQtyText,
+                      isPositive ? styles.qtyPositive : isNegative ? styles.qtyNegative : styles.qtyNeutral
+                    ]}>
+                      {mov.quantity || '0'}
                     </Text>
                   </View>
                 </View>
               </Pressable>
             );
           })
+        ) : (
+          // Desktop Table View
+          <>
+            <View style={styles.tableHeaderRow}>
+              <Text style={[styles.thCell, styles.colDate]}>Date</Text>
+              <Text style={[styles.thCell, styles.colType]}>Type</Text>
+              <Text style={[styles.thCell, styles.colItem]}>Item</Text>
+              <Text style={[styles.thCell, styles.colQty]}>Quantity</Text>
+              <Text style={[styles.thCell, styles.colRef]}>Reference</Text>
+              <Text style={[styles.thCell, styles.colStatus]}>Status</Text>
+            </View>
+
+            {movementList.map((mov, index) => {
+              const qtyStr = String(mov.quantity || '');
+              const isPositive = qtyStr.startsWith('+');
+              const isNegative = qtyStr.startsWith('-');
+              const typeConf = TYPE_CONFIG[mov.type] || TYPE_CONFIG.Purchase;
+              const statusConf = STATUS_CONFIG[mov.status] || STATUS_CONFIG.Completed;
+
+              return (
+                <Pressable
+                  key={mov.id || index}
+                  onPress={() => onMovementPress && onMovementPress(mov)}
+                  style={[
+                    styles.tableRow,
+                    index % 2 === 1 && styles.tableRowAlt,
+                  ]}
+                >
+                  <Text style={[styles.tdCell, styles.colDate, styles.dateText]}>
+                    {mov.date || '-'}
+                  </Text>
+                  <View style={[styles.colType, styles.badgeWrapper]}>
+                    <View
+                      style={[
+                        styles.badge,
+                        { backgroundColor: typeConf.bgColor },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.badgeText,
+                          { color: typeConf.textColor },
+                        ]}
+                      >
+                        {typeConf.label}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text
+                    style={[styles.tdCell, styles.colItem, styles.itemText]}
+                    numberOfLines={1}
+                  >
+                    {mov.item || '-'}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.tdCell,
+                      styles.colQty,
+                      styles.qtyText,
+                      isPositive && styles.qtyPositive,
+                      isNegative && styles.qtyNegative,
+                    ]}
+                  >
+                    {mov.quantity || '0'}
+                  </Text>
+                  <Text style={[styles.tdCell, styles.colRef, styles.refText]}>
+                    {mov.reference || '-'}
+                  </Text>
+                  <View style={[styles.colStatus, styles.badgeWrapper]}>
+                    <View
+                      style={[
+                        styles.badge,
+                        { backgroundColor: statusConf.bgColor },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.badgeText,
+                          { color: statusConf.textColor },
+                        ]}
+                      >
+                        {statusConf.label}
+                      </Text>
+                    </View>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </>
         )}
       </View>
     </View>
@@ -338,5 +387,88 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#94A3B8',
     fontStyle: 'italic',
+  },
+  mobileCardsContainer: {
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    gap: 10,
+  },
+  mobileCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 12,
+    marginBottom: 8,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+      },
+      default: {
+        elevation: 1,
+      },
+    }),
+  },
+  mobileCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  mobileDateText: {
+    fontSize: 11.5,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  mobileItemName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 10,
+  },
+  mobileCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  mobileRefPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  mobileRefLabel: {
+    fontSize: 11,
+    color: '#94A3B8',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  mobileRefValue: {
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '600',
+  },
+  mobileQtyPill: {
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  qtyPillPositive: {
+    backgroundColor: '#DCFCE7',
+  },
+  qtyPillNegative: {
+    backgroundColor: '#FEE2E2',
+  },
+  qtyPillNeutral: {
+    backgroundColor: '#F1F5F9',
+  },
+  mobileQtyText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+  },
+  qtyNeutral: {
+    color: '#475569',
   },
 });

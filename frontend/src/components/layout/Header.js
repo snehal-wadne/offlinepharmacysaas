@@ -127,7 +127,7 @@ export default function Header({
 
         {/* Active Branch Switcher Dropdown */}
         <View style={styles.branchSelectorRow}>
-            {!isMobile && <Text style={styles.branchLabel}>Branch</Text>}
+            {!isMobile && <Text style={styles.branchLabel}>Store / Branch</Text>}
             <View style={styles.branchAnchorContainer}>
               <Pressable
                 onPress={() => {
@@ -138,6 +138,7 @@ export default function Header({
                 accessibilityRole="button"
                 accessibilityLabel="Select Branch"
               >
+                <Text style={styles.branchStoreIcon}>📍</Text>
                 <Text style={styles.branchButtonText} numberOfLines={1}>
                   {currentBranch}
                 </Text>
@@ -153,7 +154,7 @@ export default function Header({
                   />
                   <View style={styles.dropdownCardAnchored}>
                     <Text style={styles.dropdownTitle}>
-                      Select Active Branch
+                      Select Active Store Branch
                     </Text>
                     {branchOptions.map((branch) => {
                       const isSelected = branch === currentBranch;
@@ -172,7 +173,7 @@ export default function Header({
                               isSelected && styles.dropdownItemTextSelected,
                             ]}
                           >
-                            {branch}
+                            📍 {branch}
                           </Text>
                           {isSelected && (
                             <Text style={styles.checkmark}>✓</Text>
@@ -180,10 +181,65 @@ export default function Header({
                         </Pressable>
                       );
                     })}
+
+                    {/* Single vs Multi Pharmacy Mode Switcher */}
+                    <View style={styles.dropdownDivider} />
+                    <View style={styles.dropdownModeSection}>
+                      <Text style={styles.dropdownModeSectionTitle}>PHARMACY OPERATION MODE</Text>
+                      <Pressable
+                        onPress={() => {
+                          if (onSetPharmacyMode) onSetPharmacyMode(false);
+                          setDropdownOpen(false);
+                        }}
+                        style={[styles.dropdownModeBtn, !isMultiBranch && styles.dropdownModeBtnActive]}
+                      >
+                        <Text style={[styles.dropdownModeBtnText, !isMultiBranch && styles.dropdownModeBtnTextActive]}>
+                          🏪 Single Store Mode
+                        </Text>
+                        {!isMultiBranch && <Text style={styles.checkmark}>✓</Text>}
+                      </Pressable>
+                      <Pressable
+                        onPress={() => {
+                          if (onSetPharmacyMode) onSetPharmacyMode(true);
+                          setDropdownOpen(false);
+                        }}
+                        style={[styles.dropdownModeBtn, isMultiBranch && styles.dropdownModeBtnActive]}
+                      >
+                        <Text style={[styles.dropdownModeBtnText, isMultiBranch && styles.dropdownModeBtnTextActive]}>
+                          🏢 Multi-Branch Network
+                        </Text>
+                        {isMultiBranch && <Text style={styles.checkmark}>✓</Text>}
+                      </Pressable>
+                    </View>
                   </View>
                 </>
               )}
             </View>
+
+            {/* Quick Mode Toggle Pill in Header Bar */}
+            {onTogglePharmacyMode && (
+              <Pressable
+                onPress={onTogglePharmacyMode}
+                style={[
+                  styles.modeTogglePill,
+                  isMultiBranch ? styles.modeTogglePillMulti : styles.modeTogglePillSingle,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Toggle Pharmacy Mode"
+              >
+                <Text style={styles.modeToggleIcon}>{isMultiBranch ? '🏢' : '🏪'}</Text>
+                {!isMobile && (
+                  <Text
+                    style={[
+                      styles.modeToggleText,
+                      isMultiBranch ? styles.modeToggleTextMulti : styles.modeToggleTextSingle,
+                    ]}
+                  >
+                    {isMultiBranch ? 'Multi-Branch' : 'Single Shop'}
+                  </Text>
+                )}
+              </Pressable>
+            )}
           </View>
       </View>
 
@@ -228,6 +284,16 @@ export default function Header({
             </Text>
           </View>
         )}
+
+        {/* Quick Settings Icon */}
+        <Pressable
+          onPress={() => onNavigate && onNavigate('tax-settings')}
+          style={styles.quickSettingsButton}
+          accessibilityRole="button"
+          accessibilityLabel="Settings"
+        >
+          <Text style={styles.quickSettingsIcon}>⚙️</Text>
+        </Pressable>
 
         {/* User Profile */}
         <View style={styles.profileContainer}>
@@ -551,5 +617,90 @@ const styles = StyleSheet.create({
     fontSize: 9.5,
     color: '#8B5CF6',
     fontWeight: '600',
+  },
+  branchStoreIcon: {
+    fontSize: 13,
+  },
+  modeTogglePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    cursor: 'pointer',
+    borderWidth: 1,
+  },
+  modeTogglePillMulti: {
+    backgroundColor: '#F0FDFA',
+    borderColor: '#99F6E4',
+  },
+  modeTogglePillSingle: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#BFDBFE',
+  },
+  modeToggleIcon: {
+    fontSize: 12,
+  },
+  modeToggleText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  modeToggleTextMulti: {
+    color: '#0F766E',
+  },
+  modeToggleTextSingle: {
+    color: '#1D4ED8',
+  },
+  dropdownDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginVertical: 6,
+  },
+  dropdownModeSection: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  dropdownModeSectionTitle: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#94A3B8',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+    paddingHorizontal: 6,
+  },
+  dropdownModeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    cursor: 'pointer',
+  },
+  dropdownModeBtnActive: {
+    backgroundColor: '#F0FDFA',
+  },
+  dropdownModeBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  dropdownModeBtnTextActive: {
+    color: '#0F766E',
+    fontWeight: '750',
+  },
+  quickSettingsButton: {
+    padding: 7,
+    borderRadius: 8,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    cursor: 'pointer',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickSettingsIcon: {
+    fontSize: 15,
   },
 });

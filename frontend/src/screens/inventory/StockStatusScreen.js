@@ -11,6 +11,8 @@ import {
   Platform,
 } from 'react-native';
 import InventoryStatCard from '../../components/inventory/InventoryStatCard';
+import { SkeletonKpiCard, SkeletonTableRow, SkeletonItemCard } from '../../components/common/SkeletonLoader';
+import PaginationControls from '../../components/common/PaginationControls';
 import {
   MOCK_LOW_STOCK_ITEMS,
   MOCK_EXPIRY_BATCHES,
@@ -187,6 +189,35 @@ export default function StockStatusScreen({ onNavigate, onShowToast, isMultiBran
     return matchesSearch && matchesCritical;
   });
 
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [isPageLoading, setIsPageLoading] = useState(false);
+
+  // Reset page on tab or filter change
+  useEffect(() => {
+    setPage(1);
+  }, [activeTab, searchQuery, criticalOnly]);
+
+  const activeItemsList = activeTab === 'low-stock' ? filteredLowStock : filteredExpiry;
+  const totalItems = activeItemsList.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const startIndex = (page - 1) * pageSize;
+  const paginatedItems = activeItemsList.slice(startIndex, startIndex + pageSize);
+
+  const handlePageChange = (newPage) => {
+    setIsPageLoading(true);
+    setPage(newPage);
+    setTimeout(() => setIsPageLoading(false), 200);
+  };
+
+  const handlePageSizeChange = (newSize) => {
+    setIsPageLoading(true);
+    setPageSize(newSize);
+    setPage(1);
+    setTimeout(() => setIsPageLoading(false), 200);
+  };
+
   const handleOpenActionMenu = (item, type) => {
     setSelectedItemForAction(item);
     setActionItemType(type);
@@ -247,16 +278,25 @@ export default function StockStatusScreen({ onNavigate, onShowToast, isMultiBran
     >
       {/* Top 4 KPI Cards */}
       <View style={[styles.kpiRow, isCompact && styles.kpiRowCompact]}>
-        {dynamicStockStatusKpis.map((kpi) => (
-          <InventoryStatCard
-            key={kpi.id}
-            label={kpi.label}
-            value={kpi.value}
-            subtext={kpi.subtext}
-            variant={kpi.variant}
-            onPress={() => onShowToast && onShowToast(`Filter: ${kpi.label}`)}
-          />
-        ))}
+        {loading ? (
+          <>
+            <SkeletonKpiCard />
+            <SkeletonKpiCard />
+            <SkeletonKpiCard />
+            <SkeletonKpiCard />
+          </>
+        ) : (
+          dynamicStockStatusKpis.map((kpi) => (
+            <InventoryStatCard
+              key={kpi.id}
+              label={kpi.label}
+              value={kpi.value}
+              subtext={kpi.subtext}
+              variant={kpi.variant}
+              onPress={() => onShowToast && onShowToast(`Filter: ${kpi.label}`)}
+            />
+          ))
+        )}
       </View>
 
       {/* Main Table Card with Tabs */}
@@ -372,10 +412,26 @@ export default function StockStatusScreen({ onNavigate, onShowToast, isMultiBran
 
         {/* Tab 1: Low Stock Items */}
         {activeTab === 'low-stock' && (
-          isMobile ? (
+          loading || isPageLoading ? (
+            isMobile ? (
+              <View style={styles.mobileCardList}>
+                <SkeletonItemCard />
+                <SkeletonItemCard />
+                <SkeletonItemCard />
+              </View>
+            ) : (
+              <View style={{ padding: 12 }}>
+                <SkeletonTableRow columns={10} />
+                <SkeletonTableRow columns={10} />
+                <SkeletonTableRow columns={10} />
+                <SkeletonTableRow columns={10} />
+                <SkeletonTableRow columns={10} />
+              </View>
+            )
+          ) : isMobile ? (
             /* Mobile Low Stock Card List */
             <View style={styles.mobileCardList}>
-              {filteredLowStock.map((item) => {
+              {paginatedItems.map((item) => {
                 const badge = STOCK_STATUS_BADGES[item.status] || STOCK_STATUS_BADGES['Low Stock'];
                 const isCritical = item.status === 'Critical' || item.status === 'Out of Stock';
                 return (
@@ -458,7 +514,7 @@ export default function StockStatusScreen({ onNavigate, onShowToast, isMultiBran
                   <Text style={[styles.thCell, { width: 95, textAlign: 'center' }]}>ACTION</Text>
                 </View>
 
-                {filteredLowStock.map((item, index) => {
+                {paginatedItems.map((item, index) => {
                   const badge = STOCK_STATUS_BADGES[item.status] || STOCK_STATUS_BADGES['Low Stock'];
                   const isCritical = item.status === 'Critical' || item.status === 'Out of Stock';
 
@@ -530,10 +586,26 @@ export default function StockStatusScreen({ onNavigate, onShowToast, isMultiBran
 
         {/* Tab 2: Batch Timeline */}
         {activeTab === 'batch-timeline' && (
-          isMobile ? (
+          loading || isPageLoading ? (
+            isMobile ? (
+              <View style={styles.mobileCardList}>
+                <SkeletonItemCard />
+                <SkeletonItemCard />
+                <SkeletonItemCard />
+              </View>
+            ) : (
+              <View style={{ padding: 12 }}>
+                <SkeletonTableRow columns={9} />
+                <SkeletonTableRow columns={9} />
+                <SkeletonTableRow columns={9} />
+                <SkeletonTableRow columns={9} />
+                <SkeletonTableRow columns={9} />
+              </View>
+            )
+          ) : isMobile ? (
             /* Mobile Batch Expiry Card List */
             <View style={styles.mobileCardList}>
-              {filteredExpiry.map((item) => {
+              {paginatedItems.map((item) => {
                 const badge = BATCH_TIMELINE_BADGES[item.status] || BATCH_TIMELINE_BADGES.Safe;
                 const isExpired = item.status === 'Expired';
                 const isSoon = item.status === 'Expiring Soon';
@@ -609,7 +681,7 @@ export default function StockStatusScreen({ onNavigate, onShowToast, isMultiBran
                   <Text style={[styles.thCell, { width: 95, textAlign: 'center' }]}>ACTION</Text>
                 </View>
 
-                {filteredExpiry.map((item, index) => {
+                {paginatedItems.map((item, index) => {
                   const badge = BATCH_TIMELINE_BADGES[item.status] || BATCH_TIMELINE_BADGES.Safe;
                   const isExpired = item.status === 'Expired';
                   const isSoon = item.status === 'Expiring Soon';
@@ -677,6 +749,18 @@ export default function StockStatusScreen({ onNavigate, onShowToast, isMultiBran
             </ScrollView>
           )
         )}
+
+        {/* Pagination Controls */}
+        <PaginationControls
+          currentPage={page}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          pageSize={pageSize}
+          onPageChange={handlePageChange}
+          onPageSizeChange={handlePageSizeChange}
+          isMobile={isMobile}
+          isLoading={isPageLoading}
+        />
       </View>
 
       {/* 1. 3-DOTS ACTION MENU MODAL */}

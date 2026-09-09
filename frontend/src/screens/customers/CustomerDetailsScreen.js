@@ -302,55 +302,23 @@ export default function CustomerDetailsScreen({
                 </View>
               </View>
 
-              {/* Table Data */}
-              <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-                <View style={styles.tableWrapper}>
-                  {/* Table Header */}
-                  <View style={styles.tableHeader}>
-                    <Text style={[styles.thCell, { width: 120 }]}>INVOICE NO.</Text>
-                    <Text style={[styles.thCell, { width: 170 }]}>DATE & TIME</Text>
-                    <Text style={[styles.thCell, { width: 80, textAlign: 'center' }]}>ITEMS</Text>
-                    <Text style={[styles.thCell, { width: 110, textAlign: 'right' }]}>AMOUNT (₹)</Text>
-                    <Text style={[styles.thCell, { width: 120, textAlign: 'center' }]}>PAYMENT METHOD</Text>
-                    <Text style={[styles.thCell, { width: 110, textAlign: 'center' }]}>STATUS</Text>
-                    <Text style={[styles.thCell, { width: 90, textAlign: 'center' }]}>ACTION</Text>
-                  </View>
-
-                  {/* Table Rows */}
+              {/* Table Data / Mobile KPI Cards */}
+              {isMobile ? (
+                <View style={styles.mobileCardsContainer}>
                   {paginatedInvoices.length === 0 ? (
                     <View style={styles.emptyTableBox}>
                       <Text style={styles.emptyTableText}>No invoices found matching your search.</Text>
                     </View>
                   ) : (
-                    paginatedInvoices.map((inv, idx) => (
-                      <View
-                        key={inv.invoiceNo}
-                        style={[
-                          styles.tableRow,
-                          idx % 2 === 1 && styles.tableRowAlt,
-                        ]}
-                      >
-                        <Text style={[styles.tdCell, styles.invNoText, { width: 120 }]}>
-                          {inv.invoiceNo}
-                        </Text>
-                        <Text style={[styles.tdCell, styles.dateText, { width: 170 }]}>
-                          {inv.dateTime}
-                        </Text>
-                        <Text style={[styles.tdCell, { width: 80, textAlign: 'center', fontWeight: '600' }]}>
-                          {inv.items}
-                        </Text>
-                        <Text style={[styles.tdCell, styles.amountText, { width: 110, textAlign: 'right' }]}>
-                          {inv.amount}
-                        </Text>
-                        <Text style={[styles.tdCell, styles.paymentMethodText, { width: 120, textAlign: 'center' }]}>
-                          {inv.paymentMethod}
-                        </Text>
-                        <View style={[{ width: 110, alignItems: 'center' }]}>
-                          <View style={styles.statusCompletedPill}>
-                            <Text style={styles.statusCompletedText}>{inv.status}</Text>
+                    paginatedInvoices.map((inv) => (
+                      <View key={inv.invoiceNo} style={styles.mobileCustomerCard}>
+                        <View style={styles.mobileCardHeader}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={styles.invNoText}>{inv.invoiceNo}</Text>
+                            <View style={styles.statusCompletedPill}>
+                              <Text style={styles.statusCompletedText}>{inv.status}</Text>
+                            </View>
                           </View>
-                        </View>
-                        <View style={[{ width: 90, alignItems: 'center' }]}>
                           <Pressable
                             onPress={() => handleViewInvoice(inv)}
                             style={styles.viewActionBtn}
@@ -360,11 +328,84 @@ export default function CustomerDetailsScreen({
                             <Text style={styles.viewActionBtnText}>View</Text>
                           </Pressable>
                         </View>
+
+                        <Text style={styles.mobileCardDate}>{inv.dateTime}</Text>
+
+                        <View style={styles.mobileCardFooter}>
+                          <View>
+                            <Text style={styles.mobileCardSub}>{inv.items} items</Text>
+                            <Text style={styles.mobileCardMethod}>Paid via {inv.paymentMethod}</Text>
+                          </View>
+                          <Text style={styles.mobileCardAmount}>{inv.amount}</Text>
+                        </View>
                       </View>
                     ))
                   )}
                 </View>
-              </ScrollView>
+              ) : (
+                <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+                  <View style={styles.tableWrapper}>
+                    {/* Table Header */}
+                    <View style={styles.tableHeader}>
+                      <Text style={[styles.thCell, { width: 120 }]}>INVOICE NO.</Text>
+                      <Text style={[styles.thCell, { width: 170 }]}>DATE & TIME</Text>
+                      <Text style={[styles.thCell, { width: 80, textAlign: 'center' }]}>ITEMS</Text>
+                      <Text style={[styles.thCell, { width: 110, textAlign: 'right' }]}>AMOUNT (₹)</Text>
+                      <Text style={[styles.thCell, { width: 120, textAlign: 'center' }]}>PAYMENT METHOD</Text>
+                      <Text style={[styles.thCell, { width: 110, textAlign: 'center' }]}>STATUS</Text>
+                      <Text style={[styles.thCell, { width: 90, textAlign: 'center' }]}>ACTION</Text>
+                    </View>
+
+                    {/* Table Rows */}
+                    {paginatedInvoices.length === 0 ? (
+                      <View style={styles.emptyTableBox}>
+                        <Text style={styles.emptyTableText}>No invoices found matching your search.</Text>
+                      </View>
+                    ) : (
+                      paginatedInvoices.map((inv, idx) => (
+                        <View
+                          key={inv.invoiceNo}
+                          style={[
+                            styles.tableRow,
+                            idx % 2 === 1 && styles.tableRowAlt,
+                          ]}
+                        >
+                          <Text style={[styles.tdCell, styles.invNoText, { width: 120 }]}>
+                            {inv.invoiceNo}
+                          </Text>
+                          <Text style={[styles.tdCell, styles.dateText, { width: 170 }]}>
+                            {inv.dateTime}
+                          </Text>
+                          <Text style={[styles.tdCell, { width: 80, textAlign: 'center', fontWeight: '600' }]}>
+                            {inv.items}
+                          </Text>
+                          <Text style={[styles.tdCell, styles.amountText, { width: 110, textAlign: 'right' }]}>
+                            {inv.amount}
+                          </Text>
+                          <Text style={[styles.tdCell, styles.paymentMethodText, { width: 120, textAlign: 'center' }]}>
+                            {inv.paymentMethod}
+                          </Text>
+                          <View style={[{ width: 110, alignItems: 'center' }]}>
+                            <View style={styles.statusCompletedPill}>
+                              <Text style={styles.statusCompletedText}>{inv.status}</Text>
+                            </View>
+                          </View>
+                          <View style={[{ width: 90, alignItems: 'center' }]}>
+                            <Pressable
+                              onPress={() => handleViewInvoice(inv)}
+                              style={styles.viewActionBtn}
+                              accessibilityRole="button"
+                              accessibilityLabel={`View invoice ${inv.invoiceNo}`}
+                            >
+                              <Text style={styles.viewActionBtnText}>View</Text>
+                            </Pressable>
+                          </View>
+                        </View>
+                      ))
+                    )}
+                  </View>
+                </ScrollView>
+              )}
 
               {/* Table Footer with Pagination */}
               <View style={[styles.paginationFooter, isMobile && styles.paginationFooterMobile]}>
@@ -467,60 +508,93 @@ export default function CustomerDetailsScreen({
             </View>
           </View>
 
-          <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-            <View style={styles.tableWrapper}>
-              <View style={styles.tableHeader}>
-                <Text style={[styles.thCell, { width: 120 }]}>RETURN NO.</Text>
-                <Text style={[styles.thCell, { width: 170 }]}>DATE & TIME</Text>
-                <Text style={[styles.thCell, { width: 120 }]}>ORIGINAL INVOICE</Text>
-                <Text style={[styles.thCell, { width: 220 }]}>ITEMS RETURNED</Text>
-                <Text style={[styles.thCell, { width: 110, textAlign: 'right' }]}>REFUND AMOUNT</Text>
-                <Text style={[styles.thCell, { width: 160 }]}>REFUND METHOD</Text>
-                <Text style={[styles.thCell, { width: 110, textAlign: 'center' }]}>STATUS</Text>
-                <Text style={[styles.thCell, { width: 240 }]}>REASON</Text>
-              </View>
-
+          {isMobile ? (
+            <View style={styles.mobileCardsContainer}>
               {returns.length === 0 ? (
                 <View style={styles.emptyTableBox}>
                   <Text style={styles.emptyTableText}>No return records for this customer.</Text>
                 </View>
               ) : (
-                returns.map((ret, idx) => (
-                  <View
-                    key={ret.returnNo}
-                    style={[styles.tableRow, idx % 2 === 1 && styles.tableRowAlt]}
-                  >
-                    <Text style={[styles.tdCell, styles.invNoText, { width: 120 }]}>
-                      {ret.returnNo}
-                    </Text>
-                    <Text style={[styles.tdCell, styles.dateText, { width: 170 }]}>
-                      {ret.dateTime}
-                    </Text>
-                    <Text style={[styles.tdCell, { width: 120, color: '#0F766E', fontWeight: '600' }]}>
-                      {ret.originalInvoice}
-                    </Text>
-                    <Text style={[styles.tdCell, { width: 220 }]} numberOfLines={1}>
-                      {ret.items}
-                    </Text>
-                    <Text style={[styles.tdCell, { width: 110, textAlign: 'right', fontWeight: '700', color: '#DC2626' }]}>
-                      {ret.refundAmount}
-                    </Text>
-                    <Text style={[styles.tdCell, { width: 160 }]}>
-                      {ret.refundMethod}
-                    </Text>
-                    <View style={[{ width: 110, alignItems: 'center' }]}>
-                      <View style={styles.statusCompletedPill}>
-                        <Text style={styles.statusCompletedText}>{ret.status}</Text>
+                returns.map((ret) => (
+                  <View key={ret.returnNo} style={styles.mobileCustomerCard}>
+                    <View style={styles.mobileCardHeader}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={styles.invNoText}>{ret.returnNo}</Text>
+                        <View style={styles.statusCompletedPill}>
+                          <Text style={styles.statusCompletedText}>{ret.status}</Text>
+                        </View>
                       </View>
+                      <Text style={[styles.mobileCardAmount, { color: '#DC2626' }]}>{ret.refundAmount}</Text>
                     </View>
-                    <Text style={[styles.tdCell, { width: 240, color: '#64748B' }]} numberOfLines={1}>
-                      {ret.reason}
-                    </Text>
+
+                    <Text style={styles.mobileCardDate}>{ret.dateTime} • Ref: {ret.originalInvoice}</Text>
+
+                    <Text style={styles.mobileCardReasonText}>Items: {ret.items}</Text>
+                    <Text style={styles.mobileCardReasonSub}>Reason: {ret.reason}</Text>
+
+                    <View style={styles.mobileCardFooter}>
+                      <Text style={styles.mobileCardMethod}>Refund Method: {ret.refundMethod}</Text>
+                    </View>
                   </View>
                 ))
               )}
             </View>
-          </ScrollView>
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+              <View style={styles.tableWrapper}>
+                <View style={styles.tableHeader}>
+                  <Text style={[styles.thCell, { width: 120 }]}>RETURN NO.</Text>
+                  <Text style={[styles.thCell, { width: 170 }]}>DATE & TIME</Text>
+                  <Text style={[styles.thCell, { width: 120 }]}>ORIGINAL INVOICE</Text>
+                  <Text style={[styles.thCell, { width: 220 }]}>ITEMS RETURNED</Text>
+                  <Text style={[styles.thCell, { width: 110, textAlign: 'right' }]}>REFUND AMOUNT</Text>
+                  <Text style={[styles.thCell, { width: 160 }]}>REFUND METHOD</Text>
+                  <Text style={[styles.thCell, { width: 110, textAlign: 'center' }]}>STATUS</Text>
+                  <Text style={[styles.thCell, { width: 240 }]}>REASON</Text>
+                </View>
+
+                {returns.length === 0 ? (
+                  <View style={styles.emptyTableBox}>
+                    <Text style={styles.emptyTableText}>No return records for this customer.</Text>
+                  </View>
+                ) : (
+                  returns.map((ret, idx) => (
+                    <View
+                      key={ret.returnNo}
+                      style={[styles.tableRow, idx % 2 === 1 && styles.tableRowAlt]}
+                    >
+                      <Text style={[styles.tdCell, styles.invNoText, { width: 120 }]}>
+                        {ret.returnNo}
+                      </Text>
+                      <Text style={[styles.tdCell, styles.dateText, { width: 170 }]}>
+                        {ret.dateTime}
+                      </Text>
+                      <Text style={[styles.tdCell, { width: 120, color: '#0F766E', fontWeight: '600' }]}>
+                        {ret.originalInvoice}
+                      </Text>
+                      <Text style={[styles.tdCell, { width: 220 }]} numberOfLines={1}>
+                        {ret.items}
+                      </Text>
+                      <Text style={[styles.tdCell, { width: 110, textAlign: 'right', fontWeight: '700', color: '#DC2626' }]}>
+                        {ret.refundAmount}
+                      </Text>
+                      <Text style={[styles.tdCell, { width: 160 }]}>
+                        {ret.refundMethod}
+                      </Text>
+                      <View style={[{ width: 110, alignItems: 'center' }]}>
+                        <View style={styles.statusCompletedPill}>
+                          <Text style={styles.statusCompletedText}>{ret.status}</Text>
+                        </View>
+                      </View>
+                      <Text style={[styles.tdCell, { width: 240, color: '#64748B' }]} numberOfLines={1}>
+                        {ret.reason}
+                      </Text>
+                    </View>
+                  ))
+                )}
+              </View>
+            </ScrollView>
+          )}
         </View>
       )}
 
@@ -543,48 +617,90 @@ export default function CustomerDetailsScreen({
             </Pressable>
           </View>
 
-          <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-            <View style={styles.tableWrapper}>
-              <View style={styles.tableHeader}>
-                <Text style={[styles.thCell, { width: 160 }]}>DATE & TIME</Text>
-                <Text style={[styles.thCell, { width: 140 }]}>TYPE</Text>
-                <Text style={[styles.thCell, { width: 120 }]}>REF NO.</Text>
-                <Text style={[styles.thCell, { width: 280 }]}>DESCRIPTION</Text>
-                <Text style={[styles.thCell, { width: 110, textAlign: 'right' }]}>DEBIT (+)</Text>
-                <Text style={[styles.thCell, { width: 110, textAlign: 'right' }]}>CREDIT (-)</Text>
-                <Text style={[styles.thCell, { width: 120, textAlign: 'right' }]}>BALANCE</Text>
-              </View>
+          {isMobile ? (
+            <View style={styles.mobileCardsContainer}>
+              {ledger.map((entry) => (
+                <View key={entry.id} style={styles.mobileCustomerCard}>
+                  <View style={styles.mobileCardHeader}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={styles.invNoText}>{entry.refNo}</Text>
+                      <View style={styles.statusCompletedPill}>
+                        <Text style={styles.statusCompletedText}>{entry.type}</Text>
+                      </View>
+                    </View>
+                    <Text style={[styles.mobileCardAmount, { color: '#0F172A' }]}>Bal: {entry.balance}</Text>
+                  </View>
 
-              {ledger.map((entry, idx) => (
-                <View
-                  key={entry.id}
-                  style={[styles.tableRow, idx % 2 === 1 && styles.tableRowAlt]}
-                >
-                  <Text style={[styles.tdCell, styles.dateText, { width: 160 }]}>
-                    {entry.dateTime}
-                  </Text>
-                  <Text style={[styles.tdCell, { width: 140, fontWeight: '600' }]}>
-                    {entry.type}
-                  </Text>
-                  <Text style={[styles.tdCell, styles.invNoText, { width: 120 }]}>
-                    {entry.refNo}
-                  </Text>
-                  <Text style={[styles.tdCell, { width: 280 }]} numberOfLines={1}>
-                    {entry.description}
-                  </Text>
-                  <Text style={[styles.tdCell, { width: 110, textAlign: 'right', color: entry.debit !== '₹0.00' ? '#DC2626' : '#64748B', fontWeight: '600' }]}>
-                    {entry.debit}
-                  </Text>
-                  <Text style={[styles.tdCell, { width: 110, textAlign: 'right', color: entry.credit !== '₹0.00' ? '#16A34A' : '#64748B', fontWeight: '600' }]}>
-                    {entry.credit}
-                  </Text>
-                  <Text style={[styles.tdCell, { width: 120, textAlign: 'right', fontWeight: '700', color: '#0F172A' }]}>
-                    {entry.balance}
-                  </Text>
+                  <Text style={styles.mobileCardDate}>{entry.dateTime}</Text>
+                  <Text style={styles.mobileCardReasonText}>{entry.description}</Text>
+
+                  <View style={styles.mobileLedgerValuesRow}>
+                    <View style={styles.mobileLedgerValBlock}>
+                      <Text style={styles.mobileLedgerValLabel}>DEBIT (+)</Text>
+                      <Text style={[styles.mobileLedgerValText, { color: entry.debit !== '₹0.00' ? '#DC2626' : '#64748B' }]}>
+                        {entry.debit}
+                      </Text>
+                    </View>
+                    <View style={styles.mobileLedgerValBlock}>
+                      <Text style={styles.mobileLedgerValLabel}>CREDIT (-)</Text>
+                      <Text style={[styles.mobileLedgerValText, { color: entry.credit !== '₹0.00' ? '#16A34A' : '#64748B' }]}>
+                        {entry.credit}
+                      </Text>
+                    </View>
+                    <View style={styles.mobileLedgerValBlock}>
+                      <Text style={styles.mobileLedgerValLabel}>BALANCE</Text>
+                      <Text style={[styles.mobileLedgerValText, { fontWeight: '800', color: '#0F172A' }]}>
+                        {entry.balance}
+                      </Text>
+                    </View>
+                  </View>
                 </View>
               ))}
             </View>
-          </ScrollView>
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+              <View style={styles.tableWrapper}>
+                <View style={styles.tableHeader}>
+                  <Text style={[styles.thCell, { width: 160 }]}>DATE & TIME</Text>
+                  <Text style={[styles.thCell, { width: 140 }]}>TYPE</Text>
+                  <Text style={[styles.thCell, { width: 120 }]}>REF NO.</Text>
+                  <Text style={[styles.thCell, { width: 280 }]}>DESCRIPTION</Text>
+                  <Text style={[styles.thCell, { width: 110, textAlign: 'right' }]}>DEBIT (+)</Text>
+                  <Text style={[styles.thCell, { width: 110, textAlign: 'right' }]}>CREDIT (-)</Text>
+                  <Text style={[styles.thCell, { width: 120, textAlign: 'right' }]}>BALANCE</Text>
+                </View>
+
+                {ledger.map((entry, idx) => (
+                  <View
+                    key={entry.id}
+                    style={[styles.tableRow, idx % 2 === 1 && styles.tableRowAlt]}
+                  >
+                    <Text style={[styles.tdCell, styles.dateText, { width: 160 }]}>
+                      {entry.dateTime}
+                    </Text>
+                    <Text style={[styles.tdCell, { width: 140, fontWeight: '600' }]}>
+                      {entry.type}
+                    </Text>
+                    <Text style={[styles.tdCell, styles.invNoText, { width: 120 }]}>
+                      {entry.refNo}
+                    </Text>
+                    <Text style={[styles.tdCell, { width: 280 }]} numberOfLines={1}>
+                      {entry.description}
+                    </Text>
+                    <Text style={[styles.tdCell, { width: 110, textAlign: 'right', color: entry.debit !== '₹0.00' ? '#DC2626' : '#64748B', fontWeight: '600' }]}>
+                      {entry.debit}
+                    </Text>
+                    <Text style={[styles.tdCell, { width: 110, textAlign: 'right', color: entry.credit !== '₹0.00' ? '#16A34A' : '#64748B', fontWeight: '600' }]}>
+                      {entry.credit}
+                    </Text>
+                    <Text style={[styles.tdCell, { width: 120, textAlign: 'right', fontWeight: '700', color: '#0F172A' }]}>
+                      {entry.balance}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </ScrollView>
+          )}
         </View>
       )}
 
@@ -1498,6 +1614,91 @@ const styles = StyleSheet.create({
   closeBtnPrimaryText: {
     color: '#FFFFFF',
     fontSize: 12.5,
+    fontWeight: '700',
+  },
+  // Mobile KPI Card Styles
+  mobileCardsContainer: {
+    padding: 12,
+    gap: 12,
+  },
+  mobileCustomerCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 14,
+    ...Platform.select({
+      web: { boxShadow: '0 1px 3px rgba(0,0,0,0.04)' },
+      default: { elevation: 1 },
+    }),
+  },
+  mobileCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  mobileCardDate: {
+    fontSize: 12,
+    color: '#64748B',
+    marginBottom: 8,
+  },
+  mobileCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    paddingTop: 8,
+    marginTop: 6,
+  },
+  mobileCardSub: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  mobileCardMethod: {
+    fontSize: 11.5,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  mobileCardAmount: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F766E',
+  },
+  mobileCardReasonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#334155',
+    marginBottom: 4,
+  },
+  mobileCardReasonSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginBottom: 4,
+  },
+  mobileLedgerValuesRow: {
+    flexDirection: 'row',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    padding: 10,
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  mobileLedgerValBlock: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  mobileLedgerValLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+    marginBottom: 2,
+    letterSpacing: 0.3,
+  },
+  mobileLedgerValText: {
+    fontSize: 13,
     fontWeight: '700',
   },
 });

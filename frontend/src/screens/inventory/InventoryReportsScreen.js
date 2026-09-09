@@ -200,7 +200,7 @@ export default function InventoryReportsScreen({ navigation, route }) {
           
           {selectedReport === 'stock_valuation' ? (
             <View>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.kpiScroll} contentContainerStyle={styles.kpiScrollContent}>
+              <View style={styles.kpiGrid}>
                 <View style={[styles.kpiCard, { borderLeftColor: COLORS.primary }]}>
                   <Text style={styles.kpiLabel}>Total Inventory Value</Text>
                   <Text style={[styles.kpiValue, { color: COLORS.primary }]}>₹18,42,650</Text>
@@ -217,7 +217,7 @@ export default function InventoryReportsScreen({ navigation, route }) {
                   <Text style={styles.kpiLabel}>Average Item Value</Text>
                   <Text style={[styles.kpiValue, { color: COLORS.warning }]}>₹1,476</Text>
                 </View>
-              </ScrollView>
+              </View>
 
               <ScrollView horizontal style={styles.tableContainer}>
                 <View>
@@ -493,19 +493,21 @@ const styles = StyleSheet.create({
   searchContainer: {
     marginBottom: 8,
   },
-  kpiScroll: {
+  kpiGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
     marginBottom: 16,
   },
-  kpiScrollContent: {
-    paddingRight: 16,
-  },
   kpiCard: {
-    width: 140,
+    flex: 1,
+    minWidth: 140,
     backgroundColor: COLORS.surfaceHover,
     borderRadius: 8,
     padding: 12,
-    marginRight: 12,
     borderLeftWidth: 4,
+    justifyContent: 'space-between',
+    minHeight: 75,
   },
   kpiLabel: {
     fontSize: 12,

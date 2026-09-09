@@ -581,7 +581,6 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
               </View>
             )}
 
-            {/* Table of Movements */}
             {pettyCashMovements.length === 0 ? (
               <View style={styles.emptyMovementsBox}>
                 <Text style={styles.emptyMovementsIcon}>🧾</Text>
@@ -595,6 +594,73 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
                 >
                   <Text style={styles.emptyRecordBtnText}>+ Record First Movement</Text>
                 </Pressable>
+              </View>
+            ) : isMobile ? (
+              <View style={styles.mobileMovementsList}>
+                {pettyCashMovements.map((mov, idx) => {
+                  const isIn = mov.type === 'IN';
+                  const isHighlighted = mov.id === lastAddedMovementId || mov.isNew;
+                  return (
+                    <View
+                      key={mov.id || idx}
+                      style={[
+                        styles.mobileMovementCard,
+                        isHighlighted && styles.mobileMovementCardHighlight,
+                      ]}
+                    >
+                      <View style={styles.mobileMovementHeader}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={styles.movIdText}>{mov.id}</Text>
+                          {isHighlighted && (
+                            <View style={styles.justAddedBadge}>
+                              <Text style={styles.justAddedBadgeText}>NEW</Text>
+                            </View>
+                          )}
+                          <View
+                            style={[
+                              styles.movementTypeBadge,
+                              isIn ? styles.badgeCashIn : styles.badgeCashOut,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.movementTypeBadgeText,
+                                isIn ? styles.badgeTextCashIn : styles.badgeTextCashOut,
+                              ]}
+                            >
+                              {isIn ? '+ Cash In' : '− Cash Out'}
+                            </Text>
+                          </View>
+                        </View>
+                        <Pressable
+                          onPress={() => handleDeleteMovement(mov.id)}
+                          style={styles.deleteMovBtn}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Delete movement ${mov.id}`}
+                        >
+                          <Text style={styles.deleteMovBtnText}>✕</Text>
+                        </Pressable>
+                      </View>
+
+                      <Text style={styles.mobileMovementReason}>{mov.reason}</Text>
+
+                      <View style={styles.mobileMovementFooter}>
+                        <View>
+                          <Text style={styles.mobileMovementTime}>{mov.time}</Text>
+                          <Text style={styles.mobileMovementCashier}>👤 {mov.cashier}</Text>
+                        </View>
+                        <Text
+                          style={[
+                            styles.mobileMovementAmount,
+                            { color: isIn ? '#059669' : '#DC2626' },
+                          ]}
+                        >
+                          {isIn ? '+' : '-'}₹{mov.amount.toFixed(2)}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })}
               </View>
             ) : (
               <ScrollView horizontal={true} showsHorizontalScrollIndicator={false} style={{ width: '100%' }}>
@@ -864,36 +930,15 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
             </View>
 
             <ScrollView style={{ maxHeight: 450 }}>
-              <View style={styles.historyTable}>
-                <View style={styles.historyTableHeader}>
-                  <Text style={[styles.historyTh, { flex: 1.2 }]}>Session ID / Date</Text>
-                  <Text style={[styles.historyTh, { flex: 1 }]}>Cashier</Text>
-                  <Text style={[styles.historyTh, { flex: 0.8 }]}>Shift</Text>
-                  <Text style={[styles.historyTh, { flex: 1, textAlign: 'right' }]}>Opening Float</Text>
-                  <Text style={[styles.historyTh, { flex: 1, textAlign: 'right' }]}>Expected</Text>
-                  <Text style={[styles.historyTh, { flex: 1, textAlign: 'right' }]}>Counted</Text>
-                  <Text style={[styles.historyTh, { flex: 1, textAlign: 'center' }]}>Variance</Text>
-                </View>
-
-                {historyList.map((item) => (
-                  <View key={item.id}>
-                    <View style={styles.historyTableRow}>
-                      <View style={{ flex: 1.2 }}>
-                        <Text style={styles.historySessionId}>{item.id}</Text>
-                        <Text style={styles.historyDate}>{item.date} • {item.closedAt}</Text>
-                      </View>
-                      <Text style={[styles.historyTd, { flex: 1 }]}>{item.cashier}</Text>
-                      <Text style={[styles.historyTd, { flex: 0.8 }]}>{item.shift}</Text>
-                      <Text style={[styles.historyTd, { flex: 1, textAlign: 'right' }]}>
-                        ₹{item.openingBalance.toFixed(2)}
-                      </Text>
-                      <Text style={[styles.historyTd, { flex: 1, textAlign: 'right' }]}>
-                        ₹{item.expectedCash.toFixed(2)}
-                      </Text>
-                      <Text style={[styles.historyTd, { flex: 1, textAlign: 'right', fontWeight: '700' }]}>
-                        ₹{item.countedCash.toFixed(2)}
-                      </Text>
-                      <View style={{ flex: 1, alignItems: 'center' }}>
+              {isMobile ? (
+                <View style={styles.mobileHistoryList}>
+                  {historyList.map((item) => (
+                    <View key={item.id} style={styles.mobileHistoryCard}>
+                      <View style={styles.mobileHistoryHeader}>
+                        <View>
+                          <Text style={styles.historySessionId}>{item.id}</Text>
+                          <Text style={styles.historyDate}>{item.date} • {item.closedAt}</Text>
+                        </View>
                         <View
                           style={[
                             styles.varianceBadge,
@@ -918,17 +963,110 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
                           </Text>
                         </View>
                       </View>
-                    </View>
-                    {item.movements && item.movements.length > 0 && (
-                      <View style={styles.historyMovementsRow}>
-                        <Text style={styles.historyMovementsSummaryText}>
-                          📋 Includes {item.movements.length} Petty Cash Movement(s): Float In: +₹{(item.pettyCashIn || 0).toFixed(2)}, Expenses: -₹{(item.pettyCashOut || 0).toFixed(2)}
+
+                      <View style={styles.mobileHistoryDetailsRow}>
+                        <Text style={styles.mobileHistoryLabel}>
+                          Cashier: <Text style={{ color: '#0F172A', fontWeight: '600' }}>{item.cashier}</Text>
                         </Text>
+                        <View style={styles.mobileHistoryShiftBadge}>
+                          <Text style={styles.mobileHistoryShiftText}>{item.shift}</Text>
+                        </View>
                       </View>
-                    )}
+
+                      <View style={styles.mobileHistoryMetricsGrid}>
+                        <View style={styles.mobileHistoryMetricItem}>
+                          <Text style={styles.mobileHistoryMetricLabel}>Opening Float</Text>
+                          <Text style={styles.mobileHistoryMetricVal}>₹{item.openingBalance.toFixed(2)}</Text>
+                        </View>
+                        <View style={styles.mobileHistoryMetricItem}>
+                          <Text style={styles.mobileHistoryMetricLabel}>Expected</Text>
+                          <Text style={styles.mobileHistoryMetricVal}>₹{item.expectedCash.toFixed(2)}</Text>
+                        </View>
+                        <View style={styles.mobileHistoryMetricItem}>
+                          <Text style={styles.mobileHistoryMetricLabel}>Counted</Text>
+                          <Text style={[styles.mobileHistoryMetricVal, { fontWeight: '800', color: '#0F172A' }]}>
+                            ₹{item.countedCash.toFixed(2)}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {item.movements && item.movements.length > 0 && (
+                        <View style={styles.mobileHistoryMovementsBox}>
+                          <Text style={styles.historyMovementsSummaryText}>
+                            📋 {item.movements.length} Petty Cash Movement(s): +₹{(item.pettyCashIn || 0).toFixed(2)} / -₹{(item.pettyCashOut || 0).toFixed(2)}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.historyTable}>
+                  <View style={styles.historyTableHeader}>
+                    <Text style={[styles.historyTh, { flex: 1.2 }]}>Session ID / Date</Text>
+                    <Text style={[styles.historyTh, { flex: 1 }]}>Cashier</Text>
+                    <Text style={[styles.historyTh, { flex: 0.8 }]}>Shift</Text>
+                    <Text style={[styles.historyTh, { flex: 1, textAlign: 'right' }]}>Opening Float</Text>
+                    <Text style={[styles.historyTh, { flex: 1, textAlign: 'right' }]}>Expected</Text>
+                    <Text style={[styles.historyTh, { flex: 1, textAlign: 'right' }]}>Counted</Text>
+                    <Text style={[styles.historyTh, { flex: 1, textAlign: 'center' }]}>Variance</Text>
                   </View>
-                ))}
-              </View>
+
+                  {historyList.map((item) => (
+                    <View key={item.id}>
+                      <View style={styles.historyTableRow}>
+                        <View style={{ flex: 1.2 }}>
+                          <Text style={styles.historySessionId}>{item.id}</Text>
+                          <Text style={styles.historyDate}>{item.date} • {item.closedAt}</Text>
+                        </View>
+                        <Text style={[styles.historyTd, { flex: 1 }]}>{item.cashier}</Text>
+                        <Text style={[styles.historyTd, { flex: 0.8 }]}>{item.shift}</Text>
+                        <Text style={[styles.historyTd, { flex: 1, textAlign: 'right' }]}>
+                          ₹{item.openingBalance.toFixed(2)}
+                        </Text>
+                        <Text style={[styles.historyTd, { flex: 1, textAlign: 'right' }]}>
+                          ₹{item.expectedCash.toFixed(2)}
+                        </Text>
+                        <Text style={[styles.historyTd, { flex: 1, textAlign: 'right', fontWeight: '700' }]}>
+                          ₹{item.countedCash.toFixed(2)}
+                        </Text>
+                        <View style={{ flex: 1, alignItems: 'center' }}>
+                          <View
+                            style={[
+                              styles.varianceBadge,
+                              item.status === 'Shortage'
+                                ? styles.varBadgeShortage
+                                : item.status === 'Overage'
+                                ? styles.varBadgeOverage
+                                : styles.varBadgeBalanced,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.varianceBadgeText,
+                                item.status === 'Shortage'
+                                  ? styles.varTextShortage
+                                  : item.status === 'Overage'
+                                  ? styles.varTextOverage
+                                  : styles.varTextBalanced,
+                              ]}
+                            >
+                              {item.variance === 0 ? '✓ Balanced' : `${item.variance > 0 ? '+' : ''}₹${item.variance.toFixed(2)}`}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                      {item.movements && item.movements.length > 0 && (
+                        <View style={styles.historyMovementsRow}>
+                          <Text style={styles.historyMovementsSummaryText}>
+                            📋 Includes {item.movements.length} Petty Cash Movement(s): Float In: +₹{(item.pettyCashIn || 0).toFixed(2)}, Expenses: -₹{(item.pettyCashOut || 0).toFixed(2)}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              )}
             </ScrollView>
 
             <View style={styles.historyModalFooter}>
@@ -2325,5 +2463,134 @@ const styles = StyleSheet.create({
     color: '#64748B',
     lineHeight: 16,
     marginBottom: 14,
+  },
+  // Mobile KPI Cards for Petty Cash Movements
+  mobileMovementsList: {
+    gap: 10,
+    paddingVertical: 6,
+  },
+  mobileMovementCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    padding: 14,
+    ...Platform.select({
+      web: { boxShadow: '0 1px 2px rgba(0,0,0,0.03)' },
+      default: { elevation: 1 },
+    }),
+  },
+  mobileMovementCardHighlight: {
+    borderColor: '#6EE7B7',
+    backgroundColor: '#F0FDF4',
+  },
+  mobileMovementHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  mobileMovementReason: {
+    fontSize: 13.5,
+    fontWeight: '600',
+    color: '#0F172A',
+    marginBottom: 10,
+    lineHeight: 18,
+  },
+  mobileMovementFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  mobileMovementTime: {
+    fontSize: 11.5,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  mobileMovementCashier: {
+    fontSize: 11.5,
+    color: '#475569',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  mobileMovementAmount: {
+    fontSize: 15,
+    fontWeight: '800',
+  },
+
+  // Mobile KPI Cards for Register History Modal
+  mobileHistoryList: {
+    gap: 12,
+    paddingVertical: 6,
+  },
+  mobileHistoryCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    padding: 14,
+    ...Platform.select({
+      web: { boxShadow: '0 1px 3px rgba(0,0,0,0.04)' },
+      default: { elevation: 1 },
+    }),
+  },
+  mobileHistoryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  mobileHistoryDetailsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  mobileHistoryLabel: {
+    fontSize: 12.5,
+    color: '#64748B',
+  },
+  mobileHistoryShiftBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  mobileHistoryShiftText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  mobileHistoryMetricsGrid: {
+    flexDirection: 'row',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    padding: 10,
+    justifyContent: 'space-between',
+  },
+  mobileHistoryMetricItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  mobileHistoryMetricLabel: {
+    fontSize: 10.5,
+    color: '#64748B',
+    fontWeight: '600',
+    marginBottom: 2,
+    textTransform: 'uppercase',
+  },
+  mobileHistoryMetricVal: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  mobileHistoryMovementsBox: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
   },
 });

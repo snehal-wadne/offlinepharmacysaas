@@ -6,10 +6,14 @@ import {
   ScrollView,
   StyleSheet,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { MOCK_STOCK_SUMMARY } from '../../data/inventoryDashboardMockData';
 
 export default function StockSummary({ data = MOCK_STOCK_SUMMARY, onViewAll }) {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
+
   const stockList = Array.isArray(data)
     ? data
     : Array.isArray(MOCK_STOCK_SUMMARY)
@@ -34,64 +38,106 @@ export default function StockSummary({ data = MOCK_STOCK_SUMMARY, onViewAll }) {
         </Pressable>
       </View>
 
-      {/* Table Container */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View style={styles.tableContainer}>
-          {/* Table Header */}
-          <View style={styles.tableHeaderRow}>
-            <Text style={[styles.thCell, styles.categoryCol]}>CATEGORY</Text>
-            <Text style={[styles.thCell, styles.numCol]}>TOTAL ITEMS</Text>
-            <Text style={[styles.thCell, styles.numCol]}>IN-STOCK</Text>
-            <Text style={[styles.thCell, styles.numCol]}>LOW STOCK</Text>
-            <Text style={[styles.thCell, styles.numCol]}>OUT OF STOCK</Text>
-          </View>
-
-          {/* Table Rows */}
+      {/* Table / Mobile Cards Container */}
+      {isMobile ? (
+        <View style={styles.mobileCardsContainer}>
           {stockList.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>No stock summary data available</Text>
             </View>
           ) : (
             stockList.map((row, index) => (
-              <View
+              <Pressable
                 key={row.id || index}
-                style={[
-                  styles.tableRow,
-                  index % 2 === 1 && styles.tableRowAlt,
-                ]}
+                onPress={onViewAll}
+                style={styles.mobileCategoryCard}
               >
-                <Text style={[styles.tdCell, styles.categoryCol, styles.categoryText]}>
-                  {row.category || '-'}
-                </Text>
-                <Text style={[styles.tdCell, styles.numCol, styles.totalText]}>
-                  {row.totalItems ?? 0}
-                </Text>
-                <Text style={[styles.tdCell, styles.numCol, styles.inStockText]}>
-                  {row.inStock ?? 0}
-                </Text>
-                <Text
-                  style={[
-                    styles.tdCell,
-                    styles.numCol,
-                    row.lowStock > 0 ? styles.lowStockText : styles.zeroText,
-                  ]}
-                >
-                  {row.lowStock ?? 0}
-                </Text>
-                <Text
-                  style={[
-                    styles.tdCell,
-                    styles.numCol,
-                    row.outOfStock > 0 ? styles.outOfStockText : styles.zeroText,
-                  ]}
-                >
-                  {row.outOfStock ?? 0}
-                </Text>
-              </View>
+                <View style={styles.mobileCardHeader}>
+                  <Text style={styles.mobileCategoryTitle}>{row.category || '-'}</Text>
+                  <View style={styles.totalBadge}>
+                    <Text style={styles.totalBadgeText}>{row.totalItems ?? 0} Items</Text>
+                  </View>
+                </View>
+
+                <View style={styles.mobileMetricsRow}>
+                  <View style={[styles.mobileMetricBadge, styles.inStockBadge]}>
+                    <Text style={styles.mobileMetricLabel}>IN STOCK</Text>
+                    <Text style={styles.inStockVal}>{row.inStock ?? 0}</Text>
+                  </View>
+
+                  <View style={[styles.mobileMetricBadge, styles.lowStockBadge]}>
+                    <Text style={styles.mobileMetricLabel}>LOW STOCK</Text>
+                    <Text style={styles.lowStockVal}>{row.lowStock ?? 0}</Text>
+                  </View>
+
+                  <View style={[styles.mobileMetricBadge, styles.outOfStockBadge]}>
+                    <Text style={styles.mobileMetricLabel}>OUT OF STOCK</Text>
+                    <Text style={styles.outOfStockVal}>{row.outOfStock ?? 0}</Text>
+                  </View>
+                </View>
+              </Pressable>
             ))
           )}
         </View>
-      </ScrollView>
+      ) : (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View style={styles.tableContainer}>
+            {/* Table Header */}
+            <View style={styles.tableHeaderRow}>
+              <Text style={[styles.thCell, styles.categoryCol]}>CATEGORY</Text>
+              <Text style={[styles.thCell, styles.numCol]}>TOTAL ITEMS</Text>
+              <Text style={[styles.thCell, styles.numCol]}>IN-STOCK</Text>
+              <Text style={[styles.thCell, styles.numCol]}>LOW STOCK</Text>
+              <Text style={[styles.thCell, styles.numCol]}>OUT OF STOCK</Text>
+            </View>
+
+            {/* Table Rows */}
+            {stockList.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>No stock summary data available</Text>
+              </View>
+            ) : (
+              stockList.map((row, index) => (
+                <View
+                  key={row.id || index}
+                  style={[
+                    styles.tableRow,
+                    index % 2 === 1 && styles.tableRowAlt,
+                  ]}
+                >
+                  <Text style={[styles.tdCell, styles.categoryCol, styles.categoryText]}>
+                    {row.category || '-'}
+                  </Text>
+                  <Text style={[styles.tdCell, styles.numCol, styles.totalText]}>
+                    {row.totalItems ?? 0}
+                  </Text>
+                  <Text style={[styles.tdCell, styles.numCol, styles.inStockText]}>
+                    {row.inStock ?? 0}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.tdCell,
+                      styles.numCol,
+                      row.lowStock > 0 ? styles.lowStockText : styles.zeroText,
+                    ]}
+                  >
+                    {row.lowStock ?? 0}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.tdCell,
+                      styles.numCol,
+                      row.outOfStock > 0 ? styles.outOfStockText : styles.zeroText,
+                    ]}
+                  >
+                    {row.outOfStock ?? 0}
+                  </Text>
+                </View>
+              ))
+            )}
+          </View>
+        </ScrollView>
+      )}
 
       {/* Footer Action Button */}
       <View style={styles.cardFooter}>
@@ -260,5 +306,88 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#94A3B8',
     fontStyle: 'italic',
+  },
+
+  /* Mobile Category KPI Cards */
+  mobileCardsContainer: {
+    padding: 12,
+    gap: 10,
+  },
+  mobileCategoryCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 12,
+    cursor: 'pointer',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 1px 2px rgba(0, 0, 0, 0.03)',
+      },
+    }),
+  },
+  mobileCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  mobileCategoryTitle: {
+    fontSize: 14,
+    fontWeight: '750',
+    color: '#0F172A',
+  },
+  totalBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  totalBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  mobileMetricsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  mobileMetricBadge: {
+    flex: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mobileMetricLabel: {
+    fontSize: 9.5,
+    fontWeight: '750',
+    letterSpacing: 0.3,
+    marginBottom: 2,
+  },
+  inStockBadge: {
+    backgroundColor: '#DCFCE7',
+  },
+  inStockVal: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#15803D',
+  },
+  lowStockBadge: {
+    backgroundColor: '#FEF3C7',
+  },
+  lowStockVal: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#B45309',
+  },
+  outOfStockBadge: {
+    backgroundColor: '#FEE2E2',
+  },
+  outOfStockVal: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#DC2626',
   },
 });
