@@ -342,7 +342,10 @@ export default function AppNavigator() {
       <LoginScreen
         onLoginSuccess={(user) => {
           setCurrentUser(user);
-          showToast(`Welcome back, ${user.display_name}!`);
+          if (user?.branch) {
+            setSelectedBranch(user.branch);
+          }
+          showToast(`Welcome back, ${user.display_name}! (Branch: ${user.branch || 'Main Branch'})`);
         }}
       />
     );

@@ -163,6 +163,7 @@ export default function LoginScreen({ onLoginSuccess }) {
 
     const name = signUpName.trim();
     const email = signUpEmail.trim();
+    const branch = signUpBranch.trim();
 
     if (!name || name.length < 2) {
       setErrorMessage("Please enter your full name.");
@@ -176,6 +177,11 @@ export default function LoginScreen({ onLoginSuccess }) {
 
     if (!isValidGoogleEmail(email)) {
       setErrorMessage("Please enter a valid Gmail / Google address (e.g. yourname@gmail.com).");
+      return;
+    }
+
+    if (!branch) {
+      setErrorMessage("Please select or enter the pharmacy branch name.");
       return;
     }
 
@@ -599,6 +605,71 @@ export default function LoginScreen({ onLoginSuccess }) {
                           </Text>
                         </Pressable>
                       ))}
+                    </View>
+                  </View>
+
+                  {/* Assigned Branch Name */}
+                  <View style={styles.fieldContainer}>
+                    <View style={styles.branchHeaderRow}>
+                      <Text style={styles.label}>Assigned Branch Name</Text>
+                      <Text style={styles.branchSubLabel}>Branch / Location</Text>
+                    </View>
+
+                    {/* Quick Branch Preset Chips */}
+                    <View style={styles.roleChipsRow}>
+                      {[
+                        { label: "Main Campus (HQ)", value: "FIT Main Campus Hospital Pharmacy", icon: "🏥" },
+                        { label: "Pune City OPD", value: "FIT Pune City OPD Pharmacy", icon: "🏥" },
+                        { label: "Central Warehouse", value: "FIT Central Medical Warehouse", icon: "📦" },
+                        { label: "Student Health", value: "FIT Student Health Center Dispensary", icon: "🩺" },
+                      ].map((b) => (
+                        <Pressable
+                          key={b.value}
+                          onPress={() => {
+                            setSignUpBranch(b.value);
+                            if (errorMessage) setErrorMessage("");
+                          }}
+                          style={[
+                            styles.branchChip,
+                            signUpBranch === b.value && styles.branchChipActive,
+                          ]}
+                        >
+                          <Text style={styles.branchChipIcon}>{b.icon}</Text>
+                          <Text
+                            style={[
+                              styles.branchChipText,
+                              signUpBranch === b.value && styles.branchChipTextActive,
+                            ]}
+                          >
+                            {b.label}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+
+                    {/* Branch Name Input Field (allows custom input or editing) */}
+                    <View style={[styles.inputWrapper, { marginTop: 8 }]}>
+                      <Text style={styles.inputPrefixIcon}>🏢</Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Enter branch name (e.g. Main Campus or City OPD)"
+                        placeholderTextColor="#94a3b8"
+                        value={signUpBranch}
+                        onChangeText={(text) => {
+                          setSignUpBranch(text);
+                          if (errorMessage) setErrorMessage("");
+                        }}
+                        editable={!isLoading}
+                      />
+                      {signUpBranch.length > 0 && (
+                        <Pressable
+                          onPress={() => setSignUpBranch("")}
+                          style={{ padding: 6 }}
+                          hitSlop={8}
+                        >
+                          <Text style={{ fontSize: 13, color: "#94A3B8" }}>✕</Text>
+                        </Pressable>
+                      )}
                     </View>
                   </View>
 
@@ -1205,6 +1276,45 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   roleChipTextActive: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+  },
+
+  branchHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  branchSubLabel: {
+    fontSize: 11,
+    color: "#64748B",
+    fontWeight: "500",
+  },
+  branchChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    backgroundColor: "#F8FAFC",
+    gap: 4,
+  },
+  branchChipActive: {
+    backgroundColor: "#0F766E",
+    borderColor: "#0F766E",
+  },
+  branchChipIcon: {
+    fontSize: 12,
+  },
+  branchChipText: {
+    fontSize: 11.5,
+    color: "#475569",
+    fontWeight: "600",
+  },
+  branchChipTextActive: {
     color: "#FFFFFF",
     fontWeight: "700",
   },
