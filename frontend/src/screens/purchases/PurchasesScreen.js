@@ -23,6 +23,7 @@ import {
 } from '../../api/purchaseApi';
 
 const PO_STATUS_BADGES = {
+  Draft: { bg: '#F1F5F9', text: '#475569' },
   Pending: { bg: '#FEF3C7', text: '#B45309' },
   Approved: { bg: '#DBEAFE', text: '#1D4ED8' },
   Received: { bg: '#DCFCE7', text: '#15803D' },
@@ -34,6 +35,9 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
   const isMobile = width < 768;
+
+  // Primary View Tab State: 'all' | 'customer_orders' | 'drafts'
+  const [activeTab, setActiveTab] = useState('all');
 
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
@@ -71,7 +75,7 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
     }
   };
 
-  // Dynamic 4 KPI Cards Calculations
+  // Dynamic KPI Calculations
   const totalPurchasesSum = orders.reduce((sum, po) => {
     const val = typeof po.numericAmount === 'number'
       ? po.numericAmount
@@ -79,6 +83,8 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
     return sum + val;
   }, 0);
 
+  const draftCount = orders.filter((po) => po.status === 'Draft' || po.status === 'DRAFT').length;
+  const customerOrdersCount = orders.filter((po) => po.isCustomerOrder || po.customerName).length;
   const pendingCount = orders.filter((po) => po.status === 'Pending' || po.status === 'PENDING').length;
   const receivedCount = orders.filter((po) => po.status === 'Received' || po.status === 'RECEIVED').length;
   const cancelledCount = orders.filter((po) => po.status === 'Cancelled' || po.status === 'CANCELLED').length;
@@ -91,36 +97,45 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
       subtext: 'This fiscal month',
       variant: 'teal',
       key: 'All Statuses',
+      tabKey: 'all',
     },
     {
       id: 'p-kpi-2',
-      label: 'PENDING ORDERS',
-      value: pendingCount.toLocaleString(),
-      subtext: 'Awaiting delivery',
-      variant: 'amber',
-      key: 'Pending',
+      label: 'CUSTOMER ORDERS',
+      value: customerOrdersCount.toLocaleString(),
+      subtext: 'Patient special orders',
+      variant: 'blue',
+      key: 'All Statuses',
+      tabKey: 'customer_orders',
     },
     {
       id: 'p-kpi-3',
-      label: 'RECEIVED THIS MONTH',
-      value: receivedCount.toLocaleString(),
-      subtext: 'Fully processed',
-      variant: 'blue',
-      key: 'Received',
+      label: 'DRAFT ORDERS',
+      value: draftCount.toLocaleString(),
+      subtext: 'Unsubmitted drafts',
+      variant: 'amber',
+      key: 'Draft',
+      tabKey: 'drafts',
     },
     {
       id: 'p-kpi-4',
-      label: 'CANCELLED ORDERS',
-      value: cancelledCount.toLocaleString(),
-      subtext: 'Supplier out of stock',
-      variant: 'red',
-      key: 'Cancelled',
+      label: 'PENDING ORDERS',
+      value: pendingCount.toLocaleString(),
+      subtext: 'Awaiting delivery',
+      variant: 'orange',
+      key: 'Pending',
+      tabKey: 'all',
     },
   ];
 
-  const handleKpiCardPress = (statusKey, label) => {
-    setSelectedStatus(statusKey);
-    if (onShowToast) onShowToast(`Filtered: ${label}`);
+  const handleKpiCardPress = (kpi) => {
+    if (kpi.tabKey) {
+      setActiveTab(kpi.tabKey);
+    }
+    if (kpi.key) {
+      setSelectedStatus(kpi.key);
+    }
+    if (onShowToast) onShowToast(`Filtered: ${kpi.label}`);
   };
 
   // New PO Modal State
@@ -133,6 +148,10 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
     quantity: '10',
     unitPrice: '120.00',
     notes: '',
+    isCustomerOrder: false,
+    customerName: '',
+    customerPhone: '',
+    prescriptionRef: '',
   });
   const [formErrors, setFormErrors] = useState({});
 
@@ -142,15 +161,25 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
     const matchesSearch =
       (po.id && po.id.toLowerCase().includes(q)) ||
       (po.supplier && po.supplier.toLowerCase().includes(q)) ||
-      (po.branch && po.branch.toLowerCase().includes(q));
+      (po.branch && po.branch.toLowerCase().includes(q)) ||
+      (po.customerName && po.customerName.toLowerCase().includes(q)) ||
+      (po.medicine && po.medicine.toLowerCase().includes(q));
+
+    // Tab Filter
+    if (activeTab === 'customer_orders') {
+      if (!po.isCustomerOrder && !po.customerName) return false;
+    } else if (activeTab === 'drafts') {
+      if (po.status !== 'Draft' && po.status !== 'DRAFT') return false;
+    }
 
     const matchesStatus =
       selectedStatus === 'All Statuses' ||
       po.status === selectedStatus ||
-      (selectedStatus === 'Pending' && po.status === 'PENDING') ||
-      (selectedStatus === 'Approved' && po.status === 'APPROVED') ||
-      (selectedStatus === 'Received' && po.status === 'RECEIVED') ||
-      (selectedStatus === 'Cancelled' && po.status === 'CANCELLED');
+      (selectedStatus === 'Draft' && (po.status === 'Draft' || po.status === 'DRAFT')) ||
+      (selectedStatus === 'Pending' && (po.status === 'Pending' || po.status === 'PENDING')) ||
+      (selectedStatus === 'Approved' && (po.status === 'Approved' || po.status === 'APPROVED')) ||
+      (selectedStatus === 'Received' && (po.status === 'Received' || po.status === 'RECEIVED')) ||
+      (selectedStatus === 'Cancelled' && (po.status === 'Cancelled' || po.status === 'CANCELLED'));
 
     const matchesTogglePending = !togglePendingOnly || po.status === 'Pending' || po.status === 'PENDING';
 
@@ -166,17 +195,24 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
       quantity: '10',
       unitPrice: '120.00',
       notes: '',
+      isCustomerOrder: activeTab === 'customer_orders',
+      customerName: '',
+      customerPhone: '',
+      prescriptionRef: '',
     });
     setFormErrors({});
     setModalVisible(true);
   };
 
-  const handleCreatePO = async () => {
+  const handleCreatePO = async (targetStatus = 'Pending') => {
     const errors = {};
     if (!formData.supplier.trim()) errors.supplier = 'Supplier is required';
     if (!formData.medicine.trim()) errors.medicine = 'Medicine/Product is required';
     if (!formData.quantity.trim() || isNaN(formData.quantity) || Number(formData.quantity) <= 0) {
       errors.quantity = 'Valid quantity is required';
+    }
+    if (formData.isCustomerOrder && !formData.customerName.trim()) {
+      errors.customerName = 'Customer/Patient name is required';
     }
 
     if (Object.keys(errors).length > 0) {
@@ -187,7 +223,8 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
     const qtyNum = Number(formData.quantity);
     const unitCostNum = Number(formData.unitPrice || 100);
     const calculatedTotal = (qtyNum * unitCostNum).toFixed(2);
-    const poNum = `PO-${1026 + orders.length}`;
+    const isDraft = targetStatus === 'Draft';
+    const poNum = isDraft ? `PO-DRAFT-${Date.now().toString().slice(-4)}` : `PO-${1026 + orders.length}`;
 
     const payload = {
       purchaseNumber: poNum,
@@ -195,6 +232,11 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
       branchName: formData.branch || 'Main Branch',
       expectedDate: formData.expectedDate || '05 Sep 2026',
       notes: formData.notes || '',
+      status: isDraft ? 'DRAFT' : 'PENDING',
+      isCustomerOrder: formData.isCustomerOrder,
+      customerName: formData.customerName.trim(),
+      customerPhone: formData.customerPhone.trim(),
+      prescriptionRef: formData.prescriptionRef.trim(),
       items: [
         {
           medicineName: formData.medicine,
@@ -218,8 +260,13 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
         amount: `₹${Number(calculatedTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
         numericAmount: Number(calculatedTotal),
         itemsCount: qtyNum,
-        status: 'Pending',
+        status: isDraft ? 'Draft' : 'Pending',
         branch: formData.branch || 'Main Branch',
+        medicine: formData.medicine,
+        isCustomerOrder: formData.isCustomerOrder,
+        customerName: formData.customerName.trim(),
+        customerPhone: formData.customerPhone.trim(),
+        prescriptionRef: formData.prescriptionRef.trim(),
         createdBy: 'Manager',
       };
 
@@ -227,7 +274,7 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
       setModalVisible(false);
 
       if (onShowToast) {
-        onShowToast(`✓ Created Purchase Order ${newPO.id} in database!`);
+        onShowToast(isDraft ? `✓ Saved Purchase Order ${newPO.id} as Draft!` : `✓ Created Purchase Order ${newPO.id} in database!`);
       }
     } catch (err) {
       console.warn('Backend PO create error, saving locally:', err.message);
@@ -239,8 +286,13 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
         amount: `₹${Number(calculatedTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
         numericAmount: Number(calculatedTotal),
         itemsCount: qtyNum,
-        status: 'Pending',
+        status: isDraft ? 'Draft' : 'Pending',
         branch: formData.branch || 'Main Branch',
+        medicine: formData.medicine,
+        isCustomerOrder: formData.isCustomerOrder,
+        customerName: formData.customerName.trim(),
+        customerPhone: formData.customerPhone.trim(),
+        prescriptionRef: formData.prescriptionRef.trim(),
         createdBy: 'Manager',
       };
 
@@ -248,7 +300,7 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
       setModalVisible(false);
 
       if (onShowToast) {
-        onShowToast(`✓ Created Purchase Order ${newPO.id}!`);
+        onShowToast(isDraft ? `✓ Saved Purchase Order ${newPO.id} as Draft!` : `✓ Created Purchase Order ${newPO.id}!`);
       }
     }
   };
@@ -382,9 +434,69 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
             value={kpi.value}
             subtext={kpi.subtext}
             variant={kpi.variant}
-            onPress={() => handleKpiCardPress(kpi.key, kpi.label)}
+            onPress={() => handleKpiCardPress(kpi)}
           />
         ))}
+      </View>
+
+      {/* Primary Order Mode Tabs (All Orders, Customer Special Orders, Draft Orders) */}
+      <View style={[styles.primaryTabBar, isMobile && styles.primaryTabBarMobile]}>
+        <Pressable
+          onPress={() => {
+            setActiveTab('all');
+            setSelectedStatus('All Statuses');
+            if (onShowToast) onShowToast('Showing All Purchase Orders');
+          }}
+          style={[styles.primaryTabItem, activeTab === 'all' && styles.primaryTabItemActive]}
+        >
+          <Text style={styles.primaryTabIcon}>📦</Text>
+          <Text style={[styles.primaryTabText, activeTab === 'all' && styles.primaryTabTextActive]}>
+            All Purchase Orders
+          </Text>
+          <View style={[styles.primaryTabCountBadge, activeTab === 'all' && styles.primaryTabCountBadgeActive]}>
+            <Text style={[styles.primaryTabCountText, activeTab === 'all' && styles.primaryTabCountTextActive]}>
+              {orders.length}
+            </Text>
+          </View>
+        </Pressable>
+
+        <Pressable
+          onPress={() => {
+            setActiveTab('customer_orders');
+            setSelectedStatus('All Statuses');
+            if (onShowToast) onShowToast('Showing Customer Special Orders');
+          }}
+          style={[styles.primaryTabItem, activeTab === 'customer_orders' && styles.primaryTabItemActive]}
+        >
+          <Text style={styles.primaryTabIcon}>👤</Text>
+          <Text style={[styles.primaryTabText, activeTab === 'customer_orders' && styles.primaryTabTextActive]}>
+            Customer Special Orders
+          </Text>
+          <View style={[styles.primaryTabCountBadge, activeTab === 'customer_orders' && styles.primaryTabCountBadgeActive]}>
+            <Text style={[styles.primaryTabCountText, activeTab === 'customer_orders' && styles.primaryTabCountTextActive]}>
+              {customerOrdersCount}
+            </Text>
+          </View>
+        </Pressable>
+
+        <Pressable
+          onPress={() => {
+            setActiveTab('drafts');
+            setSelectedStatus('Draft');
+            if (onShowToast) onShowToast('Showing Draft Purchase Orders');
+          }}
+          style={[styles.primaryTabItem, activeTab === 'drafts' && styles.primaryTabItemActive]}
+        >
+          <Text style={styles.primaryTabIcon}>📝</Text>
+          <Text style={[styles.primaryTabText, activeTab === 'drafts' && styles.primaryTabTextActive]}>
+            Draft Orders
+          </Text>
+          <View style={[styles.primaryTabCountBadge, activeTab === 'drafts' && styles.primaryTabCountBadgeActive]}>
+            <Text style={[styles.primaryTabCountText, activeTab === 'drafts' && styles.primaryTabCountTextActive]}>
+              {draftCount}
+            </Text>
+          </View>
+        </Pressable>
       </View>
 
       {/* Main Table Card */}
@@ -394,7 +506,7 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
           <View style={styles.searchBox}>
             <TextInput
               style={styles.searchInput}
-              placeholder="Search PO number, supplier or branch..."
+              placeholder="Search PO number, supplier, customer or medicine..."
               placeholderTextColor="#94A3B8"
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -489,7 +601,7 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
             {filteredOrders.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyTitle}>No purchase orders found</Text>
-                <Text style={styles.emptySubtitle}>Try changing your search keywords.</Text>
+                <Text style={styles.emptySubtitle}>Try changing your search keywords or filter tab.</Text>
               </View>
             ) : (
               filteredOrders.map((po) => {
@@ -508,6 +620,21 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
                         </Text>
                       </View>
                     </View>
+
+                    {/* Customer Requisition Banner if Customer Order */}
+                    {(po.isCustomerOrder || po.customerName) && (
+                      <View style={styles.mobileCustomerRow}>
+                        <Text style={styles.mobileCustomerTag}>👤 CUSTOMER SPECIAL ORDER</Text>
+                        <Text style={styles.mobileCustomerText} numberOfLines={1}>
+                          {po.customerName} {po.customerPhone ? `• ${po.customerPhone}` : ''}
+                        </Text>
+                        {po.prescriptionRef ? (
+                          <Text style={styles.mobileRxText} numberOfLines={1}>
+                            📋 {po.prescriptionRef}
+                          </Text>
+                        ) : null}
+                      </View>
+                    )}
 
                     {/* PO Details Grid */}
                     <View style={styles.mobileGrid}>
@@ -556,21 +683,22 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
               {/* Header */}
               <View style={styles.tableHeader}>
                 <Text style={[styles.thCell, { width: 110 }]}>PO NUMBER</Text>
-                <Text style={[styles.thCell, { width: 180 }]}>SUPPLIER</Text>
-                <Text style={[styles.thCell, { width: 120 }]}>ORDER DATE</Text>
-                <Text style={[styles.thCell, { width: 120 }]}>EXPECTED</Text>
-                <Text style={[styles.thCell, { width: 120, textAlign: 'right' }]}>AMOUNT</Text>
-                <Text style={[styles.thCell, { width: 80, textAlign: 'center' }]}>ITEMS</Text>
-                <Text style={[styles.thCell, { width: 130 }]}>BRANCH</Text>
-                <Text style={[styles.thCell, { width: 130, textAlign: 'center' }]}>STATUS</Text>
-                <Text style={[styles.thCell, { width: 110, textAlign: 'center' }]}>ACTION</Text>
+                <Text style={[styles.thCell, { width: 170 }]}>SUPPLIER</Text>
+                <Text style={[styles.thCell, { width: 170 }]}>ORDERED FOR</Text>
+                <Text style={[styles.thCell, { width: 110 }]}>ORDER DATE</Text>
+                <Text style={[styles.thCell, { width: 110 }]}>EXPECTED</Text>
+                <Text style={[styles.thCell, { width: 110, textAlign: 'right' }]}>AMOUNT</Text>
+                <Text style={[styles.thCell, { width: 70, textAlign: 'center' }]}>ITEMS</Text>
+                <Text style={[styles.thCell, { width: 120 }]}>BRANCH</Text>
+                <Text style={[styles.thCell, { width: 120, textAlign: 'center' }]}>STATUS</Text>
+                <Text style={[styles.thCell, { width: 100, textAlign: 'center' }]}>ACTION</Text>
               </View>
 
               {/* Rows */}
               {filteredOrders.length === 0 ? (
                 <View style={styles.emptyState}>
                   <Text style={styles.emptyTitle}>No purchase orders found</Text>
-                  <Text style={styles.emptySubtitle}>Try changing your search keywords.</Text>
+                  <Text style={styles.emptySubtitle}>Try changing your search keywords or active tab.</Text>
                 </View>
               ) : (
                 filteredOrders.map((po, index) => {
@@ -584,21 +712,42 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
                       ]}
                     >
                       <Text style={[styles.tdCell, styles.poId, { width: 110 }]}>{po.id}</Text>
-                      <Text style={[styles.tdCell, styles.supplierName, { width: 180 }]} numberOfLines={1}>
+                      <Text style={[styles.tdCell, styles.supplierName, { width: 170 }]} numberOfLines={1}>
                         {po.supplier}
                       </Text>
-                      <Text style={[styles.tdCell, { width: 120 }]}>{po.orderDate}</Text>
-                      <Text style={[styles.tdCell, { width: 120 }]}>{po.expectedDate}</Text>
-                      <Text style={[styles.tdCell, styles.amountText, { width: 120, textAlign: 'right' }]}>
+
+                      {/* Ordered For: Customer or General Stock */}
+                      <View style={[{ width: 170, paddingHorizontal: 10, justifyContent: 'center' }]}>
+                        {po.isCustomerOrder || po.customerName ? (
+                          <View style={styles.tableCustomerBadge}>
+                            <Text style={styles.tableCustomerName} numberOfLines={1}>
+                              👤 {po.customerName}
+                            </Text>
+                            {po.customerPhone ? (
+                              <Text style={styles.tableCustomerPhone} numberOfLines={1}>
+                                {po.customerPhone}
+                              </Text>
+                            ) : null}
+                          </View>
+                        ) : (
+                          <View style={styles.tableStockBadge}>
+                            <Text style={styles.tableStockText}>🏢 General Stock</Text>
+                          </View>
+                        )}
+                      </View>
+
+                      <Text style={[styles.tdCell, { width: 110 }]}>{po.orderDate}</Text>
+                      <Text style={[styles.tdCell, { width: 110 }]}>{po.expectedDate}</Text>
+                      <Text style={[styles.tdCell, styles.amountText, { width: 110, textAlign: 'right' }]}>
                         {po.amount}
                       </Text>
-                      <Text style={[styles.tdCell, { width: 80, textAlign: 'center', fontWeight: '600' }]}>
+                      <Text style={[styles.tdCell, { width: 70, textAlign: 'center', fontWeight: '600' }]}>
                         {po.itemsCount}
                       </Text>
-                      <Text style={[styles.tdCell, { width: 130 }]}>{po.branch}</Text>
+                      <Text style={[styles.tdCell, { width: 120 }]}>{po.branch}</Text>
 
                       {/* Status Badge */}
-                      <View style={[styles.statusWrapper, { width: 130 }]}>
+                      <View style={[styles.statusWrapper, { width: 120 }]}>
                         <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
                           <Text style={[styles.statusBadgeText, { color: badge.text }]}>
                             {po.status}
@@ -607,7 +756,7 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
                       </View>
 
                       {/* Action Button: 3 Dots (⋮) */}
-                      <View style={[styles.actionCell, { width: 110 }]}>
+                      <View style={[styles.actionCell, { width: 100 }]}>
                         <Pressable
                           onPress={() => handleOpenActionMenu(po)}
                           style={styles.actionDotsButton}
@@ -646,6 +795,129 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
             </View>
 
             <ScrollView style={styles.modalBody}>
+              {/* Order Purpose / Type Switcher */}
+              <View style={styles.modalOrderTypeRow}>
+                <Pressable
+                  onPress={() => setFormData((p) => ({ ...p, isCustomerOrder: false }))}
+                  style={[
+                    styles.orderTypeBtn,
+                    !formData.isCustomerOrder && styles.orderTypeBtnActive,
+                  ]}
+                >
+                  <Text style={styles.orderTypeBtnIcon}>📦</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.orderTypeBtnTitle, !formData.isCustomerOrder && styles.orderTypeBtnTitleActive]}>
+                      General Pharmacy Stock
+                    </Text>
+                    <Text style={styles.orderTypeBtnSubtitle}>Standard warehouse replenishment</Text>
+                  </View>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => setFormData((p) => ({ ...p, isCustomerOrder: true }))}
+                  style={[
+                    styles.orderTypeBtn,
+                    formData.isCustomerOrder && styles.orderTypeBtnActive,
+                  ]}
+                >
+                  <Text style={styles.orderTypeBtnIcon}>👤</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.orderTypeBtnTitle, formData.isCustomerOrder && styles.orderTypeBtnTitleActive]}>
+                      Customer / Patient Order
+                    </Text>
+                    <Text style={styles.orderTypeBtnSubtitle}>Procuring medicine requested by customer</Text>
+                  </View>
+                </Pressable>
+              </View>
+
+              {/* Customer Specific Order Details Card (when isCustomerOrder is true) */}
+              {formData.isCustomerOrder && (
+                <View style={styles.customerOrderBox}>
+                  <View style={styles.customerOrderBoxHeader}>
+                    <Text style={styles.customerOrderBoxTitle}>👤 Customer / Patient Information</Text>
+                    <Text style={styles.customerOrderBoxSub}>Select an existing customer or enter details</Text>
+                  </View>
+
+                  {/* Quick Select Patient Chips */}
+                  <View style={styles.quickPatientRow}>
+                    {[
+                      { name: 'Ayesha Khan', phone: '98765 43210' },
+                      { name: 'Rajesh Sharma', phone: '98220 11450' },
+                      { name: 'Suresh Patil', phone: '98220 00000' },
+                      { name: 'Ananya Patel', phone: '98112 33445' },
+                    ].map((cust) => (
+                      <Pressable
+                        key={cust.name}
+                        onPress={() =>
+                          setFormData((p) => ({
+                            ...p,
+                            customerName: cust.name,
+                            customerPhone: cust.phone,
+                          }))
+                        }
+                        style={[
+                          styles.quickPatientChip,
+                          formData.customerName === cust.name && styles.quickPatientChipActive,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.quickPatientChipText,
+                            formData.customerName === cust.name && styles.quickPatientChipTextActive,
+                          ]}
+                        >
+                          {cust.name}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+
+                  <View style={styles.formRow}>
+                    <View style={styles.formFieldHalf}>
+                      <Text style={styles.fieldLabel}>
+                        Customer Name <Text style={styles.reqStar}>*</Text>
+                      </Text>
+                      <TextInput
+                        style={styles.modalInput}
+                        placeholder="e.g. Rajesh Sharma"
+                        placeholderTextColor="#94A3B8"
+                        value={formData.customerName}
+                        onChangeText={(t) => {
+                          setFormData((p) => ({ ...p, customerName: t }));
+                          if (formErrors.customerName) setFormErrors((p) => ({ ...p, customerName: null }));
+                        }}
+                      />
+                      {formErrors.customerName && (
+                        <Text style={styles.errorText}>{formErrors.customerName}</Text>
+                      )}
+                    </View>
+
+                    <View style={styles.formFieldHalf}>
+                      <Text style={styles.fieldLabel}>Customer Contact / Phone</Text>
+                      <TextInput
+                        style={styles.modalInput}
+                        placeholder="e.g. +91 98220 12345"
+                        placeholderTextColor="#94A3B8"
+                        keyboardType="phone-pad"
+                        value={formData.customerPhone}
+                        onChangeText={(t) => setFormData((p) => ({ ...p, customerPhone: t }))}
+                      />
+                    </View>
+                  </View>
+
+                  <View style={styles.fieldGroup}>
+                    <Text style={styles.fieldLabel}>Prescription / Rx Reference (Optional)</Text>
+                    <TextInput
+                      style={styles.modalInput}
+                      placeholder="e.g. Rx-2026-1025 (Dr. Farooq Siddiqui)"
+                      placeholderTextColor="#94A3B8"
+                      value={formData.prescriptionRef}
+                      onChangeText={(t) => setFormData((p) => ({ ...p, prescriptionRef: t }))}
+                    />
+                  </View>
+                </View>
+              )}
+
               <View style={styles.formRow}>
                 <View style={styles.formFieldHalf}>
                   <Text style={styles.fieldLabel}>
@@ -690,6 +962,9 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
                     value={formData.medicine}
                     onChangeText={(t) => setFormData((p) => ({ ...p, medicine: t }))}
                   />
+                  {formErrors.medicine && (
+                    <Text style={styles.errorText}>{formErrors.medicine}</Text>
+                  )}
                 </View>
               </View>
 
@@ -741,9 +1016,23 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </Pressable>
+
+              {/* Save as Draft Button */}
               <Pressable
-                onPress={handleCreatePO}
+                onPress={() => handleCreatePO('Draft')}
+                style={styles.draftModalButton}
+                accessibilityRole="button"
+                accessibilityLabel="Save as Draft"
+              >
+                <Text style={styles.draftModalButtonText}>📝 Save as Draft</Text>
+              </Pressable>
+
+              {/* Create / Submit Active PO */}
+              <Pressable
+                onPress={() => handleCreatePO('Pending')}
                 style={styles.submitModalButton}
+                accessibilityRole="button"
+                accessibilityLabel="Create PO"
               >
                 <Text style={styles.submitModalButtonText}>Create PO</Text>
               </Pressable>
@@ -1264,6 +1553,20 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#64748B',
   },
+  draftModalButton: {
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingVertical: 9,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    cursor: 'pointer',
+  },
+  draftModalButtonText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#475569',
+  },
   submitModalButton: {
     backgroundColor: '#0F766E',
     paddingVertical: 9,
@@ -1573,6 +1876,222 @@ const styles = StyleSheet.create({
   closeDevGuideModalBtnText: {
     color: '#FFFFFF',
     fontSize: 12.5,
+    fontWeight: '700',
+  },
+
+  /* Primary Order Mode Tabs */
+  primaryTabBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#FFFFFF',
+    padding: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    flexWrap: 'wrap',
+  },
+  primaryTabBarMobile: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: 8,
+  },
+  primaryTabItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 9,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: 'transparent',
+    cursor: 'pointer',
+  },
+  primaryTabItemActive: {
+    backgroundColor: '#0F766E',
+    shadowColor: '#0F766E',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  primaryTabIcon: {
+    fontSize: 16,
+  },
+  primaryTabText: {
+    fontSize: 13.5,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  primaryTabTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  primaryTabCountBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+  },
+  primaryTabCountBadgeActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+  },
+  primaryTabCountText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  primaryTabCountTextActive: {
+    color: '#FFFFFF',
+  },
+
+  /* Customer Badge in Table & Cards */
+  tableCustomerBadge: {
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  tableCustomerName: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1D4ED8',
+  },
+  tableCustomerPhone: {
+    fontSize: 10.5,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  tableStockBadge: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  tableStockText: {
+    fontSize: 11.5,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+
+  /* Mobile Customer Row */
+  mobileCustomerRow: {
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 10,
+    gap: 3,
+  },
+  mobileCustomerTag: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#1D4ED8',
+    letterSpacing: 0.5,
+  },
+  mobileCustomerText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  mobileRxText: {
+    fontSize: 11.5,
+    color: '#475569',
+    fontStyle: 'italic',
+  },
+
+  /* Order Type Switcher in Modal */
+  modalOrderTypeRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+    flexWrap: 'wrap',
+  },
+  orderTypeBtn: {
+    flex: 1,
+    minWidth: 200,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+    cursor: 'pointer',
+  },
+  orderTypeBtnActive: {
+    borderColor: '#0F766E',
+    backgroundColor: '#F0FDFA',
+  },
+  orderTypeBtnIcon: {
+    fontSize: 22,
+  },
+  orderTypeBtnTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  orderTypeBtnTitleActive: {
+    color: '#0F766E',
+    fontWeight: '800',
+  },
+  orderTypeBtnSubtitle: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+
+  /* Customer Details Box in Modal */
+  customerOrderBox: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1.5,
+    borderColor: '#BBF7D0',
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 16,
+    gap: 12,
+  },
+  customerOrderBoxHeader: {
+    marginBottom: 4,
+  },
+  customerOrderBoxTitle: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#15803D',
+  },
+  customerOrderBoxSub: {
+    fontSize: 11,
+    color: '#166534',
+    marginTop: 1,
+  },
+  quickPatientRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  quickPatientChip: {
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+    cursor: 'pointer',
+  },
+  quickPatientChipActive: {
+    backgroundColor: '#15803D',
+    borderColor: '#15803D',
+  },
+  quickPatientChipText: {
+    fontSize: 11.5,
+    color: '#15803D',
+    fontWeight: '600',
+  },
+  quickPatientChipTextActive: {
+    color: '#FFFFFF',
     fontWeight: '700',
   },
 });

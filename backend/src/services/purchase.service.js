@@ -35,6 +35,7 @@ const getPurchases = async ({
   });
 
   const STATUS_MAP = {
+    DRAFT: 'Draft',
     PENDING: 'Pending',
     APPROVED: 'Approved',
     RECEIVED: 'Received',
@@ -54,6 +55,20 @@ const getPurchases = async ({
     const formattedAmt = `₹${rawAmt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     const formattedStatus = STATUS_MAP[p.status] || p.status || 'Pending';
 
+    let customerName = null;
+    let customerPhone = null;
+    let prescriptionRef = null;
+    let isCustomerOrder = false;
+    if (p.notes && p.notes.includes('[Customer:')) {
+      const match = p.notes.match(/\[Customer:\s*([^|\]]+)(?:\|\s*([^|\]]+))?(?:\|\s*Rx:\s*([^\]]+))?\]/);
+      if (match) {
+        isCustomerOrder = true;
+        customerName = match[1]?.trim();
+        customerPhone = match[2]?.trim() || null;
+        prescriptionRef = match[3]?.trim() || null;
+      }
+    }
+
     return {
       id: p.purchase_number || p.id,
       dbId: p.id,
@@ -67,6 +82,11 @@ const getPurchases = async ({
       branch: p.branch_name || 'Main Branch',
       status: formattedStatus,
       rawStatus: p.status,
+      notes: p.notes || '',
+      customerName,
+      customerPhone,
+      prescriptionRef,
+      isCustomerOrder,
       createdBy: p.created_by_name || 'Manager',
     };
   });
@@ -203,6 +223,13 @@ const createPurchase = async (purchaseData) => {
     finalPO = `PO-${timestamp}`;
   }
 
+  // Format customer tag if customer-specific order
+  let finalNotes = notes || null;
+  if (purchaseData.customerName) {
+    const custTag = `[Customer: ${purchaseData.customerName.trim()}${purchaseData.customerPhone ? ' | ' + purchaseData.customerPhone.trim() : ''}${purchaseData.prescriptionRef ? ' | Rx: ' + purchaseData.prescriptionRef.trim() : ''}]`;
+    finalNotes = finalNotes ? `${custTag} ${finalNotes}` : custTag;
+  }
+
   const createdPurchase = await purchaseRepo.createPurchase({
     organisationId,
     purchaseNumber: finalPO,
@@ -211,7 +238,7 @@ const createPurchase = async (purchaseData) => {
     orderDate,
     expectedDate,
     status: (status || 'PENDING').toUpperCase(),
-    notes,
+    notes: finalNotes,
     createdBy,
     items: resolvedItems,
   });
