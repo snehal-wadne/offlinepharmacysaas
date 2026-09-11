@@ -1,6 +1,27 @@
-import React from 'react';
-import { View, Text, StatusBar, StyleSheet, Platform, Pressable } from 'react-native';
-import AppNavigator from './src/navigation/AppNavigator';
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  StatusBar,
+  StyleSheet,
+  Platform,
+  Pressable,
+} from "react-native";
+import AppNavigator from "./src/navigation/AppNavigator";
+import SuperAdminLayout from "./src/app/superadmin/_layout";
+
+function isSuperAdminUrl() {
+  if (typeof window !== "undefined" && window.location) {
+    const path = (window.location.pathname || "").toLowerCase();
+    const hash = (window.location.hash || "").toLowerCase();
+    return (
+      path.startsWith("/superadmin") ||
+      hash.startsWith("#/superadmin") ||
+      hash.startsWith("#superadmin")
+    );
+  }
+  return false;
+}
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -13,7 +34,11 @@ class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error('PharmaFlow ERP ErrorBoundary caught error:', error, errorInfo);
+    console.error(
+      "PharmaFlow ERP ErrorBoundary caught error:",
+      error,
+      errorInfo,
+    );
   }
 
   render() {
@@ -39,11 +64,23 @@ class ErrorBoundary extends React.Component {
 }
 
 export default function App() {
+  const [isSuperAdmin, setIsSuperAdmin] = useState(isSuperAdminUrl);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const handleLocationChange = () => {
+        setIsSuperAdmin(isSuperAdminUrl());
+      };
+      window.addEventListener("popstate", handleLocationChange);
+      return () => window.removeEventListener("popstate", handleLocationChange);
+    }
+  }, []);
+
   return (
     <ErrorBoundary>
       <View style={styles.container}>
         <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-        <AppNavigator />
+        {isSuperAdmin ? <SuperAdminLayout /> : <AppNavigator />}
       </View>
     </ErrorBoundary>
   );
@@ -52,21 +89,21 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
     ...Platform.select({
       web: {
-        height: '100vh',
-        width: '100vw',
-        overflow: 'hidden',
+        height: "100vh",
+        width: "100vw",
+        overflow: "hidden",
       },
     }),
   },
   errorContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     padding: 24,
-    backgroundColor: '#FEF2F2',
+    backgroundColor: "#FEF2F2",
   },
   errorEmoji: {
     fontSize: 48,
@@ -74,34 +111,33 @@ const styles = StyleSheet.create({
   },
   errorTitle: {
     fontSize: 20,
-    fontWeight: '800',
-    color: '#991B1B',
+    fontWeight: "800",
+    color: "#991B1B",
     marginBottom: 8,
   },
   errorMessage: {
     fontSize: 13,
-    color: '#B91C1C',
-    textAlign: 'center',
+    color: "#B91C1C",
+    textAlign: "center",
     maxWidth: 600,
     marginBottom: 20,
-    fontFamily: Platform.select({ web: 'monospace', default: 'System' }),
-    backgroundColor: '#FFFFFF',
+    fontFamily: Platform.select({ web: "monospace", default: "System" }),
+    backgroundColor: "#FFFFFF",
     padding: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: "#FECACA",
   },
   retryButton: {
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   retryButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
+    color: "#FFFFFF",
+    fontWeight: "700",
     fontSize: 14,
   },
 });
-

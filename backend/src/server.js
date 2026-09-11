@@ -15,7 +15,12 @@ const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
 
-const { pool, testConnection, isDbOnline, getDbStatus } = require("./db/connection");
+const {
+  pool,
+  testConnection,
+  isDbOnline,
+  getDbStatus,
+} = require("./db/connection");
 const { autoInitDatabase } = require("./db/auto-init");
 const { connectRedis, disconnectRedis } = require("./cache/redis");
 const localStore = require("./db/localStore");
@@ -29,7 +34,13 @@ const PORT = Number(process.env.PORT || 5000);
  * ------------------------------------------------------------
  */
 app.use(cors());
-app.use(express.json());
+app.use(
+  express.json({
+    verify: (req, res, buf) => {
+      req.rawBody = buf;
+    },
+  }),
+);
 
 /**
  * ------------------------------------------------------------
@@ -70,29 +81,31 @@ app.get("/health/db", async (req, res) => {
  * ROUTE REGISTRATION
  * ------------------------------------------------------------
  */
-const purchaseRoutes = require('./routes/purchase.routes');
-const goodsReceiptRoutes = require('./routes/goods-receipt.routes');
-const supplierRoutes = require('./routes/supplier.routes');
-const inventoryRoutes = require('./routes/inventory.routes');
-const cashierRoutes = require('./routes/cashier.routes');
-const syncRoutes = require('./routes/sync.routes');
-const authRoutes = require('./routes/auth.routes');
-const authController = require('./controllers/auth.controller');
-const branchRoutes = require('./routes/branch.routes');
-const customerRoutes = require('./routes/customer.routes');
+const purchaseRoutes = require("./routes/purchase.routes");
+const goodsReceiptRoutes = require("./routes/goods-receipt.routes");
+const supplierRoutes = require("./routes/supplier.routes");
+const inventoryRoutes = require("./routes/inventory.routes");
+const cashierRoutes = require("./routes/cashier.routes");
+const syncRoutes = require("./routes/sync.routes");
+const authRoutes = require("./routes/auth.routes");
+const authController = require("./controllers/auth.controller");
+const branchRoutes = require("./routes/branch.routes");
+const customerRoutes = require("./routes/customer.routes");
+const superadminRoutes = require("./routes/superadmin.routes");
 
-app.use('/api/purchases', purchaseRoutes);
-app.use('/api/goods-receipts', goodsReceiptRoutes);
-app.use('/api/suppliers', supplierRoutes);
-app.use('/api/inventory', inventoryRoutes);
-app.use('/api/cashier', cashierRoutes);
-app.use('/api/sync', syncRoutes);
-app.use('/api/auth', authRoutes);
-app.use('/api/branches', branchRoutes);
-app.use('/branches', branchRoutes);
-app.use('/api/customers', customerRoutes);
-app.use('/customers', customerRoutes);
-app.post('/api/login', authController.login);
+app.use("/api/purchases", purchaseRoutes);
+app.use("/api/goods-receipts", goodsReceiptRoutes);
+app.use("/api/suppliers", supplierRoutes);
+app.use("/api/inventory", inventoryRoutes);
+app.use("/api/cashier", cashierRoutes);
+app.use("/api/sync", syncRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/branches", branchRoutes);
+app.use("/branches", branchRoutes);
+app.use("/api/customers", customerRoutes);
+app.use("/customers", customerRoutes);
+app.use("/api/superadmin", superadminRoutes);
+app.post("/api/login", authController.login);
 
 /**
  * ------------------------------------------------------------
@@ -108,7 +121,7 @@ const startServer = () => {
   console.log("=================================================");
 
   // 1. Start HTTP Server immediately (listen on all interfaces)
-  const server = app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, "0.0.0.0", () => {
     console.log(`✨ Backend server is listening on port ${PORT}`);
     console.log(`📡 Local Offline Engine: ACTIVE (Zero internet dependency)`);
     console.log(`🏪 Cashier API: http://localhost:${PORT}/api/cashier`);
@@ -117,10 +130,12 @@ const startServer = () => {
     console.log("=================================================");
   });
 
-  server.on('error', (err) => {
-    if (err.code === 'EADDRINUSE') {
+  server.on("error", (err) => {
+    if (err.code === "EADDRINUSE") {
       console.error(`❌ Port ${PORT} is already in use by another process.`);
-      console.error(`Close the existing process on port ${PORT} or change PORT in .env`);
+      console.error(
+        `Close the existing process on port ${PORT} or change PORT in .env`,
+      );
     } else {
       console.error(`❌ Server startup error:`, err.message);
     }
@@ -130,9 +145,13 @@ const startServer = () => {
   testConnection()
     .then((connected) => {
       if (connected) {
-        console.log(`✅ PostgreSQL connected: ${process.env.DB_DATABASE || 'falah_pharmacy'}`);
+        console.log(
+          `✅ PostgreSQL connected: ${process.env.DB_DATABASE || "falah_pharmacy"}`,
+        );
       } else {
-        console.log("ℹ️  PostgreSQL offline: Running seamlessly in LocalStore offline mode.");
+        console.log(
+          "ℹ️  PostgreSQL offline: Running seamlessly in LocalStore offline mode.",
+        );
       }
     })
     .catch(() => {});
@@ -142,5 +161,3 @@ const startServer = () => {
 };
 
 startServer();
-
-

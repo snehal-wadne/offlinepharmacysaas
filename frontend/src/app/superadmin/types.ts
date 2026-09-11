@@ -3,13 +3,16 @@ export type PlanName =
   | 'Standard'
   | 'Professional'
   | 'Enterprise'
-  | 'Custom';
+  | 'Custom'
+  | (string & {});
 
 export type PharmacyStatus =
   | 'Active'
   | 'Expiring Soon'
   | 'Expired'
-  | 'Deactivated';
+  | 'Deactivated'
+  | 'Pending Payment'
+  | (string & {});
 
 export type Pharmacy = {
   id: string;

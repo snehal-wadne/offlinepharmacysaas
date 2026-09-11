@@ -16,7 +16,29 @@ export default function SuperAdminDashboard() {
     activePharmacies,
     expiringPharmacies,
     expiredPharmacies,
+    metrics,
+    charts,
   } = useSuperAdmin();
+
+  const formattedRevenue = metrics?.monthlyRevenue !== undefined
+    ? `₹${metrics.monthlyRevenue.toLocaleString('en-IN')}`
+    : '₹12,45,000';
+
+  const usersDisplay = metrics?.totalUsersUsed !== undefined
+    ? `${metrics.totalUsersUsed} / ${metrics.totalUserLimit || 1800}`
+    : '1,248 / 1,800';
+
+  const userQuotaPercent = metrics?.totalUserLimit && metrics.totalUserLimit > 0
+    ? Math.round((metrics.totalUsersUsed / metrics.totalUserLimit) * 100)
+    : 69;
+
+  const activeCount = charts?.statusDistribution?.active ?? activePharmacies.length;
+  const expiringCount = charts?.statusDistribution?.expiringSoon ?? expiringPharmacies.length;
+  const expiredCount = charts?.statusDistribution?.expired ?? expiredPharmacies.length;
+  const totalDistribution = Math.max(activeCount + expiringCount + expiredCount, 1);
+  const activePercent = ((activeCount / totalDistribution) * 100).toFixed(1);
+  const expiringPercent = ((expiringCount / totalDistribution) * 100).toFixed(1);
+  const expiredPercent = ((expiredCount / totalDistribution) * 100).toFixed(1);
 
   return (
     <ScrollView
@@ -37,7 +59,7 @@ export default function SuperAdminDashboard() {
       <View style={styles.statsGrid}>
         <KpiCard
           title="Total Pharmacies"
-          value={String(pharmacies.length)}
+          value={String(metrics?.totalPharmacies ?? pharmacies.length)}
           subtitle="+3 onboarded this month"
           trend="▲ +12% MoM"
           trendPositive={true}
@@ -48,9 +70,9 @@ export default function SuperAdminDashboard() {
 
         <KpiCard
           title="Active Subscriptions"
-          value={String(activePharmacies.length)}
+          value={String(metrics?.activeSubscriptions ?? activePharmacies.length)}
           subtitle={`${Math.round(
-            (activePharmacies.length / pharmacies.length) * 100,
+            (activePharmacies.length / Math.max(pharmacies.length, 1)) * 100,
           )}% active retention`}
           trend="● 80% Healthy"
           trendPositive={true}
@@ -62,7 +84,7 @@ export default function SuperAdminDashboard() {
 
         <KpiCard
           title="Expiring Soon"
-          value={String(expiringPharmacies.length)}
+          value={String(metrics?.expiringSoon ?? expiringPharmacies.length)}
           subtitle="Expires within 7 days"
           trend="⚠ Action Needed"
           trendPositive={false}
@@ -73,7 +95,7 @@ export default function SuperAdminDashboard() {
 
         <KpiCard
           title="Monthly SaaS Revenue"
-          value="₹12,45,000"
+          value={formattedRevenue}
           subtitle="+18.7% revenue growth"
           trend="▲ +18.7%"
           trendPositive={true}
@@ -84,13 +106,13 @@ export default function SuperAdminDashboard() {
 
         <KpiCard
           title="Total Users (SaaS)"
-          value="1,248 / 1,800"
-          subtitle="69% platform quota used"
-          trend="● 69% Quota"
+          value={usersDisplay}
+          subtitle={`${userQuotaPercent}% platform quota used`}
+          trend={`● ${userQuotaPercent}% Quota`}
           trendPositive={true}
           color="#7C3AED"
           icon="▦"
-          progress={69}
+          progress={userQuotaPercent}
           onPress={() => router.push('/superadmin/pharmacies')}
         />
       </View>
@@ -100,28 +122,27 @@ export default function SuperAdminDashboard() {
           <View style={styles.statusChart}>
             <View style={styles.chartRing}>
               <Text style={styles.chartNumber}>
-                {activePharmacies.length}
+                {activeCount}
               </Text>
               <Text style={styles.chartLabel}>Active</Text>
             </View>
 
             <View style={styles.legend}>
               <Text style={styles.activeLegend}>
-                ● Active {activePharmacies.length} (90.5%)
+                ● Active {activeCount} ({activePercent}%)
               </Text>
               <Text style={styles.expiringLegend}>
-                ● Expiring Soon {expiringPharmacies.length} (4.8%)
+                ● Expiring Soon {expiringCount} ({expiringPercent}%)
               </Text>
               <Text style={styles.expiredLegend}>
-                ● Expired {expiredPharmacies.length} (4.8%)
+                ● Expired {expiredCount} ({expiredPercent}%)
               </Text>
             </View>
           </View>
 
           <View style={styles.alertBox}>
             <Text style={styles.alertText}>
-              {expiringPharmacies.length} subscriptions are expiring within
-              30 days.
+              {expiringCount} subscriptions are expiring within 30 days.
             </Text>
           </View>
         </Panel>
@@ -140,34 +161,56 @@ export default function SuperAdminDashboard() {
           </View>
 
           <View style={styles.dateLabels}>
-            <Text>01 Sep</Text>
-            <Text>05 Sep</Text>
-            <Text>10 Sep</Text>
-            <Text>15 Sep</Text>
-            <Text>20 Sep</Text>
-            <Text>25 Sep</Text>
-            <Text>30 Sep</Text>
+            {charts?.trend && charts.trend.length > 0 ? (
+              charts.trend.map((t: any) => <Text key={t.month_key}>{t.month}</Text>)
+            ) : (
+              <>
+                <Text>Apr</Text>
+                <Text>May</Text>
+                <Text>Jun</Text>
+                <Text>Jul</Text>
+                <Text>Aug</Text>
+                <Text>Sep</Text>
+              </>
+            )}
           </View>
 
           <View style={styles.trendFooter}>
             <View>
               <Text style={styles.smallText}>New Pharmacies</Text>
-              <Text style={styles.greenValue}>+5 +12%</Text>
+              <Text style={styles.greenValue}>
+                +{metrics?.totalPharmacies ? metrics.totalPharmacies : '14'}
+              </Text>
             </View>
 
             <View>
               <Text style={styles.smallText}>New Subscriptions</Text>
-              <Text style={styles.greenValue}>+6 +20%</Text>
+              <Text style={styles.greenValue}>
+                +{metrics?.activeSubscriptions ? metrics.activeSubscriptions : '3'}
+              </Text>
             </View>
           </View>
         </Panel>
 
         <Panel title="Top Plans by Revenue">
-          <RevenueRow label="Professional" amount="₹5,20,000" color="#16A47A" />
-          <RevenueRow label="Standard" amount="₹3,65,000" color="#2563EB" />
-          <RevenueRow label="Custom" amount="₹1,85,000" color="#7C3AED" />
-          <RevenueRow label="Enterprise" amount="₹90,000" color="#D97706" />
-          <RevenueRow label="Basic" amount="₹85,000" color="#64748B" />
+          {charts?.topPlans && charts.topPlans.length > 0 ? (
+            charts.topPlans.slice(0, 5).map((plan: any, idx: number) => (
+              <RevenueRow
+                key={`${plan.plan_name}-${idx}`}
+                label={plan.plan_name}
+                amount={`₹${Number(plan.total_revenue || 0).toLocaleString('en-IN')}`}
+                color={plan.color_hex || '#2563EB'}
+              />
+            ))
+          ) : (
+            <>
+              <RevenueRow label="Professional" amount="₹5,20,000" color="#16A47A" />
+              <RevenueRow label="Standard" amount="₹3,65,000" color="#2563EB" />
+              <RevenueRow label="Custom" amount="₹1,85,000" color="#7C3AED" />
+              <RevenueRow label="Enterprise" amount="₹90,000" color="#D97706" />
+              <RevenueRow label="Basic" amount="₹85,000" color="#64748B" />
+            </>
+          )}
         </Panel>
       </View>
 
@@ -188,7 +231,19 @@ export default function SuperAdminDashboard() {
               <Text style={styles.rowText}>{pharmacy.adminName}</Text>
               <Text style={styles.rowText}>{pharmacy.plan}</Text>
               <Text style={styles.rowText}>{pharmacy.usersUsed}</Text>
-              <Text style={styles.activeText}>Active</Text>
+              <Text
+                style={
+                  pharmacy.status === 'Active'
+                    ? styles.activeText
+                    : pharmacy.status === 'Expiring Soon'
+                    ? styles.expiringLegend
+                    : pharmacy.status === 'Deactivated'
+                    ? styles.expiredLegend
+                    : styles.activeText
+                }
+              >
+                {pharmacy.status}
+              </Text>
             </Pressable>
           ))}
 

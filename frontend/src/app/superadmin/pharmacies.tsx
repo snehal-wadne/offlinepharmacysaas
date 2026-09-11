@@ -347,10 +347,11 @@ function PharmacyRow({
   pharmacy: Pharmacy;
   onView: () => void;
 }) {
+  const limit = pharmacy.userLimit > 0 ? pharmacy.userLimit : 1;
   const usagePercent = Math.min(
-    Math.round((pharmacy.usersUsed / pharmacy.userLimit) * 100),
+    Math.max(0, Math.round(((pharmacy.usersUsed || 0) / limit) * 100)),
     100,
-  );
+  ) || 0;
 
   return (
     <View style={styles.tableRow}>
@@ -411,7 +412,9 @@ function PharmacyRow({
             ? 'Expired'
             : pharmacy.status === 'Expiring Soon'
               ? '7 days left'
-              : 'Active subscription'}
+              : pharmacy.status === 'Pending Payment'
+                ? 'Pending Payment'
+                : 'Active subscription'}
         </Text>
       </View>
 
@@ -428,8 +431,8 @@ function PharmacyRow({
   );
 }
 
-function PlanBadge({ plan }: { plan: PlanName }) {
-  const colors: Record<PlanName, { bg: string; text: string }> = {
+function PlanBadge({ plan }: { plan: PlanName | string }) {
+  const colors: Record<string, { bg: string; text: string }> = {
     Basic: { bg: '#DBEAFE', text: '#2563EB' },
     Standard: { bg: '#FEF3C7', text: '#B45309' },
     Professional: { bg: '#EDE9FE', text: '#7C3AED' },
@@ -437,32 +440,36 @@ function PlanBadge({ plan }: { plan: PlanName }) {
     Custom: { bg: '#DFF5ED', text: '#047857' },
   };
 
+  const scheme = (plan && colors[plan]) || { bg: '#F1F5F9', text: '#475569' };
+
   return (
     <Text
       style={[
         styles.planBadge,
         {
-          backgroundColor: colors[plan].bg,
-          color: colors[plan].text,
+          backgroundColor: scheme.bg,
+          color: scheme.text,
         },
       ]}
     >
-      {plan}
+      {plan || 'Basic'}
     </Text>
   );
 }
 
-function StatusBadge({ status }: { status: PharmacyStatus }) {
-  const style =
-    status === 'Active'
-      ? styles.activeBadge
-      : status === 'Expired'
-        ? styles.expiredBadge
-        : status === 'Deactivated'
-          ? styles.deactivatedBadge
-          : styles.expiringBadge;
+function StatusBadge({ status }: { status: PharmacyStatus | string }) {
+  let style = styles.expiringBadge;
+  if (status === 'Active') {
+    style = styles.activeBadge;
+  } else if (status === 'Expired') {
+    style = styles.expiredBadge;
+  } else if (status === 'Deactivated') {
+    style = styles.deactivatedBadge;
+  } else if (status === 'Pending Payment' || status === 'PENDING_PAYMENT') {
+    style = styles.pendingBadge;
+  }
 
-  return <Text style={[styles.statusBadge, style]}>{status}</Text>;
+  return <Text style={[styles.statusBadge, style]}>{status || 'Active'}</Text>;
 }
 
 const styles = StyleSheet.create({
@@ -822,6 +829,10 @@ const styles = StyleSheet.create({
   deactivatedBadge: {
     color: '#475569',
     backgroundColor: '#E2E8F0',
+  },
+  pendingBadge: {
+    color: '#4338CA',
+    backgroundColor: '#E0E7FF',
   },
   viewText: {
     color: '#047857',

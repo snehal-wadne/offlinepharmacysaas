@@ -72,7 +72,25 @@ const NUMBER_PREFIXES = {
   REGISTER_SESSION: "REG",
   CASH_MOVEMENT: "PC",
   HELD_BILL: "HB",
+  PHARMACY_CODE: "PHARM",
+  SAAS_INVOICE: "INV-SAAS",
+  PLATFORM_PAYMENT: "PAY",
+  PLATFORM_REFUND: "RFD",
 };
+
+/**
+ * Platform-scoped sequence types.
+ *
+ * These sequences have:
+ *     organisation_id = NULL
+ *     branch_id = NULL
+ */
+const PLATFORM_SCOPED_TYPES = new Set([
+  "PHARMACY_CODE",
+  "SAAS_INVOICE",
+  "PLATFORM_PAYMENT",
+  "PLATFORM_REFUND",
+]);
 
 /**
  * Organisation-scoped sequence types.
@@ -113,6 +131,10 @@ const BRANCH_SCOPED_TYPES = new Set([
  * The schema allows branch_id to be NULL, but the meaning of
  * that NULL depends on the sequence type.
  *
+ * PLATFORM_SCOPED:
+ *     organisationId must be null
+ *     branchId must be null
+ *
  * CUSTOMER/PRESCRIPTION:
  *
  *     organisationId required
@@ -123,17 +145,31 @@ const BRANCH_SCOPED_TYPES = new Set([
  *     organisationId required
  *     branchId required
  *
- * @param {string} organisationId
+ * @param {string|null} organisationId
  * @param {string|null} branchId
  * @param {string} sequenceType
  */
 const validateSequenceScope = (organisationId, branchId, sequenceType) => {
-  if (!organisationId) {
-    throw new Error("organisationId is required.");
-  }
-
   if (!sequenceType || !NUMBER_PREFIXES[sequenceType]) {
     throw new Error(`Unsupported sequence type: ${sequenceType}.`);
+  }
+
+  if (PLATFORM_SCOPED_TYPES.has(sequenceType)) {
+    if (organisationId !== null && organisationId !== undefined) {
+      throw new Error(
+        `${sequenceType} sequences are platform-scoped and must not have an organisationId.`,
+      );
+    }
+    if (branchId !== null && branchId !== undefined) {
+      throw new Error(
+        `${sequenceType} sequences are platform-scoped and must not have a branchId.`,
+      );
+    }
+    return;
+  }
+
+  if (!organisationId) {
+    throw new Error("organisationId is required.");
   }
 
   if (ORGANISATION_SCOPED_TYPES.has(sequenceType)) {
@@ -282,7 +318,23 @@ const getNextBusinessNumber = async ({
   let insertQuery;
   let insertValues;
 
-  if (branchId === null || branchId === undefined) {
+  if (PLATFORM_SCOPED_TYPES.has(sequenceType)) {
+    insertQuery = `
+            INSERT INTO number_sequences (
+                organisation_id,
+                branch_id,
+                sequence_type,
+                next_number
+            )
+            VALUES (NULL, NULL, $1, $2)
+            ON CONFLICT (
+                sequence_type
+            )
+            WHERE organisation_id IS NULL AND branch_id IS NULL
+            DO NOTHING;
+        `;
+    insertValues = [sequenceType, INITIAL_SEQUENCE_NUMBER];
+  } else if (branchId === null || branchId === undefined) {
     insertQuery = `
             INSERT INTO number_sequences (
                 organisation_id,
@@ -332,21 +384,36 @@ const getNextBusinessNumber = async ({
    * Lock the sequence row.
    *
    * SELECT ... FOR UPDATE ensures that concurrent transactions
-   * requesting the same organisation/branch sequence cannot
-   * receive the same business number.
+   * requesting the same sequence cannot receive the same business number.
    */
-  const lockQuery = `
-        SELECT
-            id,
-            next_number
-        FROM number_sequences
-        WHERE organisation_id = $1
-          AND branch_id IS NOT DISTINCT FROM $2
-          AND sequence_type = $3
-        FOR UPDATE;
-    `;
+  let lockQuery;
+  let lockValues;
 
-  const lockValues = [organisationId, branchId, sequenceType];
+  if (PLATFORM_SCOPED_TYPES.has(sequenceType)) {
+    lockQuery = `
+            SELECT
+                id,
+                next_number
+            FROM number_sequences
+            WHERE organisation_id IS NULL
+              AND branch_id IS NULL
+              AND sequence_type = $1
+            FOR UPDATE;
+        `;
+    lockValues = [sequenceType];
+  } else {
+    lockQuery = `
+            SELECT
+                id,
+                next_number
+            FROM number_sequences
+            WHERE organisation_id = $1
+              AND branch_id IS NOT DISTINCT FROM $2
+              AND sequence_type = $3
+            FOR UPDATE;
+        `;
+    lockValues = [organisationId, branchId, sequenceType];
+  }
 
   const sequenceResult = await client.query(lockQuery, lockValues);
 

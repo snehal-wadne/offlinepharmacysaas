@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import {
   Alert,
+  Image,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,6 +14,13 @@ import { router, useLocalSearchParams } from 'expo-router';
 
 import { useSuperAdmin } from './store';
 import type { Pharmacy, PlanName } from './types';
+import {
+  provisionPharmacy,
+  renewSubscription,
+  upgradeSubscriptionPlan,
+  verifyPayment,
+  fetchSubscriptionPlans,
+} from '../../api/superadminApi';
 
 type PaymentMethod = 'UPI' | 'Card' | 'Net Banking';
 
@@ -70,7 +79,13 @@ function formatCurrency(amount: number) {
 export default function PharmacyPaymentPage() {
   const params = useLocalSearchParams<PaymentParams>();
 
-  const { getPharmacy, addPharmacy, updatePharmacy } = useSuperAdmin();
+  const {
+    getPharmacy,
+    addPharmacy,
+    updatePharmacy,
+    refreshPharmacies,
+    refreshDashboard,
+  } = useSuperAdmin();
 
   const mode = getParam(params.mode) || 'create';
   const pharmacyId = getParam(params.pharmacyId);
@@ -102,10 +117,9 @@ export default function PharmacyPaymentPage() {
     useState<PaymentMethod>('UPI');
 
   const [upiId, setUpiId] = useState('');
-
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const baseAmount = PLAN_PRICES[selectedPlan];
+  const baseAmount = PLAN_PRICES[selectedPlan] ?? 0;
   const gstAmount = Math.round(baseAmount * 0.18);
   const totalAmount = baseAmount + gstAmount;
 
@@ -115,7 +129,7 @@ export default function PharmacyPaymentPage() {
     return 'Payment';
   }, [mode]);
 
-  const completePayment = () => {
+  const completePayment = async () => {
     if (existingPharmacy?.status === 'Deactivated') {
       Alert.alert(
         'Pharmacy Deactivated',
@@ -126,12 +140,26 @@ export default function PharmacyPaymentPage() {
 
     setIsProcessing(true);
 
-    setTimeout(() => {
+    try {
       if (mode === 'renew' && existingPharmacy) {
+        const renewRes = await renewSubscription(existingPharmacy.id, {
+          billingCycle: 'ANNUAL',
+        });
+        if (renewRes && renewRes.data && renewRes.data.razorpayOrderId) {
+          await verifyPayment({
+            razorpay_order_id: renewRes.data.razorpayOrderId,
+            razorpay_payment_id: `pay_sim_${Date.now()}`,
+            razorpay_signature: `sim_sig_${Date.now()}`,
+          });
+        }
+
         updatePharmacy(existingPharmacy.id, {
           status: 'Active',
           expiryDate: '01 Sep 2027',
         });
+
+        await refreshPharmacies().catch(() => {});
+        await refreshDashboard().catch(() => {});
 
         setIsProcessing(false);
 
@@ -150,11 +178,32 @@ export default function PharmacyPaymentPage() {
       }
 
       if (mode === 'upgrade' && existingPharmacy) {
+        const plansRes = await fetchSubscriptionPlans(true).catch(() => null);
+        const targetPlan = plansRes?.data?.find(
+          (p: any) => (p.name || '').toLowerCase() === selectedPlan.toLowerCase(),
+        );
+        if (targetPlan) {
+          const upRes = await upgradeSubscriptionPlan(existingPharmacy.id, {
+            newPlanId: targetPlan.id,
+            billingCycle: 'ANNUAL',
+          });
+          if (upRes && upRes.data && upRes.data.razorpayOrderId) {
+            await verifyPayment({
+              razorpay_order_id: upRes.data.razorpayOrderId,
+              razorpay_payment_id: `pay_sim_${Date.now()}`,
+              razorpay_signature: `sim_sig_${Date.now()}`,
+            });
+          }
+        }
+
         updatePharmacy(existingPharmacy.id, {
           plan: selectedPlan,
-          userLimit: PLAN_USERS[selectedPlan],
+          userLimit: PLAN_USERS[selectedPlan] || 50,
           status: 'Active',
         });
+
+        await refreshPharmacies().catch(() => {});
+        await refreshDashboard().catch(() => {});
 
         setIsProcessing(false);
 
@@ -172,22 +221,56 @@ export default function PharmacyPaymentPage() {
         return;
       }
 
+      // Provision new pharmacy on PostgreSQL backend
+      const provRes = await provisionPharmacy({
+        name: pharmacyName,
+        adminName,
+        email,
+        phone: getParam(params.phone),
+        address: getParam(params.address),
+        city: getParam(params.city),
+        state: getParam(params.state),
+        pincode: getParam(params.pincode),
+        gstNumber: getParam(params.gstNumber),
+        businessType: getParam(params.businessType),
+        planName: selectedPlan,
+        branches,
+        billingCycle: 'ANNUAL',
+      });
+
+      if (!provRes || !provRes.success || !provRes.data) {
+        throw new Error(provRes?.error || 'Backend pharmacy provisioning failed.');
+      }
+
+      const { organisation, paymentOrder, credentials } = provRes.data;
+      const finalPharmacyId = organisation?.pharmacy_code || organisation?.id || `PH-${Date.now().toString().slice(-6)}`;
+      const temporaryPassword = credentials?.temporaryPassword || '';
+
+      if (paymentOrder && paymentOrder.razorpayOrderId) {
+        await verifyPayment({
+          razorpay_order_id: paymentOrder.razorpayOrderId,
+          razorpay_payment_id: `pay_sim_${Date.now()}`,
+          razorpay_signature: `sim_sig_${Date.now()}`,
+        });
+      }
+
       const initials = pharmacyName
         .split(' ')
+        .filter(Boolean)
         .map((word) => word[0])
         .join('')
         .slice(0, 2)
-        .toUpperCase();
+        .toUpperCase() || 'PH';
 
       const newPharmacy: Pharmacy = {
-        id: `PH-${Date.now().toString().slice(-6)}`,
+        id: finalPharmacyId,
         name: pharmacyName,
         initials,
         adminName,
         email,
         plan: selectedPlan,
         usersUsed: 0,
-        userLimit: PLAN_USERS[selectedPlan],
+        userLimit: PLAN_USERS[selectedPlan] || 50,
         branches,
         expiryDate: '01 Sep 2027',
         status: 'Active',
@@ -201,6 +284,8 @@ export default function PharmacyPaymentPage() {
       };
 
       addPharmacy(newPharmacy);
+      await refreshPharmacies().catch(() => {});
+      await refreshDashboard().catch(() => {});
 
       setIsProcessing(false);
 
@@ -208,13 +293,17 @@ export default function PharmacyPaymentPage() {
         pathname: '/superadmin/confirmation',
         params: {
           mode: 'create',
-          pharmacyId: newPharmacy.id,
+          pharmacyId: finalPharmacyId,
           plan: selectedPlan,
-          name: newPharmacy.name,
-          email: newPharmacy.email,
+          name: pharmacyName,
+          email,
+          temporaryPassword,
         },
       });
-    }, 700);
+    } catch (err: any) {
+      setIsProcessing(false);
+      Alert.alert('Payment Error', err.message || 'Payment processing encountered an error.');
+    }
   };
 
   return (
@@ -254,7 +343,7 @@ export default function PharmacyPaymentPage() {
 
           <SummaryRow
             label="No. of Users"
-            value={`Up to ${PLAN_USERS[selectedPlan]} users`}
+            value={`Up to ${PLAN_USERS[selectedPlan] || 50} users`}
           />
 
           <SummaryRow
@@ -322,12 +411,12 @@ export default function PharmacyPaymentPage() {
 
           {paymentMethod === 'UPI' && (
             <>
-              <Text style={styles.label}>UPI ID (Optional)</Text>
+              <Text style={styles.label}>UPI ID (Optional for custom VPA)</Text>
 
               <TextInput
                 value={upiId}
                 onChangeText={setUpiId}
-                placeholder="example@upi"
+                placeholder="billing@pharmaflow or user@okhdfcbank"
                 placeholderTextColor="#94A3B8"
                 style={styles.input}
                 autoCapitalize="none"
@@ -335,14 +424,33 @@ export default function PharmacyPaymentPage() {
 
               <View style={styles.qrBox}>
                 <View style={styles.qrPlaceholder}>
-                  <Text style={styles.qrText}>QR</Text>
+                  <Image
+                    source={{
+                      uri: `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(
+                        `upi://pay?pa=${encodeURIComponent(
+                          upiId.trim() || 'billing@pharmaflow'
+                        )}&pn=PharmaFlow%20Technologies&am=${totalAmount}&cu=INR&tn=${encodeURIComponent(
+                          `Plan ${selectedPlan} - ${pharmacyName}`
+                        )}`
+                      )}`,
+                    }}
+                    style={styles.qrImage}
+                    resizeMode="contain"
+                  />
                 </View>
 
-                <View>
-                  <Text style={styles.scanTitle}>Scan to Pay</Text>
-                  <Text style={styles.scanSubtitle}>
-                    Use any UPI application
+                <View style={styles.qrDetails}>
+                  <Text style={styles.scanTitle}>
+                    Scan to Pay {formatCurrency(totalAmount)}
                   </Text>
+                  <Text style={styles.scanSubtitle}>
+                    Open any UPI app (GPay, PhonePe, Paytm, BHIM) and scan this QR code
+                  </Text>
+                  <View style={styles.vpaBadge}>
+                    <Text style={styles.vpaBadgeText}>
+                      VPA: {upiId.trim() || 'billing@pharmaflow'}
+                    </Text>
+                  </View>
                 </View>
               </View>
             </>
@@ -704,37 +812,63 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   qrBox: {
-    minHeight: 130,
+    minHeight: 140,
     marginTop: 18,
-    padding: 18,
-    borderRadius: 9,
-    backgroundColor: '#E3F7F0',
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 18,
+    gap: 16,
   },
   qrPlaceholder: {
-    width: 88,
-    height: 88,
-    borderRadius: 5,
+    width: 112,
+    height: 112,
+    borderRadius: 8,
     backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     alignItems: 'center',
     justifyContent: 'center',
+    padding: 6,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  qrText: {
-    color: '#1E293B',
-    fontSize: 24,
-    fontWeight: '900',
+  qrImage: {
+    width: 100,
+    height: 100,
+  },
+  qrDetails: {
+    flex: 1,
   },
   scanTitle: {
-    color: '#047857',
-    fontSize: 13,
+    color: '#065F46',
+    fontSize: 14,
     fontWeight: '900',
   },
   scanSubtitle: {
-    marginTop: 5,
-    color: '#64748B',
+    marginTop: 4,
+    color: '#047857',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  vpaBadge: {
+    marginTop: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: '#DCFCE7',
+    alignSelf: 'flex-start',
+  },
+  vpaBadgeText: {
+    color: '#065F46',
     fontSize: 11,
+    fontWeight: '800',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   infoBox: {
     marginTop: 18,

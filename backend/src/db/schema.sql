@@ -34,6 +34,8 @@ professional_registration_number VARCHAR(100),
 working_shift VARCHAR(100),
 email_verified_at TIMESTAMPTZ,
 last_login_at TIMESTAMPTZ,
+-- Platform Superadmin flag. Only platform Superadmins have TRUE.
+is_platform_superadmin BOOLEAN NOT NULL DEFAULT FALSE,
 created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -44,6 +46,11 @@ CONSTRAINT users_auth_method_check
             OR google_sub IS NOT NULL
         )
 );
+
+CREATE INDEX IF NOT EXISTS idx_users_is_platform_superadmin ON users (is_platform_superadmin)
+WHERE
+    is_platform_superadmin = TRUE;
+
 -- ============================================================
 -- 2. ORGANISATIONS
 -- ============================================================
@@ -54,9 +61,32 @@ CREATE TABLE IF NOT EXISTS organisations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
     owner_id UUID NOT NULL REFERENCES users (id),
     name VARCHAR(150) NOT NULL,
+    pharmacy_code VARCHAR(50) UNIQUE,
+    admin_name VARCHAR(150),
+    email VARCHAR(255),
+    phone VARCHAR(50),
+    address TEXT,
+    city VARCHAR(100),
+    state VARCHAR(100),
+    pincode VARCHAR(20),
+    gst_number VARCHAR(50),
+    business_type VARCHAR(100) DEFAULT 'Private Limited',
+    status VARCHAR(30) NOT NULL DEFAULT 'PENDING_PAYMENT',
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT organisations_status_check CHECK (
+        status IN (
+            'PENDING_PAYMENT',
+            'ACTIVE',
+            'SUSPENDED',
+            'DEACTIVATED'
+        )
+    )
 );
+
+CREATE INDEX IF NOT EXISTS idx_organisations_status ON organisations (status);
+
+CREATE INDEX IF NOT EXISTS idx_organisations_created_at ON organisations (created_at DESC);
 
 -- ============================================================
 -- 3. SUBSCRIPTION PLANS
@@ -67,6 +97,7 @@ CREATE TABLE IF NOT EXISTS organisations (
 CREATE TABLE IF NOT EXISTS subscription_plans (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
     name VARCHAR(100) NOT NULL,
+    tier_code VARCHAR(50) NOT NULL DEFAULT 'BASIC',
     description TEXT,
     price NUMERIC(12, 2) NOT NULL DEFAULT 0,
     currency CHAR(3) NOT NULL DEFAULT 'INR',
@@ -74,6 +105,10 @@ CREATE TABLE IF NOT EXISTS subscription_plans (
     max_branches INTEGER,
     max_users INTEGER,
     max_storage_bytes BIGINT,
+    features JSONB NOT NULL DEFAULT '[]'::jsonb,
+    module_summary VARCHAR(100) DEFAULT '2 Modules',
+    color_hex VARCHAR(20) DEFAULT '#2563EB',
+    is_popular BOOLEAN NOT NULL DEFAULT FALSE,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -94,6 +129,8 @@ CREATE TABLE IF NOT EXISTS subscription_plans (
     )
 );
 
+CREATE INDEX IF NOT EXISTS idx_subscription_plans_active_tier ON subscription_plans (is_active, tier_code);
+
 -- ============================================================
 -- 4. SUBSCRIPTIONS
 -- ============================================================
@@ -105,14 +142,38 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
     organisation_id UUID NOT NULL REFERENCES organisations (id),
     plan_id UUID NOT NULL REFERENCES subscription_plans (id),
-    status VARCHAR(30) NOT NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'PENDING_PAYMENT',
+    billing_cycle VARCHAR(20) NOT NULL DEFAULT 'ANNUAL',
+    auto_renew BOOLEAN NOT NULL DEFAULT FALSE,
+    max_branches_override INTEGER,
+    max_users_override INTEGER,
     started_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     current_period_start TIMESTAMPTZ,
     current_period_end TIMESTAMPTZ,
     cancelled_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT subscriptions_billing_cycle_check CHECK (
+        billing_cycle IN (
+            'MONTHLY',
+            'ANNUAL',
+            'YEARLY',
+            'CUSTOM'
+        )
+    ),
+    CONSTRAINT subscriptions_status_check CHECK (
+        status IN (
+            'PENDING_PAYMENT',
+            'ACTIVE',
+            'EXPIRED',
+            'CANCELLED'
+        )
+    )
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_subscriptions_single_current_active ON subscriptions (organisation_id)
+WHERE
+    status IN ('PENDING_PAYMENT', 'ACTIVE');
 
 -- ============================================================
 -- 5. ROLES
@@ -257,7 +318,7 @@ WHERE
 
 CREATE TABLE IF NOT EXISTS audit_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
-    organisation_id UUID NOT NULL REFERENCES organisations (id) ON DELETE CASCADE,
+    organisation_id UUID REFERENCES organisations (id) ON DELETE CASCADE,
     user_id UUID REFERENCES users (id) ON DELETE SET NULL,
     action VARCHAR(100) NOT NULL,
     entity_type VARCHAR(100),
@@ -614,11 +675,12 @@ CREATE TABLE IF NOT EXISTS number_sequences (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
 -- Organisation owning this sequence.
-organisation_id UUID NOT NULL REFERENCES organisations (id) ON DELETE CASCADE,
+-- NULL means the sequence is platform-scoped (e.g. PHARMACY_CODE, SAAS_INVOICE).
+organisation_id UUID REFERENCES organisations (id) ON DELETE CASCADE,
 
 -- Branch for branch-scoped sequences.
 --
--- NULL means the sequence is organisation-scoped.
+-- NULL means the sequence is organisation-scoped or platform-scoped.
 -- For example, customer numbers use NULL here.
 branch_id UUID REFERENCES branches (id) ON DELETE CASCADE,
 
@@ -653,13 +715,22 @@ next_number BIGINT NOT NULL DEFAULT 1001,
                 'GOODS_RECEIPT',
                 'REGISTER_SESSION',
                 'CASH_MOVEMENT',
-                'HELD_BILL'
+                'HELD_BILL',
+                'PHARMACY_CODE',
+                'SAAS_INVOICE',
+                'PLATFORM_PAYMENT',
+                'PLATFORM_REFUND'
             )
         ),
 
     CONSTRAINT number_sequences_next_number_check
         CHECK (next_number > 0)
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS number_sequences_platform_scope_unique ON number_sequences (sequence_type)
+WHERE
+    organisation_id IS NULL
+    AND branch_id IS NULL;
 
 -- Organisation-scoped sequences.
 -- Example:
@@ -994,8 +1065,20 @@ CREATE TABLE IF NOT EXISTS cash_register_sessions (
         )
     ),
     CONSTRAINT cash_register_sessions_branch_org_fk FOREIGN KEY (branch_id, organisation_id) REFERENCES branches (id, organisation_id) ON DELETE RESTRICT,
-    CONSTRAINT cash_register_sessions_register_branch_org_fk FOREIGN KEY (cash_register_id, branch_id, organisation_id) REFERENCES cash_registers (id, branch_id, organisation_id) ON DELETE RESTRICT,
-    CONSTRAINT cash_register_sessions_id_branch_org_unique UNIQUE (id, branch_id, organisation_id),
+    CONSTRAINT cash_register_sessions_register_branch_org_fk FOREIGN KEY (
+        cash_register_id,
+        branch_id,
+        organisation_id
+    ) REFERENCES cash_registers (
+        id,
+        branch_id,
+        organisation_id
+    ) ON DELETE RESTRICT,
+    CONSTRAINT cash_register_sessions_id_branch_org_unique UNIQUE (
+        id,
+        branch_id,
+        organisation_id
+    ),
     CONSTRAINT cash_register_sessions_id_org_unique UNIQUE (id, organisation_id)
 );
 
@@ -1068,7 +1151,10 @@ CREATE TABLE IF NOT EXISTS cash_denominations (
         cash_register_session_id,
         denomination_value
     ),
-    CONSTRAINT cash_denominations_session_org_fk FOREIGN KEY (cash_register_session_id, organisation_id) REFERENCES cash_register_sessions (id, organisation_id) ON DELETE CASCADE
+    CONSTRAINT cash_denominations_session_org_fk FOREIGN KEY (
+        cash_register_session_id,
+        organisation_id
+    ) REFERENCES cash_register_sessions (id, organisation_id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_cash_denominations_session ON cash_denominations (cash_register_session_id);
@@ -1111,7 +1197,15 @@ CREATE TABLE IF NOT EXISTS held_bills (
         )
     ),
     CONSTRAINT held_bills_branch_org_fk FOREIGN KEY (branch_id, organisation_id) REFERENCES branches (id, organisation_id) ON DELETE RESTRICT,
-    CONSTRAINT held_bills_session_branch_org_fk FOREIGN KEY (cash_register_session_id, branch_id, organisation_id) REFERENCES cash_register_sessions (id, branch_id, organisation_id) ON DELETE RESTRICT
+    CONSTRAINT held_bills_session_branch_org_fk FOREIGN KEY (
+        cash_register_session_id,
+        branch_id,
+        organisation_id
+    ) REFERENCES cash_register_sessions (
+        id,
+        branch_id,
+        organisation_id
+    ) ON DELETE RESTRICT
 );
 
 CREATE INDEX IF NOT EXISTS idx_held_bills_org_branch_status ON held_bills (
@@ -1207,6 +1301,7 @@ notes TEXT,
 created_by UUID REFERENCES users (id) ON DELETE SET NULL,
 
 -- Optional cash register session during which the sale was recorded.
+
 
 cash_register_session_id UUID,
 
@@ -1415,6 +1510,7 @@ notes TEXT,
 received_by UUID REFERENCES users (id) ON DELETE SET NULL,
 
 -- Optional cash register session during which the payment was received.
+
 
 cash_register_session_id UUID,
 
@@ -1870,6 +1966,7 @@ processed_by UUID REFERENCES users (id) ON DELETE SET NULL,
 
 -- Optional cash register session during which the cash refund was issued.
 
+
 cash_register_session_id UUID,
 
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -2199,3 +2296,192 @@ CREATE INDEX IF NOT EXISTS idx_branch_gst_settings_org_branch ON branch_gst_sett
 CREATE INDEX IF NOT EXISTS idx_taxes_organisation_id ON taxes (organisation_id);
 
 CREATE INDEX IF NOT EXISTS idx_branch_tax_assignments_tax_id ON branch_tax_assignments (tax_id);
+
+-- ============================================================
+-- SUPERADMIN PLATFORM TABLES & INDEXES
+-- ============================================================
+
+-- 1. PLATFORM TAX CONFIGURATIONS (EFFECTIVE-DATED)
+CREATE TABLE IF NOT EXISTS platform_tax_configs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
+    config_code VARCHAR(50) NOT NULL,
+    tax_name VARCHAR(100) NOT NULL DEFAULT 'Goods and Services Tax',
+    rate_percent NUMERIC(5, 2) NOT NULL DEFAULT 18.00,
+    sac_code VARCHAR(20) NOT NULL DEFAULT '998313',
+    description TEXT,
+    effective_from TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    effective_to TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_platform_tax_lookup ON platform_tax_configs (
+    config_code,
+    effective_from DESC
+);
+
+-- 2. PLATFORM BUSINESS CONFIGURATIONS (SELLER PROFILE)
+CREATE TABLE IF NOT EXISTS platform_business_configs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
+    legal_name VARCHAR(150),
+    trade_name VARCHAR(150),
+    gstin VARCHAR(50),
+    address_line1 TEXT,
+    city VARCHAR(100),
+    state VARCHAR(100),
+    pincode VARCHAR(20),
+    contact_email VARCHAR(255),
+    contact_phone VARCHAR(50),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_platform_business_single_active ON platform_business_configs (is_active)
+WHERE
+    is_active = TRUE;
+
+-- 3. PLATFORM SUBSCRIPTION PAYMENTS (RAZORPAY SAAS)
+CREATE TABLE IF NOT EXISTS platform_subscription_payments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
+    payment_reference VARCHAR(50) UNIQUE NOT NULL,
+    organisation_id UUID NOT NULL REFERENCES organisations (id) ON DELETE CASCADE,
+    subscription_id UUID NOT NULL REFERENCES subscriptions (id) ON DELETE CASCADE,
+    transaction_type VARCHAR(30) NOT NULL CHECK (
+        transaction_type IN (
+            'NEW_ONBOARDING',
+            'RENEWAL',
+            'PLAN_UPGRADE'
+        )
+    ),
+    razorpay_order_id VARCHAR(100) NOT NULL,
+    razorpay_payment_id VARCHAR(100) UNIQUE,
+    razorpay_signature VARCHAR(255),
+    currency CHAR(3) NOT NULL DEFAULT 'INR',
+    base_amount NUMERIC(12, 2) NOT NULL,
+    gst_rate NUMERIC(5, 2) NOT NULL,
+    cgst_amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    sgst_amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    igst_amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    total_amount NUMERIC(12, 2) NOT NULL,
+    payment_method VARCHAR(50) NOT NULL DEFAULT 'RAZORPAY' CHECK (
+        payment_method IN (
+            'RAZORPAY',
+            'UPI',
+            'CARD',
+            'NETBANKING',
+            'BANK_TRANSFER',
+            'MANUAL_OFFLINE'
+        )
+    ),
+    status VARCHAR(30) NOT NULL DEFAULT 'PENDING' CHECK (
+        status IN (
+            'PENDING',
+            'SUCCESS',
+            'FAILED',
+            'REFUNDED',
+            'PARTIALLY_REFUNDED'
+        )
+    ),
+    error_code VARCHAR(100),
+    error_description TEXT,
+    paid_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_platform_payments_org ON platform_subscription_payments (organisation_id);
+
+CREATE INDEX IF NOT EXISTS idx_platform_payments_order ON platform_subscription_payments (razorpay_order_id);
+
+CREATE INDEX IF NOT EXISTS idx_platform_payments_status ON platform_subscription_payments (status);
+
+CREATE INDEX IF NOT EXISTS idx_platform_payments_paid_at ON platform_subscription_payments (paid_at DESC);
+
+-- 4. PLATFORM PAYMENT REFUNDS (TWO-PHASE RESERVATION & SETTLEMENT)
+CREATE TABLE IF NOT EXISTS platform_payment_refunds (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
+    payment_id UUID NOT NULL REFERENCES platform_subscription_payments (id) ON DELETE RESTRICT,
+    refund_reference VARCHAR(50) UNIQUE NOT NULL,
+    razorpay_refund_id VARCHAR(100) UNIQUE,
+    amount NUMERIC(12, 2) NOT NULL CHECK (amount > 0),
+    currency CHAR(3) NOT NULL DEFAULT 'INR',
+    reason TEXT NOT NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'PENDING' CHECK (
+        status IN (
+            'PENDING',
+            'PROCESSED',
+            'FAILED'
+        )
+    ),
+    error_message TEXT,
+    processed_by UUID REFERENCES users (id) ON DELETE SET NULL,
+    processed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_platform_refunds_payment ON platform_payment_refunds (payment_id);
+
+CREATE INDEX IF NOT EXISTS idx_platform_refunds_status ON platform_payment_refunds (status);
+
+-- 5. SUBSCRIPTION INVOICES (B2B SAAS TAX INVOICES)
+CREATE TABLE IF NOT EXISTS subscription_invoices (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
+    invoice_number VARCHAR(50) UNIQUE NOT NULL,
+    organisation_id UUID NOT NULL REFERENCES organisations (id) ON DELETE RESTRICT,
+    subscription_id UUID NOT NULL REFERENCES subscriptions (id) ON DELETE RESTRICT,
+    payment_id UUID NOT NULL UNIQUE REFERENCES platform_subscription_payments (id) ON DELETE RESTRICT,
+    seller_legal_name VARCHAR(150),
+    seller_gstin VARCHAR(50),
+    seller_address TEXT,
+    seller_state VARCHAR(100),
+    buyer_legal_name VARCHAR(150) NOT NULL,
+    buyer_gstin VARCHAR(50),
+    buyer_address TEXT NOT NULL,
+    buyer_state VARCHAR(100) NOT NULL,
+    sac_code VARCHAR(20) NOT NULL DEFAULT '998313',
+    billing_period_start TIMESTAMPTZ NOT NULL,
+    billing_period_end TIMESTAMPTZ NOT NULL,
+    taxable_amount NUMERIC(12, 2) NOT NULL,
+    gst_rate NUMERIC(5, 2) NOT NULL,
+    is_interstate BOOLEAN NOT NULL DEFAULT FALSE,
+    cgst_amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    sgst_amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    igst_amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    total_amount NUMERIC(12, 2) NOT NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'PAID' CHECK (
+        status IN ('PAID', 'VOID', 'REFUNDED')
+    ),
+    pdf_url TEXT,
+    issued_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_sub_invoices_org ON subscription_invoices (organisation_id);
+
+-- 6. RAZORPAY WEBHOOK EVENTS (IDEMPOTENT EVENT LEDGER)
+CREATE TABLE IF NOT EXISTS razorpay_webhook_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
+    event_id VARCHAR(100) UNIQUE NOT NULL,
+    event_type VARCHAR(100) NOT NULL,
+    razorpay_order_id VARCHAR(100),
+    razorpay_payment_id VARCHAR(100),
+    payload JSONB NOT NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'RECEIVED' CHECK (
+        status IN (
+            'RECEIVED',
+            'PROCESSING',
+            'PROCESSED',
+            'FAILED',
+            'IGNORED'
+        )
+    ),
+    attempts INTEGER NOT NULL DEFAULT 0,
+    error_message TEXT,
+    processed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_webhook_events_order ON razorpay_webhook_events (razorpay_order_id);
+
+CREATE INDEX IF NOT EXISTS idx_webhook_events_status ON razorpay_webhook_events (status);
