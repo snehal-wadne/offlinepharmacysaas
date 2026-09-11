@@ -499,6 +499,10 @@ export class SyncEngine {
       this.stateListeners.delete(listener);
     };
   }
+
+  onStateChange(listener: SyncStateListener): () => void {
+    return this.subscribe(listener);
+  }
 }
 
 export const syncEngine = new SyncEngine();

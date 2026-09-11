@@ -14,7 +14,11 @@ export function PosProvider({ children }) {
   const [heldBills, setHeldBills] = useState(MOCK_HELD_BILLS);
   const [activeResumedDraft, setActiveResumedDraft] = useState(null);
   const [invoices, setInvoices] = useState(MOCK_RECENT_INVOICES);
-  const [syncState, setSyncState] = useState(syncEngine.getState());
+  const [syncState, setSyncState] = useState(
+    typeof syncEngine?.getState === "function"
+      ? syncEngine.getState()
+      : { status: "IDLE", isOnline: true }
+  );
   const [returnHistory, setReturnHistory] = useState([
     {
       returnNo: "RET-2026-104",
@@ -35,18 +39,30 @@ export function PosProvider({ children }) {
     let isMounted = true;
 
     // Start Sync Engine in background and listen for status updates
-    const unsubscribeSync = syncEngine.onStateChange((newState) => {
-      if (isMounted) {
-        setSyncState(newState);
-      }
-    });
+    const subscribeFn =
+      typeof syncEngine?.onStateChange === "function"
+        ? syncEngine.onStateChange.bind(syncEngine)
+        : typeof syncEngine?.subscribe === "function"
+        ? syncEngine.subscribe.bind(syncEngine)
+        : null;
 
-    syncEngine.start().catch((err) => {
-      console.warn("[PosContext] Sync engine start warning:", err);
-    });
+    const unsubscribeSync = subscribeFn
+      ? subscribeFn((newState) => {
+          if (isMounted) {
+            setSyncState(newState);
+          }
+        })
+      : () => {};
 
-    localPersistenceService
-      .initialize()
+    if (typeof syncEngine?.start === "function") {
+      syncEngine.start().catch((err) => {
+        console.warn("[PosContext] Sync engine start warning:", err);
+      });
+    }
+
+    if (typeof localPersistenceService?.initialize === "function") {
+      localPersistenceService
+        .initialize()
       .then(async () => {
         try {
           const persistedInvoices =
@@ -269,7 +285,7 @@ export function PosProvider({ children }) {
     });
 
     // Opportunistically push to server if online (non-blocking)
-    syncEngine.sync().catch(() => {});
+    syncEngine?.sync?.().catch(() => {});
 
     // 3. Update React UI state (stock, drafts, invoices) ONLY after local DB succeeds
     setProducts((prev) => {
@@ -367,7 +383,7 @@ export function PosProvider({ children }) {
     });
 
     // Opportunistically push to server if online (non-blocking)
-    syncEngine.sync().catch(() => {});
+    syncEngine?.sync?.().catch(() => {});
 
     // 2. Update React UI state (stock, return history) ONLY after local DB succeeds
     if (returnData.stockDisposition === "Sellable") {
@@ -407,10 +423,18 @@ export function PosProvider({ children }) {
         finalizeSale,
         processReturnRefund,
         syncState,
-        triggerSync: (resetRetries = false) => syncEngine.syncNow(resetRetries),
-        setSyncAuthToken: (token) => syncEngine.setAuthToken(token),
+        triggerSync: (resetRetries = false) =>
+          typeof syncEngine?.syncNow === "function"
+            ? syncEngine.syncNow(resetRetries)
+            : Promise.resolve(),
+        setSyncAuthToken: (token) =>
+          typeof syncEngine?.setAuthToken === "function"
+            ? syncEngine.setAuthToken(token)
+            : undefined,
         setSyncTenantContext: (orgId, branchId) =>
-          syncEngine.setTenantContext(orgId, branchId),
+          typeof syncEngine?.setTenantContext === "function"
+            ? syncEngine.setTenantContext(orgId, branchId)
+            : undefined,
       }}
     >
       {children}
