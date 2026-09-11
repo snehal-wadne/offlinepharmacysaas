@@ -25,14 +25,17 @@ const tryStartPostgresService = () => {
   if (process.platform === "win32") {
     try {
       console.log("⚡ Attempting to auto-start local PostgreSQL service...");
-      
+
       // 1. Try PowerShell Get-Service to dynamically find and start any PostgreSQL service
       try {
         const psScript = `Get-Service | Where-Object { $_.Name -like '*postgres*' -or $_.DisplayName -like '*postgres*' } | ForEach-Object { if ($_.Status -ne 'Running') { Start-Service $_.Name }; Write-Output $_.Name }`;
-        const output = execSync(`powershell -NoProfile -Command "${psScript}"`, {
-          encoding: "utf8",
-          stdio: ["ignore", "pipe", "ignore"],
-        });
+        const output = execSync(
+          `powershell -NoProfile -Command "${psScript}"`,
+          {
+            encoding: "utf8",
+            stdio: ["ignore", "pipe", "ignore"],
+          },
+        );
         if (output && output.trim()) {
           console.log(`✓ Started PostgreSQL service(s): ${output.trim()}`);
           return true;
@@ -61,7 +64,9 @@ const tryStartPostgresService = () => {
 
       // 3. Try Docker container if PostgreSQL container exists
       try {
-        execSync('docker start $(docker ps -a -q --filter "name=postgres")', { stdio: "ignore" });
+        execSync('docker start $(docker ps -a -q --filter "name=postgres")', {
+          stdio: "ignore",
+        });
         console.log("✓ Started PostgreSQL Docker container.");
         return true;
       } catch (e) {}
@@ -70,7 +75,10 @@ const tryStartPostgresService = () => {
     }
   } else {
     try {
-      execSync("sudo systemctl start postgresql || brew services start postgresql", { stdio: "ignore" });
+      execSync(
+        "sudo systemctl start postgresql || brew services start postgresql",
+        { stdio: "ignore" },
+      );
       console.log("✓ PostgreSQL service started.");
       return true;
     } catch (e) {}
@@ -95,7 +103,9 @@ const autoInitDatabase = async () => {
   try {
     await adminClient.connect();
   } catch (err) {
-    console.warn(`⚠️ Could not connect to PostgreSQL on ${DB_HOST}:${DB_PORT} as user '${DB_USER}'.`);
+    console.warn(
+      `⚠️ Could not connect to PostgreSQL on ${DB_HOST}:${DB_PORT} as user '${DB_USER}'.`,
+    );
     console.warn(`Attempting service startup...`);
     tryStartPostgresService();
 
@@ -103,8 +113,12 @@ const autoInitDatabase = async () => {
     try {
       await adminClient.connect();
     } catch (retryErr) {
-      console.error(`❌ Failed to connect to PostgreSQL server: ${retryErr.message}`);
-      console.error("Please verify PostgreSQL is installed and running on port 5432.");
+      console.error(
+        `❌ Failed to connect to PostgreSQL server: ${retryErr.message}`,
+      );
+      console.error(
+        "Please verify PostgreSQL is installed and running on port 5432.",
+      );
       throw retryErr;
     }
   }
@@ -113,7 +127,7 @@ const autoInitDatabase = async () => {
     // 1. Ensure Database Exists
     const dbCheckRes = await adminClient.query(
       "SELECT 1 FROM pg_database WHERE datname = $1",
-      [DB_DATABASE]
+      [DB_DATABASE],
     );
 
     if (dbCheckRes.rows.length === 0) {
@@ -139,12 +153,14 @@ const autoInitDatabase = async () => {
 
   try {
     const tableCheckRes = await targetPool.query(
-      `SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public';`
+      `SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public';`,
     );
     const tableCount = parseInt(tableCheckRes.rows[0].count, 10);
 
     if (tableCount === 0) {
-      console.log(`📄 Schema missing in '${DB_DATABASE}'. Applying schema.sql...`);
+      console.log(
+        `📄 Schema missing in '${DB_DATABASE}'. Applying schema.sql...`,
+      );
       const schemaPath = path.join(__dirname, "schema.sql");
       const schemaSql = fs.readFileSync(schemaPath, "utf8");
       await targetPool.query(schemaSql);
@@ -152,12 +168,15 @@ const autoInitDatabase = async () => {
     } else {
       console.log(`✓ Database schema verified (${tableCount} tables present).`);
       // Run light migrations for schema updates
-      await targetPool.query(
-        "ALTER TABLE branches ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE';"
-      ).catch(() => {});
+      await targetPool
+        .query(
+          "ALTER TABLE branches ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE';",
+        )
+        .catch(() => {});
 
-      await targetPool.query(
-        `CREATE TABLE IF NOT EXISTS stock_movements (
+      await targetPool
+        .query(
+          `CREATE TABLE IF NOT EXISTS stock_movements (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           organisation_id UUID,
           branch_name VARCHAR(255) DEFAULT 'Main Branch',
@@ -167,8 +186,20 @@ const autoInitDatabase = async () => {
           reference VARCHAR(100) DEFAULT 'SYS-LOG',
           status VARCHAR(50) DEFAULT 'Completed',
           created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-        );`
-      ).catch(() => {});
+        );`,
+        )
+        .catch(() => {});
+
+      // Apply sync_mutations table migration
+      try {
+        const { migrateSyncMutations } = require("./migrate-sync-mutations");
+        await migrateSyncMutations();
+      } catch (syncMigrateErr) {
+        console.warn(
+          "⚠️ sync_mutations migration notice:",
+          syncMigrateErr.message,
+        );
+      }
     }
 
     // 3. Verify user table seed data
@@ -181,7 +212,10 @@ const autoInitDatabase = async () => {
         const { seedDevelopmentData } = require("./seed-dev");
         await seedDevelopmentData(targetPool);
       } catch (seedErr) {
-        console.warn("⚠️ Seed dev output/completion:", seedErr.message || seedErr);
+        console.warn(
+          "⚠️ Seed dev output/completion:",
+          seedErr.message || seedErr,
+        );
       }
     }
 
@@ -189,7 +223,10 @@ const autoInitDatabase = async () => {
       const { seedCustomers } = require("./seed-customers");
       await seedCustomers(targetPool);
     } catch (custSeedErr) {
-      console.warn("⚠️ Customer seed output/completion:", custSeedErr.message || custSeedErr);
+      console.warn(
+        "⚠️ Customer seed output/completion:",
+        custSeedErr.message || custSeedErr,
+      );
     }
   } catch (err) {
     console.error("❌ Database schema auto-initialization error:", err.message);

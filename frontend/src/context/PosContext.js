@@ -1,9 +1,11 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from "react";
 import {
   MOCK_POS_PRODUCTS,
   MOCK_HELD_BILLS,
   MOCK_RECENT_INVOICES,
-} from '../data/cashierMockData';
+} from "../data/cashierMockData";
+import { localPersistenceService } from "../db";
+import { syncEngine } from "../sync";
 
 const PosContext = createContext(null);
 
@@ -12,38 +14,98 @@ export function PosProvider({ children }) {
   const [heldBills, setHeldBills] = useState(MOCK_HELD_BILLS);
   const [activeResumedDraft, setActiveResumedDraft] = useState(null);
   const [invoices, setInvoices] = useState(MOCK_RECENT_INVOICES);
+  const [syncState, setSyncState] = useState(syncEngine.getState());
   const [returnHistory, setReturnHistory] = useState([
     {
-      returnNo: 'RET-2026-104',
-      originalInvoice: 'INV-1020',
-      date: '27 Aug 2026, 04:30 PM',
-      customer: 'Suresh Patil',
+      returnNo: "RET-2026-104",
+      originalInvoice: "INV-1020",
+      date: "27 Aug 2026, 04:30 PM",
+      customer: "Suresh Patil",
       amount: 158.0,
-      refundMode: 'Cash',
-      reason: 'Doctor altered prescription',
-      stockDisposition: 'Sellable',
+      refundMode: "Cash",
+      reason: "Doctor altered prescription",
+      stockDisposition: "Sellable",
       itemsCount: 1,
-      items: [{ name: 'Pan 40 Tablets', qty: 1, refundPrice: 158.0 }],
+      items: [{ name: "Pan 40 Tablets", qty: 1, refundPrice: 158.0 }],
     },
   ]);
+
+  // Initialize local persistence layer and restore recent invoices
+  useEffect(() => {
+    let isMounted = true;
+
+    // Start Sync Engine in background and listen for status updates
+    const unsubscribeSync = syncEngine.onStateChange((newState) => {
+      if (isMounted) {
+        setSyncState(newState);
+      }
+    });
+
+    syncEngine.start().catch((err) => {
+      console.warn("[PosContext] Sync engine start warning:", err);
+    });
+
+    localPersistenceService
+      .initialize()
+      .then(async () => {
+        try {
+          const persistedInvoices =
+            await localPersistenceService.getRecentInvoices();
+          if (isMounted && persistedInvoices && persistedInvoices.length > 0) {
+            setInvoices((prev) => {
+              const existingNos = new Set(
+                persistedInvoices.map((inv) => inv.invoiceNo),
+              );
+              const unpersisted = prev.filter(
+                (inv) => !existingNos.has(inv.invoiceNo),
+              );
+              return [...persistedInvoices, ...unpersisted];
+            });
+          }
+        } catch (err) {
+          console.warn(
+            "[PosContext] Could not load persisted invoices from IndexedDB:",
+            err,
+          );
+        }
+      })
+      .catch((err) => {
+        console.warn(
+          "[PosContext] Local persistence initialization warning:",
+          err,
+        );
+      });
+
+    return () => {
+      isMounted = false;
+      unsubscribeSync();
+    };
+  }, []);
 
   /**
    * Save or Update a Bill in Hold Bills (Email Draft pattern)
    */
   const holdBill = (billData, existingDraftId = null) => {
-    const draftId = existingDraftId || activeResumedDraft?.holdId || activeResumedDraft?.billNo;
+    const draftId =
+      existingDraftId ||
+      activeResumedDraft?.holdId ||
+      activeResumedDraft?.billNo;
     const now = new Date();
-    const formattedDate = now.toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    }) + ', ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const formattedDate =
+      now.toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      }) +
+      ", " +
+      now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
     // Generate items summary preview (e.g. "Azithromycin 500mg Tablets (2), Dolo 650 (1)")
-    const itemsSummary = (billData.items || [])
-      .map((item) => `${item.name} (${item.qty})`)
-      .slice(0, 2)
-      .join(', ') + ((billData.items || []).length > 2 ? '...' : '');
+    const itemsSummary =
+      (billData.items || [])
+        .map((item) => `${item.name} (${item.qty})`)
+        .slice(0, 2)
+        .join(", ") + ((billData.items || []).length > 2 ? "..." : "");
 
     if (draftId) {
       // Update existing draft
@@ -52,9 +114,13 @@ export function PosProvider({ children }) {
           if (b.holdId === draftId || b.billNo === draftId) {
             return {
               ...b,
-              customerName: billData.customerName || b.customerName || 'Walk-in Customer',
-              customerPhone: billData.customerPhone || b.customerPhone || '',
-              itemsCount: (billData.items || []).reduce((acc, it) => acc + (it.qty || 1), 0),
+              customerName:
+                billData.customerName || b.customerName || "Walk-in Customer",
+              customerPhone: billData.customerPhone || b.customerPhone || "",
+              itemsCount: (billData.items || []).reduce(
+                (acc, it) => acc + (it.qty || 1),
+                0,
+              ),
               itemsSummary: itemsSummary || b.itemsSummary,
               subtotal: billData.subtotal ?? b.subtotal,
               tax: billData.tax ?? b.tax,
@@ -62,38 +128,50 @@ export function PosProvider({ children }) {
               total: billData.total ?? b.total,
               heldAt: formattedDate,
               items: [...(billData.items || [])],
-              note: billData.note || b.note || 'Draft updated in POS',
+              note: billData.note || b.note || "Draft updated in POS",
             };
           }
           return b;
-        })
+        }),
       );
       setActiveResumedDraft(null);
       return draftId;
     } else {
       // Create new draft ID (e.g. HB-0009)
-      const nextNum = heldBills.length > 0
-        ? Math.max(...heldBills.map((b) => parseInt((b.billNo || b.holdId || 'HB-0000').replace(/[^0-9]/g, '') || '0', 10))) + 1
-        : 9;
-      const newBillNo = `HB-00${nextNum < 10 ? '0' + nextNum : nextNum}`;
+      const nextNum =
+        heldBills.length > 0
+          ? Math.max(
+              ...heldBills.map((b) =>
+                parseInt(
+                  (b.billNo || b.holdId || "HB-0000").replace(/[^0-9]/g, "") ||
+                    "0",
+                  10,
+                ),
+              ),
+            ) + 1
+          : 9;
+      const newBillNo = `HB-00${nextNum < 10 ? "0" + nextNum : nextNum}`;
 
       const newDraft = {
         holdId: newBillNo,
         billNo: newBillNo,
         token: newBillNo,
-        customerName: billData.customerName || 'Walk-in Customer',
-        customerPhone: billData.customerPhone || '',
-        itemsCount: (billData.items || []).reduce((acc, it) => acc + (it.qty || 1), 0),
-        itemsSummary: itemsSummary || 'No items',
+        customerName: billData.customerName || "Walk-in Customer",
+        customerPhone: billData.customerPhone || "",
+        itemsCount: (billData.items || []).reduce(
+          (acc, it) => acc + (it.qty || 1),
+          0,
+        ),
+        itemsSummary: itemsSummary || "No items",
         subtotal: billData.subtotal || 0,
         tax: billData.tax || 0,
         discountPercent: billData.discountPercent || 0,
         total: billData.total || 0,
         heldAt: formattedDate,
-        heldBy: 'Cashier 01',
-        status: 'Hold',
-        branch: 'Main Branch',
-        note: billData.note || 'Saved as draft from New Sale',
+        heldBy: "Cashier 01",
+        status: "Hold",
+        branch: "Main Branch",
+        note: billData.note || "Saved as draft from New Sale",
         items: [...(billData.items || [])],
       };
 
@@ -108,7 +186,7 @@ export function PosProvider({ children }) {
    */
   const resumeDraftBill = (draftIdOrBillNo) => {
     const draft = heldBills.find(
-      (b) => b.holdId === draftIdOrBillNo || b.billNo === draftIdOrBillNo
+      (b) => b.holdId === draftIdOrBillNo || b.billNo === draftIdOrBillNo,
     );
     if (draft) {
       setActiveResumedDraft(draft);
@@ -128,8 +206,13 @@ export function PosProvider({ children }) {
    * Discard/Delete a single draft
    */
   const discardHeldBill = (draftId) => {
-    setHeldBills((prev) => prev.filter((b) => b.holdId !== draftId && b.billNo !== draftId));
-    if (activeResumedDraft?.holdId === draftId || activeResumedDraft?.billNo === draftId) {
+    setHeldBills((prev) =>
+      prev.filter((b) => b.holdId !== draftId && b.billNo !== draftId),
+    );
+    if (
+      activeResumedDraft?.holdId === draftId ||
+      activeResumedDraft?.billNo === draftId
+    ) {
       setActiveResumedDraft(null);
     }
   };
@@ -148,12 +231,53 @@ export function PosProvider({ children }) {
    * - If an active draft was resumed, removes it from heldBills
    * - Adds completed invoice to invoices list
    */
-  const finalizeSale = (saleData) => {
-    // 1. Deduct stock
+  const finalizeSale = async (saleData) => {
+    // 1. Prepare invoice details
+    const newInvNo =
+      saleData.invoiceNo || `INV-${Math.floor(1026 + Math.random() * 8000)}`;
+    const now = new Date();
+    const dateStr =
+      now.toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      }) +
+      ", " +
+      now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+    const newInvoice = {
+      invoiceNo: newInvNo,
+      date: dateStr,
+      customer: saleData.customer || "Walk-in Customer",
+      phone: saleData.customerPhone || "—",
+      paymentMode: saleData.paymentMode || "Cash",
+      subtotal: saleData.subtotal || 0,
+      tax: saleData.tax || 0,
+      total: saleData.total || 0,
+      status: "Completed",
+      cashier: saleData.cashier || "Cashier 01",
+      branch: saleData.branch || "Main Branch",
+      items: saleData.items || [],
+    };
+
+    // 2. AWAIT ATOMIC LOCAL COMMIT:
+    // transactions write + sync_outbox write + local inventory projection
+    // ONLY THEN is sale considered locally completed!
+    await localPersistenceService.commitLocalSale({
+      ...saleData,
+      invoiceNo: newInvNo,
+    });
+
+    // Opportunistically push to server if online (non-blocking)
+    syncEngine.sync().catch(() => {});
+
+    // 3. Update React UI state (stock, drafts, invoices) ONLY after local DB succeeds
     setProducts((prev) => {
       const copy = [...prev];
       (saleData.items || []).forEach((cartItem) => {
-        const pIdx = copy.findIndex((p) => p.id === cartItem.id || p.name === cartItem.name);
+        const pIdx = copy.findIndex(
+          (p) => p.id === cartItem.id || p.name === cartItem.name,
+        );
         if (pIdx > -1) {
           copy[pIdx] = {
             ...copy[pIdx],
@@ -164,36 +288,18 @@ export function PosProvider({ children }) {
       return copy;
     });
 
-    // 2. Remove draft if this was completing a held draft
-    const draftIdToRemove = saleData.draftId || activeResumedDraft?.holdId || activeResumedDraft?.billNo;
+    const draftIdToRemove =
+      saleData.draftId ||
+      activeResumedDraft?.holdId ||
+      activeResumedDraft?.billNo;
     if (draftIdToRemove) {
-      setHeldBills((prev) => prev.filter((b) => b.holdId !== draftIdToRemove && b.billNo !== draftIdToRemove));
+      setHeldBills((prev) =>
+        prev.filter(
+          (b) => b.holdId !== draftIdToRemove && b.billNo !== draftIdToRemove,
+        ),
+      );
       setActiveResumedDraft(null);
     }
-
-    // 3. Create completed invoice
-    const newInvNo = saleData.invoiceNo || `INV-${Math.floor(1026 + Math.random() * 8000)}`;
-    const now = new Date();
-    const dateStr = now.toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    }) + ', ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-    const newInvoice = {
-      invoiceNo: newInvNo,
-      date: dateStr,
-      customer: saleData.customer || 'Walk-in Customer',
-      phone: saleData.customerPhone || '—',
-      paymentMode: saleData.paymentMode || 'Cash',
-      subtotal: saleData.subtotal || 0,
-      tax: saleData.tax || 0,
-      total: saleData.total || 0,
-      status: 'Completed',
-      cashier: 'Cashier 01',
-      branch: 'Main Branch',
-      items: saleData.items || [],
-    };
 
     setInvoices((prev) => [newInvoice, ...prev]);
     return newInvoice;
@@ -207,11 +313,14 @@ export function PosProvider({ children }) {
   const processReturnRefund = (returnData) => {
     const returnNo = `RET-2026-${Math.floor(105 + Math.random() * 800)}`;
     const now = new Date();
-    const dateStr = now.toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    }) + ', ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const dateStr =
+      now.toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      }) +
+      ", " +
+      now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
     const newReturnRecord = {
       returnNo,
@@ -227,7 +336,7 @@ export function PosProvider({ children }) {
     };
 
     // If Sellable, restore stock
-    if (returnData.stockDisposition === 'Sellable') {
+    if (returnData.stockDisposition === "Sellable") {
       setProducts((prev) => {
         const copy = [...prev];
         (returnData.returnedItems || []).forEach((item) => {
@@ -263,6 +372,11 @@ export function PosProvider({ children }) {
         clearAllHeldBills,
         finalizeSale,
         processReturnRefund,
+        syncState,
+        triggerSync: (resetRetries = false) => syncEngine.syncNow(resetRetries),
+        setSyncAuthToken: (token) => syncEngine.setAuthToken(token),
+        setSyncTenantContext: (orgId, branchId) =>
+          syncEngine.setTenantContext(orgId, branchId),
       }}
     >
       {children}
@@ -273,7 +387,7 @@ export function PosProvider({ children }) {
 export function usePos() {
   const context = useContext(PosContext);
   if (!context) {
-    throw new Error('usePos must be used within a PosProvider');
+    throw new Error("usePos must be used within a PosProvider");
   }
   return context;
 }

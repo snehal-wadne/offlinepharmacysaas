@@ -1,23 +1,64 @@
 /**
  * Sync Controller
+ * Handles batch push of mutations and pull of changes
  */
 
-const syncService = require('../services/sync.service');
+const syncService = require("../services/sync.service");
 
 const getStatus = async (req, res) => {
   try {
-    const status = await syncService.getStatus();
+    const orgId = req.tenantContext?.organisationId || req.query.organisationId;
+    const status = await syncService.getStatus(orgId);
     res.status(200).json(status);
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 };
 
-const triggerSync = async (req, res) => {
+const pushMutations = async (req, res) => {
   try {
-    const result = await syncService.syncPending();
+    const { deviceId, mutations } = req.body;
+    if (!deviceId) {
+      return res
+        .status(400)
+        .json({ success: false, error: "Missing deviceId in push payload" });
+    }
+    if (!Array.isArray(mutations)) {
+      return res
+        .status(400)
+        .json({ success: false, error: "Mutations must be an array" });
+    }
+
+    const result = await syncService.processPushBatch({
+      deviceId,
+      mutations,
+      userContext: req.user,
+      tenantContext: req.tenantContext,
+    });
     res.status(200).json(result);
   } catch (error) {
+    console.error("[SyncController] Push error:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+const pullChanges = async (req, res) => {
+  try {
+    const { cursor, limit } = req.query;
+    const organisationId =
+      req.tenantContext?.organisationId || req.query.organisationId;
+    const branchId = req.tenantContext?.branchId || req.query.branchId;
+
+    const result = await syncService.pullChanges({
+      cursor,
+      organisationId,
+      branchId,
+      limit: Number(limit) || 50,
+      userContext: req.user,
+    });
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("[SyncController] Pull error:", error);
     res.status(500).json({ success: false, error: error.message });
   }
 };
@@ -33,6 +74,7 @@ const testConnection = async (req, res) => {
 
 module.exports = {
   getStatus,
-  triggerSync,
+  pushMutations,
+  pullChanges,
   testConnection,
 };
