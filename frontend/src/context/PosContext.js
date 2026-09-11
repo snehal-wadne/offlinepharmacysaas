@@ -17,7 +17,7 @@ export function PosProvider({ children }) {
   const [syncState, setSyncState] = useState(
     typeof syncEngine?.getState === "function"
       ? syncEngine.getState()
-      : { status: "IDLE", isOnline: true }
+      : { status: "IDLE", isOnline: true },
   );
   const [returnHistory, setReturnHistory] = useState([
     {
@@ -43,8 +43,8 @@ export function PosProvider({ children }) {
       typeof syncEngine?.onStateChange === "function"
         ? syncEngine.onStateChange.bind(syncEngine)
         : typeof syncEngine?.subscribe === "function"
-        ? syncEngine.subscribe.bind(syncEngine)
-        : null;
+          ? syncEngine.subscribe.bind(syncEngine)
+          : null;
 
     const unsubscribeSync = subscribeFn
       ? subscribeFn((newState) => {
@@ -63,34 +63,39 @@ export function PosProvider({ children }) {
     if (typeof localPersistenceService?.initialize === "function") {
       localPersistenceService
         .initialize()
-      .then(async () => {
-        try {
-          const persistedInvoices =
-            await localPersistenceService.getRecentInvoices();
-          if (isMounted && persistedInvoices && persistedInvoices.length > 0) {
-            setInvoices((prev) => {
-              const existingNos = new Set(
-                persistedInvoices.map((inv) => inv.invoiceNo),
-              );
-              const unpersisted = prev.filter(
-                (inv) => !existingNos.has(inv.invoiceNo),
-              );
-              return [...persistedInvoices, ...unpersisted];
-            });
+        .then(async () => {
+          try {
+            const persistedInvoices =
+              await localPersistenceService.getRecentInvoices();
+            if (
+              isMounted &&
+              persistedInvoices &&
+              persistedInvoices.length > 0
+            ) {
+              setInvoices((prev) => {
+                const existingNos = new Set(
+                  persistedInvoices.map((inv) => inv.invoiceNo),
+                );
+                const unpersisted = prev.filter(
+                  (inv) => !existingNos.has(inv.invoiceNo),
+                );
+                return [...persistedInvoices, ...unpersisted];
+              });
+            }
+          } catch (err) {
+            console.warn(
+              "[PosContext] Could not load persisted invoices from IndexedDB:",
+              err,
+            );
           }
-        } catch (err) {
+        })
+        .catch((err) => {
           console.warn(
-            "[PosContext] Could not load persisted invoices from IndexedDB:",
+            "[PosContext] Local persistence initialization warning:",
             err,
           );
-        }
-      })
-      .catch((err) => {
-        console.warn(
-          "[PosContext] Local persistence initialization warning:",
-          err,
-        );
-      });
+        });
+    }
 
     return () => {
       isMounted = false;
