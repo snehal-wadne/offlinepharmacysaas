@@ -102,10 +102,16 @@ export class PullWorker {
   async applyChangesLocally(changes: ServerChangeItem[]): Promise<void> {
     await this.db.transaction(
       'rw',
-      [this.db.products, this.db.inventory, this.db.customers, this.db.transactions],
+      [this.db.products, this.db.inventory, this.db.customers, this.db.transactions, this.db.sync_metadata],
       async () => {
         for (const change of changes) {
+          if (!change) continue;
           const itemData = change.payload || change.data;
+          const appliedKey =
+            change.sequence !== undefined && change.sequence !== null
+              ? `applied_change_seq_${change.sequence}`
+              : `applied_change_ent_${change.entityType}_${change.entityId}_${change.operation}`;
+          const alreadyApplied = await this.db.sync_metadata.get(appliedKey);
 
           switch (change.entityType) {
             case 'PRODUCT':
@@ -157,16 +163,55 @@ export class PullWorker {
               if (existingTx && existingTx.syncStatus === 'PENDING') {
                 continue;
               }
+
+              // Peer Sale Inventory Projection:
+              // Decrement local inventory batch projection for sold items idempotently
+              if (!alreadyApplied && itemData && Array.isArray(itemData.items)) {
+                for (const it of itemData.items) {
+                  const branch = itemData.branchId || change.branchId || '';
+                  let existingBatch: any = null;
+                  if (it.productId && it.batchNumber && branch) {
+                    existingBatch = await this.db.inventory
+                      .where('[branchId+productId]')
+                      .equals([branch, it.productId])
+                      .filter((b) => b.batchNumber === it.batchNumber)
+                      .first();
+                  }
+                  if (!existingBatch && it.batchNumber) {
+                    existingBatch = await this.db.inventory
+                      .where('batchNumber')
+                      .equals(it.batchNumber)
+                      .filter((b) => !branch || b.branchId === branch)
+                      .first();
+                  }
+                  if (!existingBatch && it.productId) {
+                    existingBatch = await this.db.inventory
+                      .where('productId')
+                      .equals(it.productId)
+                      .filter((b) => !branch || b.branchId === branch)
+                      .first();
+                  }
+
+                  if (existingBatch) {
+                    const qty = Number(it.quantity || it.qty || 1);
+                    await this.db.inventory.put({
+                      ...existingBatch,
+                      availableQuantity: Math.max(0, existingBatch.availableQuantity - qty),
+                      updatedAt: new Date().toISOString(),
+                    });
+                  }
+                }
+              }
               break;
 
             case 'PAYMENT':
-              if (itemData && itemData.customerId) {
-                const existingCust = await this.db.customers.get(itemData.customerId);
-                if (existingCust && existingCust.syncStatus !== 'PENDING') {
+              if (!alreadyApplied && itemData && itemData.customerId) {
+                const existingCustPay = await this.db.customers.get(itemData.customerId);
+                if (existingCustPay && existingCustPay.syncStatus !== 'PENDING') {
                   const payAmount = Number(itemData.amount || 0);
-                  const curBal = Number(existingCust.outstandingBalance || 0);
+                  const curBal = Number(existingCustPay.outstandingBalance || 0);
                   await this.db.customers.put({
-                    ...existingCust,
+                    ...existingCustPay,
                     outstandingBalance: curBal - payAmount,
                     updatedAt: new Date().toISOString(),
                   });
@@ -175,22 +220,66 @@ export class PullWorker {
               break;
 
             case 'RETURN':
-              if (itemData && itemData.customerId) {
-                const existingCust = await this.db.customers.get(itemData.customerId);
-                if (existingCust && existingCust.syncStatus !== 'PENDING') {
-                  const refundAmount = Number(itemData.refundAmount || 0);
-                  const curBal = Number(existingCust.outstandingBalance || 0);
-                  await this.db.customers.put({
-                    ...existingCust,
-                    outstandingBalance: curBal - refundAmount,
-                    updatedAt: new Date().toISOString(),
-                  });
+              if (!alreadyApplied) {
+                // Reconcile customer ledger balance
+                if (itemData && itemData.customerId) {
+                  const existingCustRet = await this.db.customers.get(itemData.customerId);
+                  if (existingCustRet && existingCustRet.syncStatus !== 'PENDING') {
+                    const refundAmount = Number(itemData.refundAmount || 0);
+                    const curBal = Number(existingCustRet.outstandingBalance || 0);
+                    await this.db.customers.put({
+                      ...existingCustRet,
+                      outstandingBalance: curBal - refundAmount,
+                      updatedAt: new Date().toISOString(),
+                    });
+                  }
+                }
+
+                // Peer Return Inventory Projection:
+                // Restock local inventory batches for returned items
+                if (itemData && Array.isArray(itemData.items)) {
+                  for (const it of itemData.items) {
+                    const restockQty = Number(it.restockQuantity !== undefined ? it.restockQuantity : (it.quantityReturned || 0));
+                    if (restockQty > 0) {
+                      const branch = itemData.branchId || change.branchId || '';
+                      let existingBatch: any = null;
+                      if (it.productId && it.batchNumber && branch) {
+                        existingBatch = await this.db.inventory
+                          .where('[branchId+productId]')
+                          .equals([branch, it.productId])
+                          .filter((b) => b.batchNumber === it.batchNumber)
+                          .first();
+                      }
+                      if (!existingBatch && it.batchNumber) {
+                        existingBatch = await this.db.inventory
+                          .where('batchNumber')
+                          .equals(it.batchNumber)
+                          .filter((b) => !branch || b.branchId === branch)
+                          .first();
+                      }
+                      if (!existingBatch && it.productId) {
+                        existingBatch = await this.db.inventory
+                          .where('productId')
+                          .equals(it.productId)
+                          .filter((b) => !branch || b.branchId === branch)
+                          .first();
+                      }
+
+                      if (existingBatch) {
+                        await this.db.inventory.put({
+                          ...existingBatch,
+                          availableQuantity: existingBatch.availableQuantity + restockQty,
+                          updatedAt: new Date().toISOString(),
+                        });
+                      }
+                    }
+                  }
                 }
               }
               break;
 
             case 'PURCHASE':
-              if (itemData && Array.isArray(itemData.items)) {
+              if (!alreadyApplied && itemData && Array.isArray(itemData.items)) {
                 for (const it of itemData.items) {
                   if (it.productId && it.batchNumber) {
                     const branch = itemData.branchId || change.branchId || '';
@@ -217,6 +306,13 @@ export class PullWorker {
             default:
               break;
           }
+
+          // Durably record change application key to guarantee projection idempotency
+          await this.db.sync_metadata.put({
+            key: appliedKey,
+            value: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          });
         }
       }
     );

@@ -606,15 +606,15 @@ export class LocalPersistenceService {
   async recordLocalReturn(
     returnData: {
       returnId?: string;
-      invoiceId: string;
-      customerId: string;
+      invoiceId?: string;
+      customerId?: string;
       returnNumber?: string;
       refundAmount: number;
       refundMethod?: 'CASH' | 'STORE_CREDIT';
       reason?: string;
       notes?: string;
       items: Array<{
-        invoiceItemId: string;
+        invoiceItemId?: string;
         productId?: string;
         batchNumber?: string;
         quantityReturned: number;
@@ -636,6 +636,8 @@ export class LocalPersistenceService {
     const deviceId = context.deviceId || (await this.syncMetaRepo.getDeviceId());
 
     const returnId = returnData.returnId || generateUUID();
+    const invoiceId = returnData.invoiceId || generateUUID();
+    const customerId = returnData.customerId || generateUUID();
     const mutationId = generateUUID();
     const occurredAt = new Date().toISOString();
     const returnNumber =
@@ -651,8 +653,8 @@ export class LocalPersistenceService {
       userId,
       payload: {
         returnId,
-        invoiceId: returnData.invoiceId,
-        customerId: returnData.customerId,
+        invoiceId,
+        customerId,
         returnNumber,
         refundAmount: Number(returnData.refundAmount || 0),
         refundMethod: returnData.refundMethod || 'CASH',
@@ -666,26 +668,49 @@ export class LocalPersistenceService {
       updatedAt: occurredAt,
     };
 
-    await this.db.transaction('rw', [this.db.inventory, this.db.sync_outbox], async () => {
-      for (const item of returnData.items || []) {
-        const restockQty = Number(item.restockQuantity || 0);
-        if (restockQty > 0 && item.productId && item.batchNumber) {
-          const batch = await this.db.inventory
-            .where('[branchId+productId]')
-            .equals([branchId, item.productId])
-            .filter((b) => b.batchNumber === item.batchNumber)
-            .first();
-          if (batch) {
-            await this.db.inventory.put({
-              ...batch,
-              availableQuantity: batch.availableQuantity + restockQty,
-              updatedAt: occurredAt,
-            });
+    await this.db.transaction(
+      'rw',
+      [this.db.inventory, this.db.transactions, this.db.sync_outbox],
+      async () => {
+        for (const item of returnData.items || []) {
+          const restockQty = Number(item.restockQuantity || 0);
+          if (restockQty > 0 && item.productId && item.batchNumber) {
+            const batch = await this.db.inventory
+              .where('[branchId+productId]')
+              .equals([branchId, item.productId])
+              .filter((b) => b.batchNumber === item.batchNumber)
+              .first();
+            if (batch) {
+              await this.db.inventory.put({
+                ...batch,
+                availableQuantity: batch.availableQuantity + restockQty,
+                updatedAt: occurredAt,
+              });
+            }
           }
         }
+
+        // 2. Persist local transaction record for durable local ledger & audit trail
+        await this.db.transactions.put({
+          transactionId: returnId,
+          mutationId,
+          type: 'RETURN',
+          organisationId,
+          branchId,
+          userId,
+          deviceId,
+          occurredAt,
+          status: 'LOCAL_COMMITTED',
+          syncStatus: 'PENDING',
+          payload: outboxRecord.payload,
+          createdAt: occurredAt,
+          updatedAt: occurredAt,
+        });
+
+        // 3. Enqueue durable mutation into sync_outbox
+        await this.db.sync_outbox.add(outboxRecord as SyncOutboxRecord);
       }
-      await this.db.sync_outbox.add(outboxRecord as SyncOutboxRecord);
-    });
+    );
 
     return { returnId, mutationId };
   }

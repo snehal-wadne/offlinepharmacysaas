@@ -310,7 +310,7 @@ export function PosProvider({ children }) {
    * - Adds credit note / return entry to returnHistory
    * - Restores stock if stockDisposition is 'Sellable'
    */
-  const processReturnRefund = (returnData) => {
+  const processReturnRefund = async (returnData) => {
     const returnNo = `RET-2026-${Math.floor(105 + Math.random() * 800)}`;
     const now = new Date();
     const dateStr =
@@ -335,7 +335,41 @@ export function PosProvider({ children }) {
       items: returnData.returnedItems || [],
     };
 
-    // If Sellable, restore stock
+    // 1. AWAIT ATOMIC LOCAL COMMIT:
+    // transactions write + sync_outbox write + local inventory projection
+    // ONLY THEN is return considered locally completed!
+    await localPersistenceService.recordLocalReturn({
+      returnNumber: returnNo,
+      invoiceId: returnData.invoiceId,
+      customerId: returnData.customerId,
+      refundAmount: Number(returnData.refundAmount || 0),
+      refundMethod:
+        returnData.refundMode === "Store Credit" ||
+        returnData.refundMode === "STORE_CREDIT"
+          ? "STORE_CREDIT"
+          : "CASH",
+      reason: returnData.reason,
+      notes:
+        returnData.notes ||
+        `Return for ${returnData.originalInvoice || "invoice"}`,
+      items: (returnData.returnedItems || []).map((it) => ({
+        invoiceItemId: it.invoiceItemId,
+        productId: it.productId || it.id,
+        batchNumber: it.batchNumber || it.batch || "BAT-RET",
+        quantityReturned: Number(it.qty || it.quantity || 1),
+        refundAmount:
+          Number(it.refundPrice || it.price || 0) * Number(it.qty || 1),
+        returnCondition:
+          returnData.stockDisposition === "Sellable" ? "SEALED" : "DAMAGED",
+        restockQuantity:
+          returnData.stockDisposition === "Sellable" ? Number(it.qty || 1) : 0,
+      })),
+    });
+
+    // Opportunistically push to server if online (non-blocking)
+    syncEngine.sync().catch(() => {});
+
+    // 2. Update React UI state (stock, return history) ONLY after local DB succeeds
     if (returnData.stockDisposition === "Sellable") {
       setProducts((prev) => {
         const copy = [...prev];

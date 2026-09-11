@@ -160,13 +160,20 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
       returnedItems: returnedItemsList,
     };
 
-    const creditNote = processReturnRefund(returnData);
-    setCompletedCreditNote(creditNote);
-    setReturnModalVisible(false);
-    setCreditNoteModalVisible(true);
+    try {
+      const creditNote = await processReturnRefund(returnData);
+      setCompletedCreditNote(creditNote);
+      setReturnModalVisible(false);
+      setCreditNoteModalVisible(true);
 
-    if (onShowToast) {
-      onShowToast(`✓ Processed Return & Credit Note #${creditNote.returnNo}! Amount ₹${creditNote.amount.toFixed(2)}`);
+      if (onShowToast) {
+        onShowToast(`✓ Processed Return & Credit Note #${creditNote.returnNo}! Amount ₹${creditNote.amount.toFixed(2)}`);
+      }
+    } catch (err) {
+      console.error("[SalesReturnsScreen] Return persistence failure:", err);
+      if (onShowToast) {
+        onShowToast(`✕ Failed to process return: ${err.message || 'Local persistence error'}`);
+      }
     }
   };
 

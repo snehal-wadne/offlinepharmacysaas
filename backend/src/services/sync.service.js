@@ -350,6 +350,21 @@ class SyncService {
       if (byId.rows.length > 0) {
         return byId.rows[0].id;
       }
+
+      // If client supplied a valid UUID productId, preserve it
+      const sku =
+        item.sku ||
+        item.barcode ||
+        `SKU-${Math.floor(1000 + Math.random() * 9000)}`;
+      const newProd = await client.query(
+        `INSERT INTO products (
+          id, organisation_id, category, medicine_name, brand_name, sku, is_active, is_rx_required, created_at, updated_at
+        ) VALUES ($1, $2, 'General', $3, $3, $4, true, false, NOW(), NOW())
+        ON CONFLICT (id) DO UPDATE SET updated_at = NOW()
+        RETURNING id`,
+        [pId, organisationId, item.name || "General Medicine", sku],
+      );
+      return newProd.rows[0].id;
     }
 
     if (item.barcode) {
@@ -550,6 +565,7 @@ class SyncService {
 
       // 6. Insert Line Items & Authoritative Inventory Decrements (with Row Lock & Deficit Tracking)
       const inventoryAlerts = [];
+      const lineItemsSummary = [];
       for (const item of items) {
         const productId = await this.resolveProduct(
           client,
@@ -564,6 +580,12 @@ class SyncService {
           item.total || qty * unitPrice - itemDiscount + itemTax,
         );
         const batchNumber = item.batchNumber || item.batch || null;
+
+        lineItemsSummary.push({
+          productId,
+          batchNumber,
+          quantity: qty,
+        });
 
         let resolvedBatchId = null;
 
@@ -781,6 +803,8 @@ class SyncService {
             totalPaid,
             itemsCount: items.length,
             status: "COMPLETED",
+            branchId: resolvedBranchId,
+            items: lineItemsSummary,
           }),
         ],
       );
@@ -1332,7 +1356,16 @@ class SyncService {
         };
       }
       const invoice = invRes.rows[0];
-      const customerId = payload.customerId || invoice.customer_id;
+      let customerId = invoice.customer_id;
+      if (payload.customerId) {
+        const custCheck = await client.query(
+          "SELECT id FROM customers WHERE id = $1 AND organisation_id = $2",
+          [payload.customerId, resolvedOrgId],
+        );
+        if (custCheck.rows.length > 0) {
+          customerId = custCheck.rows[0].id;
+        }
+      }
 
       // Check for existing return by ID (idempotency check at table level)
       const existingRet = await client.query(
@@ -1342,10 +1375,26 @@ class SyncService {
 
       let returnNumber;
       let totalRefund = Number(payload.refundAmount || 0);
+      const processedReturnItems = [];
 
       if (existingRet.rows.length > 0) {
         returnNumber = existingRet.rows[0].return_number;
         totalRefund = Number(existingRet.rows[0].refund_amount);
+        const existingItemsRes = await client.query(
+          `SELECT ri.quantity_returned, ri.restock_quantity, ii.product_id, ii.batch_number
+           FROM return_items ri
+           JOIN invoice_items ii ON ii.id = ri.invoice_item_id
+           WHERE ri.return_id = $1`,
+          [returnId],
+        );
+        for (const row of existingItemsRes.rows) {
+          processedReturnItems.push({
+            productId: row.product_id,
+            batchNumber: row.batch_number,
+            quantityReturned: Number(row.quantity_returned || 0),
+            restockQuantity: Number(row.restock_quantity || 0),
+          });
+        }
       } else {
         returnNumber =
           payload.returnNumber ||
@@ -1399,12 +1448,16 @@ class SyncService {
           }
 
           if (!targetInvoiceItemId) {
+            const fallbackProdId =
+              it.productId ||
+              (await this.resolveProduct(client, resolvedOrgId, it));
             const newInvItemRes = await client.query(
               `INSERT INTO invoice_items (
-                 invoice_id, product_name, quantity, unit_price, line_total, created_at
-               ) VALUES ($1, 'Returned Item', $2, $3, $4, NOW()) RETURNING id`,
+                 invoice_id, product_id, product_name, quantity, unit_price, line_total, created_at
+               ) VALUES ($1, $2, 'Returned Item', $3, $4, $5, NOW()) RETURNING id`,
               [
                 invoiceId,
+                fallbackProdId,
                 it.quantityReturned || 1,
                 it.refundAmount || 0,
                 it.refundAmount || 0,
@@ -1461,6 +1514,13 @@ class SyncService {
               [restockQty, matchedInvItem.inventory_batch_id],
             );
           }
+
+          processedReturnItems.push({
+            productId: it.productId || matchedInvItem?.product_id,
+            batchNumber: it.batchNumber || it.batch,
+            quantityReturned: qtyReturned,
+            restockQuantity: restockQty,
+          });
         }
 
         // 3. Customer Ledger entry for return credit
@@ -1545,6 +1605,7 @@ class SyncService {
             organisationId: resolvedOrgId,
             branchId: resolvedBranchId,
             status: "COMPLETED",
+            items: processedReturnItems,
           }),
         ],
       );
@@ -2457,7 +2518,7 @@ class SyncService {
     }
 
     const fromSeq = parseInt(cursor, 10) || 0;
-    const batchLimit = Math.min(Math.max(1, parseInt(limit, 10) || 50), 200);
+    const batchLimit = Math.min(Math.max(1, parseInt(limit, 10) || 50), 1000);
 
     let query;
     let params;
