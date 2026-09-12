@@ -23,6 +23,9 @@ router.post('/movements', inventoryController.recordMovement);
 // POST /api/inventory - Create inventory entry
 router.post('/', inventoryController.saveInventory);
 
+// GET /api/inventory/:id/barcode - Generate barcode & thermal shelf tag
+router.get('/:id/barcode', inventoryController.getItemBarcode);
+
 // PUT /api/inventory/:id - Update inventory entry
 router.put('/:id', inventoryController.updateInventory);
 

@@ -8,7 +8,7 @@ const login = async (req, res) => {
   try {
     const { emailOrPhone, password, email } = req.body;
     const identifier = emailOrPhone || email;
-    const result = await authService.login({ emailOrPhone: identifier, password });
+    const result = await authService.login({ emailOrPhone: identifier, password, branchId: req.body.branchId });
     res.status(200).json(result);
   } catch (error) {
     res.status(401).json({ success: false, error: error.message });

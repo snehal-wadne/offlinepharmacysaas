@@ -11,6 +11,9 @@ const purchaseController = require('../controllers/purchase.controller');
 // GET /api/purchases - List purchase orders (supports status, search, limit, offset filters)
 router.get('/', purchaseController.getPurchases);
 
+// GET /api/purchases/summary - Purchase KPI summary
+router.get('/summary', purchaseController.getPurchaseSummary);
+
 // GET /api/purchases/:id - Get PO details by ID
 router.get('/:id', purchaseController.getPurchaseById);
 

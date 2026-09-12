@@ -169,6 +169,26 @@ const recordMovement = async (req, res) => {
   }
 };
 
+const getItemBarcode = async (req, res) => {
+  try {
+    const organisationId = await getOrgId(req);
+    const { id } = req.params;
+
+    const barcodeData = await inventoryService.getItemBarcodeData(organisationId, id);
+
+    res.status(200).json({
+      success: true,
+      data: barcodeData,
+    });
+  } catch (error) {
+    console.error(`Error fetching barcode for item ${req.params.id}:`, error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to generate barcode data',
+    });
+  }
+};
+
 module.exports = {
   getInventory,
   getInventorySummary,
@@ -177,4 +197,5 @@ module.exports = {
   saveInventory,
   updateInventory,
   deleteInventory,
+  getItemBarcode,
 };

@@ -54,6 +54,28 @@ const getSessionHistory = async (req, res) => {
   }
 };
 
+const recordCashMovement = async (req, res) => {
+  try {
+    const { movementType, amount, reason, sessionId } = req.body;
+    const result = await cashierService.recordCashMovement({ movementType, amount, reason, sessionId });
+    res.status(201).json(result);
+  } catch (error) {
+    console.error('Error recording cash movement:', error);
+    res.status(400).json({ success: false, error: error.message });
+  }
+};
+
+const getCashMovements = async (req, res) => {
+  try {
+    const { sessionId } = req.query;
+    const result = await cashierService.getCashMovements(sessionId);
+    res.status(200).json(result);
+  } catch (error) {
+    console.error('Error getting cash movements:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 // --- Products & Barcode Search ---
 const searchProducts = async (req, res) => {
   try {
@@ -177,6 +199,8 @@ module.exports = {
   openSession,
   closeSession,
   getSessionHistory,
+  recordCashMovement,
+  getCashMovements,
   searchProducts,
   createSale,
   getRecentSales,

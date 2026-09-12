@@ -352,9 +352,41 @@ const receivePurchaseStock = async (organisationId, purchaseId, receiveData = {}
   }
 };
 
+const getPurchaseSummary = async (organisationId) => {
+  if (!organisationId) {
+    throw new Error('organisationId is required');
+  }
+
+  const query = `
+    SELECT
+      COUNT(DISTINCT p.id) AS "totalOrders",
+      COUNT(DISTINCT CASE WHEN p.status = 'PENDING' THEN p.id END) AS "pendingOrders",
+      COUNT(DISTINCT CASE WHEN p.status = 'APPROVED' THEN p.id END) AS "approvedOrders",
+      COUNT(DISTINCT CASE WHEN p.status IN ('RECEIVED', 'PARTIALLY_RECEIVED') THEN p.id END) AS "receivedOrders",
+      COUNT(DISTINCT CASE WHEN p.status = 'DRAFT' THEN p.id END) AS "draftOrders",
+      COALESCE(SUM(pi.ordered_quantity * pi.unit_cost), 0.00) AS "totalSpend"
+    FROM purchases p
+    LEFT JOIN purchase_items pi ON pi.purchase_id = p.id
+    WHERE p.organisation_id = $1;
+  `;
+
+  const res = await pool.query(query, [organisationId]);
+  const row = res.rows[0] || {};
+
+  return {
+    totalOrders: parseInt(row.totalOrders || 0, 10),
+    pendingOrders: parseInt(row.pendingOrders || 0, 10),
+    approvedOrders: parseInt(row.approvedOrders || 0, 10),
+    receivedOrders: parseInt(row.receivedOrders || 0, 10),
+    draftOrders: parseInt(row.draftOrders || 0, 10),
+    totalSpend: parseFloat(row.totalSpend || 0).toFixed(2),
+  };
+};
+
 module.exports = {
   getPurchases,
   getPurchaseById,
+  getPurchaseSummary,
   createPurchase,
   updatePurchaseStatus,
   approvePurchase,

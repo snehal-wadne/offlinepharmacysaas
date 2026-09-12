@@ -13,9 +13,10 @@ const getStatus = async (req, res) => {
   }
 };
 
-const triggerSync = async (req, res) => {
+const processBatch = async (req, res) => {
   try {
-    const result = await syncService.syncPending();
+    const { mutations, batchId } = req.body;
+    const result = await syncService.processBatch(mutations || [], batchId);
     res.status(200).json(result);
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -33,6 +34,7 @@ const testConnection = async (req, res) => {
 
 module.exports = {
   getStatus,
-  triggerSync,
+  processBatch,
   testConnection,
 };
+

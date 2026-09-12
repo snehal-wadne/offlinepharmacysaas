@@ -19,6 +19,8 @@ router.get('/register/current', cashierController.getCurrentSession);
 router.post('/register/open', cashierController.openSession);
 router.post('/register/close', cashierController.closeSession);
 router.get('/register/history', cashierController.getSessionHistory);
+router.post('/register/movement', cashierController.recordCashMovement);
+router.get('/register/movements', cashierController.getCashMovements);
 
 // --- Products & Barcode Search ---
 router.get('/products', cashierController.searchProducts);
