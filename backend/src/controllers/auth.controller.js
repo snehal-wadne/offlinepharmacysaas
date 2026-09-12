@@ -34,8 +34,26 @@ const register = async (req, res) => {
   }
 };
 
+const googleLogin = async (req, res) => {
+  try {
+    const { email, name, googleSub, role, branchId } = req.body;
+    const result = await authService.googleLogin({
+      email,
+      name,
+      googleSub,
+      role,
+      branchId,
+    });
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+};
+
 module.exports = {
   login,
   pinLogin,
   register,
+  googleLogin,
 };
+

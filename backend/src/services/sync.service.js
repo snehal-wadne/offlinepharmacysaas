@@ -6,7 +6,6 @@
  */
 
 const crypto = require("crypto");
-const localStore = require("../db/localStore");
 const {
   pool,
   checkDbConnection,
@@ -44,7 +43,6 @@ function computePayloadHash(payload) {
     .update(canonicalString(payload))
     .digest("hex");
 }
->>>>>>> origin/main
 
 class SyncService {
   /**
@@ -151,15 +149,6 @@ class SyncService {
             await cashierService.processReturn(payload);
             syncedIds.push(id);
             console.log(`✓ Synced offline return: ${payload.invoiceNo || payload.returnNo || id}`);
-=======
-        switch (item.action) {
-          case "CREATE_INVOICE":
-            break;
-          case "OPEN_SESSION":
-          case "CLOSE_SESSION":
-            break;
-          case "CREATE_RETURN":
->>>>>>> origin/main
             break;
           }
 

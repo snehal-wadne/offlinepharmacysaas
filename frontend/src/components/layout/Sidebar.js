@@ -66,10 +66,16 @@ export default function Sidebar({
 }) {
   const roleName = (currentUser?.role || '').toLowerCase();
   const accessLevel = (currentUser?.accessLevel || '').toLowerCase();
+  const isOwner =
+    Boolean(currentUser?.isOwner) ||
+    roleName.includes('owner') ||
+    accessLevel.includes('owner');
   const isAdmin =
     !currentUser ||
+    isOwner ||
     roleName.includes('admin') ||
     accessLevel.includes('admin');
+
 
   let heldCount = 6;
   try {

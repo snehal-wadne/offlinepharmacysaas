@@ -335,16 +335,37 @@ export default function Header({
 
         {/* User Profile */}
         <View style={styles.profileContainer}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initials || "C"}</Text>
+          <View
+            style={[
+              styles.avatar,
+              (currentUser?.isOwner || (currentUser?.role || '').toUpperCase() === 'OWNER') && {
+                backgroundColor: '#0D9488',
+              },
+            ]}
+          >
+            <Text style={styles.avatarText}>
+              {(currentUser?.isOwner || (currentUser?.role || '').toUpperCase() === 'OWNER')
+                ? '👑'
+                : initials || 'C'}
+            </Text>
           </View>
           {!isMobile && (
             <View style={styles.userInfoColumn}>
               <Text style={styles.userNameText}>
-                {displayName || "Admin Owner"}
+                {displayName || 'Admin Owner'}
               </Text>
-              <Text style={styles.userRoleText}>
-                {currentUser?.role || "Admin"}
+              <Text
+                style={[
+                  styles.userRoleText,
+                  (currentUser?.isOwner || (currentUser?.role || '').toUpperCase() === 'OWNER') && {
+                    color: '#0F766E',
+                    fontWeight: '800',
+                  },
+                ]}
+              >
+                {(currentUser?.isOwner || (currentUser?.role || '').toUpperCase() === 'OWNER')
+                  ? '👑 Pharmacy Owner'
+                  : currentUser?.roleName || currentUser?.role || 'Admin'}
               </Text>
             </View>
           )}

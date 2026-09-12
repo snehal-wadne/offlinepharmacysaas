@@ -159,6 +159,9 @@ app.use("/taxes", taxRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/superadmin", superadminRoutes);
 app.post("/api/login", authController.login);
+app.post("/api/login/google", authController.googleLogin);
+app.post("/api/auth/google", authController.googleLogin);
+
 
 /**
  * Server Startup
