@@ -8,7 +8,12 @@
     "ios": "node scripts/start-single-tier.js npx expo start --ios",
     "web": "node scripts/start-single-tier.js npx expo start --web",
     "test:persistence": "ts-node scripts/test-persistence.ts",
-    "test:sync": "ts-node scripts/test-sync-engine.ts"
+    "test:sync": "ts-node scripts/test-sync-engine.ts",
+    "test:bootstrap": "ts-node scripts/test-bootstrap.ts",
+    "test:payments": "ts-node scripts/test-phase2-payments.ts",
+    "test:receiving": "ts-node scripts/test-phase3-receiving.ts",
+    "test:integration": "ts-node scripts/test-canonical-integration.ts",
+    "test:shared": "ts-node scripts/test-shared-architecture.ts"
   },
   "dependencies": {
     "@expo/metro-config": "~0.18.11",

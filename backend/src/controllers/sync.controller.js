@@ -72,9 +72,43 @@ const testConnection = async (req, res) => {
   }
 };
 
+const bootstrap = async (req, res) => {
+  try {
+    const organisationId =
+      req.tenantContext?.organisationId || req.query.organisationId;
+    const branchId = req.tenantContext?.branchId || req.query.branchId;
+
+    if (!organisationId) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing organisationId for bootstrap",
+      });
+    }
+
+    if (!branchId) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing branchId for bootstrap",
+      });
+    }
+
+    const data = await syncService.bootstrapTenantData({
+      organisationId,
+      branchId,
+      userId: req.user?.id,
+    });
+
+    res.status(200).json(data);
+  } catch (error) {
+    console.error("[SyncController] Bootstrap error:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 module.exports = {
   getStatus,
   pushMutations,
   pullChanges,
   testConnection,
+  bootstrap,
 };

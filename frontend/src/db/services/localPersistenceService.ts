@@ -62,13 +62,19 @@ export class LocalPersistenceService {
    */
   async initialize(
     organisationId = DEFAULT_ORG_ID,
-    branchId = DEFAULT_BRANCH_ID
+    branchId = DEFAULT_BRANCH_ID,
+    options: { seedMockIfEmpty?: boolean } = {}
   ): Promise<{ deviceId: string; productCount: number }> {
+    this.defaultOrgId = organisationId;
+    this.defaultBranchId = branchId;
     const deviceId = await this.syncMetaRepo.getDeviceId();
 
-    // Check if products store has data
+    // In production offline mode, only seed mock data if explicitly requested or in default demo mode without real tenant context
+    const isMockDemo = organisationId === DEFAULT_ORG_ID;
+    const shouldSeedMock = options.seedMockIfEmpty ?? isMockDemo;
+
     const count = await this.db.products.count();
-    if (count === 0 && MOCK_POS_PRODUCTS && MOCK_POS_PRODUCTS.length > 0) {
+    if (count === 0 && shouldSeedMock && MOCK_POS_PRODUCTS && MOCK_POS_PRODUCTS.length > 0) {
       await this.seedInitialCatalog(organisationId, branchId);
     }
 
@@ -406,6 +412,74 @@ export class LocalPersistenceService {
   }
 
   /**
+   * Fetch local catalogue projection for POS UI:
+   * Aggregates products with their available branch batches, stock, and pricing.
+   */
+  async getCatalogForPos(
+    organisationId: string = this.defaultOrgId || DEFAULT_ORG_ID,
+    branchId: string = this.defaultBranchId || DEFAULT_BRANCH_ID
+  ): Promise<any[]> {
+    const products = await this.db.products
+      .where('organisationId')
+      .equals(organisationId)
+      .filter((p) => p.active !== false)
+      .toArray();
+
+    if (products.length === 0) {
+      return [];
+    }
+
+    const result = [];
+    for (const p of products) {
+      const batches = await this.db.inventory
+        .where('[branchId+productId]')
+        .equals([branchId, p.productId])
+        .toArray();
+
+      const totalStock = batches.reduce((sum, b) => sum + (b.availableQuantity || 0), 0);
+      const activeBatches = batches.filter((b) => b.availableQuantity > 0);
+      const primaryBatch = activeBatches[0] || batches[0] || null;
+
+      result.push({
+        id: p.productId,
+        name: p.name,
+        generic: p.genericName || '',
+        barcode: p.barcode || p.sku || '',
+        sku: p.sku || '',
+        category: p.category || 'General',
+        batch: primaryBatch?.batchNumber || '',
+        expiry: primaryBatch?.expiryDate || '',
+        mrp: primaryBatch?.mrp || p.mrp || 0,
+        sellingPrice: primaryBatch?.sellingPrice || p.sellingPrice || primaryBatch?.mrp || p.mrp || 0,
+        stock: totalStock,
+        gstRate: p.gstRate || 5,
+        pack: p.packSize ? String(p.packSize) : 'Unit',
+        batches: batches.map((b) => ({
+          batch: b.batchNumber,
+          expiry: b.expiryDate,
+          stock: b.availableQuantity,
+          price: b.sellingPrice,
+          mrp: b.mrp,
+        })),
+      });
+    }
+
+    return result;
+  }
+
+  /**
+   * Fetch local customers list for POS UI
+   */
+  async getCustomersForPos(
+    organisationId: string = this.defaultOrgId || DEFAULT_ORG_ID
+  ): Promise<CustomerRecord[]> {
+    return this.db.customers
+      .where('organisationId')
+      .equals(organisationId)
+      .toArray();
+  }
+
+  /**
    * Search products by barcode or text query
    */
   async searchProducts(query: string, organisationId = DEFAULT_ORG_ID): Promise<ProductRecord[]> {
@@ -579,7 +653,7 @@ export class LocalPersistenceService {
       updatedAt: occurredAt,
     };
 
-    await this.db.transaction('rw', [this.db.customers, this.db.sync_outbox], async () => {
+    await this.db.transaction('rw', [this.db.customers, this.db.transactions, this.db.sync_outbox], async () => {
       const cust = await this.db.customers.get(paymentData.customerId);
       if (cust) {
         const currentBal = Number(cust.outstandingBalance || 0);
@@ -590,10 +664,84 @@ export class LocalPersistenceService {
           updatedAt: occurredAt,
         });
       }
+
+      await this.db.transactions.put({
+        transactionId: paymentId,
+        mutationId,
+        type: 'CUSTOMER_PAYMENT',
+        organisationId,
+        branchId,
+        userId,
+        deviceId,
+        invoiceNumber: receiptNumber,
+        payload: {
+          ...outboxRecord.payload,
+          customerName: cust?.name || '',
+          customerPhone: cust?.phone || '',
+        },
+        occurredAt,
+        status: 'LOCAL_COMMITTED',
+        syncStatus: 'PENDING',
+        createdAt: occurredAt,
+        updatedAt: occurredAt,
+      });
+
       await this.db.sync_outbox.add(outboxRecord as SyncOutboxRecord);
     });
 
     return { paymentId, mutationId, newBalance };
+  }
+
+  /**
+   * Fetch local customer payment receipts for UI and credit ledger
+   */
+  async getPaymentReceipts(
+    organisationId: string = this.defaultOrgId || DEFAULT_ORG_ID,
+    customerId?: string,
+    limit = 50
+  ): Promise<any[]> {
+    const records = await this.db.transactions
+      .where('type')
+      .equals('CUSTOMER_PAYMENT')
+      .reverse()
+      .sortBy('occurredAt');
+
+    const filtered = records
+      .filter((tx) => !organisationId || tx.organisationId === organisationId)
+      .filter((tx) => !customerId || tx.payload?.customerId === customerId)
+      .slice(0, limit);
+
+    return filtered.map((tx) => {
+      const p = tx.payload || {};
+      const amountVal = Number(p.amount || 0);
+      return {
+        id: p.receiptNumber || tx.invoiceNumber || `REC-${tx.transactionId.slice(0, 8)}`,
+        transactionId: tx.transactionId,
+        mutationId: tx.mutationId,
+        customerId: p.customerId,
+        customerName: p.customerName || 'Customer',
+        phone: p.customerPhone || '—',
+        amount: `₹${amountVal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
+        amountRaw: amountVal,
+        paymentMode: p.paymentMethod || 'Cash',
+        transactionRef: p.reference || 'DIRECT-RECEIPT',
+        linkedRef: p.allocations && p.allocations.length > 0
+          ? p.allocations.map((a: any) => a.invoiceId).join(', ')
+          : 'Ledger Dues',
+        date: new Date(tx.occurredAt).toLocaleString('en-GB', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+        status: tx.status === 'LOCAL_COMMITTED' ? 'Completed' : tx.status,
+        syncStatus: tx.syncStatus,
+        receivedBy: tx.userId || 'Pharmacist',
+        branch: tx.branchId || 'Main Branch',
+        notes: p.notes || '',
+      };
+    });
   }
 
   /**
@@ -725,6 +873,7 @@ export class LocalPersistenceService {
       purchaseId?: string;
       goodsReceiptId?: string;
       supplierId?: string;
+      supplierName?: string;
       purchaseNumber?: string;
       receiptNumber?: string;
       notes?: string;
@@ -785,7 +934,57 @@ export class LocalPersistenceService {
       updatedAt: occurredAt,
     };
 
-    await this.db.transaction('rw', [this.db.inventory, this.db.sync_outbox], async () => {
+    if (!purchaseData.items || !Array.isArray(purchaseData.items) || purchaseData.items.length === 0) {
+      throw new Error('Purchase receipt must contain at least one item');
+    }
+
+    for (const item of purchaseData.items) {
+      if (!item.productId || typeof item.productId !== 'string' || !item.productId.trim()) {
+        throw new Error('Valid productId is required for each received item');
+      }
+      if (!item.batchNumber || typeof item.batchNumber !== 'string' || !item.batchNumber.trim()) {
+        throw new Error('Valid batchNumber is required for each received item');
+      }
+      const qty = Number(item.quantity);
+      if (isNaN(qty) || qty <= 0) {
+        throw new Error('Valid positive quantity is required for each received item');
+      }
+    }
+
+    const transactionRecord: TransactionRecord = {
+      transactionId: goodsReceiptId,
+      mutationId,
+      type: 'PURCHASE',
+      organisationId,
+      branchId,
+      userId,
+      deviceId,
+      invoiceNumber: purchaseData.supplierInvoiceNumber || receiptNumber,
+      payload: {
+        purchaseId,
+        goodsReceiptId,
+        supplierId: purchaseData.supplierId,
+        supplierName: (purchaseData as any).supplierName || (purchaseData as any).supplier || 'Supplier',
+        purchaseNumber: purchaseData.purchaseNumber || `PO-${Date.now().toString().slice(-4)}`,
+        receiptNumber,
+        receivedDate: (purchaseData as any).receivedDate || new Date().toISOString().split('T')[0],
+        receivedBy: (purchaseData as any).receivedBy || 'Staff',
+        branchName: (purchaseData as any).branchName || 'Main Branch',
+        supplierInvoiceNumber: purchaseData.supplierInvoiceNumber || null,
+        packageCount: purchaseData.packageCount || 1,
+        itemsCount: (purchaseData.items || []).length,
+        notes: purchaseData.notes || null,
+        items: purchaseData.items || [],
+        status: 'Verified',
+      },
+      occurredAt,
+      status: 'LOCAL_COMMITTED',
+      syncStatus: 'PENDING',
+      createdAt: occurredAt,
+      updatedAt: occurredAt,
+    };
+
+    await this.db.transaction('rw', [this.db.inventory, this.db.transactions, this.db.sync_outbox], async () => {
       for (const item of purchaseData.items || []) {
         const qty = Number(item.quantity || 0);
         if (qty > 0 && item.productId && item.batchNumber) {
@@ -812,16 +1011,62 @@ export class LocalPersistenceService {
               availableQuantity: qty,
               costPrice: item.costPrice || 100,
               mrp: item.mrp || 130,
-              sellingPrice: item.sellingPrice || 130,
+              sellingPrice: item.sellingPrice || item.mrp || 130,
               updatedAt: occurredAt,
             });
           }
         }
       }
+      await this.db.transactions.put(transactionRecord);
       await this.db.sync_outbox.add(outboxRecord as SyncOutboxRecord);
     });
 
     return { purchaseId, goodsReceiptId, mutationId };
+  }
+
+  /**
+   * Retrieve locally persisted goods receipts / purchase transactions.
+   */
+  async getLocalPurchaseReceipts(
+    organisationId: string = this.defaultOrgId || DEFAULT_ORG_ID,
+    branchId?: string,
+    limit = 50
+  ): Promise<any[]> {
+    const records = await this.db.transactions
+      .where('type')
+      .equals('PURCHASE')
+      .reverse()
+      .sortBy('occurredAt');
+
+    const filtered = records
+      .filter((tx) => !organisationId || tx.organisationId === organisationId)
+      .filter((tx) => !branchId || tx.branchId === branchId)
+      .slice(0, limit);
+
+    return filtered.map((tx) => {
+      const p = tx.payload || {};
+      return {
+        realId: tx.transactionId,
+        id: p.receiptNumber || tx.invoiceNumber || `GRN-${tx.transactionId.slice(0, 8)}`,
+        poReference: p.purchaseNumber || 'PO-1026',
+        supplier: p.supplierName || p.supplier || 'Supplier',
+        receivedDate: p.receivedDate || new Date(tx.occurredAt).toLocaleDateString('en-GB', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+        }),
+        receivedBy: p.receivedBy || 'Staff',
+        itemsCount: p.itemsCount || (p.items ? p.items.length : 0),
+        packagesCount: p.packageCount || 1,
+        invoiceNo: p.supplierInvoiceNumber || tx.invoiceNumber || '—',
+        status: p.status || 'Verified',
+        branch: p.branchName || 'Main Branch',
+        syncStatus: tx.syncStatus,
+        transactionId: tx.transactionId,
+        mutationId: tx.mutationId,
+        items: p.items || [],
+      };
+    });
   }
 
   /**

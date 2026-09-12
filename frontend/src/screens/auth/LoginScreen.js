@@ -18,15 +18,17 @@ export default function LoginScreen({ onLoginSuccess }) {
   const [authMode, setAuthMode] = useState("signin");
 
   // Sign In States
-  const [signInEmail, setSignInEmail] = useState("root@falah.com");
-  const [signInPassword, setSignInPassword] = useState("more#78548");
+  const [signInEmail, setSignInEmail] = useState("admin@flora.edu.in");
+  const [signInPassword, setSignInPassword] = useState("admin123");
   const [showSignInPassword, setShowSignInPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
   // Sign Up States
   const [signUpName, setSignUpName] = useState("");
   const [signUpEmail, setSignUpEmail] = useState("");
-  const [signUpBranch, setSignUpBranch] = useState("FIT Main Campus Hospital Pharmacy");
+  const [signUpBranch, setSignUpBranch] = useState(
+    "FIT Main Campus Hospital Pharmacy",
+  );
   const [signUpRole, setSignUpRole] = useState("Pharmacist");
   const [signUpPassword, setSignUpPassword] = useState("");
   const [signUpConfirmPassword, setSignUpConfirmPassword] = useState("");
@@ -86,7 +88,9 @@ export default function LoginScreen({ onLoginSuccess }) {
     }
 
     if (!isValidGoogleEmail(email)) {
-      setErrorMessage("Please enter a valid Google / Gmail address (e.g. yourname@gmail.com).");
+      setErrorMessage(
+        "Please enter a valid Google / Gmail address (e.g. yourname@gmail.com).",
+      );
       return;
     }
 
@@ -148,11 +152,16 @@ export default function LoginScreen({ onLoginSuccess }) {
           email: email,
           role: "Administrator",
           accessLevel: "Admin",
-          branch: "FIT Main Campus Hospital Pharmacy",
+          organisationId: "ORG-DEMO",
+          organisationName: "Demo Pharmacy",
+          branchId: "BRANCH-DEMO",
+          branch: "Main Branch",
         });
       }
     } else {
-      setErrorMessage("Invalid credentials. Please verify your Gmail ID and password or use Demo Credentials.");
+      setErrorMessage(
+        "Invalid credentials. Please verify your Gmail ID and password or use Demo Credentials.",
+      );
     }
   };
 
@@ -176,7 +185,9 @@ export default function LoginScreen({ onLoginSuccess }) {
     }
 
     if (!isValidGoogleEmail(email)) {
-      setErrorMessage("Please enter a valid Gmail / Google address (e.g. yourname@gmail.com).");
+      setErrorMessage(
+        "Please enter a valid Gmail / Google address (e.g. yourname@gmail.com).",
+      );
       return;
     }
 
@@ -273,7 +284,9 @@ export default function LoginScreen({ onLoginSuccess }) {
                 </View>
                 <View>
                   <Text style={styles.logoTitle}>FLORA INSTITUTE</Text>
-                  <Text style={styles.logoSubtitle}>PHARMACY BILLING & ERP</Text>
+                  <Text style={styles.logoSubtitle}>
+                    PHARMACY BILLING & ERP
+                  </Text>
                 </View>
               </View>
 
@@ -282,8 +295,9 @@ export default function LoginScreen({ onLoginSuccess }) {
                 <Text style={styles.greenHeading}>& Management</Text>
                 <Text style={styles.tagline}>Simple. Smart. Reliable.</Text>
                 <Text style={styles.description}>
-                  Manage multi-branch inventory, batch expiries, rapid POS checkout,
-                  purchases, and real-time compliance with Google security.
+                  Manage multi-branch inventory, batch expiries, rapid POS
+                  checkout, purchases, and real-time compliance with Google
+                  security.
                 </Text>
 
                 <View style={styles.featuresContainer}>
@@ -294,7 +308,9 @@ export default function LoginScreen({ onLoginSuccess }) {
                       </View>
                       <View style={styles.featureText}>
                         <Text style={styles.featureTitle}>{feature.title}</Text>
-                        <Text style={styles.featureDescription}>{feature.description}</Text>
+                        <Text style={styles.featureDescription}>
+                          {feature.description}
+                        </Text>
                       </View>
                     </View>
                   ))}
@@ -307,7 +323,9 @@ export default function LoginScreen({ onLoginSuccess }) {
                     <Text style={styles.footerIcon}>🎧</Text>
                     <Text style={styles.footerTitle}>Need Help?</Text>
                   </View>
-                  <Text style={styles.footerText}>Contact pharmacy.support@flora.edu.in</Text>
+                  <Text style={styles.footerText}>
+                    Contact pharmacy.support@flora.edu.in
+                  </Text>
                 </View>
                 <View style={styles.footerItemRight}>
                   <View style={styles.footerTitleRow}>
@@ -337,7 +355,9 @@ export default function LoginScreen({ onLoginSuccess }) {
                 </View>
                 <View>
                   <Text style={styles.mobileBrandTitle}>PharmaFlow ERP</Text>
-                  <Text style={styles.mobileBrandSubtitle}>Flora Institute of Technology</Text>
+                  <Text style={styles.mobileBrandSubtitle}>
+                    Flora Institute of Technology
+                  </Text>
                 </View>
               </View>
             )}
@@ -358,7 +378,10 @@ export default function LoginScreen({ onLoginSuccess }) {
               {/* AUTH MODE TABS */}
               <View style={styles.tabContainer}>
                 <Pressable
-                  style={[styles.tabButton, authMode === "signin" && styles.tabButtonActive]}
+                  style={[
+                    styles.tabButton,
+                    authMode === "signin" && styles.tabButtonActive,
+                  ]}
                   onPress={() => {
                     setAuthMode("signin");
                     setErrorMessage("");
@@ -366,14 +389,20 @@ export default function LoginScreen({ onLoginSuccess }) {
                   }}
                 >
                   <Text
-                    style={[styles.tabText, authMode === "signin" && styles.tabTextActive]}
+                    style={[
+                      styles.tabText,
+                      authMode === "signin" && styles.tabTextActive,
+                    ]}
                   >
                     Sign In
                   </Text>
                 </Pressable>
 
                 <Pressable
-                  style={[styles.tabButton, authMode === "signup" && styles.tabButtonActive]}
+                  style={[
+                    styles.tabButton,
+                    authMode === "signup" && styles.tabButtonActive,
+                  ]}
                   onPress={() => {
                     setAuthMode("signup");
                     setErrorMessage("");
@@ -381,7 +410,10 @@ export default function LoginScreen({ onLoginSuccess }) {
                   }}
                 >
                   <Text
-                    style={[styles.tabText, authMode === "signup" && styles.tabTextActive]}
+                    style={[
+                      styles.tabText,
+                      authMode === "signup" && styles.tabTextActive,
+                    ]}
                   >
                     Sign Up
                   </Text>
@@ -413,13 +445,17 @@ export default function LoginScreen({ onLoginSuccess }) {
                   <Text style={styles.googleGText}>G</Text>
                 </View>
                 <Text style={styles.googleButtonText}>
-                  {authMode === "signin" ? "Continue with Google ID" : "Sign up with Google ID"}
+                  {authMode === "signin"
+                    ? "Continue with Google ID"
+                    : "Sign up with Google ID"}
                 </Text>
               </Pressable>
 
               <View style={styles.dividerRow}>
                 <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>or continue with email & password</Text>
+                <Text style={styles.dividerText}>
+                  or continue with email & password
+                </Text>
                 <View style={styles.dividerLine} />
               </View>
 
@@ -472,7 +508,9 @@ export default function LoginScreen({ onLoginSuccess }) {
                       />
                       <Pressable
                         style={styles.eyeButton}
-                        onPress={() => setShowSignInPassword(!showSignInPassword)}
+                        onPress={() =>
+                          setShowSignInPassword(!showSignInPassword)
+                        }
                         disabled={isLoading}
                       >
                         <Text style={styles.eyeIcon}>
@@ -500,21 +538,29 @@ export default function LoginScreen({ onLoginSuccess }) {
                       <Text style={styles.rememberText}>Remember me</Text>
                     </Pressable>
 
-                    <Pressable onPress={loadDemoCredentials} disabled={isLoading}>
+                    <Pressable
+                      onPress={loadDemoCredentials}
+                      disabled={isLoading}
+                    >
                       <Text style={styles.forgotText}>Use Demo Login</Text>
                     </Pressable>
                   </View>
 
                   {/* SUBMIT SIGN IN */}
                   <Pressable
-                    style={[styles.signInButton, isLoading && styles.disabledButton]}
+                    style={[
+                      styles.signInButton,
+                      isLoading && styles.disabledButton,
+                    ]}
                     onPress={handleSignIn}
                     disabled={isLoading}
                   >
                     {isLoading ? (
                       <ActivityIndicator size="small" color="#ffffff" />
                     ) : (
-                      <Text style={styles.signInText}>Sign In to Pharmacy Workspace →</Text>
+                      <Text style={styles.signInText}>
+                        Sign In to Pharmacy Workspace →
+                      </Text>
                     )}
                   </Pressable>
 
@@ -530,7 +576,9 @@ export default function LoginScreen({ onLoginSuccess }) {
                   >
                     <Text style={styles.switchModeText}>
                       Don't have an account?{" "}
-                      <Text style={styles.switchModeHighlight}>Sign Up here</Text>
+                      <Text style={styles.switchModeHighlight}>
+                        Sign Up here
+                      </Text>
                     </Text>
                   </Pressable>
                 </View>
@@ -586,7 +634,12 @@ export default function LoginScreen({ onLoginSuccess }) {
                   <View style={styles.fieldContainer}>
                     <Text style={styles.label}>Assigned Role</Text>
                     <View style={styles.roleChipsRow}>
-                      {["Pharmacist", "Cashier", "Inventory Manager", "Administrator"].map((r) => (
+                      {[
+                        "Pharmacist",
+                        "Cashier",
+                        "Inventory Manager",
+                        "Administrator",
+                      ].map((r) => (
                         <Pressable
                           key={r}
                           onPress={() => setSignUpRole(r)}
@@ -612,16 +665,34 @@ export default function LoginScreen({ onLoginSuccess }) {
                   <View style={styles.fieldContainer}>
                     <View style={styles.branchHeaderRow}>
                       <Text style={styles.label}>Assigned Branch Name</Text>
-                      <Text style={styles.branchSubLabel}>Branch / Location</Text>
+                      <Text style={styles.branchSubLabel}>
+                        Branch / Location
+                      </Text>
                     </View>
 
                     {/* Quick Branch Preset Chips */}
                     <View style={styles.roleChipsRow}>
                       {[
-                        { label: "Main Campus (HQ)", value: "FIT Main Campus Hospital Pharmacy", icon: "🏥" },
-                        { label: "Pune City OPD", value: "FIT Pune City OPD Pharmacy", icon: "🏥" },
-                        { label: "Central Warehouse", value: "FIT Central Medical Warehouse", icon: "📦" },
-                        { label: "Student Health", value: "FIT Student Health Center Dispensary", icon: "🩺" },
+                        {
+                          label: "Main Campus (HQ)",
+                          value: "FIT Main Campus Hospital Pharmacy",
+                          icon: "🏥",
+                        },
+                        {
+                          label: "Pune City OPD",
+                          value: "FIT Pune City OPD Pharmacy",
+                          icon: "🏥",
+                        },
+                        {
+                          label: "Central Warehouse",
+                          value: "FIT Central Medical Warehouse",
+                          icon: "📦",
+                        },
+                        {
+                          label: "Student Health",
+                          value: "FIT Student Health Center Dispensary",
+                          icon: "🩺",
+                        },
                       ].map((b) => (
                         <Pressable
                           key={b.value}
@@ -638,7 +709,8 @@ export default function LoginScreen({ onLoginSuccess }) {
                           <Text
                             style={[
                               styles.branchChipText,
-                              signUpBranch === b.value && styles.branchChipTextActive,
+                              signUpBranch === b.value &&
+                                styles.branchChipTextActive,
                             ]}
                           >
                             {b.label}
@@ -667,7 +739,9 @@ export default function LoginScreen({ onLoginSuccess }) {
                           style={{ padding: 6 }}
                           hitSlop={8}
                         >
-                          <Text style={{ fontSize: 13, color: "#94A3B8" }}>✕</Text>
+                          <Text style={{ fontSize: 13, color: "#94A3B8" }}>
+                            ✕
+                          </Text>
                         </Pressable>
                       )}
                     </View>
@@ -675,7 +749,9 @@ export default function LoginScreen({ onLoginSuccess }) {
 
                   {/* Password */}
                   <View style={styles.fieldContainer}>
-                    <Text style={styles.label}>Password (Min 6 characters)</Text>
+                    <Text style={styles.label}>
+                      Password (Min 6 characters)
+                    </Text>
                     <View style={styles.inputWrapper}>
                       <Text style={styles.inputPrefixIcon}>🔒</Text>
                       <TextInput
@@ -693,7 +769,9 @@ export default function LoginScreen({ onLoginSuccess }) {
                       />
                       <Pressable
                         style={styles.eyeButton}
-                        onPress={() => setShowSignUpPassword(!showSignUpPassword)}
+                        onPress={() =>
+                          setShowSignUpPassword(!showSignUpPassword)
+                        }
                         disabled={isLoading}
                       >
                         <Text style={styles.eyeIcon}>
@@ -727,14 +805,19 @@ export default function LoginScreen({ onLoginSuccess }) {
 
                   {/* SUBMIT SIGN UP */}
                   <Pressable
-                    style={[styles.signInButton, isLoading && styles.disabledButton]}
+                    style={[
+                      styles.signInButton,
+                      isLoading && styles.disabledButton,
+                    ]}
                     onPress={handleSignUp}
                     disabled={isLoading}
                   >
                     {isLoading ? (
                       <ActivityIndicator size="small" color="#ffffff" />
                     ) : (
-                      <Text style={styles.signInText}>Create Account & Sign In →</Text>
+                      <Text style={styles.signInText}>
+                        Create Account & Sign In →
+                      </Text>
                     )}
                   </Pressable>
 
@@ -750,7 +833,9 @@ export default function LoginScreen({ onLoginSuccess }) {
                   >
                     <Text style={styles.switchModeText}>
                       Already have an account?{" "}
-                      <Text style={styles.switchModeHighlight}>Sign In to Login here</Text>
+                      <Text style={styles.switchModeHighlight}>
+                        Sign In to Login here
+                      </Text>
                     </Text>
                   </Pressable>
                 </View>
@@ -759,7 +844,8 @@ export default function LoginScreen({ onLoginSuccess }) {
               {/* DEMO NOTICE BADGE */}
               <View style={styles.demoNotice}>
                 <Text style={styles.demoNoticeText}>
-                  💡 <Text style={{ fontWeight: "700" }}>Admin Account:</Text> root@falah.com / more#78548
+                  💡 <Text style={{ fontWeight: "700" }}>Admin Account:</Text>{" "}
+                  root@falah.com / more#78548
                 </Text>
               </View>
             </View>
@@ -781,7 +867,15 @@ export default function LoginScreen({ onLoginSuccess }) {
             <View style={styles.googleModalHeader}>
               <View style={styles.googleModalLogoRow}>
                 <View style={styles.googleGSmall}>
-                  <Text style={{ fontSize: 18, fontWeight: "800", color: "#4285F4" }}>G</Text>
+                  <Text
+                    style={{
+                      fontSize: 18,
+                      fontWeight: "800",
+                      color: "#4285F4",
+                    }}
+                  >
+                    G
+                  </Text>
                 </View>
                 <Text style={styles.googleModalTitle}>Sign in with Google</Text>
               </View>

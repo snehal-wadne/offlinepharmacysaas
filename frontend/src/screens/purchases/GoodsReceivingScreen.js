@@ -20,11 +20,20 @@ import {
   createGoodsReceipt,
   updateGoodsReceiptStatus,
 } from '../../api/purchaseApi';
+import { localPersistenceService } from '../../db';
+import { syncEngine } from '../../sync';
 
 const GRN_STATUS_BADGES = {
   Verified: { bg: '#DCFCE7', text: '#15803D', dot: '#16A34A' },
   'Pending Inspection': { bg: '#FEF3C7', text: '#B45309', dot: '#F59E0B' },
   Discrepancy: { bg: '#FEE2E2', text: '#B91C1C', dot: '#EF4444' },
+};
+
+const SYNC_STATUS_BADGES = {
+  PENDING: { bg: '#FEF3C7', text: '#B45309', label: 'Local Pending' },
+  SYNCED: { bg: '#DCFCE7', text: '#15803D', label: 'Synced' },
+  FAILED: { bg: '#FEE2E2', text: '#B91C1C', label: 'Sync Failed' },
+  CONFLICT: { bg: '#FEE2E2', text: '#B91C1C', label: 'Conflict' },
 };
 
 export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
@@ -35,15 +44,21 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('All Statuses');
   const [grnList, setGrnList] = useState(MOCK_GRN_LIST);
+  const [availableProducts, setAvailableProducts] = useState([]);
   const [activeMenuId, setActiveMenuId] = useState(null);
 
-  useEffect(() => {
-    let isMounted = true;
-    async function loadGRNs() {
+  const loadGRNs = async () => {
+    try {
+      let localRecords = [];
+      if (typeof localPersistenceService?.getLocalPurchaseReceipts === 'function') {
+        localRecords = await localPersistenceService.getLocalPurchaseReceipts();
+      }
+
+      let serverRecords = [];
       try {
         const response = await fetchGoodsReceipts();
-        if (isMounted && response && response.data && response.data.length > 0) {
-          const formatted = response.data.map((grn) => ({
+        if (response && response.data && response.data.length > 0) {
+          serverRecords = response.data.map((grn) => ({
             realId: grn.id,
             id: grn.receiptNumber || grn.receipt_number || grn.id,
             poReference: grn.purchaseNumber || grn.poReference || 'PO-1026',
@@ -60,16 +75,66 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
                 ? 'Discrepancy'
                 : 'Pending Inspection',
             branch: grn.branchName || grn.branch || 'Main Branch',
+            syncStatus: 'SYNCED',
           }));
-          setGrnList(formatted);
         }
       } catch (err) {
-        console.log('[GoodsReceivingScreen] Backend offline or using default list');
+        // Server unreachable or offline
       }
+
+      // Merge local and server records without overwriting pending local transactions
+      const combined = [...localRecords];
+      const existingIds = new Set(localRecords.map((r) => r.id || r.realId));
+      for (const s of serverRecords) {
+        if (!existingIds.has(s.id) && !existingIds.has(s.realId)) {
+          combined.push(s);
+          existingIds.add(s.id);
+        }
+      }
+
+      if (combined.length > 0) {
+        setGrnList(combined);
+      } else {
+        setGrnList(MOCK_GRN_LIST);
+      }
+    } catch (err) {
+      console.warn('[GoodsReceivingScreen] Error loading GRN list:', err);
+      setGrnList(MOCK_GRN_LIST);
     }
+  };
+
+  useEffect(() => {
+    let isMounted = true;
     loadGRNs();
+
+    async function loadProducts() {
+      try {
+        if (typeof localPersistenceService?.getCatalogForPos === 'function') {
+          const prods = await localPersistenceService.getCatalogForPos();
+          if (isMounted && prods && prods.length > 0) {
+            setAvailableProducts(prods);
+          }
+        }
+      } catch (err) {}
+    }
+    loadProducts();
+
+    const subscribeFn =
+      typeof syncEngine?.onStateChange === 'function'
+        ? syncEngine.onStateChange.bind(syncEngine)
+        : typeof syncEngine?.subscribe === 'function'
+        ? syncEngine.subscribe.bind(syncEngine)
+        : null;
+
+    const unsubscribe = subscribeFn
+      ? subscribeFn(() => {
+          if (isMounted) loadGRNs();
+        })
+      : null;
+
     return () => {
       isMounted = false;
+      if (unsubscribe) unsubscribe();
     };
   }, []);
 
@@ -144,7 +209,20 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
     return matchesSearch && matchesStatus;
   });
 
+  const [items, setItems] = useState([
+    {
+      productId: '',
+      productName: 'Paracetamol 500mg',
+      batchNumber: `BAT-${Math.floor(1000 + Math.random() * 9000)}`,
+      expiryDate: '2028-12-31',
+      quantity: '10',
+      costPrice: '100',
+      mrp: '130',
+    },
+  ]);
+
   const handleOpenModal = () => {
+    const firstProd = availableProducts[0];
     setFormData({
       poReference: 'PO-1026',
       supplier: 'Sun Pharma Care',
@@ -153,8 +231,59 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
       branch: 'Main Branch',
       notes: '',
     });
+    setItems([
+      {
+        productId: firstProd ? (firstProd.productId || firstProd.id) : '',
+        productName: firstProd ? firstProd.name : 'Paracetamol 500mg',
+        batchNumber: `BAT-${Math.floor(1000 + Math.random() * 9000)}`,
+        expiryDate: '2028-12-31',
+        quantity: '10',
+        costPrice: '100',
+        mrp: '130',
+      },
+    ]);
     setFormErrors({});
     setModalVisible(true);
+  };
+
+  const handleAddItem = () => {
+    const nextProd = availableProducts[items.length % (availableProducts.length || 1)];
+    setItems((prev) => [
+      ...prev,
+      {
+        productId: nextProd ? (nextProd.productId || nextProd.id) : '',
+        productName: nextProd ? nextProd.name : '',
+        batchNumber: `BAT-${Math.floor(1000 + Math.random() * 9000)}`,
+        expiryDate: '2028-12-31',
+        quantity: '10',
+        costPrice: '100',
+        mrp: '130',
+      },
+    ]);
+  };
+
+  const handleRemoveItem = (index) => {
+    if (items.length <= 1) return;
+    setItems((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleItemChange = (index, field, value) => {
+    setItems((prev) =>
+      prev.map((it, i) => {
+        if (i !== index) return it;
+        if (field === 'productId') {
+          const selected = availableProducts.find(
+            (p) => (p.productId || p.id) === value
+          );
+          return {
+            ...it,
+            productId: value,
+            productName: selected ? selected.name : it.productName,
+          };
+        }
+        return { ...it, [field]: value };
+      })
+    );
   };
 
   const handleReceiveShipment = async () => {
@@ -163,55 +292,106 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
     if (!formData.supplier.trim()) errors.supplier = 'Supplier is required';
     if (!formData.invoiceNo.trim()) errors.invoiceNo = 'Invoice No is required';
 
+    if (!items || items.length === 0) {
+      errors.items = 'At least one line item is required';
+    }
+
+    const validatedItems = [];
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      const qtyNum = Number(it.quantity);
+      if (!it.productName?.trim() && !it.productId?.trim()) {
+        errors[`item_${i}_product`] = 'Product is required';
+      }
+      if (!it.batchNumber?.trim()) {
+        errors[`item_${i}_batch`] = 'Batch number is required';
+      }
+      if (isNaN(qtyNum) || qtyNum <= 0) {
+        errors[`item_${i}_qty`] = 'Valid quantity (>0) is required';
+      }
+
+      let resolvedPid = it.productId;
+      if (!resolvedPid && availableProducts.length > 0) {
+        const found = availableProducts.find(
+          (p) => p.name?.toLowerCase() === it.productName?.trim().toLowerCase()
+        );
+        if (found) resolvedPid = found.productId || found.id;
+      }
+      if (!resolvedPid) {
+        resolvedPid = `prod-rec-${Date.now()}-${i}`;
+      }
+
+      validatedItems.push({
+        productId: resolvedPid,
+        productName: it.productName?.trim() || 'Received Item',
+        batchNumber: it.batchNumber.trim(),
+        expiryDate: it.expiryDate?.trim() || '2028-12-31',
+        quantity: qtyNum,
+        costPrice: Number(it.costPrice) || 100,
+        mrp: Number(it.mrp) || 130,
+        sellingPrice: Number(it.mrp) || 130,
+      });
+    }
+
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
       return;
     }
 
-    const generatedId = `GRN-2026-0${90 + grnList.length}`;
-    const newGRN = {
-      realId: generatedId,
-      id: generatedId,
-      poReference: formData.poReference,
-      supplier: formData.supplier,
-      receivedDate: new Date().toLocaleDateString('en-GB', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-      }),
-      receivedBy: 'Manager (HP)',
-      itemsCount: 4,
-      packagesCount: Number(formData.packagesCount || 8),
-      invoiceNo: formData.invoiceNo,
-      status: 'Verified',
-      branch: formData.branch || 'Main Branch',
-    };
-
     try {
-      const res = await createGoodsReceipt({
-        receiptNumber: newGRN.id,
-        poReference: formData.poReference,
-        supplier: formData.supplier,
-        supplierInvoiceNumber: formData.invoiceNo,
-        packageCount: Number(formData.packagesCount || 8),
-        status: 'VERIFIED',
-        notes: formData.notes,
-      });
-      if (res && res.data && res.data.id) {
-        newGRN.realId = res.data.id;
+      if (typeof localPersistenceService?.receiveLocalPurchase === 'function') {
+        await localPersistenceService.receiveLocalPurchase({
+          purchaseNumber: formData.poReference.trim(),
+          supplierInvoiceNumber: formData.invoiceNo.trim(),
+          supplierName: formData.supplier.trim(),
+          packageCount: Number(formData.packagesCount || 1),
+          notes: formData.notes.trim(),
+          items: validatedItems,
+        });
+
+        await loadGRNs();
+        setModalVisible(false);
+
+        if (onShowToast) {
+          onShowToast(`✓ Received Goods Note logged locally (${validatedItems.length} items)!`);
+        }
+
+        // Opportunistic sync
+        if (typeof syncEngine?.sync === 'function') {
+          syncEngine.sync().catch(() => {});
+        }
+      } else {
+        // Fallback for mock mode
+        const generatedId = `GRN-2026-0${90 + grnList.length}`;
+        const newGRN = {
+          realId: generatedId,
+          id: generatedId,
+          poReference: formData.poReference,
+          supplier: formData.supplier,
+          receivedDate: new Date().toLocaleDateString('en-GB', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+          }),
+          receivedBy: 'Manager (HP)',
+          itemsCount: validatedItems.length,
+          packagesCount: Number(formData.packagesCount || 8),
+          invoiceNo: formData.invoiceNo,
+          status: 'Verified',
+          branch: formData.branch || 'Main Branch',
+        };
+        setGrnList((prev) => [newGRN, ...prev]);
+        setModalVisible(false);
+
+        if (onShowToast) {
+          onShowToast(`✓ Logged Goods Received Note ${newGRN.id} for ${newGRN.poReference}!`);
+        }
       }
     } catch (err) {
-      console.warn(
-        '[GoodsReceivingScreen] Backend GRN save failed, updated local state:',
-        err.message
-      );
-    }
-
-    setGrnList((prev) => [newGRN, ...prev]);
-    setModalVisible(false);
-
-    if (onShowToast) {
-      onShowToast(`✓ Logged Goods Received Note ${newGRN.id} for ${newGRN.poReference}!`);
+      console.error('[GoodsReceivingScreen] Error committing purchase receipt:', err);
+      if (onShowToast) {
+        onShowToast(`Error saving receipt: ${err.message || 'Local persistence failure'}`);
+      }
     }
   };
 
@@ -344,13 +524,20 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
                   >
                     {/* Header Row: ID + Status + Action menu */}
                     <View style={styles.mobileCardTopRow}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                         <Text style={styles.grnId}>{grn.id}</Text>
                         <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
                           <Text style={[styles.statusBadgeText, { color: badge.text }]}>
                             {grn.status}
                           </Text>
                         </View>
+                        {grn.syncStatus && grn.syncStatus !== 'SYNCED' && (
+                          <View style={[styles.statusBadge, { backgroundColor: '#FEF3C7', paddingVertical: 1 }]}>
+                            <Text style={[styles.statusBadgeText, { color: '#B45309', fontSize: 10 }]}>
+                              {grn.syncStatus}
+                            </Text>
+                          </View>
+                        )}
                       </View>
 
                       <View style={styles.actionWrapper}>
@@ -539,12 +726,19 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
                       </Text>
 
                       {/* Status Badge */}
-                      <View style={[styles.statusWrapper, { width: 140 }]}>
+                      <View style={[styles.statusWrapper, { width: 140, gap: 4 }]}>
                         <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
                           <Text style={[styles.statusBadgeText, { color: badge.text }]}>
                             {grn.status}
                           </Text>
                         </View>
+                        {grn.syncStatus && grn.syncStatus !== 'SYNCED' && (
+                          <View style={[styles.statusBadge, { backgroundColor: '#FEF3C7', paddingVertical: 1 }]}>
+                            <Text style={[styles.statusBadgeText, { color: '#B45309', fontSize: 10 }]}>
+                              {grn.syncStatus}
+                            </Text>
+                          </View>
+                        )}
                       </View>
 
                       {/* 3-Dots Action Column */}
@@ -707,6 +901,138 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
                     onChangeText={(t) => setFormData((p) => ({ ...p, packagesCount: t }))}
                   />
                 </View>
+              {/* Received Line Items Section */}
+              <View style={styles.itemsSection}>
+                <View style={styles.itemsSectionHeader}>
+                  <Text style={styles.itemsSectionTitle}>Received Line Items ({items.length})</Text>
+                  <Pressable onPress={handleAddItem} style={styles.addItemBtn}>
+                    <Text style={styles.addItemBtnText}>+ Add Medicine</Text>
+                  </Pressable>
+                </View>
+                {formErrors.items && (
+                  <Text style={[styles.errorText, { marginBottom: 8 }]}>{formErrors.items}</Text>
+                )}
+
+                {items.map((item, idx) => (
+                  <View key={idx} style={styles.itemRowCard}>
+                    <View style={styles.itemRowHeader}>
+                      <Text style={styles.itemRowNumber}>Item #{idx + 1}</Text>
+                      {items.length > 1 && (
+                        <Pressable onPress={() => handleRemoveItem(idx)} style={styles.removeItemBtn}>
+                          <Text style={styles.removeItemText}>✕ Remove</Text>
+                        </Pressable>
+                      )}
+                    </View>
+
+                    {/* Product Selection */}
+                    <View style={styles.fieldGroup}>
+                      <Text style={styles.fieldLabel}>
+                        Medicine / Product <Text style={styles.reqStar}>*</Text>
+                      </Text>
+                      <TextInput
+                        style={styles.modalInput}
+                        value={item.productName}
+                        placeholder="Type medicine name or select below..."
+                        placeholderTextColor="#94A3B8"
+                        onChangeText={(t) => handleItemChange(idx, 'productName', t)}
+                      />
+                      {availableProducts.length > 0 && (
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickProdChips}>
+                          {availableProducts.slice(0, 6).map((p) => (
+                            <Pressable
+                              key={p.productId || p.id}
+                              onPress={() => {
+                                handleItemChange(idx, 'productId', p.productId || p.id);
+                                handleItemChange(idx, 'productName', p.name);
+                              }}
+                              style={[
+                                styles.quickProdChip,
+                                (item.productId === (p.productId || p.id) || item.productName === p.name) && styles.quickProdChipActive,
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.quickProdChipText,
+                                  (item.productId === (p.productId || p.id) || item.productName === p.name) && styles.quickProdChipTextActive,
+                                ]}
+                              >
+                                {p.name}
+                              </Text>
+                            </Pressable>
+                          ))}
+                        </ScrollView>
+                      )}
+                      {formErrors[`item_${idx}_product`] && (
+                        <Text style={styles.errorText}>{formErrors[`item_${idx}_product`]}</Text>
+                      )}
+                    </View>
+
+                    {/* Batch Number & Expiry Date */}
+                    <View style={styles.formRow}>
+                      <View style={styles.formFieldHalf}>
+                        <Text style={styles.fieldLabel}>
+                          Batch Number <Text style={styles.reqStar}>*</Text>
+                        </Text>
+                        <TextInput
+                          style={styles.modalInput}
+                          value={item.batchNumber}
+                          placeholder="BAT-1001"
+                          placeholderTextColor="#94A3B8"
+                          onChangeText={(t) => handleItemChange(idx, 'batchNumber', t)}
+                        />
+                        {formErrors[`item_${idx}_batch`] && (
+                          <Text style={styles.errorText}>{formErrors[`item_${idx}_batch`]}</Text>
+                        )}
+                      </View>
+                      <View style={styles.formFieldHalf}>
+                        <Text style={styles.fieldLabel}>Expiry Date (YYYY-MM-DD)</Text>
+                        <TextInput
+                          style={styles.modalInput}
+                          value={item.expiryDate}
+                          placeholder="2028-12-31"
+                          placeholderTextColor="#94A3B8"
+                          onChangeText={(t) => handleItemChange(idx, 'expiryDate', t)}
+                        />
+                      </View>
+                    </View>
+
+                    {/* Quantity, Cost Price, MRP */}
+                    <View style={styles.formRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.fieldLabel}>
+                          Quantity <Text style={styles.reqStar}>*</Text>
+                        </Text>
+                        <TextInput
+                          style={styles.modalInput}
+                          keyboardType="numeric"
+                          value={item.quantity}
+                          onChangeText={(t) => handleItemChange(idx, 'quantity', t)}
+                        />
+                        {formErrors[`item_${idx}_qty`] && (
+                          <Text style={styles.errorText}>{formErrors[`item_${idx}_qty`]}</Text>
+                        )}
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.fieldLabel}>Cost Price (₹)</Text>
+                        <TextInput
+                          style={styles.modalInput}
+                          keyboardType="numeric"
+                          value={item.costPrice}
+                          onChangeText={(t) => handleItemChange(idx, 'costPrice', t)}
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.fieldLabel}>MRP (₹)</Text>
+                        <TextInput
+                          style={styles.modalInput}
+                          keyboardType="numeric"
+                          value={item.mrp}
+                          onChangeText={(t) => handleItemChange(idx, 'mrp', t)}
+                        />
+                      </View>
+                    </View>
+                  </View>
+                ))}
               </View>
 
               <View style={styles.fieldGroup}>
@@ -1028,7 +1354,7 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     width: '100%',
-    maxWidth: 580,
+    maxWidth: 680,
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
     overflow: 'hidden',
@@ -1062,7 +1388,7 @@ const styles = StyleSheet.create({
   },
   modalBody: {
     padding: 22,
-    maxHeight: 480,
+    maxHeight: 520,
   },
   formRow: {
     flexDirection: 'row',
@@ -1104,6 +1430,92 @@ const styles = StyleSheet.create({
   textArea: {
     height: 70,
     paddingTop: 8,
+  },
+  itemsSection: {
+    marginVertical: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    paddingTop: 14,
+  },
+  itemsSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  itemsSectionTitle: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  addItemBtn: {
+    backgroundColor: '#0F766E',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 6,
+    cursor: 'pointer',
+  },
+  addItemBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  itemRowCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 12,
+    marginBottom: 12,
+  },
+  itemRowHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  itemRowNumber: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  removeItemBtn: {
+    padding: 4,
+    cursor: 'pointer',
+  },
+  removeItemText: {
+    color: '#DC2626',
+    fontSize: 11.5,
+    fontWeight: '600',
+  },
+  productSelectRow: {
+    gap: 6,
+  },
+  quickProdChips: {
+    flexDirection: 'row',
+    marginTop: 4,
+  },
+  quickProdChip: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginRight: 6,
+    cursor: 'pointer',
+  },
+  quickProdChipActive: {
+    backgroundColor: '#0F766E',
+    borderColor: '#0F766E',
+  },
+  quickProdChipText: {
+    fontSize: 11,
+    color: '#334155',
+  },
+  quickProdChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   modalFooter: {
     flexDirection: 'row',

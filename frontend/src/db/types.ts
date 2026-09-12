@@ -11,6 +11,8 @@
 export type TransactionType =
   | 'SALE'
   | 'RETURN'
+  | 'CUSTOMER_PAYMENT'
+  | 'PURCHASE'
   | 'EXPENSE'
   | 'REGISTER_OPEN'
   | 'REGISTER_CLOSE'

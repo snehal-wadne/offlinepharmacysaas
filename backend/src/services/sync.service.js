@@ -1707,15 +1707,14 @@ class SyncService {
       }
 
       // 2. Ensure Purchase Order Header
+      let purchaseNumber =
+        payload.purchaseNumber || `PO-${Date.now().toString().slice(-6)}`;
       const poRes = await client.query(
-        "SELECT id, purchase_number, supplier_id, status FROM purchases WHERE id = $1 AND organisation_id = $2",
-        [purchaseId, resolvedOrgId],
+        "SELECT id, purchase_number, supplier_id, status FROM purchases WHERE (id = $1 OR purchase_number = $3) AND organisation_id = $2",
+        [purchaseId, resolvedOrgId, purchaseNumber],
       );
 
-      let purchaseNumber;
       if (poRes.rows.length === 0) {
-        purchaseNumber =
-          payload.purchaseNumber || `PO-${Date.now().toString().slice(-6)}`;
         await client.query(
           `INSERT INTO purchases (
              id, organisation_id, purchase_number, supplier_id, branch_id,
@@ -1735,7 +1734,7 @@ class SyncService {
         purchaseNumber = poRes.rows[0].purchase_number;
         await client.query(
           "UPDATE purchases SET status = 'RECEIVED', updated_at = NOW() WHERE id = $1",
-          [purchaseId],
+          [poRes.rows[0].id],
         );
       }
 
@@ -1772,6 +1771,7 @@ class SyncService {
         );
 
         // 4. Process Items & Inventory Batches
+        var processedItems = [];
         for (const item of items) {
           // Resolve product
           let productId = item.productId;
@@ -1863,7 +1863,35 @@ class SyncService {
               ],
             );
           }
+
+          processedItems.push({
+            productId,
+            productName: item.productName || null,
+            batchNumber,
+            expiryDate,
+            manufacturingDate: item.manufacturingDate || null,
+            quantity: qtyReceived,
+            unitCost,
+            costPrice: unitCost,
+            mrp,
+          });
         }
+      } else {
+        var processedItems = items.map((item) => ({
+          productId: item.productId,
+          productName: item.productName || null,
+          batchNumber:
+            item.batchNumber || `BAT-${Date.now().toString().slice(-4)}`,
+          expiryDate: item.expiryDate || "2028-12-31",
+          manufacturingDate: item.manufacturingDate || null,
+          quantity: Math.max(
+            1,
+            Number(item.receivedQuantity || item.quantity || 1),
+          ),
+          unitCost: Number(item.unitCost || item.costPrice || 100),
+          costPrice: Number(item.unitCost || item.costPrice || 100),
+          mrp: Number(item.mrp || 130),
+        }));
       }
 
       const resultData = {
@@ -1872,7 +1900,8 @@ class SyncService {
         goodsReceiptId,
         receiptNumber,
         status: "RECEIVED",
-        itemsCount: items.length,
+        itemsCount: processedItems.length,
+        items: processedItems,
         organisationId: resolvedOrgId,
         branchId: resolvedBranchId,
       };
@@ -1912,7 +1941,8 @@ class SyncService {
             goodsReceiptId,
             receiptNumber,
             status: "RECEIVED",
-            itemsCount: items.length,
+            itemsCount: processedItems.length,
+            items: processedItems,
             organisationId: resolvedOrgId,
             branchId: resolvedBranchId,
           }),
@@ -2577,6 +2607,224 @@ class SyncService {
       changes,
       hasMore,
       serverTime: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Authoritative Master Data Bootstrap for Active Tenant & Branch
+   *
+   * Securely returns the core datasets required for full offline operation:
+   * - Branch metadata (name, code, contact, facility, drug license)
+   * - Branch GST & Tax configuration
+   * - Active Product catalogue for the organisation
+   * - Active Inventory batches for the specified branch
+   * - Active Customers for the organisation
+   * - Latest monotonic sequence cursor from sync_changes
+   */
+  async bootstrapTenantData({ organisationId, branchId, userId }) {
+    if (!organisationId) {
+      throw new Error("Missing organisationId for bootstrap");
+    }
+    if (!branchId) {
+      throw new Error("Missing branchId for bootstrap");
+    }
+
+    // 1. Resolve and verify branch belongs to organisation
+    const branchRes = await pool.query(
+      `SELECT * FROM branches WHERE id = $1 AND organisation_id = $2`,
+      [branchId, organisationId],
+    );
+
+    if (branchRes.rows.length === 0) {
+      throw new Error(
+        `Branch ${branchId} not found in organisation ${organisationId}`,
+      );
+    }
+    const branch = branchRes.rows[0];
+
+    // 2. Fetch branch GST / Tax settings
+    let taxConfig = null;
+    try {
+      const gstRes = await pool.query(
+        `SELECT * FROM branch_gst_settings WHERE branch_id = $1 AND organisation_id = $2`,
+        [branchId, organisationId],
+      );
+      if (gstRes.rows.length > 0) {
+        const g = gstRes.rows[0];
+        taxConfig = {
+          gstin: g.gstin || null,
+          legalName: g.legal_name || branch.name,
+          tradeName: g.trade_name || branch.name,
+          state: g.state || branch.state || "Maharashtra",
+          stateCode: g.state_code || "27",
+          gstScheme: g.gst_scheme || "REGULAR",
+          taxInclusivePricing: g.tax_inclusive_pricing !== false,
+          autoInterstateSplit: g.auto_interstate_split !== false,
+          eInvoicingEnabled: g.e_invoicing_enabled === true,
+        };
+      }
+    } catch (err) {
+      // Ignore if table not present
+    }
+
+    if (!taxConfig) {
+      taxConfig = {
+        gstin: branch.gstin || null,
+        legalName: branch.name,
+        tradeName: branch.name,
+        state: branch.state || "Maharashtra",
+        stateCode: "27",
+        gstScheme: "REGULAR",
+        taxInclusivePricing: true,
+        autoInterstateSplit: true,
+        eInvoicingEnabled: false,
+      };
+    }
+
+    // 3. Fetch active products for organisation
+    const productsRes = await pool.query(
+      `SELECT * FROM products
+       WHERE organisation_id = $1 AND (is_active = TRUE OR is_active IS NULL)
+       ORDER BY medicine_name ASC`,
+      [organisationId],
+    );
+
+    // 4. Fetch inventory batches for the branch
+    const inventoryRes = await pool.query(
+      `SELECT ib.*
+       FROM inventory_batches ib
+       INNER JOIN products p ON p.id = ib.product_id
+       WHERE ib.branch_id = $1 AND p.organisation_id = $2
+       ORDER BY ib.expiry_date ASC, ib.batch_number ASC`,
+      [branchId, organisationId],
+    );
+
+    // Build product price map from batches
+    const batchPriceMap = new Map();
+    for (const b of inventoryRes.rows) {
+      if (!batchPriceMap.has(b.product_id)) {
+        batchPriceMap.set(b.product_id, {
+          mrp: Number(b.mrp || 0),
+          sellingPrice: Number(b.selling_price || b.mrp || 0),
+        });
+      }
+    }
+
+    // Format products for Dexie schema
+    const products = productsRes.rows.map((p) => {
+      const pricing = batchPriceMap.get(p.id) || { mrp: 0, sellingPrice: 0 };
+      return {
+        productId: p.id,
+        organisationId: p.organisation_id,
+        name: p.medicine_name || p.brand_name || "Unknown Product",
+        genericName: p.brand_name || p.medicine_name || "",
+        barcode: p.sku || p.barcode || "",
+        sku: p.sku || "",
+        category: p.category || "General",
+        gstRate: Number(p.gst_rate || 5),
+        mrp: pricing.mrp,
+        sellingPrice: pricing.sellingPrice,
+        unit: p.pack_size || "Strip",
+        packSize: p.pack_size || "",
+        isPrescriptionRequired: Boolean(p.is_rx_required),
+        isNarcotic: false,
+        active: p.is_active !== false,
+        updatedAt: p.updated_at
+          ? new Date(p.updated_at).toISOString()
+          : new Date().toISOString(),
+      };
+    });
+
+    // Format inventory batches for Dexie schema
+    const inventory = inventoryRes.rows.map((b) => {
+      const mrp = Number(b.mrp || 0);
+      const sellingPrice = Number(b.selling_price || mrp);
+      const costPrice = Number(
+        b.cost_price || Math.round(mrp * 0.7 * 100) / 100,
+      );
+      return {
+        id: b.id,
+        organisationId,
+        branchId: b.branch_id,
+        productId: b.product_id,
+        batchNumber: b.batch_number,
+        expiryDate:
+          b.expiry_date instanceof Date
+            ? b.expiry_date.toISOString().split("T")[0]
+            : String(b.expiry_date || "2028-12-31").split("T")[0],
+        availableQuantity: Number(b.quantity || 0),
+        costPrice,
+        mrp,
+        sellingPrice,
+        shelfLocation: b.shelf_location || null,
+        updatedAt: b.updated_at
+          ? new Date(b.updated_at).toISOString()
+          : new Date().toISOString(),
+      };
+    });
+
+    // 5. Fetch active customers for organisation
+    const customersRes = await pool.query(
+      `SELECT * FROM customers
+       WHERE organisation_id = $1 AND (status = 'ACTIVE' OR status IS NULL)
+       ORDER BY full_name ASC`,
+      [organisationId],
+    );
+
+    const customers = customersRes.rows.map((c) => ({
+      customerId: c.id,
+      organisationId: c.organisation_id,
+      name: c.full_name || c.name || "Customer",
+      phone: c.phone || "",
+      email: c.email || "",
+      address: c.address
+        ? `${c.address}${c.city ? ", " + c.city : ""}`
+        : c.city || "",
+      doctorName: c.doctor_name || "",
+      category: c.category || "Regular",
+      outstandingBalance: Number(c.outstanding_balance || 0),
+      creditLimit: Number(c.credit_limit || 0),
+      isLocallyCreated: false,
+      syncStatus: "SYNCED",
+      updatedAt: c.updated_at
+        ? new Date(c.updated_at).toISOString()
+        : new Date().toISOString(),
+    }));
+
+    // 6. Fetch latest monotonic serverCursor
+    const cursorRes = await pool.query(
+      `SELECT COALESCE(MAX(sequence), 0)::text AS server_cursor
+       FROM sync_changes
+       WHERE organisation_id = $1`,
+      [organisationId],
+    );
+    const serverCursor = cursorRes.rows[0]?.server_cursor || "0";
+
+    return {
+      success: true,
+      organisationId,
+      branchId,
+      serverCursor,
+      bootstrappedAt: new Date().toISOString(),
+      branch: {
+        id: branch.id,
+        organisationId: branch.organisation_id,
+        name: branch.name,
+        branchCode: branch.branch_code || "",
+        facilityType: branch.facility_type || "Store",
+        address: branch.address || "",
+        city: branch.city || "",
+        state: branch.state || "",
+        postalCode: branch.postal_code || "",
+        phone: branch.phone || "",
+        drugLicenseNumber: branch.drug_license_number || "",
+        invoicePrefix: branch.invoice_prefix || "",
+        status: branch.status || "ACTIVE",
+      },
+      taxConfig,
+      products,
+      inventory,
+      customers,
     };
   }
 }

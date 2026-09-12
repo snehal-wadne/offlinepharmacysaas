@@ -283,15 +283,34 @@ export class PullWorker {
                 for (const it of itemData.items) {
                   if (it.productId && it.batchNumber) {
                     const branch = itemData.branchId || change.branchId || '';
+                    const org = itemData.organisationId || change.organisationId || '';
                     const existingBatch = await this.db.inventory
                       .where('[branchId+productId]')
                       .equals([branch, it.productId])
                       .filter((b) => b.batchNumber === it.batchNumber)
                       .first();
+                    const qty = Number(it.quantity || 0);
                     if (existingBatch) {
                       await this.db.inventory.put({
                         ...existingBatch,
-                        availableQuantity: existingBatch.availableQuantity + Number(it.quantity || 0),
+                        availableQuantity: existingBatch.availableQuantity + qty,
+                        updatedAt: new Date().toISOString(),
+                      });
+                    } else {
+                      const costPrice = Number(it.unitCost || it.costPrice || 0);
+                      const mrp = Number(it.mrp || (costPrice ? costPrice * 1.3 : 100));
+                      const sellingPrice = Number(it.sellingPrice || mrp);
+                      await this.db.inventory.put({
+                        id: `${branch}_${it.batchNumber}_${it.productId}`,
+                        organisationId: org,
+                        branchId: branch,
+                        productId: it.productId,
+                        batchNumber: it.batchNumber,
+                        expiryDate: it.expiryDate || '2028-12-31',
+                        availableQuantity: qty,
+                        costPrice,
+                        mrp,
+                        sellingPrice,
                         updatedAt: new Date().toISOString(),
                       });
                     }

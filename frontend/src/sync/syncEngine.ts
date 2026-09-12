@@ -331,7 +331,11 @@ export class SyncEngine {
 
       for (const item of eligibleBatch) {
         const result = resultMap.get(item.mutationId);
-        const txId = item.payload?.clientTransactionId || item.payload?.transactionId;
+        let txId = item.payload?.clientTransactionId || item.payload?.transactionId || item.payload?.paymentId || item.payload?.returnId;
+        if (!txId) {
+          const tx = await this.txRepo.getTransactionByMutationId(item.mutationId);
+          if (tx) txId = tx.transactionId;
+        }
 
         if (!result) {
           // Unacknowledged mutation: treat as retryable

@@ -13,6 +13,7 @@ const { requireSyncAuth } = require("../middleware/sync-auth.middleware");
 router.get("/status", requireSyncAuth, syncController.getStatus);
 router.post("/push", requireSyncAuth, syncController.pushMutations);
 router.get("/pull", requireSyncAuth, syncController.pullChanges);
+router.get("/bootstrap", requireSyncAuth, syncController.bootstrap);
 
 // Connectivity probe (unauthenticated health check)
 router.post("/check", syncController.testConnection);

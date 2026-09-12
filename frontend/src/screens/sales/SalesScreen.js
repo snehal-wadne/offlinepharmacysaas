@@ -11,7 +11,6 @@ import {
   Platform,
 } from "react-native";
 import { usePos } from "../../context/PosContext";
-import { MOCK_CUSTOMERS_LIST } from "../../data/customersMockData";
 import BarcodeScannerModal from "../../components/common/BarcodeScannerModal";
 
 export default function SalesScreen({
@@ -26,6 +25,8 @@ export default function SalesScreen({
   // Shared POS Context
   const {
     products,
+    customers: posCustomers,
+    isOfflineReady,
     activeResumedDraft,
     holdBill,
     closeResumedDraft,
@@ -43,8 +44,17 @@ export default function SalesScreen({
   // Barcode Scanner Modal State
   const [scannerModalVisible, setScannerModalVisible] = useState(false);
 
-  // Customer Selection State
-  const [customers, setCustomers] = useState(MOCK_CUSTOMERS_LIST);
+  // Customer Selection State (Dexie-backed)
+  const [customers, setCustomers] = useState(
+    posCustomers && posCustomers.length > 0 ? posCustomers : [],
+  );
+
+  useEffect(() => {
+    if (posCustomers && posCustomers.length > 0) {
+      setCustomers(posCustomers);
+    }
+  }, [posCustomers]);
+
   const [selectedCustomer, setSelectedCustomer] = useState({
     id: "WALK-IN",
     name: "Walk-in Customer",
