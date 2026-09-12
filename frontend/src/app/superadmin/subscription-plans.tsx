@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -11,6 +11,7 @@ import {
 import { router } from 'expo-router';
 
 import type { PlanName } from './types';
+import { fetchSubscriptionPlans } from '../../api/superadminApi';
 
 const PLANS: {
   name: PlanName;
@@ -100,6 +101,28 @@ const PLANS: {
 ];
 
 export default function SubscriptionPlansPage() {
+  const [plans, setPlans] = useState(PLANS);
+
+  useEffect(() => {
+    fetchSubscriptionPlans()
+      .then((res) => {
+        if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
+          const mapped = res.data.map((p: any) => ({
+            name: (p.name || 'Basic') as PlanName,
+            price: `₹${Number(p.price || 0).toLocaleString('en-IN')}`,
+            description: p.description || '',
+            users: `Up to ${p.max_users || 5} Users`,
+            modules: `${(p.features || []).length || 2} Modules`,
+            features: Array.isArray(p.features) ? p.features : ['Core Module'],
+            color: p.color_hex || '#2563EB',
+            popular: Boolean(p.is_popular),
+          }));
+          setPlans(mapped);
+        }
+      })
+      .catch((err) => console.warn('Could not load plans from backend:', err));
+  }, []);
+
   const exportPlan = async (plan: PlanName) => {
     Alert.alert('Plan Export', `Plan ${plan} details printed.`);
   };
@@ -125,7 +148,7 @@ export default function SubscriptionPlansPage() {
       </View>
 
       <View style={styles.planGrid}>
-        {PLANS.map((plan) => (
+        {plans.map((plan) => (
           <View
             key={plan.name}
             style={[

@@ -86,8 +86,31 @@ const deleteCache = async (key) => {
   }
 };
 
+/**
+ * ------------------------------------------------------------
+ * DELETE MATCHING KEYS
+ * ------------------------------------------------------------
+ *
+ * Removes all cached keys matching a wildcard pattern.
+ */
+const deleteMatchingKeys = async (pattern) => {
+  if (!redisClient.isOpen) {
+    return;
+  }
+
+  try {
+    const keys = await redisClient.keys(pattern);
+    if (keys && keys.length > 0) {
+      await redisClient.del(keys);
+    }
+  } catch (error) {
+    console.error(`Cache pattern delete error [${pattern}]:`, error.message);
+  }
+};
+
 module.exports = {
   getCache,
   setCache,
   deleteCache,
+  deleteMatchingKeys,
 };

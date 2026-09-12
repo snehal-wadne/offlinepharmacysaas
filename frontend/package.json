@@ -3,10 +3,12 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "start": "expo start --offline",
-    "web": "expo start --offline --web",
-    "android": "expo start --offline --android",
-    "ios": "expo start --offline --ios"
+    "start": "node scripts/start-single-tier.js npx expo start",
+    "android": "node scripts/start-single-tier.js npx expo start --android",
+    "ios": "node scripts/start-single-tier.js npx expo start --ios",
+    "web": "node scripts/start-single-tier.js npx expo start --web",
+    "test:persistence": "ts-node scripts/test-persistence.ts",
+    "test:sync": "ts-node scripts/test-sync-engine.ts"
   },
   "dependencies": {
     "@expo/metro-config": "~0.18.11",
@@ -18,6 +20,7 @@
     "@react-navigation/native": "^6.1.17",
     "@react-navigation/stack": "^6.3.29",
     "@types/react": "~18.2.79",
+    "dexie": "^4.4.6",
     "expo": "~51.0.28",
     "expo-status-bar": "~1.12.1",
     "lucide-react-native": "^1.38.0",
@@ -33,7 +36,9 @@
     "typescript": "~5.3.3"
   },
   "devDependencies": {
-    "@babel/core": "^7.24.0"
+    "@babel/core": "^7.24.0",
+    "fake-indexeddb": "^6.2.5",
+    "ts-node": "^10.9.2"
   },
   "private": true
 }

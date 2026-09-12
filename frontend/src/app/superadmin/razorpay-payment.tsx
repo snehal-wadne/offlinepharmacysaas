@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -8,6 +9,14 @@ import {
   View,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
+import {
+  fetchPayments,
+  processRefund,
+  createPaymentOrder,
+  verifyPayment,
+  fetchPharmacies,
+  fetchSubscriptionPlans,
+} from '../../api/superadminApi';
 
 export type PaymentStatus = 'Success' | 'Pending' | 'Failed' | 'Refunded';
 
@@ -20,7 +29,7 @@ export type Payment = {
   rawAmount: number;
   paymentDate: string;
   isoDate: string; // YYYY-MM-DD
-  monthKey: '2026-09' | '2026-08' | '2026-07';
+  monthKey: string;
   day: number;
   status: PaymentStatus;
 };
@@ -278,6 +287,43 @@ const STATUS_OPTIONS: Array<'All Status' | PaymentStatus> = [
   'Refunded',
 ];
 
+function mapBackendPayment(p: any): Payment {
+  const d = new Date(p.created_at || Date.now());
+  const isoDate = !isNaN(d.getTime()) ? d.toISOString().split('T')[0] : '2026-09-01';
+  const monthKey = isoDate.slice(0, 7);
+  const day = !isNaN(d.getTime()) ? d.getDate() : 1;
+  const rawAmount = Number(p.total_amount || 0);
+
+  let status: PaymentStatus = 'Pending';
+  if (p.status === 'SUCCESS') status = 'Success';
+  else if (p.status === 'FAILED') status = 'Failed';
+  else if (p.status === 'REFUNDED' || p.status === 'PARTIALLY_REFUNDED') status = 'Refunded';
+
+  const dateFormatted = !isNaN(d.getTime())
+    ? d.toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : '01 Sep 2026';
+
+  return {
+    id: p.id,
+    pharmacyName: p.pharmacy_name || 'Pharmacy',
+    razorpayPaymentId: p.razorpay_payment_id || 'pay_pending',
+    razorpayOrderId: p.razorpay_order_id || 'order_pending',
+    amount: `₹${rawAmount.toLocaleString('en-IN')}`,
+    rawAmount,
+    paymentDate: dateFormatted,
+    isoDate,
+    monthKey,
+    day,
+    status,
+  };
+}
+
 export default function RazorPayPaymentsPage() {
   const params = useLocalSearchParams<{
     planId?: string;
@@ -286,19 +332,98 @@ export default function RazorPayPaymentsPage() {
     billingCycle?: string;
   }>();
 
+  const [payments, setPayments] = useState<Payment[]>(PAYMENTS);
+  const [isProcessingAction, setIsProcessingAction] = useState(false);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<'All Status' | PaymentStatus>('All Status');
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
 
   // Month and Date Selection State
-  const [selectedMonth, setSelectedMonth] = useState<MonthKey>('2026-08'); // Default to August 2026
+  const [selectedMonth, setSelectedMonth] = useState<MonthKey>('ALL');
   const [selectedDate, setSelectedDate] = useState<string | null>(null); // Specific 'YYYY-MM-DD'
   const [calendarOpen, setCalendarOpen] = useState(false);
-  const [viewingMonthKey, setViewingMonthKey] = useState<'2026-09' | '2026-08' | '2026-07'>('2026-08');
+  const [viewingMonthKey, setViewingMonthKey] = useState<'2026-09' | '2026-08' | '2026-07'>('2026-09');
+
+  const loadPayments = useCallback(async () => {
+    try {
+      const res = await fetchPayments({
+        search: search.trim() || undefined,
+        status: status !== 'All Status' ? status : undefined,
+        month: selectedMonth !== 'ALL' ? selectedMonth : undefined,
+        date: selectedDate || undefined,
+        limit: 50,
+      });
+
+      if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
+        const live = res.data.map(mapBackendPayment);
+        setPayments(live);
+      }
+    } catch (err) {
+      console.warn('Backend payment fetch warning, keeping existing state:', err);
+    }
+  }, [search, status, selectedMonth, selectedDate]);
+
+  useEffect(() => {
+    loadPayments();
+  }, [loadPayments]);
+
+  const handleSimulatePayment = async () => {
+    if (isProcessingAction) return;
+    setIsProcessingAction(true);
+    try {
+      const [pharmRes, plansRes] = await Promise.all([
+        fetchPharmacies({ limit: 5 }),
+        fetchSubscriptionPlans(true),
+      ]);
+      const org = pharmRes?.data?.[0];
+      const plan = plansRes?.data?.[0];
+
+      if (!org) {
+        Alert.alert('Simulate Payment', 'No pharmacy found to simulate payment.');
+        return;
+      }
+
+      const orderRes = await createPaymentOrder({
+        organisationId: org.id,
+        planId: plan?.id,
+        billingCycle: 'YEARLY',
+      });
+
+      if (orderRes && orderRes.data && orderRes.data.razorpayOrderId) {
+        await verifyPayment({
+          razorpay_order_id: orderRes.data.razorpayOrderId,
+          razorpay_payment_id: `pay_sim_${Date.now()}`,
+          razorpay_signature: `sim_sig_${Date.now()}`,
+        });
+        Alert.alert('Payment Succeeded', `Simulated payment processed for ${org.name}`);
+        await loadPayments();
+      }
+    } catch (err: any) {
+      Alert.alert('Simulation Error', err.message || 'Payment simulation failed.');
+    } finally {
+      setIsProcessingAction(false);
+    }
+  };
+
+  const handleRefund = async (payment: Payment) => {
+    if (isProcessingAction) return;
+    setIsProcessingAction(true);
+    try {
+      await processRefund(payment.id, {
+        reason: 'Requested by Super Administrator',
+      });
+      Alert.alert('Refund Processed', `Refund completed successfully for ${payment.pharmacyName}`);
+      await loadPayments();
+    } catch (err: any) {
+      Alert.alert('Refund Failed', err.message || 'Could not process refund.');
+    } finally {
+      setIsProcessingAction(false);
+    }
+  };
 
   // Filter payments by date/month FIRST for KPI calculations
   const dateFilteredPayments = useMemo(() => {
-    return PAYMENTS.filter((payment) => {
+    return payments.filter((payment) => {
       if (selectedDate) {
         return payment.isoDate === selectedDate;
       }
@@ -307,7 +432,7 @@ export default function RazorPayPaymentsPage() {
       }
       return payment.monthKey === selectedMonth;
     });
-  }, [selectedMonth, selectedDate]);
+  }, [payments, selectedMonth, selectedDate]);
 
   // Dynamically calculate KPIs for the chosen month / date range
   const metrics = useMemo(() => {
@@ -450,7 +575,7 @@ export default function RazorPayPaymentsPage() {
           </View>
           <Pressable
             style={styles.simulatePayBtn}
-            onPress={() => alert(`Razorpay modal initiated for ${params.planName} (${params.planPrice})`)}
+            onPress={handleSimulatePayment}
           >
             <Text style={styles.simulatePayBtnText}>Simulate Razorpay Pay →</Text>
           </Pressable>
@@ -828,8 +953,16 @@ export default function RazorPayPaymentsPage() {
                   {payment.paymentDate}
                 </Text>
 
-                <View style={styles.statusColumn}>
+                <View style={[styles.statusColumn, styles.statusActionRow]}>
                   <StatusBadge status={payment.status} />
+                  {payment.status === 'Success' && (
+                    <Pressable
+                      style={styles.refundBtn}
+                      onPress={() => handleRefund(payment)}
+                    >
+                      <Text style={styles.refundBtnText}>Refund</Text>
+                    </Pressable>
+                  )}
                 </View>
               </View>
             ))}
@@ -924,17 +1057,18 @@ function PaymentKpiCard({
   );
 }
 
-function StatusBadge({ status }: { status: PaymentStatus }) {
-  const badgeStyles =
-    status === 'Success'
-      ? styles.successBadge
-      : status === 'Pending'
-      ? styles.pendingBadge
-      : status === 'Failed'
-      ? styles.failedBadge
-      : styles.refundedBadge;
+function StatusBadge({ status }: { status: PaymentStatus | string }) {
+  const norm = (status || '').toUpperCase();
+  let badgeStyles = styles.pendingBadge;
+  if (norm === 'SUCCESS' || norm === 'CAPTURED' || norm === 'PAID') {
+    badgeStyles = styles.successBadge;
+  } else if (norm === 'REFUNDED') {
+    badgeStyles = styles.refundedBadge;
+  } else if (norm === 'FAILED') {
+    badgeStyles = styles.failedBadge;
+  }
 
-  return <Text style={[styles.statusBadge, badgeStyles]}>{status}</Text>;
+  return <Text style={[styles.statusBadge, badgeStyles]}>{status || 'Pending'}</Text>;
 }
 
 const styles = StyleSheet.create({
@@ -1558,7 +1692,25 @@ const styles = StyleSheet.create({
     width: 190,
   },
   statusColumn: {
-    width: 110,
+    width: 180,
+  },
+  statusActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  refundBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 5,
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  refundBtnText: {
+    color: '#B91C1C',
+    fontSize: 10,
+    fontWeight: '800',
   },
   cell: {
     color: '#475569',

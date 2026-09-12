@@ -2,14 +2,21 @@
  * BACKEND SERVER ENTRY POINT
  *
  * Clean, production-ready Express API server for Pharmacy Billing SaaS.
- * Provides RESTful endpoints for Inventory, Billing, Purchases, and Offline Sync.
+ * Provides RESTful endpoints for Inventory, Billing, Purchases, Taxes, Reports,
+ * Superadmin, and Authoritative Offline Sync.
  */
 
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
 
-const { testConnection } = require("./db/connection");
+const {
+  pool,
+  testConnection,
+  isDbOnline,
+  getDbStatus,
+} = require("./db/connection");
+const { autoInitDatabase } = require("./db/auto-init");
 
 const app = express();
 const PORT = Number(process.env.PORT || 5000);
@@ -18,13 +25,20 @@ const PORT = Number(process.env.PORT || 5000);
  * Middleware
  */
 app.use(cors());
-app.use(express.json({ limit: '10mb' }));
+app.use(
+  express.json({
+    limit: "10mb",
+    verify: (req, res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
 
 /**
  * Root & Health Check Endpoints
  */
 app.get("/", (req, res) => {
-  if (req.accepts('html')) {
+  if (req.accepts("html")) {
     return res.send(`
       <!DOCTYPE html>
       <html lang="en">
@@ -85,6 +99,7 @@ app.get("/", (req, res) => {
       goodsReceipts: "/api/goods-receipts",
       taxes: "/api/taxes",
       reports: "/api/reports",
+      superadmin: "/api/superadmin",
       offlineSync: "/api/sync",
     },
   });
@@ -109,39 +124,41 @@ app.get("/api/health", (req, res) => {
 /**
  * Route Registration
  */
-const purchaseRoutes = require('./routes/purchase.routes');
-const goodsReceiptRoutes = require('./routes/goods-receipt.routes');
-const supplierRoutes = require('./routes/supplier.routes');
-const inventoryRoutes = require('./routes/inventory.routes');
-const cashierRoutes = require('./routes/cashier.routes');
-const syncRoutes = require('./routes/sync.routes');
-const authRoutes = require('./routes/auth.routes');
-const authController = require('./controllers/auth.controller');
-const branchRoutes = require('./routes/branch.routes');
-const customerRoutes = require('./routes/customer.routes');
-const prescriptionRoutes = require('./routes/prescription.routes');
-const stockTransferRoutes = require('./routes/stock-transfer.routes');
-const taxRoutes = require('./routes/tax.routes');
-const reportRoutes = require('./routes/report.routes');
+const purchaseRoutes = require("./routes/purchase.routes");
+const goodsReceiptRoutes = require("./routes/goods-receipt.routes");
+const supplierRoutes = require("./routes/supplier.routes");
+const inventoryRoutes = require("./routes/inventory.routes");
+const cashierRoutes = require("./routes/cashier.routes");
+const syncRoutes = require("./routes/sync.routes");
+const authRoutes = require("./routes/auth.routes");
+const authController = require("./controllers/auth.controller");
+const branchRoutes = require("./routes/branch.routes");
+const customerRoutes = require("./routes/customer.routes");
+const prescriptionRoutes = require("./routes/prescription.routes");
+const stockTransferRoutes = require("./routes/stock-transfer.routes");
+const taxRoutes = require("./routes/tax.routes");
+const reportRoutes = require("./routes/report.routes");
+const superadminRoutes = require("./routes/superadmin.routes");
 
-app.use('/api/purchases', purchaseRoutes);
-app.use('/api/goods-receipts', goodsReceiptRoutes);
-app.use('/api/suppliers', supplierRoutes);
-app.use('/api/inventory', inventoryRoutes);
-app.use('/api/cashier', cashierRoutes);
-app.use('/api/sync', syncRoutes);
-app.use('/sync', syncRoutes);
-app.use('/api/auth', authRoutes);
-app.use('/api/branches', branchRoutes);
-app.use('/branches', branchRoutes);
-app.use('/api/customers', customerRoutes);
-app.use('/customers', customerRoutes);
-app.use('/api/prescriptions', prescriptionRoutes);
-app.use('/api/stock-transfers', stockTransferRoutes);
-app.use('/api/taxes', taxRoutes);
-app.use('/taxes', taxRoutes);
-app.use('/api/reports', reportRoutes);
-app.post('/api/login', authController.login);
+app.use("/api/purchases", purchaseRoutes);
+app.use("/api/goods-receipts", goodsReceiptRoutes);
+app.use("/api/suppliers", supplierRoutes);
+app.use("/api/inventory", inventoryRoutes);
+app.use("/api/cashier", cashierRoutes);
+app.use("/api/sync", syncRoutes);
+app.use("/sync", syncRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/branches", branchRoutes);
+app.use("/branches", branchRoutes);
+app.use("/api/customers", customerRoutes);
+app.use("/customers", customerRoutes);
+app.use("/api/prescriptions", prescriptionRoutes);
+app.use("/api/stock-transfers", stockTransferRoutes);
+app.use("/api/taxes", taxRoutes);
+app.use("/taxes", taxRoutes);
+app.use("/api/reports", reportRoutes);
+app.use("/api/superadmin", superadminRoutes);
+app.post("/api/login", authController.login);
 
 /**
  * Server Startup
@@ -151,16 +168,21 @@ const startServer = () => {
   console.log("  🚀 PHARMACY BILLING SAAS - BACKEND SERVER");
   console.log("=================================================");
 
-  const server = app.listen(PORT, '0.0.0.0', () => {
-    console.log(`✨ Backend listening on port ${PORT}`);
-    console.log(`📡 Health Check: http://localhost:${PORT}/health`);
-    console.log(`🔄 Sync Endpoint: http://localhost:${PORT}/api/sync`);
+  const server = app.listen(PORT, "0.0.0.0", () => {
+    console.log(`✨ Backend server is listening on port ${PORT}`);
+    console.log(`🏪 Cashier API:    http://localhost:${PORT}/api/cashier`);
+    console.log(`🔄 Sync API:       http://localhost:${PORT}/api/sync`);
+    console.log(`🩺 Health API:     http://localhost:${PORT}/health`);
+    console.log(`👑 Superadmin API: http://localhost:${PORT}/api/superadmin`);
     console.log("=================================================");
   });
 
-  server.on('error', (err) => {
-    if (err.code === 'EADDRINUSE') {
+  server.on("error", (err) => {
+    if (err.code === "EADDRINUSE") {
       console.error(`❌ Port ${PORT} is already in use by another process.`);
+      console.error(
+        `Close the existing process on port ${PORT} or change PORT in .env`
+      );
     } else {
       console.error(`❌ Server error:`, err.message);
     }
@@ -170,15 +192,16 @@ const startServer = () => {
   testConnection()
     .then((connected) => {
       if (connected) {
-        console.log(`✅ PostgreSQL database connected successfully.`);
+        console.log(
+          `✅ PostgreSQL connected: ${process.env.DB_DATABASE || "falah_pharmacy"}`
+        );
       } else {
-        console.log(`ℹ️  PostgreSQL not connected. API will respond, offline sync ready.`);
+        console.log(
+          "ℹ️  PostgreSQL offline: Running seamlessly in offline mode."
+        );
       }
     })
     .catch(() => {});
 };
 
 startServer();
-
-
-

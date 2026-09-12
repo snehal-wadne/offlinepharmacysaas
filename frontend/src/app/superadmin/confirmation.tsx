@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -17,6 +18,7 @@ type ConfirmationParams = {
   name?: string;
   email?: string;
   plan?: string;
+  temporaryPassword?: string;
 };
 
 export default function ConfirmationPage() {
@@ -34,7 +36,26 @@ export default function ConfirmationPage() {
 
   const plan = pharmacy?.plan || getValue(params.plan) || 'Professional';
 
+  const temporaryPassword =
+    getValue(params.temporaryPassword) || 'PF@PharmaFlow#2026';
+
   const mode = getValue(params.mode);
+
+  const copyToClipboard = (text: string, label: string) => {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        navigator.clipboard.writeText(text);
+      }
+      Alert.alert('Copied', `${label} copied to clipboard.`);
+    } catch {
+      Alert.alert('Copy', text);
+    }
+  };
+
+  const copyFullCredentials = () => {
+    const text = `PharmaFlow Account Credentials:\nPharmacy: ${pharmacyName}\nPharmacy Code: ${pharmacyId || 'Assigned'}\nLogin Email: ${email}\nInitial Password: ${temporaryPassword}\nLogin URL: http://localhost:8081\n\n(Please change your password upon initial login)`;
+    copyToClipboard(text, 'All login credentials');
+  };
 
   const pageMessage =
     mode === 'renew'
@@ -117,16 +138,33 @@ export default function ConfirmationPage() {
           <CredentialRow label="Plan" value={plan} />
 
           <View style={styles.passwordRow}>
-            <Text style={styles.credentialLabel}>Initial Password</Text>
-            <Text style={styles.password}>R78kL9mQ2</Text>
+            <View style={styles.passwordHeader}>
+              <Text style={styles.credentialLabel}>Initial Password</Text>
+              <Pressable
+                style={styles.inlineCopyBtn}
+                onPress={() => copyToClipboard(temporaryPassword, 'Initial password')}
+              >
+                <Text style={styles.inlineCopyBtnText}>📋 Copy</Text>
+              </Pressable>
+            </View>
+            <Text style={styles.password}>{temporaryPassword}</Text>
           </View>
 
           <View style={styles.passwordNotice}>
             <Text style={styles.noticeIcon}>ⓘ</Text>
             <Text style={styles.passwordNoticeText}>
-              Please change the password after first login.
+              Please provide this password to the client. They should change it upon first login.
             </Text>
           </View>
+
+          <Pressable
+            style={styles.copyAllButton}
+            onPress={copyFullCredentials}
+          >
+            <Text style={styles.copyAllButtonText}>
+              📋 Copy Full Credentials for Client
+            </Text>
+          </Pressable>
 
           <View style={styles.cardActions}>
             <Pressable
@@ -439,18 +477,51 @@ const styles = StyleSheet.create({
   },
   passwordRow: {
     minHeight: 58,
-    padding: 11,
+    padding: 12,
     marginTop: 10,
     borderRadius: 8,
     backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     justifyContent: 'center',
   },
+  passwordHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  inlineCopyBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: '#E2E8F0',
+  },
+  inlineCopyBtnText: {
+    color: '#0F172A',
+    fontSize: 10,
+    fontWeight: '800',
+  },
   password: {
-    marginTop: 5,
-    color: '#172033',
-    fontSize: 14,
+    marginTop: 6,
+    color: '#047857',
+    fontSize: 15,
     fontWeight: '900',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
     letterSpacing: 1,
+  },
+  copyAllButton: {
+    marginTop: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: '#047857',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  copyAllButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
   },
   passwordNotice: {
     marginTop: 12,

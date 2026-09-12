@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -9,11 +9,15 @@ import {
   StyleSheet,
   useWindowDimensions,
   Platform,
-} from 'react-native';
-import { usePos } from '../../context/PosContext';
-import BarcodeScannerModal from '../../components/common/BarcodeScannerModal';
+} from "react-native";
+import { usePos } from "../../context/PosContext";
+import BarcodeScannerModal from "../../components/common/BarcodeScannerModal";
 
-export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBranch = true }) {
+export default function SalesReturnsScreen({
+  onNavigate,
+  onShowToast,
+  isMultiBranch = true,
+}) {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const isCompact = width < 1100;
@@ -21,50 +25,69 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
   const { invoices, returnHistory, processReturnRefund } = usePos();
 
   // Active Tab: 'find-invoice' | 'return-history'
-  const [activeTab, setActiveTab] = useState('find-invoice');
+  const [activeTab, setActiveTab] = useState("find-invoice");
 
   // Mobile view mode: 'table' | 'details'
-  const [mobileView, setMobileView] = useState('table');
+  const [mobileView, setMobileView] = useState("table");
 
   // Search & Filter
-  const [searchInvoice, setSearchInvoice] = useState('');
-  const [selectedDateFilter, setSelectedDateFilter] = useState('All Dates');
+  const [searchInvoice, setSearchInvoice] = useState("");
+  const [selectedDateFilter, setSelectedDateFilter] = useState("All Dates");
   const [dateDropdownOpen, setDateDropdownOpen] = useState(false);
 
   // Dynamic counts for dropdown list
   const dateCounts = {
     all: invoices.length,
-    today: invoices.filter((inv) => inv.date && inv.date.includes('29 Aug 2026')).length,
-    yesterday: invoices.filter((inv) => inv.date && inv.date.includes('28 Aug 2026')).length,
+    today: invoices.filter(
+      (inv) => inv.date && inv.date.includes("29 Aug 2026"),
+    ).length,
+    yesterday: invoices.filter(
+      (inv) => inv.date && inv.date.includes("28 Aug 2026"),
+    ).length,
     last7: invoices.filter(
       (inv) =>
         inv.date &&
-        (inv.date.includes('29 Aug 2026') ||
-          inv.date.includes('28 Aug 2026') ||
-          inv.date.includes('27 Aug 2026'))
+        (inv.date.includes("29 Aug 2026") ||
+          inv.date.includes("28 Aug 2026") ||
+          inv.date.includes("27 Aug 2026")),
     ).length,
-    month: invoices.filter((inv) => inv.date && inv.date.includes('Aug 2026')).length,
+    month: invoices.filter((inv) => inv.date && inv.date.includes("Aug 2026"))
+      .length,
   };
 
   const DATE_OPTIONS = [
-    { label: 'All Dates', value: 'All Dates', count: dateCounts.all },
-    { label: 'Today (29 Aug 2026)', value: 'Today (29 Aug 2026)', count: dateCounts.today },
-    { label: 'Yesterday (28 Aug 2026)', value: 'Yesterday (28 Aug 2026)', count: dateCounts.yesterday },
-    { label: 'Last 7 Days', value: 'Last 7 Days', count: dateCounts.last7 },
-    { label: 'This Month (Aug 2026)', value: 'This Month (Aug 2026)', count: dateCounts.month },
+    { label: "All Dates", value: "All Dates", count: dateCounts.all },
+    {
+      label: "Today (29 Aug 2026)",
+      value: "Today (29 Aug 2026)",
+      count: dateCounts.today,
+    },
+    {
+      label: "Yesterday (28 Aug 2026)",
+      value: "Yesterday (28 Aug 2026)",
+      count: dateCounts.yesterday,
+    },
+    { label: "Last 7 Days", value: "Last 7 Days", count: dateCounts.last7 },
+    {
+      label: "This Month (Aug 2026)",
+      value: "This Month (Aug 2026)",
+      count: dateCounts.month,
+    },
   ];
 
   // Selected Invoice for inspection in Right Panel (Default to INV-1025 matching Screenshot 3)
   const [selectedInvoice, setSelectedInvoice] = useState(
-    invoices.find((inv) => inv.invoiceNo === 'INV-1025') || invoices[0] || null
+    invoices.find((inv) => inv.invoiceNo === "INV-1025") || invoices[0] || null,
   );
 
   // Return Process Modal State
   const [returnModalVisible, setReturnModalVisible] = useState(false);
   const [returnQtys, setReturnQtys] = useState({});
-  const [returnReason, setReturnReason] = useState('Doctor altered prescription');
-  const [stockDisposition, setStockDisposition] = useState('Sellable'); // 'Sellable' | 'Quarantine'
-  const [refundMode, setRefundMode] = useState('Cash'); // 'Cash' | 'Original Payment' | 'Credit Note'
+  const [returnReason, setReturnReason] = useState(
+    "Doctor altered prescription",
+  );
+  const [stockDisposition, setStockDisposition] = useState("Sellable"); // 'Sellable' | 'Quarantine'
+  const [refundMode, setRefundMode] = useState("Cash"); // 'Cash' | 'Original Payment' | 'Credit Note'
 
   // Credit Note Modal State
   const [creditNoteModalVisible, setCreditNoteModalVisible] = useState(false);
@@ -83,18 +106,18 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
       (inv.phone && inv.phone.includes(q));
 
     let matchDate = true;
-    if (selectedDateFilter === 'Today (29 Aug 2026)') {
-      matchDate = inv.date && inv.date.includes('29 Aug 2026');
-    } else if (selectedDateFilter === 'Yesterday (28 Aug 2026)') {
-      matchDate = inv.date && inv.date.includes('28 Aug 2026');
-    } else if (selectedDateFilter === 'Last 7 Days') {
+    if (selectedDateFilter === "Today (29 Aug 2026)") {
+      matchDate = inv.date && inv.date.includes("29 Aug 2026");
+    } else if (selectedDateFilter === "Yesterday (28 Aug 2026)") {
+      matchDate = inv.date && inv.date.includes("28 Aug 2026");
+    } else if (selectedDateFilter === "Last 7 Days") {
       matchDate =
         inv.date &&
-        (inv.date.includes('29 Aug 2026') ||
-          inv.date.includes('28 Aug 2026') ||
-          inv.date.includes('27 Aug 2026'));
-    } else if (selectedDateFilter === 'This Month (Aug 2026)') {
-      matchDate = inv.date && inv.date.includes('Aug 2026');
+        (inv.date.includes("29 Aug 2026") ||
+          inv.date.includes("28 Aug 2026") ||
+          inv.date.includes("27 Aug 2026"));
+    } else if (selectedDateFilter === "This Month (Aug 2026)") {
+      matchDate = inv.date && inv.date.includes("Aug 2026");
     }
 
     return matchSearch && matchDate;
@@ -102,9 +125,15 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
 
   // Dynamic Summary Metrics for Top KPI Cards
   const totalInvoicesCount = invoices.length;
-  const totalBilledAmount = invoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
+  const totalBilledAmount = invoices.reduce(
+    (sum, inv) => sum + (inv.total || 0),
+    0,
+  );
   const returnsProcessedCount = returnHistory.length;
-  const totalRefundedAmount = returnHistory.reduce((sum, ret) => sum + (ret.amount || 0), 0);
+  const totalRefundedAmount = returnHistory.reduce(
+    (sum, ret) => sum + (ret.amount || 0),
+    0,
+  );
 
   // Calculate return refund total
   const calculateRefundTotal = () => {
@@ -129,14 +158,17 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
       initialQtys[idx] = idx === 0 ? 1 : 0;
     });
     setReturnQtys(initialQtys);
-    setRefundMode(selectedInvoice.paymentMode === 'Cash' ? 'Cash' : 'Original Payment');
+    setRefundMode(
+      selectedInvoice.paymentMode === "Cash" ? "Cash" : "Original Payment",
+    );
     setReturnModalVisible(true);
   };
 
   // Submit and Finalize Return
-  const handleConfirmReturn = () => {
+  const handleConfirmReturn = async () => {
     if (currentRefundTotal <= 0) {
-      if (onShowToast) onShowToast('⚠️ Please specify return quantity for at least one item.');
+      if (onShowToast)
+        onShowToast("⚠️ Please specify return quantity for at least one item.");
       return;
     }
 
@@ -145,7 +177,8 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
         name: it.name,
         qty: returnQtys[idx] || 0,
         unitPrice: it.price || it.sellingPrice || 0,
-        refundTotal: (it.price || it.sellingPrice || 0) * (returnQtys[idx] || 0),
+        refundTotal:
+          (it.price || it.sellingPrice || 0) * (returnQtys[idx] || 0),
         batch: it.batch,
       }))
       .filter((it) => it.qty > 0);
@@ -160,13 +193,24 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
       returnedItems: returnedItemsList,
     };
 
-    const creditNote = processReturnRefund(returnData);
-    setCompletedCreditNote(creditNote);
-    setReturnModalVisible(false);
-    setCreditNoteModalVisible(true);
+    try {
+      const creditNote = await processReturnRefund(returnData);
+      setCompletedCreditNote(creditNote);
+      setReturnModalVisible(false);
+      setCreditNoteModalVisible(true);
 
-    if (onShowToast) {
-      onShowToast(`✓ Processed Return & Credit Note #${creditNote.returnNo}! Amount ₹${creditNote.amount.toFixed(2)}`);
+      if (onShowToast) {
+        onShowToast(
+          `✓ Processed Return & Credit Note #${creditNote.returnNo}! Amount ₹${creditNote.amount.toFixed(2)}`,
+        );
+      }
+    } catch (err) {
+      console.error("[SalesReturnsScreen] Return persistence failure:", err);
+      if (onShowToast) {
+        onShowToast(
+          `✕ Failed to process return: ${err.message || "Local persistence error"}`,
+        );
+      }
     }
   };
 
@@ -179,16 +223,18 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
       (inv) =>
         inv.invoiceNo.toLowerCase() === code ||
         inv.invoiceNo.toLowerCase().includes(code) ||
-        (inv.phone && inv.phone.includes(code))
+        (inv.phone && inv.phone.includes(code)),
     );
 
     if (foundInvoice) {
       setSelectedInvoice(foundInvoice);
       setSearchInvoice(foundInvoice.invoiceNo);
       setScannerModalVisible(false);
-      if (isMobile) setMobileView('details');
+      if (isMobile) setMobileView("details");
       if (onShowToast) {
-        onShowToast(`📷 Scanned: Found invoice ${foundInvoice.invoiceNo} for ${foundInvoice.customer}`);
+        onShowToast(
+          `📷 Scanned: Found invoice ${foundInvoice.invoiceNo} for ${foundInvoice.customer}`,
+        );
       }
       return;
     }
@@ -198,17 +244,19 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
       (inv.items || []).some(
         (it) =>
           (it.barcode && it.barcode.toLowerCase() === code) ||
-          it.name.toLowerCase().includes(code)
-      )
+          it.name.toLowerCase().includes(code),
+      ),
     );
 
     if (invoiceWithProduct) {
       setSelectedInvoice(invoiceWithProduct);
       setSearchInvoice(invoiceWithProduct.invoiceNo);
       setScannerModalVisible(false);
-      if (isMobile) setMobileView('details');
+      if (isMobile) setMobileView("details");
       if (onShowToast) {
-        onShowToast(`📷 Scanned Product: Located invoice ${invoiceWithProduct.invoiceNo}`);
+        onShowToast(
+          `📷 Scanned Product: Located invoice ${invoiceWithProduct.invoiceNo}`,
+        );
       }
       return;
     }
@@ -223,84 +271,138 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
       {/* Header (Matches Image 3) */}
       <View style={styles.topHeaderBar}>
         <Text style={styles.pageTitle}>Returns</Text>
-        <Text style={styles.pageSubtitle}>Process return or refund for a completed sale.</Text>
+        <Text style={styles.pageSubtitle}>
+          Process return or refund for a completed sale.
+        </Text>
       </View>
 
       {/* Tabs Navigation (Find Invoice vs Return History) */}
       <View style={styles.tabsRow}>
         <Pressable
-          onPress={() => setActiveTab('find-invoice')}
-          style={[styles.tabBtn, activeTab === 'find-invoice' && styles.tabBtnActive]}
+          onPress={() => setActiveTab("find-invoice")}
+          style={[
+            styles.tabBtn,
+            activeTab === "find-invoice" && styles.tabBtnActive,
+          ]}
         >
           <Text
-            style={[styles.tabBtnText, activeTab === 'find-invoice' && styles.tabBtnTextActive]}
+            style={[
+              styles.tabBtnText,
+              activeTab === "find-invoice" && styles.tabBtnTextActive,
+            ]}
           >
             Find Invoice
           </Text>
         </Pressable>
         <Pressable
-          onPress={() => setActiveTab('return-history')}
-          style={[styles.tabBtn, activeTab === 'return-history' && styles.tabBtnActive]}
+          onPress={() => setActiveTab("return-history")}
+          style={[
+            styles.tabBtn,
+            activeTab === "return-history" && styles.tabBtnActive,
+          ]}
         >
           <Text
-            style={[styles.tabBtnText, activeTab === 'return-history' && styles.tabBtnTextActive]}
+            style={[
+              styles.tabBtnText,
+              activeTab === "return-history" && styles.tabBtnTextActive,
+            ]}
           >
             Return History ({returnHistory.length})
           </Text>
         </Pressable>
       </View>
 
-      {activeTab === 'find-invoice' ? (
+      {activeTab === "find-invoice" ? (
         <ScrollView
           style={styles.contentScroll}
-          contentContainerStyle={[styles.contentWrapper, isMobile && styles.contentWrapperMobile]}
+          contentContainerStyle={[
+            styles.contentWrapper,
+            isMobile && styles.contentWrapperMobile,
+          ]}
           showsVerticalScrollIndicator={true}
         >
           {/* Top 4 Summary KPI Metric Cards */}
-          <View style={[styles.kpiCardsRow, isMobile && styles.kpiCardsRowMobile]}>
-            <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { borderLeftColor: '#0F766E' }]}>
+          <View
+            style={[styles.kpiCardsRow, isMobile && styles.kpiCardsRowMobile]}
+          >
+            <View
+              style={[
+                styles.kpiCard,
+                isMobile && styles.kpiCardMobile,
+                { borderLeftColor: "#0F766E" },
+              ]}
+            >
               <View style={styles.kpiHeader}>
                 <Text style={styles.kpiLabel}>TOTAL INVOICES</Text>
-                <View style={[styles.kpiDot, { backgroundColor: '#0F766E' }]} />
+                <View style={[styles.kpiDot, { backgroundColor: "#0F766E" }]} />
               </View>
               <Text style={styles.kpiValue}>{totalInvoicesCount}</Text>
               <Text style={styles.kpiSubtext}>Completed transactions</Text>
             </View>
 
-            <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { borderLeftColor: '#2563EB' }]}>
+            <View
+              style={[
+                styles.kpiCard,
+                isMobile && styles.kpiCardMobile,
+                { borderLeftColor: "#2563EB" },
+              ]}
+            >
               <View style={styles.kpiHeader}>
                 <Text style={styles.kpiLabel}>TOTAL BILLED</Text>
-                <View style={[styles.kpiDot, { backgroundColor: '#2563EB' }]} />
+                <View style={[styles.kpiDot, { backgroundColor: "#2563EB" }]} />
               </View>
-              <Text style={[styles.kpiValue, { color: '#0F766E' }]}>
-                ₹{totalBilledAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+              <Text style={[styles.kpiValue, { color: "#0F766E" }]}>
+                ₹
+                {totalBilledAmount.toLocaleString("en-IN", {
+                  maximumFractionDigits: 0,
+                })}
               </Text>
               <Text style={styles.kpiSubtext}>Gross sales volume</Text>
             </View>
 
-            <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { borderLeftColor: '#D97706' }]}>
+            <View
+              style={[
+                styles.kpiCard,
+                isMobile && styles.kpiCardMobile,
+                { borderLeftColor: "#D97706" },
+              ]}
+            >
               <View style={styles.kpiHeader}>
                 <Text style={styles.kpiLabel}>RETURNS LOGGED</Text>
-                <View style={[styles.kpiDot, { backgroundColor: '#D97706' }]} />
+                <View style={[styles.kpiDot, { backgroundColor: "#D97706" }]} />
               </View>
               <Text style={styles.kpiValue}>{returnsProcessedCount}</Text>
               <Text style={styles.kpiSubtext}>Refund credit notes</Text>
             </View>
 
-            <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { borderLeftColor: '#DC2626' }]}>
+            <View
+              style={[
+                styles.kpiCard,
+                isMobile && styles.kpiCardMobile,
+                { borderLeftColor: "#DC2626" },
+              ]}
+            >
               <View style={styles.kpiHeader}>
                 <Text style={styles.kpiLabel}>TOTAL REFUNDED</Text>
-                <View style={[styles.kpiDot, { backgroundColor: '#DC2626' }]} />
+                <View style={[styles.kpiDot, { backgroundColor: "#DC2626" }]} />
               </View>
-              <Text style={[styles.kpiValue, { color: '#DC2626' }]}>
-                ₹{totalRefundedAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+              <Text style={[styles.kpiValue, { color: "#DC2626" }]}>
+                ₹
+                {totalRefundedAmount.toLocaleString("en-IN", {
+                  maximumFractionDigits: 0,
+                })}
               </Text>
               <Text style={styles.kpiSubtext}>Processed refunds</Text>
             </View>
           </View>
 
           {/* Search Bar & Action Controls Row (Matches Image 3) */}
-          <View style={[styles.searchAndActionsRow, isMobile && styles.searchAndActionsRowMobile]}>
+          <View
+            style={[
+              styles.searchAndActionsRow,
+              isMobile && styles.searchAndActionsRowMobile,
+            ]}
+          >
             {/* Search Input */}
             <View style={styles.searchBarBox}>
               <Text style={styles.searchIcon}>🔍</Text>
@@ -312,7 +414,7 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
                 placeholderTextColor="#94A3B8"
               />
               {searchInvoice ? (
-                <Pressable onPress={() => setSearchInvoice('')}>
+                <Pressable onPress={() => setSearchInvoice("")}>
                   <Text style={styles.clearSearchIcon}>✕</Text>
                 </Pressable>
               ) : null}
@@ -324,7 +426,7 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
                 onPress={() => setDateDropdownOpen(!dateDropdownOpen)}
                 style={[
                   styles.dateFilterBtn,
-                  (dateDropdownOpen || selectedDateFilter !== 'All Dates') &&
+                  (dateDropdownOpen || selectedDateFilter !== "All Dates") &&
                     styles.dateFilterBtnActive,
                 ]}
                 accessibilityRole="button"
@@ -334,17 +436,22 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
                 <Text
                   style={[
                     styles.dateFilterText,
-                    selectedDateFilter !== 'All Dates' && styles.dateFilterTextActive,
+                    selectedDateFilter !== "All Dates" &&
+                      styles.dateFilterTextActive,
                   ]}
                 >
                   {selectedDateFilter}
                 </Text>
-                <Text style={styles.dateFilterArrow}>{dateDropdownOpen ? '▴' : '▾'}</Text>
+                <Text style={styles.dateFilterArrow}>
+                  {dateDropdownOpen ? "▴" : "▾"}
+                </Text>
               </Pressable>
 
               {dateDropdownOpen && (
                 <View style={styles.dropdownMenuPopover}>
-                  <Text style={styles.dropdownSectionLabel}>SELECT DATE RANGE</Text>
+                  <Text style={styles.dropdownSectionLabel}>
+                    SELECT DATE RANGE
+                  </Text>
                   {DATE_OPTIONS.map((opt) => {
                     const isSelected = selectedDateFilter === opt.value;
                     return (
@@ -369,7 +476,7 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
                               isSelected && styles.dropdownItemCheckActive,
                             ]}
                           >
-                            {isSelected ? '✓' : ' '}
+                            {isSelected ? "✓" : " "}
                           </Text>
                           <Text
                             style={[
@@ -402,11 +509,11 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
               )}
             </View>
 
-            {selectedDateFilter !== 'All Dates' && (
+            {selectedDateFilter !== "All Dates" && (
               <Pressable
                 onPress={() => {
-                  setSelectedDateFilter('All Dates');
-                  if (onShowToast) onShowToast('Reset date filter');
+                  setSelectedDateFilter("All Dates");
+                  if (onShowToast) onShowToast("Reset date filter");
                 }}
                 style={styles.resetDateFilterBtn}
               >
@@ -430,32 +537,56 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
           {isMobile && (
             <View style={styles.mobileSegmentRow}>
               <Pressable
-                onPress={() => setMobileView('table')}
-                style={[styles.mobileSegmentBtn, mobileView === 'table' && styles.mobileSegmentBtnActive]}
+                onPress={() => setMobileView("table")}
+                style={[
+                  styles.mobileSegmentBtn,
+                  mobileView === "table" && styles.mobileSegmentBtnActive,
+                ]}
                 accessibilityRole="button"
               >
-                <Text style={[styles.mobileSegmentText, mobileView === 'table' && styles.mobileSegmentTextActive]}>
+                <Text
+                  style={[
+                    styles.mobileSegmentText,
+                    mobileView === "table" && styles.mobileSegmentTextActive,
+                  ]}
+                >
                   📋 Invoices ({filteredInvoices.length})
                 </Text>
               </Pressable>
               <Pressable
-                onPress={() => setMobileView('details')}
-                style={[styles.mobileSegmentBtn, mobileView === 'details' && styles.mobileSegmentBtnActive]}
+                onPress={() => setMobileView("details")}
+                style={[
+                  styles.mobileSegmentBtn,
+                  mobileView === "details" && styles.mobileSegmentBtnActive,
+                ]}
                 accessibilityRole="button"
               >
-                <Text style={[styles.mobileSegmentText, mobileView === 'details' && styles.mobileSegmentTextActive]}>
-                  🧾 Details {selectedInvoice ? `(${selectedInvoice.invoiceNo})` : ''}
+                <Text
+                  style={[
+                    styles.mobileSegmentText,
+                    mobileView === "details" && styles.mobileSegmentTextActive,
+                  ]}
+                >
+                  🧾 Details{" "}
+                  {selectedInvoice ? `(${selectedInvoice.invoiceNo})` : ""}
                 </Text>
               </Pressable>
             </View>
           )}
 
           {/* Split-Screen Main Layout (Matches Image 3) */}
-          <View style={[styles.splitLayout, isCompact && styles.splitLayoutCompact]}>
+          <View
+            style={[styles.splitLayout, isCompact && styles.splitLayoutCompact]}
+          >
             {/* LEFT: Invoices Table */}
             {/* LEFT: Invoices Table (Desktop) / Invoice KPI Cards (Mobile) */}
-            {(!isMobile || mobileView === 'table') && (
-              <View style={[styles.leftTableCard, isMobile && styles.leftTableCardMobile]}>
+            {(!isMobile || mobileView === "table") && (
+              <View
+                style={[
+                  styles.leftTableCard,
+                  isMobile && styles.leftTableCardMobile,
+                ]}
+              >
                 {isMobile ? (
                   /* Mobile: Responsive Invoice KPI Cards */
                   <View style={styles.mobileCardsContainer}>
@@ -470,17 +601,20 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
 
                     {filteredInvoices.length === 0 ? (
                       <View style={styles.emptyTableBox}>
-                        <Text style={styles.emptyTableText}>No invoices found matching query.</Text>
+                        <Text style={styles.emptyTableText}>
+                          No invoices found matching query.
+                        </Text>
                       </View>
                     ) : (
                       filteredInvoices.map((inv) => {
-                        const isSelected = selectedInvoice?.invoiceNo === inv.invoiceNo;
+                        const isSelected =
+                          selectedInvoice?.invoiceNo === inv.invoiceNo;
                         return (
                           <Pressable
                             key={inv.invoiceNo}
                             onPress={() => {
                               setSelectedInvoice(inv);
-                              setMobileView('details');
+                              setMobileView("details");
                             }}
                             style={[
                               styles.invoiceKpiCard,
@@ -493,11 +627,13 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
                             <View style={styles.invoiceCardHeader}>
                               <View style={styles.invoiceNoGroup}>
                                 <Text style={styles.invoiceIcon}>🧾</Text>
-                                <Text style={styles.invoiceCardNo}>{inv.invoiceNo}</Text>
+                                <Text style={styles.invoiceCardNo}>
+                                  {inv.invoiceNo}
+                                </Text>
                               </View>
                               <View style={styles.statusCompletedBadge}>
                                 <Text style={styles.statusCompletedText}>
-                                  {inv.status || 'Completed'}
+                                  {inv.status || "Completed"}
                                 </Text>
                               </View>
                             </View>
@@ -505,17 +641,27 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
                             {/* Card Details Grid */}
                             <View style={styles.invoiceCardGrid}>
                               <View style={styles.invoiceGridCol}>
-                                <Text style={styles.invoiceCardLabel}>CUSTOMER</Text>
+                                <Text style={styles.invoiceCardLabel}>
+                                  CUSTOMER
+                                </Text>
                                 <View style={styles.customerRow}>
                                   <Text style={styles.custIconSmall}>👤</Text>
-                                  <Text style={styles.invoiceCustomerText} numberOfLines={1}>
+                                  <Text
+                                    style={styles.invoiceCustomerText}
+                                    numberOfLines={1}
+                                  >
                                     {inv.customer}
                                   </Text>
                                 </View>
                               </View>
                               <View style={styles.invoiceGridCol}>
-                                <Text style={styles.invoiceCardLabel}>DATE & TIME</Text>
-                                <Text style={styles.invoiceDateText} numberOfLines={1}>
+                                <Text style={styles.invoiceCardLabel}>
+                                  DATE & TIME
+                                </Text>
+                                <Text
+                                  style={styles.invoiceDateText}
+                                  numberOfLines={1}
+                                >
                                   📅 {inv.date}
                                 </Text>
                               </View>
@@ -524,10 +670,11 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
                             {/* Meta Badges */}
                             <View style={styles.invoiceCardMetaRow}>
                               <Text style={styles.invoiceMetaBadge}>
-                                📦 {inv.items?.length || 0} {inv.items?.length === 1 ? 'item' : 'items'}
+                                📦 {inv.items?.length || 0}{" "}
+                                {inv.items?.length === 1 ? "item" : "items"}
                               </Text>
                               <Text style={styles.invoiceMetaBadge}>
-                                💳 {inv.paymentMode || 'Cash'}
+                                💳 {inv.paymentMode || "Cash"}
                               </Text>
                               {inv.phone ? (
                                 <Text style={styles.invoiceMetaBadge}>
@@ -539,7 +686,9 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
                             {/* Card Footer: Amount & Action Button */}
                             <View style={styles.invoiceCardFooter}>
                               <View>
-                                <Text style={styles.invoiceTotalLabel}>TOTAL AMOUNT</Text>
+                                <Text style={styles.invoiceTotalLabel}>
+                                  TOTAL AMOUNT
+                                </Text>
                                 <Text style={styles.invoiceTotalAmount}>
                                   ₹{(inv.total || 0).toFixed(2)}
                                 </Text>
@@ -554,10 +703,13 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
                                 <Text
                                   style={[
                                     styles.selectInvoiceBtnText,
-                                    isSelected && styles.selectInvoiceBtnTextActive,
+                                    isSelected &&
+                                      styles.selectInvoiceBtnTextActive,
                                   ]}
                                 >
-                                  {isSelected ? 'Selected ✓' : 'Process Return ➔'}
+                                  {isSelected
+                                    ? "Selected ✓"
+                                    : "Process Return ➔"}
                                 </Text>
                               </View>
                             </View>
@@ -568,7 +720,8 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
 
                     <View style={styles.tableFooterRow}>
                       <Text style={styles.showingCountText}>
-                        Showing {filteredInvoices.length} of {invoices.length} Invoices
+                        Showing {filteredInvoices.length} of {invoices.length}{" "}
+                        Invoices
                       </Text>
                     </View>
                   </View>
@@ -576,21 +729,39 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
                   /* Desktop: High-density 5-column table */
                   <View style={{ flex: 1 }}>
                     <View style={styles.tableHeaderRow}>
-                      <Text style={[styles.th, { flex: 1.3 }]}>INVOICE NO.</Text>
+                      <Text style={[styles.th, { flex: 1.3 }]}>
+                        INVOICE NO.
+                      </Text>
                       <Text style={[styles.th, { flex: 1.8 }]}>CUSTOMER</Text>
-                      <Text style={[styles.th, { flex: 1.6 }]}>DATE & TIME</Text>
-                      <Text style={[styles.th, { flex: 1.2, textAlign: 'right' }]}>AMOUNT</Text>
-                      <Text style={[styles.th, { flex: 1.2, textAlign: 'center' }]}>STATUS</Text>
+                      <Text style={[styles.th, { flex: 1.6 }]}>
+                        DATE & TIME
+                      </Text>
+                      <Text
+                        style={[styles.th, { flex: 1.2, textAlign: "right" }]}
+                      >
+                        AMOUNT
+                      </Text>
+                      <Text
+                        style={[styles.th, { flex: 1.2, textAlign: "center" }]}
+                      >
+                        STATUS
+                      </Text>
                     </View>
 
-                    <ScrollView style={styles.tableBodyScroll} showsVerticalScrollIndicator={true}>
+                    <ScrollView
+                      style={styles.tableBodyScroll}
+                      showsVerticalScrollIndicator={true}
+                    >
                       {filteredInvoices.length === 0 ? (
                         <View style={styles.emptyTableBox}>
-                          <Text style={styles.emptyTableText}>No invoices found matching query.</Text>
+                          <Text style={styles.emptyTableText}>
+                            No invoices found matching query.
+                          </Text>
                         </View>
                       ) : (
                         filteredInvoices.map((inv) => {
-                          const isSelected = selectedInvoice?.invoiceNo === inv.invoiceNo;
+                          const isSelected =
+                            selectedInvoice?.invoiceNo === inv.invoiceNo;
                           return (
                             <Pressable
                               key={inv.invoiceNo}
@@ -604,9 +775,19 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
                                 {inv.invoiceNo}
                               </Text>
 
-                              <View style={{ flex: 1.8, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                              <View
+                                style={{
+                                  flex: 1.8,
+                                  flexDirection: "row",
+                                  alignItems: "center",
+                                  gap: 4,
+                                }}
+                              >
                                 <Text style={styles.custIconSmall}>👤</Text>
-                                <Text style={styles.tdCustomer} numberOfLines={1}>
+                                <Text
+                                  style={styles.tdCustomer}
+                                  numberOfLines={1}
+                                >
                                   {inv.customer}
                                 </Text>
                               </View>
@@ -615,14 +796,19 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
                                 {inv.date}
                               </Text>
 
-                              <Text style={[styles.tdAmount, { flex: 1.2, textAlign: 'right' }]}>
+                              <Text
+                                style={[
+                                  styles.tdAmount,
+                                  { flex: 1.2, textAlign: "right" },
+                                ]}
+                              >
                                 ₹{(inv.total || 0).toFixed(2)}
                               </Text>
 
-                              <View style={{ flex: 1.2, alignItems: 'center' }}>
+                              <View style={{ flex: 1.2, alignItems: "center" }}>
                                 <View style={styles.statusCompletedBadge}>
                                   <Text style={styles.statusCompletedText}>
-                                    {inv.status || 'Completed'}
+                                    {inv.status || "Completed"}
                                   </Text>
                                 </View>
                               </View>
@@ -634,7 +820,8 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
 
                     <View style={styles.tableFooterRow}>
                       <Text style={styles.showingCountText}>
-                        Showing {filteredInvoices.length} of {invoices.length} Invoices
+                        Showing {filteredInvoices.length} of {invoices.length}{" "}
+                        Invoices
                       </Text>
                     </View>
                   </View>
@@ -643,118 +830,161 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
             )}
 
             {/* RIGHT: Invoice Details & Return Action (Matches Image 3) */}
-            {(!isMobile || mobileView === 'details') && (
-              <View style={[styles.rightDetailsCard, isMobile && styles.rightDetailsCardMobile]}>
+            {(!isMobile || mobileView === "details") && (
+              <View
+                style={[
+                  styles.rightDetailsCard,
+                  isMobile && styles.rightDetailsCardMobile,
+                ]}
+              >
                 {isMobile && (
                   <Pressable
-                    onPress={() => setMobileView('table')}
+                    onPress={() => setMobileView("table")}
                     style={styles.mobileBackBtn}
                     accessibilityRole="button"
                     accessibilityLabel="Back to Invoices List"
                   >
-                    <Text style={styles.mobileBackBtnText}>← Back to Invoices List</Text>
+                    <Text style={styles.mobileBackBtnText}>
+                      ← Back to Invoices List
+                    </Text>
                   </Pressable>
                 )}
                 {selectedInvoice ? (
-                <>
-                  <View style={styles.invoiceDetailsHeader}>
-                    <Text style={styles.invoiceDetailsTitle}>Invoice Details</Text>
-                    <View style={styles.invoiceNoBadge}>
-                      <Text style={styles.invoiceNoBadgeText}>{selectedInvoice.invoiceNo}</Text>
+                  <>
+                    <View style={styles.invoiceDetailsHeader}>
+                      <Text style={styles.invoiceDetailsTitle}>
+                        Invoice Details
+                      </Text>
+                      <View style={styles.invoiceNoBadge}>
+                        <Text style={styles.invoiceNoBadgeText}>
+                          {selectedInvoice.invoiceNo}
+                        </Text>
+                      </View>
                     </View>
-                  </View>
 
-                  {/* Metadata Grid */}
-                  <View style={styles.invoiceMetaGrid}>
-                    <View style={styles.metaCol}>
-                      <Text style={styles.metaLabel}>Customer</Text>
-                      <Text style={styles.metaValue}>{selectedInvoice.customer}</Text>
+                    {/* Metadata Grid */}
+                    <View style={styles.invoiceMetaGrid}>
+                      <View style={styles.metaCol}>
+                        <Text style={styles.metaLabel}>Customer</Text>
+                        <Text style={styles.metaValue}>
+                          {selectedInvoice.customer}
+                        </Text>
+                      </View>
+                      <View
+                        style={[styles.metaCol, { alignItems: "flex-end" }]}
+                      >
+                        <Text style={styles.metaLabel}>Final Amount</Text>
+                        <Text style={[styles.metaValue, styles.metaValueBold]}>
+                          ₹{(selectedInvoice.total || 0).toFixed(2)}
+                        </Text>
+                      </View>
                     </View>
-                    <View style={[styles.metaCol, { alignItems: 'flex-end' }]}>
-                      <Text style={styles.metaLabel}>Final Amount</Text>
-                      <Text style={[styles.metaValue, styles.metaValueBold]}>
+
+                    <View style={styles.invoiceMetaGrid}>
+                      <View style={styles.metaCol}>
+                        <Text style={styles.metaLabel}>Date & Time</Text>
+                        <Text style={styles.metaValueSub}>
+                          {selectedInvoice.date}
+                        </Text>
+                      </View>
+                      <View
+                        style={[styles.metaCol, { alignItems: "flex-end" }]}
+                      >
+                        <Text style={styles.metaLabel}>Payment</Text>
+                        <Text style={styles.metaValueSub}>
+                          {selectedInvoice.paymentMode || "Cash"}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.dividerLine} />
+
+                    {/* Purchased Items List */}
+                    <Text style={styles.purchasedItemsHeading}>
+                      Purchased Items
+                    </Text>
+                    <ScrollView
+                      style={styles.purchasedItemsScroll}
+                      showsVerticalScrollIndicator={true}
+                    >
+                      {(selectedInvoice.items || []).map((it, idx) => (
+                        <View key={idx} style={styles.purchasedItemRow}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.purchasedItemName}>
+                              {it.name}
+                            </Text>
+                            <Text style={styles.purchasedItemUnit}>
+                              {it.unit || `Batch: ${it.batch || "B001"}`}
+                            </Text>
+                          </View>
+                          <Text style={styles.purchasedItemQty}>{it.qty}</Text>
+                          <Text style={styles.purchasedItemPrice}>
+                            ₹{(it.price || it.sellingPrice || 0).toFixed(2)}
+                          </Text>
+                          <Text style={styles.purchasedItemTotal}>
+                            ₹
+                            {(
+                              (it.price || it.sellingPrice || 0) * (it.qty || 1)
+                            ).toFixed(2)}
+                          </Text>
+                        </View>
+                      ))}
+                    </ScrollView>
+
+                    <View style={styles.dividerLine} />
+
+                    {/* Total Summary */}
+                    <View style={styles.detailsTotalRow}>
+                      <Text style={styles.detailsTotalLabel}>Total</Text>
+                      <Text style={styles.detailsTotalAmount}>
                         ₹{(selectedInvoice.total || 0).toFixed(2)}
                       </Text>
                     </View>
-                  </View>
 
-                  <View style={styles.invoiceMetaGrid}>
-                    <View style={styles.metaCol}>
-                      <Text style={styles.metaLabel}>Date & Time</Text>
-                      <Text style={styles.metaValueSub}>{selectedInvoice.date}</Text>
-                    </View>
-                    <View style={[styles.metaCol, { alignItems: 'flex-end' }]}>
-                      <Text style={styles.metaLabel}>Payment</Text>
-                      <Text style={styles.metaValueSub}>{selectedInvoice.paymentMode || 'Cash'}</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.dividerLine} />
-
-                  {/* Purchased Items List */}
-                  <Text style={styles.purchasedItemsHeading}>Purchased Items</Text>
-                  <ScrollView style={styles.purchasedItemsScroll} showsVerticalScrollIndicator={true}>
-                    {(selectedInvoice.items || []).map((it, idx) => (
-                      <View key={idx} style={styles.purchasedItemRow}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.purchasedItemName}>{it.name}</Text>
-                          <Text style={styles.purchasedItemUnit}>
-                            {it.unit || `Batch: ${it.batch || 'B001'}`}
-                          </Text>
-                        </View>
-                        <Text style={styles.purchasedItemQty}>{it.qty}</Text>
-                        <Text style={styles.purchasedItemPrice}>
-                          ₹{(it.price || it.sellingPrice || 0).toFixed(2)}
-                        </Text>
-                        <Text style={styles.purchasedItemTotal}>
-                          ₹{((it.price || it.sellingPrice || 0) * (it.qty || 1)).toFixed(2)}
-                        </Text>
-                      </View>
-                    ))}
-                  </ScrollView>
-
-                  <View style={styles.dividerLine} />
-
-                  {/* Total Summary */}
-                  <View style={styles.detailsTotalRow}>
-                    <Text style={styles.detailsTotalLabel}>Total</Text>
-                    <Text style={styles.detailsTotalAmount}>
-                      ₹{(selectedInvoice.total || 0).toFixed(2)}
+                    {/* Start Return Button */}
+                    <Pressable
+                      onPress={handleStartReturnClick}
+                      style={styles.startReturnBtn}
+                      accessibilityRole="button"
+                      accessibilityLabel="Start Return"
+                    >
+                      <Text style={styles.startReturnBtnIcon}>↩️</Text>
+                      <Text style={styles.startReturnBtnText}>
+                        Start Return
+                      </Text>
+                    </Pressable>
+                  </>
+                ) : (
+                  <View style={styles.noInvoiceSelectedBox}>
+                    <Text style={styles.noInvoiceIcon}>📄</Text>
+                    <Text style={styles.noInvoiceTitle}>
+                      No Invoice Selected
+                    </Text>
+                    <Text style={styles.noInvoiceSub}>
+                      Select an invoice on the left or click "Scan Barcode" to
+                      search by receipt code.
                     </Text>
                   </View>
-
-                  {/* Start Return Button */}
-                  <Pressable
-                    onPress={handleStartReturnClick}
-                    style={styles.startReturnBtn}
-                    accessibilityRole="button"
-                    accessibilityLabel="Start Return"
-                  >
-                    <Text style={styles.startReturnBtnIcon}>↩️</Text>
-                    <Text style={styles.startReturnBtnText}>Start Return</Text>
-                  </Pressable>
-                </>
-              ) : (
-                <View style={styles.noInvoiceSelectedBox}>
-                  <Text style={styles.noInvoiceIcon}>📄</Text>
-                  <Text style={styles.noInvoiceTitle}>No Invoice Selected</Text>
-                  <Text style={styles.noInvoiceSub}>
-                    Select an invoice on the left or click "Scan Barcode" to search by receipt code.
-                  </Text>
-                </View>
-              )}
-            </View>
+                )}
+              </View>
             )}
           </View>
         </ScrollView>
       ) : (
         /* TAB 2: Return History */
-        <ScrollView style={styles.historyScroll} contentContainerStyle={styles.historyContent}>
-          <Text style={styles.historyTitle}>Processed Returns & Refunds Log</Text>
+        <ScrollView
+          style={styles.historyScroll}
+          contentContainerStyle={styles.historyContent}
+        >
+          <Text style={styles.historyTitle}>
+            Processed Returns & Refunds Log
+          </Text>
           {returnHistory.length === 0 ? (
             <View style={styles.emptyHistoryCard}>
               <Text style={styles.emptyHistoryIcon}>📦</Text>
-              <Text style={styles.emptyHistoryText}>No returns processed yet.</Text>
+              <Text style={styles.emptyHistoryText}>
+                No returns processed yet.
+              </Text>
             </View>
           ) : (
             returnHistory.map((ret) => (
@@ -766,18 +996,23 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
                       Original Bill: {ret.originalInvoice} • {ret.date}
                     </Text>
                   </View>
-                  <Text style={styles.historyRefundAmount}>₹{(ret.amount || 0).toFixed(2)}</Text>
+                  <Text style={styles.historyRefundAmount}>
+                    ₹{(ret.amount || 0).toFixed(2)}
+                  </Text>
                 </View>
 
                 <View style={styles.historyDetailsRow}>
                   <Text style={styles.historyDetailText}>
-                    <Text style={styles.boldLabel}>Customer:</Text> {ret.customer}
+                    <Text style={styles.boldLabel}>Customer:</Text>{" "}
+                    {ret.customer}
                   </Text>
                   <Text style={styles.historyDetailText}>
-                    <Text style={styles.boldLabel}>Refund Mode:</Text> {ret.refundMode}
+                    <Text style={styles.boldLabel}>Refund Mode:</Text>{" "}
+                    {ret.refundMode}
                   </Text>
                   <Text style={styles.historyDetailText}>
-                    <Text style={styles.boldLabel}>Disposition:</Text> {ret.stockDisposition}
+                    <Text style={styles.boldLabel}>Disposition:</Text>{" "}
+                    {ret.stockDisposition}
                   </Text>
                 </View>
 
@@ -816,7 +1051,9 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
               </View>
 
               {/* Items Return Stepper Table */}
-              <Text style={styles.modalSectionLabel}>Select Items & Return Quantity:</Text>
+              <Text style={styles.modalSectionLabel}>
+                Select Items & Return Quantity:
+              </Text>
               <ScrollView style={{ maxHeight: 180, marginBottom: 14 }}>
                 {(selectedInvoice.items || []).map((it, idx) => {
                   const currentReturnQty = returnQtys[idx] || 0;
@@ -843,7 +1080,9 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
                         >
                           <Text style={styles.qtyStepBtnText}>−</Text>
                         </Pressable>
-                        <Text style={styles.qtyValText}>{currentReturnQty}</Text>
+                        <Text style={styles.qtyValText}>
+                          {currentReturnQty}
+                        </Text>
                         <Pressable
                           onPress={() =>
                             setReturnQtys({
@@ -869,15 +1108,18 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
               <Text style={styles.modalSectionLabel}>Return Reason:</Text>
               <View style={styles.reasonsChipRow}>
                 {[
-                  'Doctor altered prescription',
-                  'Wrong medicine issued',
-                  'Patient recovered / excess',
-                  'Packaging damaged',
+                  "Doctor altered prescription",
+                  "Wrong medicine issued",
+                  "Patient recovered / excess",
+                  "Packaging damaged",
                 ].map((r) => (
                   <Pressable
                     key={r}
                     onPress={() => setReturnReason(r)}
-                    style={[styles.reasonChip, returnReason === r && styles.reasonChipActive]}
+                    style={[
+                      styles.reasonChip,
+                      returnReason === r && styles.reasonChipActive,
+                    ]}
                   >
                     <Text
                       style={[
@@ -895,36 +1137,48 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
               <Text style={styles.modalSectionLabel}>Stock Disposition:</Text>
               <View style={styles.dispositionRow}>
                 <Pressable
-                  onPress={() => setStockDisposition('Sellable')}
+                  onPress={() => setStockDisposition("Sellable")}
                   style={[
                     styles.dispBtn,
-                    stockDisposition === 'Sellable' && styles.dispBtnActive,
+                    stockDisposition === "Sellable" && styles.dispBtnActive,
                   ]}
                 >
-                  <Text style={styles.dispBtnTitle}>📦 Return to Sellable Stock</Text>
-                  <Text style={styles.dispBtnSub}>Medicine stock is restored</Text>
+                  <Text style={styles.dispBtnTitle}>
+                    📦 Return to Sellable Stock
+                  </Text>
+                  <Text style={styles.dispBtnSub}>
+                    Medicine stock is restored
+                  </Text>
                 </Pressable>
 
                 <Pressable
-                  onPress={() => setStockDisposition('Quarantine')}
+                  onPress={() => setStockDisposition("Quarantine")}
                   style={[
                     styles.dispBtn,
-                    stockDisposition === 'Quarantine' && styles.dispBtnActiveRed,
+                    stockDisposition === "Quarantine" &&
+                      styles.dispBtnActiveRed,
                   ]}
                 >
-                  <Text style={styles.dispBtnTitle}>⚠️ Quarantine / Damaged</Text>
-                  <Text style={styles.dispBtnSub}>Stock not returned to shelf</Text>
+                  <Text style={styles.dispBtnTitle}>
+                    ⚠️ Quarantine / Damaged
+                  </Text>
+                  <Text style={styles.dispBtnSub}>
+                    Stock not returned to shelf
+                  </Text>
                 </Pressable>
               </View>
 
               {/* Refund Mode */}
               <Text style={styles.modalSectionLabel}>Refund Mode:</Text>
               <View style={styles.refundModesRow}>
-                {['Cash', 'Original Payment', 'Credit Note'].map((mode) => (
+                {["Cash", "Original Payment", "Credit Note"].map((mode) => (
                   <Pressable
                     key={mode}
                     onPress={() => setRefundMode(mode)}
-                    style={[styles.refundModeChip, refundMode === mode && styles.refundModeChipActive]}
+                    style={[
+                      styles.refundModeChip,
+                      refundMode === mode && styles.refundModeChipActive,
+                    ]}
                   >
                     <Text
                       style={[
@@ -973,16 +1227,22 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
           <View style={styles.modalOverlay}>
             <View style={styles.creditNoteCard}>
               <Text style={styles.cnHeaderTitle}>RETURN CREDIT NOTE</Text>
-              <Text style={styles.cnHeaderSub}>FALAH PHARMACY POS • Main Branch</Text>
+              <Text style={styles.cnHeaderSub}>
+                FALAH PHARMACY POS • Main Branch
+              </Text>
               <View style={styles.dashedLine} />
 
               <View style={styles.cnRow}>
                 <Text style={styles.cnLabel}>Credit Note #:</Text>
-                <Text style={styles.cnValBold}>{completedCreditNote.returnNo}</Text>
+                <Text style={styles.cnValBold}>
+                  {completedCreditNote.returnNo}
+                </Text>
               </View>
               <View style={styles.cnRow}>
                 <Text style={styles.cnLabel}>Original Bill:</Text>
-                <Text style={styles.cnVal}>{completedCreditNote.originalInvoice}</Text>
+                <Text style={styles.cnVal}>
+                  {completedCreditNote.originalInvoice}
+                </Text>
               </View>
               <View style={styles.cnRow}>
                 <Text style={styles.cnLabel}>Customer:</Text>
@@ -990,11 +1250,15 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
               </View>
               <View style={styles.cnRow}>
                 <Text style={styles.cnLabel}>Refund Method:</Text>
-                <Text style={styles.cnVal}>{completedCreditNote.refundMode}</Text>
+                <Text style={styles.cnVal}>
+                  {completedCreditNote.refundMode}
+                </Text>
               </View>
               <View style={styles.cnRow}>
                 <Text style={styles.cnLabel}>Stock Disposition:</Text>
-                <Text style={styles.cnVal}>{completedCreditNote.stockDisposition}</Text>
+                <Text style={styles.cnVal}>
+                  {completedCreditNote.stockDisposition}
+                </Text>
               </View>
 
               <View style={styles.dashedLine} />
@@ -1010,7 +1274,8 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
                 <Pressable
                   onPress={() => {
                     setCreditNoteModalVisible(false);
-                    if (onShowToast) onShowToast('🖨️ Sent Credit Note to thermal printer.');
+                    if (onShowToast)
+                      onShowToast("🖨️ Sent Credit Note to thermal printer.");
                   }}
                   style={styles.printCnBtn}
                 >
@@ -1046,52 +1311,52 @@ export default function SalesReturnsScreen({ onNavigate, onShowToast, isMultiBra
 const styles = StyleSheet.create({
   screenContainer: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
-    height: '100%',
+    backgroundColor: "#F8FAFC",
+    height: "100%",
   },
   topHeaderBar: {
     paddingHorizontal: 24,
     paddingTop: 18,
     paddingBottom: 10,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
   },
   pageTitle: {
     fontSize: 22,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   pageSubtitle: {
     fontSize: 13,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 2,
   },
 
   // Tabs Row
   tabsRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     paddingHorizontal: 24,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: "#E2E8F0",
     gap: 24,
   },
   tabBtn: {
     paddingVertical: 12,
     borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-    cursor: 'pointer',
+    borderBottomColor: "transparent",
+    cursor: "pointer",
   },
   tabBtnActive: {
-    borderBottomColor: '#0F766E',
+    borderBottomColor: "#0F766E",
   },
   tabBtnText: {
     fontSize: 13.5,
-    fontWeight: '600',
-    color: '#64748B',
+    fontWeight: "600",
+    color: "#64748B",
   },
   tabBtnTextActive: {
-    color: '#0F766E',
-    fontWeight: '700',
+    color: "#0F766E",
+    fontWeight: "700",
   },
 
   contentScroll: {
@@ -1106,8 +1371,8 @@ const styles = StyleSheet.create({
     paddingBottom: 80,
   },
   mobileSegmentRow: {
-    flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
+    flexDirection: "row",
+    backgroundColor: "#F1F5F9",
     borderRadius: 8,
     padding: 4,
     marginBottom: 14,
@@ -1116,61 +1381,61 @@ const styles = StyleSheet.create({
   mobileSegmentBtn: {
     flex: 1,
     paddingVertical: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     borderRadius: 6,
   },
   mobileSegmentBtnActive: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#000",
     shadowOpacity: 0.08,
     shadowRadius: 3,
     elevation: 2,
   },
   mobileSegmentText: {
     fontSize: 12.5,
-    fontWeight: '600',
-    color: '#64748B',
+    fontWeight: "600",
+    color: "#64748B",
   },
   mobileSegmentTextActive: {
-    color: '#0F766E',
-    fontWeight: '750',
+    color: "#0F766E",
+    fontWeight: "750",
   },
   mobileBackBtn: {
     paddingVertical: 8,
     paddingHorizontal: 12,
-    backgroundColor: '#F0FDFA',
+    backgroundColor: "#F0FDFA",
     borderRadius: 6,
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#CCFBF1',
+    borderColor: "#CCFBF1",
   },
   mobileBackBtnText: {
-    color: '#0F766E',
+    color: "#0F766E",
     fontSize: 12.5,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   leftTableCardMobile: {
-    width: '100%',
+    width: "100%",
     minHeight: 200,
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
     borderWidth: 0,
   },
   tableBodyScrollMobile: {
     maxHeight: 360,
   },
   rightDetailsCardMobile: {
-    width: '100%',
+    width: "100%",
     padding: 14,
   },
 
   // Top 4 KPI Cards
   kpiCardsRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 14,
     marginBottom: 16,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
   },
   kpiCardsRowMobile: {
     gap: 10,
@@ -1179,36 +1444,36 @@ const styles = StyleSheet.create({
   kpiCard: {
     flex: 1,
     minWidth: 170,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     borderLeftWidth: 4,
-    borderLeftColor: '#0F766E',
+    borderLeftColor: "#0F766E",
     padding: 14,
-    justifyContent: 'space-between',
+    justifyContent: "space-between",
     minHeight: 90,
   },
   kpiCardMobile: {
     flexGrow: 1,
     flexShrink: 0,
-    minWidth: '47%',
-    maxWidth: '48.5%',
+    minWidth: "47%",
+    maxWidth: "48.5%",
     minHeight: 85,
     padding: 12,
   },
   kpiHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 4,
   },
   kpiLabel: {
     fontSize: 10.5,
-    fontWeight: '750',
-    color: '#64748B',
+    fontWeight: "750",
+    color: "#64748B",
     letterSpacing: 0.5,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
   },
   kpiDot: {
     width: 6,
@@ -1217,14 +1482,14 @@ const styles = StyleSheet.create({
   },
   kpiValue: {
     fontSize: 20,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
     marginVertical: 2,
   },
   kpiSubtext: {
     fontSize: 10.5,
-    color: '#94A3B8',
-    fontWeight: '500',
+    color: "#94A3B8",
+    fontWeight: "500",
   },
 
   // Mobile Invoices KPI Card List
@@ -1232,50 +1497,50 @@ const styles = StyleSheet.create({
     padding: 2,
   },
   mobileCardsHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 10,
     paddingHorizontal: 4,
   },
   mobileCardsHeaderTitle: {
     fontSize: 14,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   mobileCardsHeaderHint: {
     fontSize: 11,
-    color: '#64748B',
+    color: "#64748B",
   },
   invoiceKpiCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     padding: 14,
     marginBottom: 12,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOpacity: 0.04,
     shadowRadius: 4,
     elevation: 2,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   invoiceKpiCardSelected: {
-    borderColor: '#0F766E',
-    backgroundColor: '#F0FDFA',
+    borderColor: "#0F766E",
+    backgroundColor: "#F0FDFA",
   },
   invoiceCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 10,
     paddingBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: "#F1F5F9",
   },
   invoiceNoGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
   },
   invoiceIcon: {
@@ -1283,11 +1548,11 @@ const styles = StyleSheet.create({
   },
   invoiceCardNo: {
     fontSize: 14,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   invoiceCardGrid: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 12,
     marginBottom: 10,
   },
@@ -1296,100 +1561,100 @@ const styles = StyleSheet.create({
   },
   invoiceCardLabel: {
     fontSize: 10,
-    fontWeight: '750',
-    color: '#94A3B8',
+    fontWeight: "750",
+    color: "#94A3B8",
     letterSpacing: 0.5,
     marginBottom: 3,
   },
   customerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
   },
   invoiceCustomerText: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#1E293B',
+    fontWeight: "700",
+    color: "#1E293B",
   },
   invoiceDateText: {
     fontSize: 12,
-    color: '#475569',
+    color: "#475569",
   },
   invoiceCardMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
     gap: 6,
     marginBottom: 12,
   },
   invoiceMetaBadge: {
     fontSize: 11,
-    color: '#475569',
-    backgroundColor: '#F1F5F9',
+    color: "#475569",
+    backgroundColor: "#F1F5F9",
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   invoiceCardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: "#F1F5F9",
   },
   invoiceTotalLabel: {
     fontSize: 10,
-    fontWeight: '750',
-    color: '#94A3B8',
+    fontWeight: "750",
+    color: "#94A3B8",
     letterSpacing: 0.5,
   },
   invoiceTotalAmount: {
     fontSize: 18,
-    fontWeight: '900',
-    color: '#0F766E',
+    fontWeight: "900",
+    color: "#0F766E",
     marginTop: 1,
   },
   selectInvoiceBtn: {
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 8,
   },
   selectInvoiceBtnActive: {
-    backgroundColor: '#047857',
+    backgroundColor: "#047857",
   },
   selectInvoiceBtnText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 12,
-    fontWeight: '750',
+    fontWeight: "750",
   },
   selectInvoiceBtnTextActive: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
 
   // Search and Actions Row (Matches Image 3)
   searchAndActionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
     marginBottom: 16,
-    position: 'relative',
+    position: "relative",
     zIndex: 100,
   },
   searchAndActionsRowMobile: {
-    flexDirection: 'column',
-    alignItems: 'stretch',
+    flexDirection: "column",
+    alignItems: "stretch",
     gap: 10,
   },
   searchBarBox: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
     borderRadius: 8,
     paddingHorizontal: 12,
     height: 40,
@@ -1401,63 +1666,63 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 13,
-    color: '#0F172A',
-    ...Platform.select({ web: { outlineStyle: 'none' } }),
+    color: "#0F172A",
+    ...Platform.select({ web: { outlineStyle: "none" } }),
   },
   clearSearchIcon: {
     fontSize: 13,
-    color: '#94A3B8',
+    color: "#94A3B8",
     padding: 4,
   },
   dateFilterWrapper: {
-    position: 'relative',
+    position: "relative",
     zIndex: 110,
   },
   dateFilterBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
     borderRadius: 8,
     paddingHorizontal: 12,
     height: 40,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   dateFilterBtnActive: {
-    borderColor: '#0F766E',
-    backgroundColor: '#F0FDFA',
+    borderColor: "#0F766E",
+    backgroundColor: "#F0FDFA",
   },
   dateFilterIcon: {
     fontSize: 12,
   },
   dateFilterText: {
     fontSize: 12.5,
-    fontWeight: '600',
-    color: '#334155',
+    fontWeight: "600",
+    color: "#334155",
   },
   dateFilterTextActive: {
-    color: '#0F766E',
-    fontWeight: '750',
+    color: "#0F766E",
+    fontWeight: "750",
   },
   dateFilterArrow: {
     fontSize: 11,
-    color: '#64748B',
+    color: "#64748B",
   },
 
   // Dropdown Popover Card
   dropdownMenuPopover: {
-    position: 'absolute',
+    position: "absolute",
     top: 45,
     left: 0,
     minWidth: 230,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
     padding: 8,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOpacity: 0.15,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
@@ -1466,241 +1731,241 @@ const styles = StyleSheet.create({
   },
   dropdownSectionLabel: {
     fontSize: 10,
-    fontWeight: '800',
-    color: '#64748B',
+    fontWeight: "800",
+    color: "#64748B",
     letterSpacing: 0.5,
     paddingHorizontal: 8,
     paddingVertical: 6,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: "#F1F5F9",
     marginBottom: 4,
   },
   dropdownMenuItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingVertical: 8,
     paddingHorizontal: 8,
     borderRadius: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   dropdownMenuItemActive: {
-    backgroundColor: '#F0FDFA',
+    backgroundColor: "#F0FDFA",
   },
   dropdownMenuItemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   dropdownItemCheck: {
     fontSize: 12,
-    fontWeight: '800',
-    color: 'transparent',
+    fontWeight: "800",
+    color: "transparent",
     width: 14,
   },
   dropdownItemCheckActive: {
-    color: '#0F766E',
+    color: "#0F766E",
   },
   dropdownItemLabel: {
     fontSize: 12.5,
-    color: '#334155',
-    fontWeight: '500',
+    color: "#334155",
+    fontWeight: "500",
   },
   dropdownItemLabelActive: {
-    color: '#0F766E',
-    fontWeight: '750',
+    color: "#0F766E",
+    fontWeight: "750",
   },
   dropdownCountBadge: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: "#F1F5F9",
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 10,
   },
   dropdownCountBadgeActive: {
-    backgroundColor: '#CCFBF1',
+    backgroundColor: "#CCFBF1",
   },
   dropdownCountText: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#64748B',
+    fontWeight: "700",
+    color: "#64748B",
   },
   dropdownCountTextActive: {
-    color: '#0F766E',
+    color: "#0F766E",
   },
   resetDateFilterBtn: {
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 6,
-    backgroundColor: '#FEE2E2',
-    cursor: 'pointer',
+    backgroundColor: "#FEE2E2",
+    cursor: "pointer",
   },
   resetDateFilterBtnText: {
     fontSize: 11.5,
-    fontWeight: '700',
-    color: '#DC2626',
+    fontWeight: "700",
+    color: "#DC2626",
   },
   scanBarcodeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: '#0F766E',
+    borderColor: "#0F766E",
     paddingHorizontal: 14,
     height: 40,
     borderRadius: 8,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   scanBarcodeBtnIcon: {
     fontSize: 13,
   },
   scanBarcodeBtnText: {
     fontSize: 12.5,
-    fontWeight: '700',
-    color: '#0F766E',
+    fontWeight: "700",
+    color: "#0F766E",
   },
 
   // Split-Screen Layout (Image 3)
   splitLayout: {
     flex: 1,
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 16,
   },
   splitLayoutCompact: {
-    flexDirection: 'column',
+    flexDirection: "column",
   },
 
   // Left Table Card
   leftTableCard: {
     flex: 1.5,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    overflow: 'hidden',
-    display: 'flex',
-    flexDirection: 'column',
+    borderColor: "#E2E8F0",
+    overflow: "hidden",
+    display: "flex",
+    flexDirection: "column",
   },
   tableHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
     paddingVertical: 10,
     paddingHorizontal: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: "#E2E8F0",
   },
   th: {
     fontSize: 10.5,
-    fontWeight: '800',
-    color: '#64748B',
+    fontWeight: "800",
+    color: "#64748B",
     letterSpacing: 0.5,
   },
   tableBodyScroll: {
     flex: 1,
   },
   tableRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    cursor: 'pointer',
+    borderBottomColor: "#F1F5F9",
+    cursor: "pointer",
   },
   tableRowSelected: {
-    backgroundColor: '#F0FDFA',
+    backgroundColor: "#F0FDFA",
     borderLeftWidth: 3,
-    borderLeftColor: '#0F766E',
+    borderLeftColor: "#0F766E",
   },
   tdInvoiceNo: {
     fontSize: 12.5,
-    fontWeight: '750',
-    color: '#0F172A',
+    fontWeight: "750",
+    color: "#0F172A",
   },
   custIconSmall: {
     fontSize: 11,
   },
   tdCustomer: {
     fontSize: 12.5,
-    color: '#334155',
+    color: "#334155",
   },
   tdDateTime: {
     fontSize: 11.5,
-    color: '#64748B',
+    color: "#64748B",
   },
   tdAmount: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   statusCompletedBadge: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: "#DCFCE7",
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 12,
   },
   statusCompletedText: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#166534',
+    fontWeight: "700",
+    color: "#166534",
   },
   tableFooterRow: {
     paddingVertical: 10,
     paddingHorizontal: 14,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    backgroundColor: '#FFFFFF',
+    borderTopColor: "#F1F5F9",
+    backgroundColor: "#FFFFFF",
   },
   showingCountText: {
     fontSize: 11.5,
-    color: '#64748B',
+    color: "#64748B",
   },
   emptyTableBox: {
     padding: 30,
-    alignItems: 'center',
+    alignItems: "center",
   },
   emptyTableText: {
     fontSize: 13,
-    color: '#94A3B8',
+    color: "#94A3B8",
   },
 
   // Right Details Card (Image 3)
   rightDetailsCard: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     padding: 20,
-    flexDirection: 'column',
-    justifyContent: 'space-between',
+    flexDirection: "column",
+    justifyContent: "space-between",
   },
   invoiceDetailsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 14,
   },
   invoiceDetailsTitle: {
     fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   invoiceNoBadge: {
-    backgroundColor: '#E6F4F1',
+    backgroundColor: "#E6F4F1",
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 4,
   },
   invoiceNoBadgeText: {
     fontSize: 11.5,
-    fontWeight: '750',
-    color: '#0F766E',
+    fontWeight: "750",
+    color: "#0F766E",
   },
   invoiceMetaGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     marginBottom: 8,
   },
   metaCol: {
@@ -1708,31 +1973,31 @@ const styles = StyleSheet.create({
   },
   metaLabel: {
     fontSize: 11,
-    color: '#64748B',
+    color: "#64748B",
     marginBottom: 2,
   },
   metaValue: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#0F172A',
+    fontWeight: "600",
+    color: "#0F172A",
   },
   metaValueBold: {
-    fontWeight: '800',
+    fontWeight: "800",
     fontSize: 15,
   },
   metaValueSub: {
     fontSize: 12,
-    color: '#334155',
+    color: "#334155",
   },
   dividerLine: {
     height: 1,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: "#F1F5F9",
     marginVertical: 12,
   },
   purchasedItemsHeading: {
     fontSize: 12,
-    fontWeight: '800',
-    color: '#475569',
+    fontWeight: "800",
+    color: "#475569",
     marginBottom: 10,
   },
   purchasedItemsScroll: {
@@ -1741,79 +2006,79 @@ const styles = StyleSheet.create({
     maxHeight: 220,
   },
   purchasedItemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 6,
     borderBottomWidth: 1,
-    borderBottomColor: '#F8FAFC',
+    borderBottomColor: "#F8FAFC",
     gap: 8,
   },
   purchasedItemName: {
     fontSize: 12.5,
-    fontWeight: '650',
-    color: '#0F172A',
+    fontWeight: "650",
+    color: "#0F172A",
   },
   purchasedItemUnit: {
     fontSize: 10.5,
-    color: '#64748B',
+    color: "#64748B",
   },
   purchasedItemQty: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#475569',
+    fontWeight: "700",
+    color: "#475569",
     minWidth: 20,
-    textAlign: 'center',
+    textAlign: "center",
   },
   purchasedItemPrice: {
     fontSize: 12,
-    color: '#64748B',
+    color: "#64748B",
     minWidth: 50,
-    textAlign: 'right',
+    textAlign: "right",
   },
   purchasedItemTotal: {
     fontSize: 12.5,
-    fontWeight: '750',
-    color: '#0F172A',
+    fontWeight: "750",
+    color: "#0F172A",
     minWidth: 55,
-    textAlign: 'right',
+    textAlign: "right",
   },
   detailsTotalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 14,
   },
   detailsTotalLabel: {
     fontSize: 14,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   detailsTotalAmount: {
     fontSize: 18,
-    fontWeight: '900',
-    color: '#0F172A',
+    fontWeight: "900",
+    color: "#0F172A",
   },
   startReturnBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 6,
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
     paddingVertical: 12,
     borderRadius: 8,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   startReturnBtnIcon: {
     fontSize: 14,
   },
   startReturnBtnText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
+    color: "#FFFFFF",
+    fontWeight: "800",
     fontSize: 14,
   },
   noInvoiceSelectedBox: {
     padding: 30,
-    alignItems: 'center',
+    alignItems: "center",
   },
   noInvoiceIcon: {
     fontSize: 36,
@@ -1821,13 +2086,13 @@ const styles = StyleSheet.create({
   },
   noInvoiceTitle: {
     fontSize: 15,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   noInvoiceSub: {
     fontSize: 12,
-    color: '#64748B',
-    textAlign: 'center',
+    color: "#64748B",
+    textAlign: "center",
     marginTop: 4,
   },
 
@@ -1842,17 +2107,17 @@ const styles = StyleSheet.create({
   },
   historyTitle: {
     fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
     marginBottom: 4,
   },
   emptyHistoryCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 10,
     padding: 30,
-    alignItems: 'center',
+    alignItems: "center",
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
   },
   emptyHistoryIcon: {
     fontSize: 32,
@@ -1860,225 +2125,225 @@ const styles = StyleSheet.create({
   },
   emptyHistoryText: {
     fontSize: 13,
-    color: '#64748B',
+    color: "#64748B",
   },
   historyCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     padding: 16,
   },
   historyHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 10,
   },
   historyReturnNo: {
     fontSize: 15,
-    fontWeight: '800',
-    color: '#0F766E',
+    fontWeight: "800",
+    color: "#0F766E",
   },
   historyMeta: {
     fontSize: 11.5,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 2,
   },
   historyRefundAmount: {
     fontSize: 16,
-    fontWeight: '900',
-    color: '#B91C1C',
+    fontWeight: "900",
+    color: "#B91C1C",
   },
   historyDetailsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 16,
     marginBottom: 6,
   },
   historyDetailText: {
     fontSize: 12,
-    color: '#475569',
+    color: "#475569",
   },
   boldLabel: {
-    fontWeight: '700',
+    fontWeight: "700",
   },
   historyReason: {
     fontSize: 11.5,
-    color: '#64748B',
-    fontStyle: 'italic',
+    color: "#64748B",
+    fontStyle: "italic",
   },
 
   // Return Modal
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(15, 23, 42, 0.7)",
+    justifyContent: "center",
+    alignItems: "center",
     padding: 16,
   },
   returnModalCard: {
-    width: '100%',
+    width: "100%",
     maxWidth: 520,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 14,
     padding: 22,
   },
   modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 14,
   },
   modalTitle: {
     fontSize: 17,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   modalSubtitle: {
     fontSize: 12,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 2,
   },
   closeBtnText: {
     fontSize: 16,
-    color: '#64748B',
-    fontWeight: '700',
+    color: "#64748B",
+    fontWeight: "700",
   },
   modalSectionLabel: {
     fontSize: 11.5,
-    fontWeight: '800',
-    color: '#475569',
+    fontWeight: "800",
+    color: "#475569",
     marginBottom: 6,
     marginTop: 8,
   },
   returnItemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: "#F1F5F9",
     gap: 8,
   },
   returnItemName: {
     fontSize: 12.5,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   returnItemPrice: {
     fontSize: 11,
-    color: '#64748B',
+    color: "#64748B",
   },
   qtyStepper: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
     borderRadius: 6,
   },
   qtyStepBtn: {
     paddingHorizontal: 8,
     paddingVertical: 4,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
   },
   qtyStepBtnText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   qtyValText: {
     paddingHorizontal: 8,
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: "800",
   },
   returnItemLineTotal: {
     fontSize: 13,
-    fontWeight: '800',
-    color: '#B91C1C',
+    fontWeight: "800",
+    color: "#B91C1C",
     minWidth: 55,
-    textAlign: 'right',
+    textAlign: "right",
   },
   reasonsChipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 6,
   },
   reasonChip: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: "#F1F5F9",
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   reasonChipActive: {
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
   },
   reasonChipText: {
     fontSize: 11,
-    color: '#475569',
-    fontWeight: '600',
+    color: "#475569",
+    fontWeight: "600",
   },
   reasonChipTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
+    color: "#FFFFFF",
+    fontWeight: "700",
   },
   dispositionRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 10,
   },
   dispBtn: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
     borderRadius: 8,
     padding: 8,
-    backgroundColor: '#F8FAFC',
-    cursor: 'pointer',
+    backgroundColor: "#F8FAFC",
+    cursor: "pointer",
   },
   dispBtnActive: {
-    borderColor: '#0F766E',
-    backgroundColor: '#F0FDFA',
+    borderColor: "#0F766E",
+    backgroundColor: "#F0FDFA",
   },
   dispBtnActiveRed: {
-    borderColor: '#DC2626',
-    backgroundColor: '#FEF2F2',
+    borderColor: "#DC2626",
+    backgroundColor: "#FEF2F2",
   },
   dispBtnTitle: {
     fontSize: 11.5,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   dispBtnSub: {
     fontSize: 10,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 2,
   },
   refundModesRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 8,
   },
   refundModeChip: {
     flex: 1,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: "#F1F5F9",
     paddingVertical: 6,
     borderRadius: 6,
-    alignItems: 'center',
-    cursor: 'pointer',
+    alignItems: "center",
+    cursor: "pointer",
   },
   refundModeChipActive: {
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
   },
   refundModeChipText: {
     fontSize: 11.5,
-    color: '#475569',
-    fontWeight: '600',
+    color: "#475569",
+    fontWeight: "600",
   },
   refundModeChipTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
+    color: "#FFFFFF",
+    fontWeight: "700",
   },
   modalFooterRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
+    flexDirection: "row",
+    justifyContent: "flex-end",
     gap: 10,
     marginTop: 16,
   },
@@ -2086,113 +2351,113 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 9,
     borderRadius: 6,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: "#F1F5F9",
   },
   cancelBtnText: {
     fontSize: 12.5,
-    fontWeight: '600',
-    color: '#475569',
+    fontWeight: "600",
+    color: "#475569",
   },
   confirmReturnBtn: {
-    backgroundColor: '#B91C1C',
+    backgroundColor: "#B91C1C",
     paddingHorizontal: 18,
     paddingVertical: 9,
     borderRadius: 6,
   },
   confirmReturnBtnText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 12.5,
-    fontWeight: '800',
+    fontWeight: "800",
   },
 
   // Credit Note Card
   creditNoteCard: {
-    width: '100%',
+    width: "100%",
     maxWidth: 400,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 12,
     padding: 22,
   },
   cnHeaderTitle: {
     fontSize: 16,
-    fontWeight: '900',
-    color: '#0F172A',
-    textAlign: 'center',
+    fontWeight: "900",
+    color: "#0F172A",
+    textAlign: "center",
     letterSpacing: 0.5,
   },
   cnHeaderSub: {
     fontSize: 11,
-    color: '#64748B',
-    textAlign: 'center',
+    color: "#64748B",
+    textAlign: "center",
     marginTop: 2,
   },
   dashedLine: {
     height: 1,
     borderBottomWidth: 1,
-    borderBottomColor: '#CBD5E1',
-    borderStyle: 'dashed',
+    borderBottomColor: "#CBD5E1",
+    borderStyle: "dashed",
     marginVertical: 12,
   },
   cnRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     paddingVertical: 3,
   },
   cnLabel: {
     fontSize: 12,
-    color: '#64748B',
+    color: "#64748B",
   },
   cnVal: {
     fontSize: 12,
-    color: '#0F172A',
+    color: "#0F172A",
   },
   cnValBold: {
     fontSize: 13,
-    fontWeight: '800',
-    color: '#0F766E',
+    fontWeight: "800",
+    color: "#0F766E",
   },
   cnTotalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginVertical: 8,
   },
   cnTotalLabel: {
     fontSize: 13,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   cnTotalValue: {
     fontSize: 18,
-    fontWeight: '900',
-    color: '#B91C1C',
+    fontWeight: "900",
+    color: "#B91C1C",
   },
   cnActionsRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 10,
     marginTop: 10,
   },
   printCnBtn: {
     flex: 1,
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
     paddingVertical: 10,
     borderRadius: 6,
-    alignItems: 'center',
+    alignItems: "center",
   },
   printCnText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
+    color: "#FFFFFF",
+    fontWeight: "700",
     fontSize: 12,
   },
   closeCnBtn: {
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 6,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: "#F1F5F9",
   },
   closeCnBtnText: {
-    color: '#475569',
-    fontWeight: '700',
+    color: "#475569",
+    fontWeight: "700",
     fontSize: 12,
   },
 });

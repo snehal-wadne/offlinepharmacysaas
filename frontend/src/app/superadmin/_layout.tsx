@@ -1,14 +1,25 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Redirect, Slot, router, usePathname } from 'expo-router';
+import { Redirect, Slot, router, usePathname, RouterProvider } from 'expo-router';
 
 import { SuperAdminProvider } from './store';
+import SuperAdminDashboard from './dashboard';
+import PharmaciesTenantsPage from './pharmacies';
+import PharmacyDetailsPage from './pharmacy-details';
+import AddPharmacyPage from './add-pharmacy';
+import ChoosePlanPage from './choose-plan';
+import PharmacyPaymentPage from './payment';
+import ConfirmationPage from './confirmation';
+import SubscriptionPlansPage from './subscription-plans';
+import RazorPayPaymentsPage from './razorpay-payment';
 
 export default function SuperAdminLayout() {
   return (
-    <SuperAdminProvider>
-      <SuperAdminShell />
-    </SuperAdminProvider>
+    <RouterProvider>
+      <SuperAdminProvider>
+        <SuperAdminShell />
+      </SuperAdminProvider>
+    </RouterProvider>
   );
 }
 
@@ -62,7 +73,9 @@ function SuperAdminShell() {
         </View>
 
         <View style={styles.sidebarFooter}>
-          <Text style={styles.logout}>↪ Logout</Text>
+          <Pressable onPress={() => { if (typeof window !== 'undefined') window.location.href = '/'; }}>
+            <Text style={styles.logout}>↪ Back to ERP</Text>
+          </Pressable>
           <Text style={styles.date}>▣ 01 Sep - 30 Sep</Text>
         </View>
       </View>
@@ -78,10 +91,22 @@ function SuperAdminShell() {
             <Text style={styles.avatar}>SA</Text>
           </View>
         </View>
-        <Slot />
+        {renderSuperAdminContent(pathname)}
       </View>
     </View>
   );
+}
+
+function renderSuperAdminContent(pathname: string) {
+  if (pathname.includes('pharmacy-details')) return <PharmacyDetailsPage />;
+  if (pathname.includes('add-pharmacy')) return <AddPharmacyPage />;
+  if (pathname.includes('choose-plan')) return <ChoosePlanPage />;
+  if (pathname.includes('payment') && !pathname.includes('razorpay')) return <PharmacyPaymentPage />;
+  if (pathname.includes('confirmation')) return <ConfirmationPage />;
+  if (pathname.includes('pharmacies')) return <PharmaciesTenantsPage />;
+  if (pathname.includes('subscription-plans')) return <SubscriptionPlansPage />;
+  if (pathname.includes('razorpay-payment')) return <RazorPayPaymentsPage />;
+  return <SuperAdminDashboard />;
 }
 
 function MenuItem({
