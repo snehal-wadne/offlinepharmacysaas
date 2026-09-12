@@ -12,6 +12,7 @@ import Sidebar from '../components/layout/Sidebar';
 import Header from '../components/layout/Header';
 import LoginScreen from '../screens/auth/LoginScreen';
 import { PosProvider } from '../context/PosContext';
+import { OfflineSyncProvider } from '../offline/OfflineSyncContext';
 
 // 0. Sales & Cashier Screens (Sales / POS Billing, Cash Register)
 import SalesScreen from '../screens/sales/SalesScreen';
@@ -354,8 +355,9 @@ export default function AppNavigator() {
   }
 
   return (
-    <PosProvider>
-      <View style={styles.appContainer}>
+    <OfflineSyncProvider>
+      <PosProvider>
+        <View style={styles.appContainer}>
         {/* 1. Fixed Left Sidebar for Desktop */}
       {!isMobile && (
         <Sidebar
@@ -443,6 +445,7 @@ export default function AppNavigator() {
       </View>
     </View>
     </PosProvider>
+    </OfflineSyncProvider>
   );
 }
 

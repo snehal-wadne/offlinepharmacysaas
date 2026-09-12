@@ -98,3 +98,14 @@ export async function deleteInventoryEntry(id) {
     method: 'DELETE',
   });
 }
+
+/**
+ * GET /api/inventory/:id/barcode
+ * Generates barcode data, SVG representation, and printable thermal HTML
+ */
+export async function fetchItemBarcode(id) {
+  return apiRequest(`/inventory/${id}/barcode`, {
+    method: 'GET',
+  });
+}
+

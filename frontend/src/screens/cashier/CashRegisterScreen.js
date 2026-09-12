@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,14 @@ import {
   DEFAULT_REGISTER_SESSION,
   MOCK_REGISTER_HISTORY,
 } from '../../data/cashierMockData';
+import {
+  fetchCurrentRegisterSession,
+  openRegisterShift,
+  closeRegisterShift,
+  fetchRegisterHistory,
+  recordCashMovement,
+  fetchCashMovements,
+} from '../../api/cashierApi';
 
 export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBranch = true }) {
   const { width } = useWindowDimensions();
@@ -68,6 +76,67 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
     },
   ]);
 
+  // Load live register session and history from backend PostgreSQL
+  useEffect(() => {
+    let isMounted = true;
+    async function loadRegisterData() {
+      try {
+        const [currentSession, historyData, movementsData] = await Promise.all([
+          fetchCurrentRegisterSession(),
+          fetchRegisterHistory(),
+          fetchCashMovements(),
+        ]);
+
+        if (isMounted) {
+          if (currentSession && (currentSession.id || currentSession.status === 'OPEN')) {
+            const isOpen = currentSession.status === 'OPEN';
+            const openBal = parseFloat(currentSession.openingBalance || 2000.0);
+            const expCash = parseFloat(currentSession.expectedCash || currentSession.openingBalance || 2000.0);
+            setSession((prev) => ({
+              ...prev,
+              ...currentSession,
+              isOpen,
+              sessionId: currentSession.sessionCode || currentSession.sessionNumber || prev.sessionId,
+              openedBy: currentSession.openedBy || currentSession.cashierName || prev.openedBy,
+              openingBalance: openBal,
+              expectedCash: expCash > 0 ? expCash : openBal,
+            }));
+          }
+
+          if (historyData && Array.isArray(historyData) && historyData.length > 0) {
+            setHistoryList(historyData.map((h, i) => ({
+              id: h.sessionCode || h.sessionNumber || h.id || `REG-${i}`,
+              date: h.openedAt ? new Date(h.openedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '28 Aug 2026',
+              shift: h.shiftName || 'Day Shift',
+              cashier: h.cashierName || 'Cashier 01',
+              openedAt: h.openedAt ? new Date(h.openedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '09:00 AM',
+              closedAt: h.closedAt ? new Date(h.closedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '10:00 PM',
+              branch: h.branchName || 'Main Branch',
+              openingBalance: parseFloat(h.openingBalance) || 2000.0,
+              cashSales: parseFloat(h.totalSales || h.cashSales) || 0,
+              cashRefunds: parseFloat(h.cashRefunds) || 0,
+              pettyCashIn: 0,
+              pettyCashOut: 0,
+              expectedCash: parseFloat(h.expectedCash) || 0,
+              countedCash: parseFloat(h.countedCash) || 0,
+              variance: parseFloat(h.variance) || 0,
+              status: h.varianceStatus || h.status || 'Balanced',
+              notes: h.notes || 'Shift completed.',
+            })));
+          }
+
+          if (movementsData && Array.isArray(movementsData) && movementsData.length > 0) {
+            setPettyCashMovements(movementsData);
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load register session from API:', err.message);
+      }
+    }
+    loadRegisterData();
+    return () => { isMounted = false; };
+  }, []);
+
   // Calculate totals
   const totalPettyCashIn = pettyCashMovements
     .filter((m) => m.type === 'IN')
@@ -83,7 +152,7 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
   const variance = countedNum - expectedNum;
 
   // Handler: Open Register (Image 1 -> Image 3)
-  const handleOpenRegister = () => {
+  const handleOpenRegister = async () => {
     const balanceNum = parseFloat(openingBalanceInput) || 0;
     if (balanceNum < 0) {
       if (onShowToast) onShowToast('⚠️ Opening balance cannot be negative.');
@@ -94,21 +163,39 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
     const dateStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
     const initialExpected = balanceNum + 8750.0 - 350.0 + totalPettyCashIn - totalPettyCashOut;
 
-    setSession((prev) => ({
-      ...prev,
-      isOpen: true,
-      openingBalance: balanceNum,
-      cashSales: 8750.0,
-      upiSales: 4250.0,
-      cardSales: 2800.0,
-      creditSales: 1500.0,
-      cashRefunds: 350.0,
-      totalDiscounts: 420.0,
-      expectedCash: initialExpected,
-      openedAt: `${dateStr}, ${nowStr}`,
-      sessionTime: 'Just started',
-      notes: openingNote || 'Opening shift float recorded.',
-    }));
+    try {
+      const res = await openRegisterShift({
+        openingBalance: balanceNum,
+        notes: openingNote || 'Opening shift float recorded.',
+      });
+
+      setSession((prev) => ({
+        ...prev,
+        isOpen: true,
+        sessionId: res?.sessionCode || res?.sessionNumber || prev.sessionId,
+        openingBalance: balanceNum,
+        cashSales: 8750.0,
+        upiSales: 4250.0,
+        cardSales: 2800.0,
+        creditSales: 1500.0,
+        cashRefunds: 350.0,
+        totalDiscounts: 420.0,
+        expectedCash: initialExpected,
+        openedAt: `${dateStr}, ${nowStr}`,
+        sessionTime: 'Just started',
+        notes: openingNote || 'Opening shift float recorded.',
+      }));
+    } catch {
+      setSession((prev) => ({
+        ...prev,
+        isOpen: true,
+        openingBalance: balanceNum,
+        expectedCash: initialExpected,
+        openedAt: `${dateStr}, ${nowStr}`,
+        sessionTime: 'Just started',
+        notes: openingNote || 'Opening shift float recorded.',
+      }));
+    }
 
     setCountedCashInput(initialExpected.toFixed(2));
     if (onShowToast) {
@@ -117,12 +204,21 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
   };
 
   // Handler: Close Register (Image 3 Modal Submit)
-  const handleCloseRegister = () => {
+  const handleCloseRegister = async () => {
     const countedVal = parseFloat(countedCashInput) || 0;
     const varVal = countedVal - session.expectedCash;
     let varStatus = 'Balanced';
     if (varVal < -1) varStatus = 'Shortage';
     else if (varVal > 1) varStatus = 'Overage';
+
+    try {
+      await closeRegisterShift({
+        countedCash: countedVal,
+        notes: closingNotes || 'Shift closed and drawer reconciled.',
+      });
+    } catch (e) {
+      console.warn('Error closing register shift on backend:', e.message);
+    }
 
     const closedRecord = {
       id: `REG-2026-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -160,7 +256,7 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
   };
 
   // Handler: Add Cash Movement (CASH-03)
-  const handleAddMovement = () => {
+  const handleAddMovement = async () => {
     const amt = parseFloat(movementAmount);
     if (!amt || amt <= 0 || isNaN(amt)) {
       setMovementError('⚠️ Please enter a valid movement amount greater than ₹0.');
@@ -174,7 +270,21 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
     const nowTimeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const nowDateStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
-    const newId = `PC-${Math.floor(1000 + Math.random() * 9000)}`;
+    let newId = `PC-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    try {
+      const res = await recordCashMovement({
+        movementType,
+        amount: amt,
+        reason: finalReason,
+      });
+      if (res?.movementNumber) {
+        newId = res.movementNumber;
+      }
+    } catch (e) {
+      console.warn('Error saving cash movement to backend:', e.message);
+    }
+
     const newMovement = {
       id: newId,
       type: movementType, // 'IN' or 'OUT'

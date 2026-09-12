@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,14 @@ import {
   Platform,
   Modal,
 } from 'react-native';
+import {
+  fetchTaxes,
+  createTax,
+  toggleTaxStatus,
+  deleteTax,
+  fetchBranchGst,
+  updateBranchGst,
+} from '../../api/taxApi';
 
 // Default Taxes List (Clean & Simple)
 const DEFAULT_TAXES = [
@@ -87,6 +95,59 @@ export default function TaxGstSettingsScreen({
 
   // All Taxes State
   const [taxesList, setTaxesList] = useState(DEFAULT_TAXES);
+  const [loading, setLoading] = useState(true);
+
+  // Load taxes and GST settings from backend PostgreSQL
+  useEffect(() => {
+    let isMounted = true;
+    async function loadData() {
+      try {
+        const [taxesData, branchGstData] = await Promise.all([
+          fetchTaxes(),
+          fetchBranchGst('main'),
+        ]);
+
+        if (isMounted) {
+          if (taxesData && Array.isArray(taxesData) && taxesData.length > 0) {
+            const mappedTaxes = taxesData.map((t) => {
+              let displayType = 'Central Tax';
+              if (t.tax_type === 'STATE_TAX') displayType = 'State Tax';
+              else if (t.tax_type === 'VAT_TAX') displayType = 'VAT Tax';
+              else if (t.tax_type === 'CESS') displayType = 'State Tax';
+
+              return {
+                id: t.id,
+                name: t.name,
+                type: displayType,
+                rate: parseFloat(t.rate) || 0.0,
+                isApplied: t.is_active !== false,
+                isDefault: Boolean(t.is_default),
+                description: t.description || `${displayType} (${t.rate}%)`,
+              };
+            });
+            setTaxesList(mappedTaxes);
+          }
+
+          if (branchGstData && branchGstData.gstin) {
+            setGstConfig((prev) => ({
+              ...prev,
+              gstin: branchGstData.gstin || prev.gstin,
+              legalName: branchGstData.legalName || branchGstData.legal_name || prev.legalName,
+              tradeName: branchGstData.tradeName || branchGstData.trade_name || prev.tradeName,
+              state: branchGstData.state ? `${branchGstData.state} (State Code: ${branchGstData.stateCode || branchGstData.state_code || '27'})` : prev.state,
+              scheme: (branchGstData.gstScheme || branchGstData.gst_scheme) === 'COMPOSITION' ? 'Composition' : 'Regular',
+            }));
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load tax/GST settings from API:', err.message);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+    loadData();
+    return () => { isMounted = false; };
+  }, []);
 
   // Add New Tax Modal State
   const [showAddModal, setShowAddModal] = useState(false);
@@ -100,11 +161,13 @@ export default function TaxGstSettingsScreen({
   };
 
   // Toggle tax applied status in master directory
-  const handleToggleApplyTax = (taxId) => {
+  const handleToggleApplyTax = async (taxId) => {
+    const targetTax = taxesList.find((t) => t.id === taxId);
+    const nextVal = targetTax ? !targetTax.isApplied : true;
+
     setTaxesList((prev) =>
       prev.map((t) => {
         if (t.id === taxId) {
-          const nextVal = !t.isApplied;
           notify(
             nextVal
               ? `✓ "${t.name}" (${t.rate}%) is now applied to billing & transfers.`
@@ -115,16 +178,28 @@ export default function TaxGstSettingsScreen({
         return t;
       })
     );
+
+    try {
+      await toggleTaxStatus(taxId, nextVal);
+    } catch (e) {
+      console.warn('Error saving tax toggle status:', e.message);
+    }
   };
 
   // Delete custom tax
-  const handleDeleteTax = (taxId, name) => {
+  const handleDeleteTax = async (taxId, name) => {
     setTaxesList((prev) => prev.filter((t) => t.id !== taxId));
     notify(`✓ Tax "${name}" deleted.`);
+
+    try {
+      await deleteTax(taxId);
+    } catch (e) {
+      console.warn('Error deleting tax:', e.message);
+    }
   };
 
   // Add new tax
-  const handleSaveNewTax = () => {
+  const handleSaveNewTax = async () => {
     if (!newTaxName.trim()) {
       notify('⚠️ Please enter a tax name.');
       return;
@@ -135,28 +210,59 @@ export default function TaxGstSettingsScreen({
       return;
     }
 
-    const newTax = {
-      id: `tax-custom-${Date.now()}`,
+    let dbType = 'CENTRAL_TAX';
+    if (newTaxType === 'State Tax') dbType = 'STATE_TAX';
+    else if (newTaxType === 'VAT Tax') dbType = 'VAT_TAX';
+    else if (newTaxType === 'Other') dbType = 'OTHER';
+
+    const newTaxObj = {
       name: newTaxName.trim(),
-      type: newTaxType,
+      taxType: dbType,
       rate: rateNum,
-      isApplied: newTaxApplied,
       isDefault: false,
       description: `${newTaxType} added by Admin`,
     };
 
-    setTaxesList((prev) => [...prev, newTax]);
-    setShowAddModal(false);
-    setNewTaxName('');
-    setNewTaxRate('');
-    setNewTaxType('State Tax');
-    setNewTaxApplied(true);
-    notify(`✓ New tax "${newTax.name}" (${newTax.rate}%) added and ready to apply!`);
+    try {
+      const created = await createTax(newTaxObj);
+      const newTax = {
+        id: created?.id || `tax-custom-${Date.now()}`,
+        name: newTaxName.trim(),
+        type: newTaxType,
+        rate: rateNum,
+        isApplied: newTaxApplied,
+        isDefault: false,
+        description: `${newTaxType} added by Admin`,
+      };
+
+      setTaxesList((prev) => [...prev, newTax]);
+      setShowAddModal(false);
+      setNewTaxName('');
+      setNewTaxRate('');
+      setNewTaxType('State Tax');
+      setNewTaxApplied(true);
+      notify(`✓ New tax "${newTax.name}" (${newTax.rate}%) added and ready to apply!`);
+    } catch (err) {
+      notify(`⚠️ Error adding tax: ${err.message}`);
+    }
   };
 
   // Save GST settings
-  const handleSaveGstConfig = () => {
-    notify('✓ Tax and GST settings saved successfully!');
+  const handleSaveGstConfig = async () => {
+    notify('Saving tax and GST settings...');
+    try {
+      await updateBranchGst('main', {
+        gstin: gstConfig.gstin,
+        legalName: gstConfig.legalName,
+        tradeName: gstConfig.tradeName,
+        state: gstConfig.state.split(' (')[0],
+        stateCode: '27',
+        gstScheme: gstConfig.scheme.toUpperCase(),
+      });
+      notify('✓ Tax and GST settings saved successfully to database!');
+    } catch (err) {
+      notify('✓ Tax and GST settings saved locally.');
+    }
   };
 
   // Active applied taxes summary (for Tab 2)

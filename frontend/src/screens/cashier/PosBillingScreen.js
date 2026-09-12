@@ -12,8 +12,13 @@ import {
 } from 'react-native';
 import { MOCK_POS_PRODUCTS } from '../../data/cashierMockData';
 import { MOCK_CUSTOMERS_LIST } from '../../data/customersMockData';
+import { useOfflineSync } from '../../offline/OfflineSyncContext';
 
 export default function PosBillingScreen({ onNavigate, onShowToast, isMultiBranch = true }) {
+  const offlineSync = useOfflineSync();
+  const productsList = (offlineSync?.products && offlineSync.products.length > 0)
+    ? offlineSync.products
+    : MOCK_POS_PRODUCTS;
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const isCompact = width < 1100;
@@ -79,7 +84,7 @@ export default function PosBillingScreen({ onNavigate, onShowToast, isMultiBranc
 
   // Filter Catalog
   const categories = ['All', 'Analgesics', 'Antibiotics', 'Antacids / PPI', 'Respiratory', 'Antidiabetic', 'OTC Cough & Cold', 'Hydration'];
-  const filteredProducts = MOCK_POS_PRODUCTS.filter((prod) => {
+  const filteredProducts = productsList.filter((prod) => {
     const q = searchQuery.toLowerCase();
     const matchSearch =
       prod.name.toLowerCase().includes(q) ||
@@ -164,9 +169,27 @@ export default function PosBillingScreen({ onNavigate, onShowToast, isMultiBranc
       if (onShowToast) onShowToast('⚠️ Cannot hold an empty bill.');
       return;
     }
-    const token = `T-${Math.floor(100 + Math.random() * 900)}`;
+    const token = `HB-${Math.floor(1000 + Math.random() * 9000)}`;
+    const billData = {
+      holdId: token,
+      billNo: token,
+      customerName: selectedCustomer.name,
+      customerPhone: selectedCustomer.phone || '',
+      subtotal: totals.subtotal,
+      tax: totals.totalTax,
+      total: totals.grandTotal,
+      items: [...cart],
+      heldAt: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ', ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      heldBy: 'Cashier 01',
+      status: 'Hold',
+    };
+
+    if (offlineSync?.recordHoldBillOffline) {
+      offlineSync.recordHoldBillOffline(billData);
+    }
+
     if (onShowToast) {
-      onShowToast(`✓ Bill parked successfully under Token #${token} (Held Bills)`);
+      onShowToast(`✓ Bill parked successfully under Token #${token} (Saved Offline)`);
     }
     setCart([]);
   };
@@ -199,13 +222,18 @@ export default function PosBillingScreen({ onNavigate, onShowToast, isMultiBranc
       cashier: 'Cashier 01',
     };
 
+    // Deduct stock, store invoice offline, and enqueue sync mutation
+    if (offlineSync?.recordSaleOffline) {
+      offlineSync.recordSaleOffline(newInv, cart);
+    }
+
     setCompletedInvoice(newInv);
     setCheckoutModalVisible(false);
     setReceiptModalVisible(true);
     setCart([]);
 
     if (onShowToast) {
-      onShowToast(`✓ Invoice ${invNo} generated successfully! Stock deducted. (BIL-10)`);
+      onShowToast(`✓ Invoice ${invNo} generated! Stock deducted offline & queued for sync.`);
     }
   };
 

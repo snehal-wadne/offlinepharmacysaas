@@ -21,6 +21,7 @@ import {
   createPurchaseOrder,
   updatePurchaseStatus,
 } from '../../api/purchaseApi';
+import { useOfflineSync } from '../../offline/OfflineSyncContext';
 
 const PO_STATUS_BADGES = {
   Draft: { bg: '#F1F5F9', text: '#475569' },
@@ -32,6 +33,7 @@ const PO_STATUS_BADGES = {
 };
 
 export default function PurchasesScreen({ onShowToast, onNavigate }) {
+  const offlineSync = useOfflineSync();
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
   const isMobile = width < 768;
@@ -270,14 +272,18 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
         createdBy: 'Manager',
       };
 
+      if (offlineSync?.recordPurchaseOffline) {
+        offlineSync.recordPurchaseOffline(newPO);
+      }
+
       setOrders((prev) => [newPO, ...prev]);
       setModalVisible(false);
 
       if (onShowToast) {
-        onShowToast(isDraft ? `✓ Saved Purchase Order ${newPO.id} as Draft!` : `✓ Created Purchase Order ${newPO.id} in database!`);
+        onShowToast(isDraft ? `✓ Saved Purchase Order ${newPO.id} as Draft!` : `✓ Created Purchase Order ${newPO.id}!`);
       }
     } catch (err) {
-      console.warn('Backend PO create error, saving locally:', err.message);
+      console.warn('Backend PO create error, saving locally in offline storage:', err.message);
       const newPO = {
         id: poNum,
         supplier: formData.supplier,
@@ -296,11 +302,15 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
         createdBy: 'Manager',
       };
 
+      if (offlineSync?.recordPurchaseOffline) {
+        offlineSync.recordPurchaseOffline(newPO);
+      }
+
       setOrders((prev) => [newPO, ...prev]);
       setModalVisible(false);
 
       if (onShowToast) {
-        onShowToast(isDraft ? `✓ Saved Purchase Order ${newPO.id} as Draft!` : `✓ Created Purchase Order ${newPO.id}!`);
+        onShowToast(isDraft ? `✓ Saved Purchase Order ${newPO.id} as Draft (Offline)!` : `✓ Created Purchase Order ${newPO.id} (Saved Offline)!`);
       }
     }
   };
