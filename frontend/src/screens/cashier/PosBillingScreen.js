@@ -16,6 +16,7 @@ import { MOCK_CUSTOMERS_LIST } from '../../data/customersMockData';
 import { useOfflineSync } from '../../offline/OfflineSyncContext';
 import { SkeletonItemCard } from '../../components/common/SkeletonLoader';
 import PaginationControls from '../../components/common/PaginationControls';
+import { generateOfflineQRCode } from '../../utils/qrGenerator';
 
 export default function PosBillingScreen({
   onNavigate,
@@ -747,15 +748,16 @@ export default function PosBillingScreen({
                 <View style={{ alignSelf: 'center', backgroundColor: '#FFFFFF', padding: 8, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 8 }}>
                   <Image
                     source={{
-                      uri: `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
+                      uri: generateOfflineQRCode(
                         `upi://pay?pa=${encodeURIComponent(
                           storeUpiId.trim() || 'pharmaflow@okhdfcbank'
                         )}&pn=PharmaFlow%20Pharmacy&am=${totals.grandTotal.toFixed(
                           2
                         )}&cu=INR&tn=${encodeURIComponent(
                           `POS-${Date.now().toString().slice(-6)}`
-                        )}`
-                      )}`,
+                        )}`,
+                        220
+                      ),
                     }}
                     style={{ width: 160, height: 160 }}
                     resizeMode="contain"

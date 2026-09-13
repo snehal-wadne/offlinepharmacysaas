@@ -15,6 +15,7 @@ import { usePos } from "../../context/PosContext";
 import BarcodeScannerModal from "../../components/common/BarcodeScannerModal";
 import { SkeletonItemCard } from "../../components/common/SkeletonLoader";
 import PaginationControls from "../../components/common/PaginationControls";
+import { generateOfflineQRCode } from "../../utils/qrGenerator";
 
 export default function SalesScreen({
   onNavigate,
@@ -1116,15 +1117,16 @@ export default function SalesScreen({
                 <View style={styles.upiQrImageCard}>
                   <Image
                     source={{
-                      uri: `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(
+                      uri: generateOfflineQRCode(
                         `upi://pay?pa=${encodeURIComponent(
                           storeUpiId.trim() || "falahpharmacy@okhdfcbank"
                         )}&pn=Falah%20Pharmacy&am=${totals.grandTotal.toFixed(
                           2
                         )}&cu=INR&tn=${encodeURIComponent(
                           `POS-${Date.now().toString().slice(-6)}`
-                        )}`
-                      )}`,
+                        )}`,
+                        260
+                      ),
                     }}
                     style={styles.upiQrCodeImage}
                     resizeMode="contain"
@@ -1311,9 +1313,10 @@ export default function SalesScreen({
               <View style={styles.receiptQrBox}>
                 <Image
                   source={{
-                    uri: `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(
-                      `INVOICE:${completedInvoice.invoiceNo}|TOTAL:₹${completedInvoice.total}|DATE:${completedInvoice.date}`
-                    )}`,
+                    uri: generateOfflineQRCode(
+                      `INVOICE:${completedInvoice.invoiceNo}|TOTAL:₹${completedInvoice.total}|DATE:${completedInvoice.date}`,
+                      120
+                    ),
                   }}
                   style={styles.receiptQrImage}
                   resizeMode="contain"
@@ -1452,15 +1455,16 @@ export default function SalesScreen({
             <View style={styles.qrStandeeImageWrapper}>
               <Image
                 source={{
-                  uri: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(
+                  uri: generateOfflineQRCode(
                     `upi://pay?pa=${encodeURIComponent(
                       storeUpiId.trim() || "falahpharmacy@okhdfcbank"
                     )}&pn=Falah%20Pharmacy&am=${totals.grandTotal.toFixed(
                       2
                     )}&cu=INR&tn=${encodeURIComponent(
                       `POS-${Date.now().toString().slice(-6)}`
-                    )}`
-                  )}`,
+                    )}`,
+                    300
+                  ),
                 }}
                 style={styles.qrStandeeImage}
                 resizeMode="contain"
