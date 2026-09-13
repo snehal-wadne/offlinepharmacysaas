@@ -16,6 +16,7 @@
 
 const { pool } = require("../db/connection");
 const { verifyPlatformToken } = require("./superadmin-auth.middleware");
+const { verifyToken } = require("../utils/token.util");
 
 const isUuid = (str) =>
   typeof str === "string" &&
@@ -66,7 +67,21 @@ const authenticateUser = async (req) => {
     }
   }
 
-  // 2. JWT Online Token: jwt_online_<userId>_<timestamp>, jwt_pg_<userId>_<timestamp>, jwt_google_<userId>_<timestamp>
+  // 2. Standard application user tokens (pf_user_...)
+  const appDecoded = verifyToken(token);
+  if (appDecoded && appDecoded.userId && isUuid(appDecoded.userId)) {
+    const res = await pool.query(
+      `SELECT id, name, email, status, is_platform_superadmin
+       FROM users
+       WHERE id = $1 AND status = 'ACTIVE'`,
+      [appDecoded.userId],
+    );
+    if (res.rows.length > 0) {
+      return { user: res.rows[0] };
+    }
+  }
+
+  // 3. JWT Online Token: jwt_online_<userId>_<timestamp>, jwt_pg_<userId>_<timestamp>, jwt_google_<userId>_<timestamp>
   if (
     token.startsWith("jwt_online_") ||
     token.startsWith("jwt_pg_") ||
