@@ -367,24 +367,11 @@ export default function StockTransferScreen({ onShowToast }) {
       return;
     }
 
-<<<<<<< HEAD
-    const newTransfer = {
-      id: 'TR-' + Date.now().toString(36).toUpperCase(),
-      fromBranch: formData.fromBranch,
-      toBranch: formData.toBranch,
-      transferDate: '29 Aug 2026',
-      items: 1,
-      totalQuantity: Number(formData.transferQuantity),
-      status: 'In Transit',
-      createdBy: 'Manager',
-    };
-=======
     try {
       const tenantCtx =
         typeof localPersistenceService?.getTenantContext === "function"
           ? localPersistenceService.getTenantContext()
           : { isDemo: true, branchId: formData.fromBranch };
->>>>>>> origin/main
 
       if (
         !tenantCtx.isDemo &&

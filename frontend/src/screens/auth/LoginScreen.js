@@ -76,6 +76,11 @@ export default function LoginScreen({ onLoginSuccess }) {
     return emailRegex.test(trimmed);
   };
 
+  const loadDemoCredentials = () => {
+    setSignInEmail("admin@flora.edu.in");
+    setSignInPassword("admin123");
+  };
+
   // Sign In Handler
   const handleSignIn = async () => {
     setErrorMessage("");
@@ -558,8 +563,6 @@ export default function LoginScreen({ onLoginSuccess }) {
                       </View>
                       <Text style={styles.rememberText}>Remember me</Text>
                     </Pressable>
-<<<<<<< HEAD
-=======
 
                     <Pressable
                       onPress={loadDemoCredentials}
@@ -567,7 +570,6 @@ export default function LoginScreen({ onLoginSuccess }) {
                     >
                       <Text style={styles.forgotText}>Use Demo Login</Text>
                     </Pressable>
->>>>>>> origin/main
                   </View>
 
                   {/* SUBMIT SIGN IN */}
@@ -864,9 +866,6 @@ export default function LoginScreen({ onLoginSuccess }) {
                   </Pressable>
                 </View>
               )}
-<<<<<<< HEAD
-=======
-
               {/* DEMO NOTICE BADGE */}
               <View style={styles.demoNotice}>
                 <Text style={styles.demoNoticeText}>
@@ -874,7 +873,6 @@ export default function LoginScreen({ onLoginSuccess }) {
                   root@falah.com / more#78548
                 </Text>
               </View>
->>>>>>> origin/main
             </View>
           </ScrollView>
         </View>

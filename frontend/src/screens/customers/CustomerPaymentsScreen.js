@@ -410,21 +410,11 @@ export default function CustomerPaymentsScreen({ onShowToast, onNavigate }) {
                 </Text>
               </View>
             ) : (
-<<<<<<< HEAD
               filteredPayments.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((rcpt) => {
                 const modeStyle = MODE_BADGES[rcpt.paymentMode] || MODE_BADGES.Cash;
                 const displayAmount = rcpt.amount || rcpt.amountPaid || '₹0.00';
                 const displayDate = rcpt.date || rcpt.paymentDate || '';
                 const displayLinked = rcpt.linkedRef || rcpt.linkedInvoices || 'Direct Payment';
-=======
-              filteredPayments.map((rcpt) => {
-                const modeStyle =
-                  MODE_BADGES[rcpt.paymentMode] || MODE_BADGES.Cash;
-                const displayAmount = rcpt.amount || rcpt.amountPaid || "₹0.00";
-                const displayDate = rcpt.date || rcpt.paymentDate || "";
-                const displayLinked =
-                  rcpt.linkedRef || rcpt.linkedInvoices || "Direct Payment";
->>>>>>> origin/main
 
                 return (
                   <View key={rcpt.id} style={styles.mobileReceiptCard}>
@@ -603,22 +593,11 @@ export default function CustomerPaymentsScreen({ onShowToast, onNavigate }) {
                   </Text>
                 </View>
               ) : (
-<<<<<<< HEAD
                 filteredPayments.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((rcpt, index) => {
                   const modeStyle = MODE_BADGES[rcpt.paymentMode] || MODE_BADGES.Cash;
                   const displayAmount = rcpt.amount || rcpt.amountPaid || '₹0.00';
                   const displayDate = rcpt.date || rcpt.paymentDate || '';
                   const displayLinked = rcpt.linkedRef || rcpt.linkedInvoices || 'Direct Payment';
-=======
-                filteredPayments.map((rcpt, index) => {
-                  const modeStyle =
-                    MODE_BADGES[rcpt.paymentMode] || MODE_BADGES.Cash;
-                  const displayAmount =
-                    rcpt.amount || rcpt.amountPaid || "₹0.00";
-                  const displayDate = rcpt.date || rcpt.paymentDate || "";
-                  const displayLinked =
-                    rcpt.linkedRef || rcpt.linkedInvoices || "Direct Payment";
->>>>>>> origin/main
 
                   return (
                     <View

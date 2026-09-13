@@ -384,33 +384,6 @@ export default function PosBillingScreen({
               isMobile && { flex: 1, paddingBottom: cart.length > 0 ? 80 : 20 },
             ]}
           >
-<<<<<<< HEAD
-            {categories.map((cat) => (
-              <Pressable
-                key={cat}
-                onPress={() => setSelectedCategory(cat)}
-                style={[
-                  styles.categoryChip,
-                  selectedCategory === cat && styles.categoryChipActive,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.categoryChipText,
-                    selectedCategory === cat && styles.categoryChipTextActive,
-                  ]}
-                >
-                  {cat}
-                </Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-
-          {/* Catalog Grid */}
-          <ScrollView style={styles.catalogScroll} showsVerticalScrollIndicator={true}>
-            <View style={styles.catalogGrid}>
-              {paginatedData.map((prod) => (
-=======
             {/* Search Input Bar */}
             <View style={styles.searchBarRow}>
               <Text style={styles.searchBarIcon}>🔍</Text>
@@ -423,7 +396,6 @@ export default function PosBillingScreen({
                 autoFocus={true}
               />
               {searchQuery ? (
->>>>>>> origin/main
                 <Pressable
                   onPress={() => setSearchQuery("")}
                   style={styles.clearSearchBtn}
@@ -459,20 +431,6 @@ export default function PosBillingScreen({
                   </Text>
                 </Pressable>
               ))}
-<<<<<<< HEAD
-            </View>
-          </ScrollView>
-          <View style={{ padding: 16 }}>
-            <PaginationControls
-              currentPage={currentPage}
-              totalItems={filteredProducts.length}
-              itemsPerPage={itemsPerPage}
-              onPageChange={setCurrentPage}
-              onItemsPerPageChange={(n) => { setItemsPerPage(n); setCurrentPage(1); }}
-            />
-          </View>
-        </View>
-=======
             </ScrollView>
 
             {/* Catalog Grid */}
@@ -531,7 +489,6 @@ export default function PosBillingScreen({
               </View>
             </ScrollView>
           </View>
->>>>>>> origin/main
         )}
 
         {/* RIGHT PANE: Cart & Checkout Summary */}
@@ -781,8 +738,7 @@ export default function PosBillingScreen({
             )}
 
             {paymentMode === "UPI" && (
-              <View style={styles.qrSectionBox}>
-<<<<<<< HEAD
+              <View style={styles.paymentInputsSection}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                   <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F766E' }}>Customer UPI Scanner</Text>
                   <Text style={{ fontSize: 18, fontWeight: '900', color: '#0F766E' }}>₹{totals.grandTotal.toFixed(2)}</Text>
@@ -844,23 +800,6 @@ export default function PosBillingScreen({
 
                 <Text style={{ fontSize: 11, color: '#92400E', backgroundColor: '#FEF3C7', padding: 6, borderRadius: 6 }}>
                   💡 Customer scans QR code above. Once payment is received, click &apos;Complete Sale &amp; Print&apos;.
-                </Text>
-              </View>
-            )}
-
-            {paymentMode === 'Credit / Ledger' && (
-              <View style={styles.creditWarnBox}>
-                <Text style={styles.creditWarnTitle}>Customer Receivable Ledger</Text>
-                <Text style={styles.creditWarnDesc}>
-                  Will add ₹{totals.grandTotal.toFixed(2)} to {selectedCustomer.name}&apos;s credit account.
-=======
-                <Text style={styles.qrIcon}>📷</Text>
-                <Text style={styles.qrText}>
-                  Show Store Dynamic UPI QR to Customer
-                </Text>
-                <Text style={styles.qrSubText}>
-                  Amount: ₹{totals.grandTotal.toFixed(2)}
->>>>>>> origin/main
                 </Text>
               </View>
             )}
@@ -1065,11 +1004,7 @@ export default function PosBillingScreen({
               {MOCK_CUSTOMERS_LIST.filter(
                 (c) =>
                   c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
-<<<<<<< HEAD
                   (c.phone && String(c.phone).includes(customerSearch))
-=======
-                  c.phone.includes(customerSearch),
->>>>>>> origin/main
               ).map((c) => (
                 <Pressable
                   key={c.id}
