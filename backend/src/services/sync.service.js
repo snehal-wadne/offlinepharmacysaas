@@ -3382,7 +3382,7 @@ class SyncService {
       // Cash movements
       const movRes = await client.query(
         `SELECT
-           COALESCE(SUM(CASE WHEN movement_type = 'IN' THEN amount ELSE 0 END), 0.00) AS cash_in,
+           COALESCE(SUM(CASE WHEN movement_type = 'IN' AND (reason != 'Opening float balance' OR reason IS NULL) THEN amount ELSE 0 END), 0.00) AS cash_in,
            COALESCE(SUM(CASE WHEN movement_type = 'OUT' THEN amount ELSE 0 END), 0.00) AS cash_out
          FROM cash_movements
          WHERE cash_register_session_id = $1`,
