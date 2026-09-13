@@ -13,7 +13,7 @@
 const express = require('express');
 const router = express.Router();
 const cashierController = require('../controllers/cashier.controller');
-const { requireSyncAuth } = require('../middleware/sync-auth.middleware');
+const { requireSyncAuth, optionalSyncAuth } = require('../middleware/sync-auth.middleware');
 
 // --- Base Cashier Directory Route ---
 router.get('/', (req, res) => {
@@ -43,7 +43,7 @@ router.get('/register/movements', requireSyncAuth, cashierController.getCashMove
 router.get('/register/summary', requireSyncAuth, cashierController.getSessionSummary);
 
 // --- Products & Barcode Search ---
-router.get('/products', requireSyncAuth, cashierController.searchProducts);
+router.get('/products', optionalSyncAuth, cashierController.searchProducts);
 
 // --- POS Sales ---
 router.post('/sales', requireSyncAuth, cashierController.createSale);
