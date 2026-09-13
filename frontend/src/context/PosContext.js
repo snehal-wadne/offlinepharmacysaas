@@ -50,18 +50,63 @@ export function PosProvider({ children, currentUser }) {
             setProducts(liveProds);
           }
           if (liveHeld && Array.isArray(liveHeld) && liveHeld.length > 0) {
-            setHeldBills(liveHeld);
+            setHeldBills(
+              liveHeld.map((b) => ({
+                ...b,
+                total: parseFloat(b.total) || Number(b.total) || 0,
+                subtotal: parseFloat(b.subtotal) || Number(b.subtotal) || 0,
+                tax: parseFloat(b.tax) || Number(b.tax) || 0,
+                items: Array.isArray(b.items)
+                  ? b.items
+                  : Array.isArray(b.cart)
+                    ? b.cart
+                    : [],
+                itemsCount:
+                  parseInt(b.itemsCount, 10) ||
+                  (Array.isArray(b.items) ? b.items.length : 0) ||
+                  (Array.isArray(b.cart) ? b.cart.length : 0) ||
+                  1,
+                customerPhone: b.customerPhone || b.phone || "",
+                heldAt:
+                  b.heldAt ||
+                  (b.savedAt
+                    ? new Date(b.savedAt).toLocaleDateString("en-GB", {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                      }) +
+                      ", " +
+                      new Date(b.savedAt).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })
+                    : "29 Aug 2026, 10:20 AM"),
+              })),
+            );
           }
           if (liveInvs && Array.isArray(liveInvs) && liveInvs.length > 0) {
-            setInvoices(liveInvs);
+            setInvoices(
+              liveInvs.map((inv) => ({
+                ...inv,
+                total: parseFloat(inv.total) || Number(inv.total) || 0,
+                subtotal: parseFloat(inv.subtotal) || Number(inv.subtotal) || 0,
+                tax: parseFloat(inv.tax) || Number(inv.tax) || 0,
+                discount: parseFloat(inv.discount) || Number(inv.discount) || 0,
+              })),
+            );
           }
         }
       } catch (err) {
-        console.warn("POS live hydration fallback to offline cache:", err.message);
+        console.warn(
+          "POS live hydration fallback to offline cache:",
+          err.message,
+        );
       }
     }
     hydratePosData();
-    return () => { isMounted = false; };
+    return () => {
+      isMounted = false;
+    };
   }, []);
   const [returnHistory, setReturnHistory] = useState([
     {

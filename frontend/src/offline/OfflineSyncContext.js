@@ -4,7 +4,13 @@
  * Provides real-time reactive sync status and offline operations across the application.
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+} from "react";
 import {
   initOfflineStorage,
   getOfflineProducts,
@@ -19,22 +25,22 @@ import {
   saveOfflineCustomer,
   getOfflinePurchases,
   saveOfflinePurchase,
-} from './offlineStorage';
+} from "./offlineStorage";
 import {
   enqueueMutation,
   getPendingQueue,
   removeSyncedMutations,
   getPendingCount,
-} from './syncQueue';
-import { checkServerConnectivity, flushOfflineQueue } from './syncService';
-import { fetchCashierProducts } from '../api/cashierApi';
-import { fetchCustomers } from '../api/customerApi';
+} from "./syncQueue";
+import { checkServerConnectivity, flushOfflineQueue } from "./syncService";
+import { fetchCashierProducts } from "../api/cashierApi";
+import { fetchCustomers } from "../api/customerApi";
 
 const OfflineSyncContext = createContext(null);
 
 export function OfflineSyncProvider({ children }) {
   const [isOnline, setIsOnline] = useState(
-    typeof navigator !== 'undefined' ? navigator.onLine : true
+    typeof navigator !== "undefined" ? navigator.onLine : true,
   );
   const [pendingCount, setPendingCount] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -67,57 +73,79 @@ export function OfflineSyncProvider({ children }) {
             fetchCashierProducts(),
             fetchCustomers(),
           ]);
-          if (active && liveProds && Array.isArray(liveProds) && liveProds.length > 0) {
+          if (
+            active &&
+            liveProds &&
+            Array.isArray(liveProds) &&
+            liveProds.length > 0
+          ) {
             setProducts(liveProds);
             saveOfflineProducts(liveProds);
           }
-          if (active && liveCusts && Array.isArray(liveCusts?.data) && liveCusts.data.length > 0) {
+          if (
+            active &&
+            liveCusts &&
+            Array.isArray(liveCusts?.data) &&
+            liveCusts.data.length > 0
+          ) {
             setCustomers(liveCusts.data);
           }
         }
       } catch (err) {
-        console.log('[OfflineSync] Server hydration skipped, offline cache active.');
+        console.log(
+          "[OfflineSync] Server hydration skipped, offline cache active.",
+        );
       }
     })();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, []);
 
   // Sync runner function
-  const triggerSync = useCallback(async (isAuto = false) => {
-    if (isSyncing) return;
-    const currentPending = getPendingCount();
-    if (currentPending === 0) return;
+  const triggerSync = useCallback(
+    async (isAuto = false) => {
+      if (isSyncing) return;
+      const currentPending = getPendingCount();
+      if (currentPending === 0) return;
 
-    setIsSyncing(true);
-    try {
-      const result = await flushOfflineQueue();
-      if (result.success && result.processedCount > 0) {
-        setLastSyncedAt(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-        setPendingCount(result.remainingCount);
-        setSyncBanner({
-          type: 'success',
-          message: `✅ Synchronized ${result.processedCount} offline record${result.processedCount > 1 ? 's' : ''} with server.`,
-        });
-        setTimeout(() => setSyncBanner(null), 4000);
-      } else if (!result.success && !isAuto) {
-        setSyncBanner({
-          type: 'warning',
-          message: `⚠️ Server offline. ${currentPending} record${currentPending > 1 ? 's' : ''} saved locally.`,
-        });
-        setTimeout(() => setSyncBanner(null), 4000);
+      setIsSyncing(true);
+      try {
+        const result = await flushOfflineQueue();
+        if (result.success && result.processedCount > 0) {
+          setLastSyncedAt(
+            new Date().toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+          );
+          setPendingCount(result.remainingCount);
+          setSyncBanner({
+            type: "success",
+            message: `✅ Synchronized ${result.processedCount} offline record${result.processedCount > 1 ? "s" : ""} with server.`,
+          });
+          setTimeout(() => setSyncBanner(null), 4000);
+        } else if (!result.success && !isAuto) {
+          setSyncBanner({
+            type: "warning",
+            message: `⚠️ Server offline. ${currentPending} record${currentPending > 1 ? "s" : ""} saved locally.`,
+          });
+          setTimeout(() => setSyncBanner(null), 4000);
+        }
+      } catch (e) {
+        console.warn("Sync attempt failed:", e.message);
+      } finally {
+        setIsSyncing(false);
+        setPendingCount(getPendingCount());
       }
-    } catch (e) {
-      console.warn('Sync attempt failed:', e.message);
-    } finally {
-      setIsSyncing(false);
-      setPendingCount(getPendingCount());
-    }
-  }, [isSyncing]);
+    },
+    [isSyncing],
+  );
 
   // Network connectivity listener & heartbeat
   useEffect(() => {
     const handleOnline = async () => {
-      console.log('📡 Browser reports online. Probing server...');
+      console.log("📡 Browser reports online. Probing server...");
       const serverReachable = await checkServerConnectivity();
       setIsOnline(serverReachable);
       if (serverReachable) {
@@ -126,18 +154,19 @@ export function OfflineSyncProvider({ children }) {
     };
 
     const handleOffline = () => {
-      console.log('⚠️ Browser reports offline.');
+      console.log("⚠️ Browser reports offline.");
       setIsOnline(false);
       setSyncBanner({
-        type: 'warning',
-        message: '📡 You are currently offline. All operations will continue running seamlessly offline.',
+        type: "warning",
+        message:
+          "📡 You are currently offline. All operations will continue running seamlessly offline.",
       });
       setTimeout(() => setSyncBanner(null), 5000);
     };
 
-    if (typeof window !== 'undefined') {
-      window.addEventListener('online', handleOnline);
-      window.addEventListener('offline', handleOffline);
+    if (typeof window !== "undefined") {
+      window.addEventListener("online", handleOnline);
+      window.addEventListener("offline", handleOffline);
     }
 
     // Background heartbeat check every 15 seconds
@@ -150,9 +179,9 @@ export function OfflineSyncProvider({ children }) {
     }, 15000);
 
     return () => {
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('online', handleOnline);
-        window.removeEventListener('offline', handleOffline);
+      if (typeof window !== "undefined") {
+        window.removeEventListener("online", handleOnline);
+        window.removeEventListener("offline", handleOffline);
       }
       clearInterval(interval);
     };
@@ -168,95 +197,121 @@ export function OfflineSyncProvider({ children }) {
    * - Saves invoice to local storage
    * - Queues mutation for sync
    */
-  const recordSaleOffline = useCallback((invoiceData, cartItems = []) => {
-    // 1. Deduct stock in local product catalog
-    if (cartItems.length > 0) {
-      const updatedProducts = deductOfflineStock(cartItems);
-      setProducts(updatedProducts);
-    }
+  const recordSaleOffline = useCallback(
+    (invoiceData, cartItems = []) => {
+      // 1. Deduct stock in local product catalog
+      if (cartItems.length > 0) {
+        const updatedProducts = deductOfflineStock(cartItems);
+        setProducts(updatedProducts);
+      }
 
-    // 2. Persist invoice to local invoices
-    saveOfflineInvoice(invoiceData);
-    setInvoices((prev) => [invoiceData, ...prev.filter((i) => i.invoiceNo !== invoiceData.invoiceNo)]);
+      // 2. Persist invoice to local invoices
+      saveOfflineInvoice(invoiceData);
+      setInvoices((prev) => [
+        invoiceData,
+        ...prev.filter((i) => i.invoiceNo !== invoiceData.invoiceNo),
+      ]);
 
-    // 3. Enqueue mutation
-    enqueueMutation('CREATE_INVOICE', {
-      invoice: invoiceData,
-      items: cartItems,
-    });
-    setPendingCount(getPendingCount());
+      // 3. Enqueue mutation
+      enqueueMutation("CREATE_INVOICE", {
+        invoice: invoiceData,
+        items: cartItems,
+      });
+      setPendingCount(getPendingCount());
 
-    // 4. If online, attempt background sync immediately
-    if (isOnline) {
-      setTimeout(() => triggerSync(true), 500);
-    }
+      // 4. If online, attempt background sync immediately
+      if (isOnline) {
+        setTimeout(() => triggerSync(true), 500);
+      }
 
-    return invoiceData;
-  }, [isOnline, triggerSync]);
+      return invoiceData;
+    },
+    [isOnline, triggerSync],
+  );
 
   /**
    * Hold Bill in Offline Mode
    */
-  const recordHoldBillOffline = useCallback((billData) => {
-    saveOfflineHeldBill(billData);
-    setHeldBills((prev) => {
-      const draftId = billData.holdId || billData.billNo;
-      return [billData, ...prev.filter((b) => (b.holdId || b.billNo) !== draftId)];
-    });
+  const recordHoldBillOffline = useCallback(
+    (billData) => {
+      saveOfflineHeldBill(billData);
+      setHeldBills((prev) => {
+        const draftId = billData.holdId || billData.billNo;
+        return [
+          billData,
+          ...prev.filter((b) => (b.holdId || b.billNo) !== draftId),
+        ];
+      });
 
-    enqueueMutation('HOLD_BILL', billData);
-    setPendingCount(getPendingCount());
+      enqueueMutation("HOLD_BILL", billData);
+      setPendingCount(getPendingCount());
 
-    if (isOnline) {
-      setTimeout(() => triggerSync(true), 500);
-    }
+      if (isOnline) {
+        setTimeout(() => triggerSync(true), 500);
+      }
 
-    return billData;
-  }, [isOnline, triggerSync]);
+      return billData;
+    },
+    [isOnline, triggerSync],
+  );
 
   /**
    * Remove / Resume Held Bill Offline
    */
   const deleteHoldBillOffline = useCallback((draftId) => {
     removeOfflineHeldBill(draftId);
-    setHeldBills((prev) => prev.filter((b) => (b.holdId || b.billNo) !== draftId));
-    enqueueMutation('DELETE_HOLD_BILL', { draftId });
+    setHeldBills((prev) =>
+      prev.filter((b) => (b.holdId || b.billNo) !== draftId),
+    );
+    enqueueMutation("DELETE_HOLD_BILL", { draftId });
     setPendingCount(getPendingCount());
   }, []);
 
   /**
    * Create Purchase Order in Offline Mode
    */
-  const recordPurchaseOffline = useCallback((poData) => {
-    saveOfflinePurchase(poData);
-    setPurchases((prev) => [poData, ...prev.filter((p) => p.poNumber !== poData.poNumber)]);
+  const recordPurchaseOffline = useCallback(
+    (poData) => {
+      saveOfflinePurchase(poData);
+      setPurchases((prev) => [
+        poData,
+        ...prev.filter((p) => p.poNumber !== poData.poNumber),
+      ]);
 
-    enqueueMutation('CREATE_PURCHASE', poData);
-    setPendingCount(getPendingCount());
+      enqueueMutation("CREATE_PURCHASE", poData);
+      setPendingCount(getPendingCount());
 
-    if (isOnline) {
-      setTimeout(() => triggerSync(true), 500);
-    }
+      if (isOnline) {
+        setTimeout(() => triggerSync(true), 500);
+      }
 
-    return poData;
-  }, [isOnline, triggerSync]);
+      return poData;
+    },
+    [isOnline, triggerSync],
+  );
 
   /**
    * Create / Update Customer in Offline Mode
    */
-  const recordCustomerOffline = useCallback((customerData) => {
-    saveOfflineCustomer(customerData);
-    setCustomers((prev) => [customerData, ...prev.filter((c) => c.id !== customerData.id)]);
+  const recordCustomerOffline = useCallback(
+    (customerData) => {
+      saveOfflineCustomer(customerData);
+      setCustomers((prev) => [
+        customerData,
+        ...prev.filter((c) => c.id !== customerData.id),
+      ]);
 
-    enqueueMutation('CREATE_CUSTOMER', customerData);
-    setPendingCount(getPendingCount());
+      enqueueMutation("CREATE_CUSTOMER", customerData);
+      setPendingCount(getPendingCount());
 
-    if (isOnline) {
-      setTimeout(() => triggerSync(true), 500);
-    }
+      if (isOnline) {
+        setTimeout(() => triggerSync(true), 500);
+      }
 
-    return customerData;
-  }, [isOnline, triggerSync]);
+      return customerData;
+    },
+    [isOnline, triggerSync],
+  );
 
   const value = {
     isOnline,
@@ -289,7 +344,24 @@ export function OfflineSyncProvider({ children }) {
 export function useOfflineSync() {
   const context = useContext(OfflineSyncContext);
   if (!context) {
-    throw new Error('useOfflineSync must be used within an OfflineSyncProvider');
+    return {
+      isOnline: typeof navigator !== "undefined" ? navigator.onLine : true,
+      pendingCount: 0,
+      isSyncing: false,
+      lastSyncedAt: null,
+      syncBanner: null,
+      products: [],
+      invoices: [],
+      heldBills: [],
+      customers: [],
+      purchases: [],
+      syncNow: async () => {},
+      recordSaleOffline: async () => {},
+      recordHoldBillOffline: async () => {},
+      deleteHoldBillOffline: async () => {},
+      recordPurchaseOffline: async () => {},
+      recordCustomerOffline: async () => {},
+    };
   }
   return context;
 }

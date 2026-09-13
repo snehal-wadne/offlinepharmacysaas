@@ -810,11 +810,17 @@ date_of_birth DATE, gender VARCHAR(30),
 -- Customer category shown by the customer-management
 -- workflow, for example REGULAR, CORPORATE, etc.
 
-
 category VARCHAR(50),
-
         address VARCHAR(500),
-
+        city VARCHAR(100) DEFAULT 'Mumbai',
+        age INT DEFAULT 30,
+        doctor_name VARCHAR(255) DEFAULT 'Dr. Farooq Siddiqui',
+        doctor_specialty VARCHAR(255) DEFAULT 'General Physician',
+        active_rx_no VARCHAR(100) DEFAULT 'Rx-2026-1025',
+        credit_limit NUMERIC(12, 2) DEFAULT 0.00,
+        outstanding_balance NUMERIC(12, 2) DEFAULT 0.00,
+        total_spent NUMERIC(12, 2) DEFAULT 0.00,
+        loyalty_points INT DEFAULT 0,
         status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
 
         created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,

@@ -972,10 +972,17 @@ class CashierService {
     `;
 
     const res = await pool.query(query, [limit]);
+    const sales = res.rows.map((r) => ({
+      ...r,
+      subtotal: parseFloat(r.subtotal) || 0,
+      discount: parseFloat(r.discount) || 0,
+      tax: parseFloat(r.tax) || 0,
+      total: parseFloat(r.total) || 0,
+    }));
     return {
       success: true,
-      count: res.rows.length,
-      data: res.rows,
+      count: sales.length,
+      data: sales,
     };
   }
 
@@ -1005,7 +1012,14 @@ class CashierService {
       return { success: false, message: `Invoice ${invoiceNo} not found` };
     }
 
-    const invoice = invoiceRes.rows[0];
+    const rawInvoice = invoiceRes.rows[0];
+    const invoice = {
+      ...rawInvoice,
+      subtotal: parseFloat(rawInvoice.subtotal) || 0,
+      discount: parseFloat(rawInvoice.discount) || 0,
+      tax: parseFloat(rawInvoice.tax) || 0,
+      total: parseFloat(rawInvoice.total) || 0,
+    };
 
     const itemsRes = await pool.query(
       `
@@ -1025,7 +1039,14 @@ class CashierService {
       [invoice.id],
     );
 
-    invoice.items = itemsRes.rows;
+    invoice.items = itemsRes.rows.map((it) => ({
+      ...it,
+      quantity: Number(it.quantity) || 1,
+      qty: Number(it.quantity) || 1,
+      price: parseFloat(it.price) || 0,
+      tax: parseFloat(it.tax) || 0,
+      total: parseFloat(it.total) || 0,
+    }));
 
     return {
       success: true,
@@ -1045,20 +1066,30 @@ class CashierService {
         hb.hold_token AS "token",
         hb.customer_name AS "customerName",
         hb.customer_phone AS "phone",
+        hb.customer_phone AS "customerPhone",
         hb.items_count AS "itemsCount",
         hb.total_amount AS "total",
         hb.cart_data AS "cart",
+        hb.cart_data AS "items",
         hb.notes,
-        hb.created_at AS "savedAt"
+        hb.created_at AS "savedAt",
+        to_char(hb.created_at, 'DD Mon YYYY, HH12:MI AM') AS "heldAt"
       FROM held_bills hb
       WHERE hb.status = 'HOLD'
       ORDER BY hb.created_at DESC;
     `;
     const res = await pool.query(query);
+    const bills = res.rows.map((r) => ({
+      ...r,
+      total: parseFloat(r.total) || 0,
+      itemsCount:
+        parseInt(r.itemsCount, 10) ||
+        (Array.isArray(r.cart) ? r.cart.length : 1),
+    }));
     return {
       success: true,
-      count: res.rows.length,
-      data: res.rows,
+      count: bills.length,
+      data: bills,
     };
   }
 

@@ -6,9 +6,12 @@
  * backend service is offline.
  */
 
-const API_BASE_URL = Platform.OS === 'android' ? 'http://10.0.2.2:5000/api' : 'http://localhost:5000/api';
+import { Platform } from "react-native";
 
-import { Platform } from 'react-native';
+const API_BASE_URL =
+  Platform.OS === "android"
+    ? "http://10.0.2.2:5000/api"
+    : "http://localhost:5000/api";
 
 /**
  * Helper to perform fetch with JSON body & headers
@@ -17,7 +20,7 @@ async function apiRequest(endpoint, options = {}) {
   const url = `${API_BASE_URL}${endpoint}`;
   const config = {
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
       ...options.headers,
     },
     ...options,
@@ -42,23 +45,23 @@ async function apiRequest(endpoint, options = {}) {
  */
 export async function fetchPurchases(params = {}) {
   const query = new URLSearchParams();
-  if (params.status && params.status !== 'All Statuses') {
-    query.append('status', params.status.toUpperCase().replace(' ', '_'));
+  if (params.status && params.status !== "All Statuses") {
+    query.append("status", params.status.toUpperCase().replace(" ", "_"));
   }
   if (params.search) {
-    query.append('search', params.search);
+    query.append("search", params.search);
   }
 
-  const queryString = query.toString() ? `?${query.toString()}` : '';
-  return apiRequest(`/purchases${queryString}`, { method: 'GET' });
+  const queryString = query.toString() ? `?${query.toString()}` : "";
+  return apiRequest(`/purchases${queryString}`, { method: "GET" });
 }
 
 /**
  * POST /api/purchases
  */
 export async function createPurchaseOrder(poData) {
-  return apiRequest('/purchases', {
-    method: 'POST',
+  return apiRequest("/purchases", {
+    method: "POST",
     body: JSON.stringify(poData),
   });
 }
@@ -68,7 +71,7 @@ export async function createPurchaseOrder(poData) {
  */
 export async function updatePurchaseStatus(id, status) {
   return apiRequest(`/purchases/${id}/status`, {
-    method: 'PATCH',
+    method: "PATCH",
     body: JSON.stringify({ status }),
   });
 }
@@ -78,7 +81,7 @@ export async function updatePurchaseStatus(id, status) {
  */
 export async function receivePurchaseStock(id, receiveData = {}) {
   return apiRequest(`/purchases/${id}/receive`, {
-    method: 'POST',
+    method: "POST",
     body: JSON.stringify(receiveData),
   });
 }
@@ -88,18 +91,18 @@ export async function receivePurchaseStock(id, receiveData = {}) {
  */
 export async function fetchGoodsReceipts(params = {}) {
   const query = new URLSearchParams();
-  if (params.purchaseId) query.append('purchaseId', params.purchaseId);
+  if (params.purchaseId) query.append("purchaseId", params.purchaseId);
 
-  const queryString = query.toString() ? `?${query.toString()}` : '';
-  return apiRequest(`/goods-receipts${queryString}`, { method: 'GET' });
+  const queryString = query.toString() ? `?${query.toString()}` : "";
+  return apiRequest(`/goods-receipts${queryString}`, { method: "GET" });
 }
 
 /**
  * POST /api/goods-receipts
  */
 export async function createGoodsReceipt(receiptData) {
-  return apiRequest('/goods-receipts', {
-    method: 'POST',
+  return apiRequest("/goods-receipts", {
+    method: "POST",
     body: JSON.stringify(receiptData),
   });
 }
@@ -109,7 +112,7 @@ export async function createGoodsReceipt(receiptData) {
  */
 export async function updateGoodsReceiptStatus(id, status) {
   return apiRequest(`/goods-receipts/${id}/status`, {
-    method: 'PATCH',
+    method: "PATCH",
     body: JSON.stringify({ status }),
   });
 }
@@ -119,18 +122,18 @@ export async function updateGoodsReceiptStatus(id, status) {
  */
 export async function fetchSuppliers(params = {}) {
   const query = new URLSearchParams();
-  if (params.search) query.append('search', params.search);
+  if (params.search) query.append("search", params.search);
 
-  const queryString = query.toString() ? `?${query.toString()}` : '';
-  return apiRequest(`/suppliers${queryString}`, { method: 'GET' });
+  const queryString = query.toString() ? `?${query.toString()}` : "";
+  return apiRequest(`/suppliers${queryString}`, { method: "GET" });
 }
 
 /**
  * POST /api/suppliers
  */
 export async function createSupplier(supplierData) {
-  return apiRequest('/suppliers', {
-    method: 'POST',
+  return apiRequest("/suppliers", {
+    method: "POST",
     body: JSON.stringify(supplierData),
   });
 }
@@ -140,7 +143,7 @@ export async function createSupplier(supplierData) {
  */
 export async function updateSupplierStatus(id, status) {
   return apiRequest(`/suppliers/${id}/status`, {
-    method: 'PATCH',
+    method: "PATCH",
     body: JSON.stringify({ status }),
   });
 }
@@ -150,7 +153,7 @@ export async function updateSupplierStatus(id, status) {
  */
 export async function updateSupplier(id, supplierData) {
   return apiRequest(`/suppliers/${id}`, {
-    method: 'PUT',
+    method: "PUT",
     body: JSON.stringify(supplierData),
   });
 }
@@ -160,8 +163,6 @@ export async function updateSupplier(id, supplierData) {
  */
 export async function deleteSupplier(id) {
   return apiRequest(`/suppliers/${id}`, {
-    method: 'DELETE',
+    method: "DELETE",
   });
 }
-
-

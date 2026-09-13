@@ -690,7 +690,7 @@ export default function SalesReturnsScreen({
                                   TOTAL AMOUNT
                                 </Text>
                                 <Text style={styles.invoiceTotalAmount}>
-                                  ₹{(inv.total || 0).toFixed(2)}
+                                  ₹{(Number(inv.total) || 0).toFixed(2)}
                                 </Text>
                               </View>
 
@@ -802,7 +802,7 @@ export default function SalesReturnsScreen({
                                   { flex: 1.2, textAlign: "right" },
                                 ]}
                               >
-                                ₹{(inv.total || 0).toFixed(2)}
+                                ₹{(Number(inv.total) || 0).toFixed(2)}
                               </Text>
 
                               <View style={{ flex: 1.2, alignItems: "center" }}>
@@ -875,7 +875,7 @@ export default function SalesReturnsScreen({
                       >
                         <Text style={styles.metaLabel}>Final Amount</Text>
                         <Text style={[styles.metaValue, styles.metaValueBold]}>
-                          ₹{(selectedInvoice.total || 0).toFixed(2)}
+                          ₹{(Number(selectedInvoice.total) || 0).toFixed(2)}
                         </Text>
                       </View>
                     </View>
@@ -919,12 +919,16 @@ export default function SalesReturnsScreen({
                           </View>
                           <Text style={styles.purchasedItemQty}>{it.qty}</Text>
                           <Text style={styles.purchasedItemPrice}>
-                            ₹{(it.price || it.sellingPrice || 0).toFixed(2)}
+                            ₹
+                            {(Number(it.price || it.sellingPrice) || 0).toFixed(
+                              2,
+                            )}
                           </Text>
                           <Text style={styles.purchasedItemTotal}>
                             ₹
                             {(
-                              (it.price || it.sellingPrice || 0) * (it.qty || 1)
+                              (Number(it.price || it.sellingPrice) || 0) *
+                              (Number(it.qty) || 1)
                             ).toFixed(2)}
                           </Text>
                         </View>
@@ -937,7 +941,7 @@ export default function SalesReturnsScreen({
                     <View style={styles.detailsTotalRow}>
                       <Text style={styles.detailsTotalLabel}>Total</Text>
                       <Text style={styles.detailsTotalAmount}>
-                        ₹{(selectedInvoice.total || 0).toFixed(2)}
+                        ₹{(Number(selectedInvoice.total) || 0).toFixed(2)}
                       </Text>
                     </View>
 
@@ -997,7 +1001,7 @@ export default function SalesReturnsScreen({
                     </Text>
                   </View>
                   <Text style={styles.historyRefundAmount}>
-                    ₹{(ret.amount || 0).toFixed(2)}
+                    ₹{(Number(ret.amount) || 0).toFixed(2)}
                   </Text>
                 </View>
 
@@ -1266,7 +1270,7 @@ export default function SalesReturnsScreen({
               <View style={styles.cnTotalRow}>
                 <Text style={styles.cnTotalLabel}>Total Refund Amount:</Text>
                 <Text style={styles.cnTotalValue}>
-                  ₹{(completedCreditNote.amount || 0).toFixed(2)}
+                  ₹{(Number(completedCreditNote.amount) || 0).toFixed(2)}
                 </Text>
               </View>
 
