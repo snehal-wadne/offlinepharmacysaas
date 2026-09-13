@@ -21,6 +21,7 @@ import {
   verifyPayment,
   fetchSubscriptionPlans,
 } from '../../api/superadminApi';
+import OfflineQRCode from '../../components/common/OfflineQRCode';
 
 type PaymentMethod = 'UPI' | 'Card' | 'Net Banking';
 
@@ -424,18 +425,13 @@ export default function PharmacyPaymentPage() {
 
               <View style={styles.qrBox}>
                 <View style={styles.qrPlaceholder}>
-                  <Image
-                    source={{
-                      uri: `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(
-                        `upi://pay?pa=${encodeURIComponent(
-                          upiId.trim() || 'billing@pharmaflow'
-                        )}&pn=PharmaFlow%20Technologies&am=${totalAmount}&cu=INR&tn=${encodeURIComponent(
-                          `Plan ${selectedPlan} - ${pharmacyName}`
-                        )}`
-                      )}`,
-                    }}
-                    style={styles.qrImage}
-                    resizeMode="contain"
+                  <OfflineQRCode
+                    value={`upi://pay?pa=${encodeURIComponent(
+                      upiId.trim() || 'billing@pharmaflow'
+                    )}&pn=PharmaFlow%20Technologies&am=${totalAmount}&cu=INR&tn=${encodeURIComponent(
+                      `Plan ${selectedPlan} - ${pharmacyName}`
+                    )}`}
+                    size={170}
                   />
                 </View>
 

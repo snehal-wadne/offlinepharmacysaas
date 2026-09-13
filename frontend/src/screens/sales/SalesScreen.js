@@ -15,6 +15,7 @@ import { usePos } from "../../context/PosContext";
 import BarcodeScannerModal from "../../components/common/BarcodeScannerModal";
 import { SkeletonItemCard } from "../../components/common/SkeletonLoader";
 import PaginationControls from "../../components/common/PaginationControls";
+import OfflineQRCode from "../../components/common/OfflineQRCode";
 import { generateOfflineQRCode } from "../../utils/qrGenerator";
 
 export default function SalesScreen({
@@ -1115,21 +1116,13 @@ export default function SalesScreen({
 
                 {/* Dynamic QR Code Card */}
                 <View style={styles.upiQrImageCard}>
-                  <Image
-                    source={{
-                      uri: generateOfflineQRCode(
-                        `upi://pay?pa=${encodeURIComponent(
-                          storeUpiId.trim() || "falahpharmacy@okhdfcbank"
-                        )}&pn=Falah%20Pharmacy&am=${totals.grandTotal.toFixed(
-                          2
-                        )}&cu=INR&tn=${encodeURIComponent(
-                          `POS-${Date.now().toString().slice(-6)}`
-                        )}`,
-                        260
-                      ),
-                    }}
-                    style={styles.upiQrCodeImage}
-                    resizeMode="contain"
+                  <OfflineQRCode
+                    value={`upi://pay?pa=${encodeURIComponent(
+                      storeUpiId.trim() || "falahpharmacy@okhdfcbank"
+                    )}&pn=Falah%20Pharmacy&am=${totals.grandTotal.toFixed(
+                      2
+                    )}&cu=INR&tn=POS-BILL`}
+                    size={220}
                   />
                   <View style={styles.scanTargetBadge}>
                     <Text style={styles.scanTargetBadgeText}>⚡ Scan to Pay ₹{totals.grandTotal.toFixed(2)}</Text>
@@ -1311,15 +1304,9 @@ export default function SalesScreen({
               </View>
 
               <View style={styles.receiptQrBox}>
-                <Image
-                  source={{
-                    uri: generateOfflineQRCode(
-                      `INVOICE:${completedInvoice.invoiceNo}|TOTAL:₹${completedInvoice.total}|DATE:${completedInvoice.date}`,
-                      120
-                    ),
-                  }}
-                  style={styles.receiptQrImage}
-                  resizeMode="contain"
+                <OfflineQRCode
+                  value={`INVOICE:${completedInvoice.invoiceNo}|TOTAL:₹${completedInvoice.total}|DATE:${completedInvoice.date}`}
+                  size={120}
                 />
                 <Text style={styles.receiptQrSubtitle}>Digital E-Invoice Verification</Text>
               </View>
@@ -1453,21 +1440,13 @@ export default function SalesScreen({
             </View>
 
             <View style={styles.qrStandeeImageWrapper}>
-              <Image
-                source={{
-                  uri: generateOfflineQRCode(
-                    `upi://pay?pa=${encodeURIComponent(
-                      storeUpiId.trim() || "falahpharmacy@okhdfcbank"
-                    )}&pn=Falah%20Pharmacy&am=${totals.grandTotal.toFixed(
-                      2
-                    )}&cu=INR&tn=${encodeURIComponent(
-                      `POS-${Date.now().toString().slice(-6)}`
-                    )}`,
-                    300
-                  ),
-                }}
-                style={styles.qrStandeeImage}
-                resizeMode="contain"
+              <OfflineQRCode
+                value={`upi://pay?pa=${encodeURIComponent(
+                  storeUpiId.trim() || "falahpharmacy@okhdfcbank"
+                )}&pn=Falah%20Pharmacy&am=${totals.grandTotal.toFixed(
+                  2
+                )}&cu=INR&tn=POS-STANDEE`}
+                size={280}
               />
             </View>
 

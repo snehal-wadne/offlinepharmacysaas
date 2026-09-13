@@ -16,6 +16,8 @@ import { MOCK_CUSTOMERS_LIST } from '../../data/customersMockData';
 import { useOfflineSync } from '../../offline/OfflineSyncContext';
 import { SkeletonItemCard } from '../../components/common/SkeletonLoader';
 import PaginationControls from '../../components/common/PaginationControls';
+import OfflineQRCode from '../../components/common/OfflineQRCode';
+import BarcodeScannerModal from '../../components/common/BarcodeScannerModal';
 import { generateOfflineQRCode } from '../../utils/qrGenerator';
 
 export default function PosBillingScreen({
@@ -48,6 +50,7 @@ export default function PosBillingScreen({
   // Search & Catalog State
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
 
   // Customer Selection State (BIL-11, RX-04)
   const [selectedCustomer, setSelectedCustomer] = useState({
@@ -184,6 +187,28 @@ export default function PosBillingScreen({
       ]);
     }
     if (onShowToast) onShowToast(`Added ${product.name} to cart.`);
+  };
+
+  // Barcode & QR Code Scan Handler
+  const handleBarcodeScanned = (code) => {
+    setIsScannerOpen(false);
+    if (!code) return;
+    const cleanCode = code.trim().toLowerCase();
+    const match = productsList.find(
+      (p) =>
+        (p.barcode && String(p.barcode).toLowerCase() === cleanCode) ||
+        (p.code && String(p.code).toLowerCase() === cleanCode) ||
+        (p.id && String(p.id).toLowerCase() === cleanCode) ||
+        (p.sku && String(p.sku).toLowerCase() === cleanCode) ||
+        p.name.toLowerCase().includes(cleanCode)
+    );
+    if (match) {
+      handleAddToCart(match);
+      if (onShowToast) onShowToast(`✓ Scanned & added ${match.name}`);
+    } else {
+      setSearchQuery(code);
+      if (onShowToast) onShowToast(`Searching for barcode: ${code}`);
+    }
   };
 
   // Update Item Qty
@@ -385,7 +410,7 @@ export default function PosBillingScreen({
               isMobile && { flex: 1, paddingBottom: cart.length > 0 ? 80 : 20 },
             ]}
           >
-            {/* Search Input Bar */}
+            {/* Search Input Bar with Integrated Camera Scanner */}
             <View style={styles.searchBarRow}>
               <Text style={styles.searchBarIcon}>🔍</Text>
               <TextInput
@@ -404,6 +429,25 @@ export default function PosBillingScreen({
                   <Text style={styles.clearSearchText}>✕</Text>
                 </Pressable>
               ) : null}
+              <Pressable
+                onPress={() => setIsScannerOpen(true)}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 4,
+                  backgroundColor: '#0F766E',
+                  paddingHorizontal: 10,
+                  paddingVertical: 7,
+                  borderRadius: 6,
+                  marginLeft: 6,
+                  cursor: 'pointer',
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Open Barcode & QR Scanner"
+              >
+                <Text style={{ fontSize: 13 }}>📷</Text>
+                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>Scanner</Text>
+              </Pressable>
             </View>
 
             {/* Category Chips */}
@@ -745,22 +789,14 @@ export default function PosBillingScreen({
                   <Text style={{ fontSize: 18, fontWeight: '900', color: '#0F766E' }}>₹{totals.grandTotal.toFixed(2)}</Text>
                 </View>
 
-                <View style={{ alignSelf: 'center', backgroundColor: '#FFFFFF', padding: 8, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 8 }}>
-                  <Image
-                    source={{
-                      uri: generateOfflineQRCode(
-                        `upi://pay?pa=${encodeURIComponent(
-                          storeUpiId.trim() || 'pharmaflow@okhdfcbank'
-                        )}&pn=PharmaFlow%20Pharmacy&am=${totals.grandTotal.toFixed(
-                          2
-                        )}&cu=INR&tn=${encodeURIComponent(
-                          `POS-${Date.now().toString().slice(-6)}`
-                        )}`,
-                        220
-                      ),
-                    }}
-                    style={{ width: 160, height: 160 }}
-                    resizeMode="contain"
+                <View style={{ alignSelf: 'center', backgroundColor: '#FFFFFF', padding: 8, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 8, alignItems: 'center' }}>
+                  <OfflineQRCode
+                    value={`upi://pay?pa=${encodeURIComponent(
+                      storeUpiId.trim() || 'pharmaflow@okhdfcbank'
+                    )}&pn=PharmaFlow%20Pharmacy&am=${totals.grandTotal.toFixed(
+                      2
+                    )}&cu=INR&tn=POS-BILL`}
+                    size={170}
                   />
                   <Text style={{ textAlign: 'center', fontSize: 11, fontWeight: '700', color: '#059669', marginTop: 4 }}>
                     ⚡ Scan to Pay ₹{totals.grandTotal.toFixed(2)}
@@ -925,6 +961,14 @@ export default function PosBillingScreen({
                 </Text>
               </View>
 
+              <View style={{ alignItems: 'center', marginVertical: 8 }}>
+                <OfflineQRCode
+                  value={`INVOICE:${completedInvoice.invoiceNo}|TOTAL:₹${completedInvoice.grandTotal}|DATE:${completedInvoice.date}`}
+                  size={100}
+                />
+                <Text style={{ fontSize: 10, color: '#64748B', marginTop: 4 }}>Digital E-Invoice Verification</Text>
+              </View>
+
               <Text style={styles.receiptFooterNote}>
                 Thank you! Get well soon.
               </Text>
@@ -1032,6 +1076,15 @@ export default function PosBillingScreen({
           </View>
         </View>
       </Modal>
+
+      {/* POS Universal Barcode & QR Code Scanner Modal */}
+      <BarcodeScannerModal
+        visible={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        onScan={handleBarcodeScanned}
+        mode="product"
+        title="POS Medicine & Barcode Scanner"
+      />
     </View>
   );
 }
