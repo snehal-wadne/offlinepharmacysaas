@@ -148,7 +148,7 @@ export default function CustomerLedgerScreen({ onShowToast, onNavigate }) {
       'Last Payment Amount',
       'Last Payment Date',
     ];
-    const rows = filteredAccounts.map((acc) => [
+    const rows = filteredLedgers.map((acc) => [
       acc.id || '',
       acc.name || '',
       acc.phone || '',
@@ -165,7 +165,7 @@ export default function CustomerLedgerScreen({ onShowToast, onNavigate }) {
 
     exportToCSV(headers, rows, `customer_master_credit_ledgers_${new Date().toISOString().slice(0, 10)}.csv`);
     if (onShowToast) {
-      onShowToast(`✓ Exported ${filteredAccounts.length} Master Credit Ledger records as CSV!`);
+      onShowToast(`✓ Exported ${filteredLedgers.length} Master Credit Ledger records as CSV!`);
     }
   };
 
