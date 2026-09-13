@@ -10,17 +10,36 @@
 const { Pool } = require("pg");
 require("dotenv").config();
 
+const connectionString =
+  process.env.DATABASE_URL ||
+  process.env.SUPABASE_DATABASE_URL ||
+  process.env.SUPABASE_DB_URL;
+
+const isRemoteOrSsl = Boolean(
+  connectionString ||
+  process.env.DB_SSL === "true" ||
+  (process.env.DB_HOST && !["localhost", "127.0.0.1"].includes(process.env.DB_HOST))
+);
+
 /**
  * PostgreSQL connection configuration.
+ * Supports both local PostgreSQL and Supabase / Cloud Postgres (with SSL).
  */
-const dbConfig = {
-  host: process.env.DB_HOST || "localhost",
-  port: Number(process.env.DB_PORT || 5432),
-  user: process.env.DB_USER || "postgres",
-  password: process.env.DB_PASSWORD || "Snehal",
-  database: process.env.DB_DATABASE || "falah_pharmacy",
-  connectionTimeoutMillis: 3000, // Quick timeout to avoid blocking offline requests
-};
+const dbConfig = connectionString
+  ? {
+      connectionString,
+      ssl: isRemoteOrSsl ? { rejectUnauthorized: false } : false,
+      connectionTimeoutMillis: 5000,
+    }
+  : {
+      host: process.env.DB_HOST || "localhost",
+      port: Number(process.env.DB_PORT || 5432),
+      user: process.env.DB_USER || "postgres",
+      password: process.env.DB_PASSWORD || "Snehal",
+      database: process.env.DB_DATABASE || "falah_pharmacy",
+      ssl: isRemoteOrSsl ? { rejectUnauthorized: false } : false,
+      connectionTimeoutMillis: 5000,
+    };
 
 const pool = new Pool(dbConfig);
 
