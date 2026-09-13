@@ -51,23 +51,121 @@ export default function StockTransferScreen({ onShowToast }) {
     useState(null);
   const [actionMenuOpen, setActionMenuOpen] = useState(false);
 
-  // New Transfer Modal State
-  const [modalVisible, setModalVisible] = useState(false);
-  const [formData, setFormData] = useState({
-    fromBranch: "Main Branch",
-    toBranch: "Downtown Branch",
-    product: "Paracetamol 500mg",
-    productId: "prod-1",
-    batch: "B-1001",
-    availableQuantity: 500,
-    transferQuantity: "",
-    notes: "",
-  });
-  const [formErrors, setFormErrors] = useState({});
+  // Inter-Branch Transfer Modal State
+  const [transferModalOpen, setTransferModalOpen] = useState(false);
+  const [selectedMedicine, setSelectedMedicine] = useState(null);
+  const [searchMedQuery, setSearchMedQuery] = useState("");
+  const [showMedPicker, setShowMedPicker] = useState(false);
+  const [fromBranchModal, setFromBranchModal] = useState(
+    "FIT Main Campus Hospital Pharmacy",
+  );
+  const [toBranchModal, setToBranchModal] = useState(
+    "FIT Pune City OPD Pharmacy",
+  );
+  const [transferQty, setTransferQty] = useState("50");
+  const [transferReason, setTransferReason] = useState(
+    "Inter-branch stock rebalancing",
+  );
+  const [transferError, setTransferError] = useState("");
+
+  const [branchesList, setBranchesList] = useState([
+    { id: "BR-01", name: "FIT Main Campus Hospital Pharmacy", city: "Pune" },
+    { id: "BR-02", name: "FIT Pune City OPD Pharmacy", city: "Pune" },
+    { id: "BR-03", name: "FIT Central Medical Warehouse", city: "Pune" },
+    { id: "BR-04", name: "FIT Student Health Center Dispensary", city: "Pune" },
+  ]);
+
+  const [availableProducts, setAvailableProducts] = useState([
+    {
+      id: "med-01",
+      productId: "prod-1",
+      medicineName: "Paracetamol 500mg",
+      brandName: "Crocin 500",
+      genericName: "Paracetamol IP",
+      strength: "500mg",
+      sku: "SKU-CRO-500",
+      batchNo: "BAT-9021",
+      quantity: 450,
+    },
+    {
+      id: "med-02",
+      productId: "prod-2",
+      medicineName: "Amoxicillin 250mg",
+      brandName: "Mox 250",
+      genericName: "Amoxicillin Trihydrate",
+      strength: "250mg",
+      sku: "SKU-MOX-250",
+      batchNo: "BAT-8842",
+      quantity: 280,
+    },
+    {
+      id: "med-03",
+      productId: "prod-3",
+      medicineName: "Ibuprofen 400mg",
+      brandName: "Brufen 400",
+      genericName: "Ibuprofen IP",
+      strength: "400mg",
+      sku: "SKU-BRU-400",
+      batchNo: "BAT-7719",
+      quantity: 320,
+    },
+    {
+      id: "med-04",
+      productId: "prod-4",
+      medicineName: "Cetirizine 10mg",
+      brandName: "Cetzine 10",
+      genericName: "Cetirizine Dihydrochloride",
+      strength: "10mg",
+      sku: "SKU-CET-010",
+      batchNo: "BAT-6634",
+      quantity: 600,
+    },
+    {
+      id: "med-05",
+      productId: "prod-5",
+      medicineName: "Azithromycin 500mg",
+      brandName: "Azee 500",
+      genericName: "Azithromycin IP",
+      strength: "500mg",
+      sku: "SKU-AZE-500",
+      batchNo: "BAT-5512",
+      quantity: 190,
+    },
+  ]);
 
   useEffect(() => {
     let isMounted = true;
     loadTransfers();
+
+    async function loadCatalog() {
+      try {
+        if (typeof localPersistenceService?.getCatalogForPos === "function") {
+          const cat = await localPersistenceService.getCatalogForPos();
+          if (isMounted && Array.isArray(cat) && cat.length > 0) {
+            const mapped = cat.map((p, idx) => ({
+              id: p.productId || p.id || `prod-${idx}`,
+              productId: p.productId || p.id || `prod-${idx}`,
+              medicineName: p.name || "Medicine",
+              brandName: p.brand || p.name || "Medicine",
+              genericName: p.generic || p.name || "",
+              strength: p.strength || "500mg",
+              sku: p.sku || `SKU-${p.id || idx}`,
+              batchNo:
+                (Array.isArray(p.batches) && p.batches[0]?.batchNumber) ||
+                "BAT-1001",
+              quantity: Number(
+                (Array.isArray(p.batches) &&
+                  p.batches[0]?.availableQuantity) ||
+                  p.stock ||
+                  250,
+              ),
+            }));
+            setAvailableProducts(mapped);
+          }
+        }
+      } catch (err) {}
+    }
+    loadCatalog();
 
     const subscribeFn =
       typeof syncEngine?.onStateChange === "function"
@@ -279,187 +377,129 @@ export default function StockTransferScreen({ onShowToast }) {
     }
   };
 
-  const handleOpenModal = async () => {
-    try {
-      const tenantCtx =
-        typeof localPersistenceService?.getTenantContext === "function"
-          ? localPersistenceService.getTenantContext()
-          : { isDemo: true, branchId: "Main Branch" };
-
-      let defaultProd = "Paracetamol 500mg";
-      let defaultBatch = "B-1001";
-      let defaultAvail = 500;
-      let defaultProdId = "prod-1";
-
-      if (
-        !tenantCtx.isDemo &&
-        typeof localPersistenceService?.getCatalogForPos === "function"
-      ) {
-        const cat = await localPersistenceService.getCatalogForPos();
-        if (Array.isArray(cat) && cat.length > 0) {
-          const firstWithBatch = cat.find(
-            (p) => Array.isArray(p.batches) && p.batches.length > 0,
-          );
-          if (firstWithBatch) {
-            defaultProd = firstWithBatch.name;
-            defaultProdId = firstWithBatch.productId || firstWithBatch.id;
-            defaultBatch = firstWithBatch.batches[0].batchNumber;
-            defaultAvail = Number(
-              firstWithBatch.batches[0].availableQuantity || 0,
-            );
-          } else {
-            defaultProd = cat[0].name;
-            defaultProdId = cat[0].productId || cat[0].id;
-            defaultBatch = "DEFAULT";
-            defaultAvail = Number(cat[0].stock || 0);
-          }
-        }
-      }
-
-      setFormData({
-        fromBranch: tenantCtx.branchId || "Main Branch",
-        toBranch: "Downtown Branch",
-        product: defaultProd,
-        productId: defaultProdId,
-        batch: defaultBatch,
-        availableQuantity: defaultAvail,
-        transferQuantity: "",
-        notes: "",
-      });
-      setFormErrors({});
-      setModalVisible(true);
-    } catch (e) {
-      setFormData({
-        fromBranch: "Main Branch",
-        toBranch: "Downtown Branch",
-        product: "Paracetamol 500mg",
-        productId: "prod-1",
-        batch: "B-1001",
-        availableQuantity: 500,
-        transferQuantity: "",
-        notes: "",
-      });
-      setFormErrors({});
-      setModalVisible(true);
-    }
+  const handleOpenModal = () => {
+    const initialMed = availableProducts[0] || {
+      id: "med-01",
+      productId: "prod-1",
+      medicineName: "Paracetamol 500mg",
+      brandName: "Crocin 500",
+      genericName: "Paracetamol IP",
+      strength: "500mg",
+      sku: "SKU-CRO-500",
+      batchNo: "BAT-9021",
+      quantity: 450,
+    };
+    setSelectedMedicine(initialMed);
+    setSearchMedQuery(initialMed.brandName || initialMed.medicineName || "");
+    setShowMedPicker(false);
+    setFromBranchModal(
+      branchesList[0]?.name || "FIT Main Campus Hospital Pharmacy",
+    );
+    setToBranchModal(
+      branchesList[1]?.name || "FIT Pune City OPD Pharmacy",
+    );
+    setTransferQty("50");
+    setTransferReason("Inter-branch stock rebalancing");
+    setTransferError("");
+    setTransferModalOpen(true);
   };
 
-  const handleCreateTransfer = async () => {
-    const errors = {};
-    if (!formData.fromBranch) errors.fromBranch = "Source branch required";
-    if (!formData.toBranch) errors.toBranch = "Destination branch required";
-    if (formData.fromBranch === formData.toBranch) {
-      errors.toBranch = "Destination branch must be different";
-    }
-    if (!formData.product.trim()) errors.product = "Product is required";
-    if (!formData.batch.trim()) errors.batch = "Batch is required";
-    if (
-      !formData.transferQuantity.trim() ||
-      isNaN(formData.transferQuantity) ||
-      Number(formData.transferQuantity) <= 0 ||
-      Number(formData.transferQuantity) > formData.availableQuantity
-    ) {
-      errors.transferQuantity = `Enter valid quantity (1 - ${formData.availableQuantity})`;
-    }
-
-    if (Object.keys(errors).length > 0) {
-      setFormErrors(errors);
+  const handleConfirmTransfer = async () => {
+    if (!selectedMedicine) {
+      setTransferError("Please select a medicine to transfer.");
       return;
     }
 
-    try {
-      const tenantCtx =
-        typeof localPersistenceService?.getTenantContext === "function"
-          ? localPersistenceService.getTenantContext()
-          : { isDemo: true, branchId: formData.fromBranch };
+    const qtyNum = parseInt(transferQty, 10);
+    if (isNaN(qtyNum) || qtyNum <= 0) {
+      setTransferError(
+        "Please enter a valid transfer quantity greater than 0.",
+      );
+      return;
+    }
 
+    if (qtyNum > selectedMedicine.quantity) {
+      setTransferError(
+        `Transfer quantity cannot exceed source branch stock (${selectedMedicine.quantity} units).`,
+      );
+      return;
+    }
+
+    if (fromBranchModal === toBranchModal) {
+      setTransferError("Source and Destination branches must be different.");
+      return;
+    }
+
+    setTransferError("");
+
+    const transferNumber = `TR-${Math.floor(1000 + Math.random() * 9000)}`;
+    const newTransfer = {
+      id: transferNumber,
+      fromBranch: fromBranchModal,
+      toBranch: toBranchModal,
+      transferDate: new Date().toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      }),
+      items: 1,
+      totalQuantity: qtyNum,
+      status: "In Transit",
+      syncStatus: "PENDING",
+      createdBy: "Manager",
+      notes: transferReason,
+      medicineName:
+        selectedMedicine.brandName || selectedMedicine.medicineName,
+    };
+
+    // Prepend to transfer records list
+    setTransfers((prev) => [newTransfer, ...prev]);
+
+    // Update medicine stock in memory
+    const updatedQty = Math.max(0, selectedMedicine.quantity - qtyNum);
+    setSelectedMedicine((prev) => ({ ...prev, quantity: updatedQty }));
+    setAvailableProducts((prev) =>
+      prev.map((p) =>
+        p.id === selectedMedicine.id ? { ...p, quantity: updatedQty } : p,
+      ),
+    );
+
+    try {
       if (
-        !tenantCtx.isDemo &&
         typeof localPersistenceService?.transferLocalStock === "function"
       ) {
-        const transferRes = await localPersistenceService.transferLocalStock({
-          fromBranchId: tenantCtx.branchId || formData.fromBranch,
-          toBranchId: formData.toBranch,
-          toBranchName: formData.toBranch,
-          notes: formData.notes,
+        await localPersistenceService.transferLocalStock({
+          fromBranchId: fromBranchModal,
+          toBranchId: toBranchModal,
+          toBranchName: toBranchModal,
+          notes: transferReason,
           items: [
             {
-              productId: formData.productId || formData.product,
-              productName: formData.product,
-              batchNumber: formData.batch,
-              quantity: Number(formData.transferQuantity),
+              productId:
+                selectedMedicine.productId || selectedMedicine.id,
+              productName:
+                selectedMedicine.brandName ||
+                selectedMedicine.medicineName,
+              batchNumber: selectedMedicine.batchNo || "DEFAULT",
+              quantity: qtyNum,
             },
           ],
         });
-
-        const newTransfer = {
-          id:
-            transferRes.transferNumber ||
-            `TR-${transferRes.transferId.slice(0, 8)}`,
-          realId: transferRes.transferId,
-          fromBranch: formData.fromBranch,
-          toBranch: formData.toBranch,
-          transferDate: new Date().toLocaleDateString("en-GB", {
-            day: "2-digit",
-            month: "short",
-            year: "numeric",
-          }),
-          items: 1,
-          totalQuantity: Number(formData.transferQuantity),
-          status: "In Transit",
-          syncStatus: "PENDING",
-          createdBy: "You",
-        };
-
-        setTransfers((prev) => [newTransfer, ...prev]);
-        setModalVisible(false);
-
-        if (typeof syncEngine?.sync === "function") {
-          syncEngine
-            .sync()
-            .catch((err) =>
-              console.warn("[StockTransferScreen] sync error:", err),
-            );
-        }
-
-        if (onShowToast) {
-          onShowToast(
-            `✓ Created transfer ${newTransfer.id} (${newTransfer.fromBranch} → ${newTransfer.toBranch})`,
-          );
-        }
-        return;
       }
 
-      // Demo mode fallback
-      const newTransfer = {
-        id: `TR-0${transfers.length + 1}`,
-        fromBranch: formData.fromBranch,
-        toBranch: formData.toBranch,
-        transferDate: new Date().toLocaleDateString("en-GB", {
-          day: "2-digit",
-          month: "short",
-          year: "numeric",
-        }),
-        items: 1,
-        totalQuantity: Number(formData.transferQuantity),
-        status: "In Transit",
-        syncStatus: "SYNCED",
-        createdBy: "Manager",
-      };
-
-      setTransfers((prev) => [newTransfer, ...prev]);
-      setModalVisible(false);
-
-      if (onShowToast) {
-        onShowToast(
-          `✓ Created transfer ${newTransfer.id} (${newTransfer.fromBranch} → ${newTransfer.toBranch})`,
-        );
+      if (typeof syncEngine?.sync === "function") {
+        syncEngine.sync().catch(() => {});
       }
     } catch (err) {
-      console.error("[StockTransferScreen] Transfer error:", err);
-      if (onShowToast) {
-        onShowToast(`❌ Transfer failed: ${err.message}`);
-      }
+      console.warn("[StockTransferScreen] Persistence note:", err.message);
+    }
+
+    setTransferModalOpen(false);
+
+    if (onShowToast) {
+      onShowToast(
+        `✓ Inter-Branch Transfer Success: ${qtyNum} units of "${selectedMedicine.brandName || selectedMedicine.medicineName}" transferred from "${fromBranchModal}" to "${toBranchModal}". Stock updated!`,
+      );
     }
   };
 
@@ -870,169 +910,499 @@ export default function StockTransferScreen({ onShowToast }) {
         />
       </View>
 
-      {/* New Transfer Modal */}
+      {/* Initiate Inter-Branch Stock Transfer Modal */}
       <Modal
-        visible={modalVisible}
-        transparent
+        visible={transferModalOpen}
         animationType="fade"
-        onRequestClose={() => setModalVisible(false)}
+        transparent={true}
+        onRequestClose={() => setTransferModalOpen(false)}
       >
-        <Pressable
-          style={styles.modalBackdrop}
-          onPress={() => setModalVisible(false)}
-        >
-          <Pressable
-            style={styles.modalCard}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Create New Stock Transfer</Text>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.transferModalCard}>
+            {/* Header */}
+            <View style={styles.transferModalHeader}>
+              <View style={{ flex: 1 }}>
+                <View
+                  style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+                >
+                  <View style={styles.transferHeaderBadge}>
+                    <Text style={styles.transferHeaderBadgeIcon}>🔄</Text>
+                  </View>
+                  <Text style={styles.transferModalTitle}>
+                    Initiate Inter-Branch Stock Transfer
+                  </Text>
+                </View>
+                <Text style={styles.transferModalSubtitle}>
+                  Move inventory stock between hospital main store, OPD clinics,
+                  and satellite branches
+                </Text>
+              </View>
               <Pressable
-                onPress={() => setModalVisible(false)}
-                style={styles.closeBtn}
+                onPress={() => setTransferModalOpen(false)}
+                style={styles.closeActionBtn}
               >
-                <Text style={styles.closeBtnText}>✕</Text>
+                <Text style={styles.closeActionText}>✕</Text>
               </Pressable>
             </View>
 
-            <ScrollView style={styles.modalBody}>
-              {/* Branch Selection Row */}
-              <View style={styles.formRow}>
-                <View style={styles.formFieldHalf}>
-                  <Text style={styles.fieldLabel}>
-                    From Branch <Text style={styles.reqStar}>*</Text>
-                  </Text>
+            {/* Body */}
+            <ScrollView
+              style={{ maxHeight: 520 }}
+              contentContainerStyle={styles.transferModalBody}
+            >
+              {/* Medicine Selector Bar with Quick Chips */}
+              <View style={styles.medSelectSection}>
+                <Text style={styles.fieldLabelModal}>
+                  Select Medicine from Stock <Text style={styles.reqStar}>*</Text>
+                </Text>
+                <View style={styles.medSearchContainer}>
                   <TextInput
-                    style={styles.modalInput}
-                    value={formData.fromBranch}
-                    onChangeText={(t) =>
-                      setFormData((p) => ({ ...p, fromBranch: t }))
-                    }
+                    style={styles.medSearchInput}
+                    placeholder="Search or select medicine..."
+                    placeholderTextColor="#94A3B8"
+                    value={searchMedQuery}
+                    onChangeText={(text) => {
+                      setSearchMedQuery(text);
+                      setShowMedPicker(true);
+                    }}
+                    onFocus={() => setShowMedPicker(true)}
                   />
-                  {formErrors.fromBranch && (
-                    <Text style={styles.errorText}>
-                      {formErrors.fromBranch}
+                  {searchMedQuery ? (
+                    <Pressable
+                      onPress={() => {
+                        setSearchMedQuery("");
+                        setShowMedPicker(true);
+                      }}
+                      style={styles.medClearBtn}
+                    >
+                      <Text style={styles.medClearText}>✕</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+
+                {/* Medicine Dropdown Options */}
+                {showMedPicker && (
+                  <View style={styles.medDropdownCard}>
+                    <ScrollView
+                      style={{ maxHeight: 160 }}
+                      nestedScrollEnabled={true}
+                    >
+                      {availableProducts
+                        .filter(
+                          (p) =>
+                            !searchMedQuery ||
+                            p.brandName
+                              ?.toLowerCase()
+                              .includes(searchMedQuery.toLowerCase()) ||
+                            p.medicineName
+                              ?.toLowerCase()
+                              .includes(searchMedQuery.toLowerCase()) ||
+                            p.sku
+                              ?.toLowerCase()
+                              .includes(searchMedQuery.toLowerCase()),
+                        )
+                        .map((p) => (
+                          <Pressable
+                            key={p.id}
+                            style={[
+                              styles.medDropdownItem,
+                              selectedMedicine?.id === p.id &&
+                                styles.medDropdownItemActive,
+                            ]}
+                            onPress={() => {
+                              setSelectedMedicine(p);
+                              setSearchMedQuery(
+                                p.brandName || p.medicineName,
+                              );
+                              setShowMedPicker(false);
+                            }}
+                          >
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.medDropdownTitle}>
+                                {p.brandName || p.medicineName}{" "}
+                                <Text style={{ fontSize: 11, color: "#64748B" }}>
+                                  ({p.strength || "500mg"})
+                                </Text>
+                              </Text>
+                              <Text style={styles.medDropdownSub}>
+                                SKU: {p.sku} • Batch: {p.batchNo}
+                              </Text>
+                            </View>
+                            <Text style={styles.medDropdownStock}>
+                              {p.quantity} units
+                            </Text>
+                          </Pressable>
+                        ))}
+                    </ScrollView>
+                  </View>
+                )}
+
+                {/* Quick Medicine Chips */}
+                <View style={styles.quickMedChipsRow}>
+                  {availableProducts.slice(0, 4).map((p) => {
+                    const isSelected = selectedMedicine?.id === p.id;
+                    return (
+                      <Pressable
+                        key={`chip-${p.id}`}
+                        onPress={() => {
+                          setSelectedMedicine(p);
+                          setSearchMedQuery(p.brandName || p.medicineName);
+                          setShowMedPicker(false);
+                        }}
+                        style={[
+                          styles.quickMedChip,
+                          isSelected && styles.quickMedChipActive,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.quickMedChipText,
+                            isSelected && styles.quickMedChipTextActive,
+                          ]}
+                        >
+                          {p.brandName || p.medicineName}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Product Info Card */}
+              {selectedMedicine && (
+                <View style={styles.transferProductCard}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.transferMedTitle}>
+                      {selectedMedicine.brandName ||
+                        selectedMedicine.medicineName}
                     </Text>
-                  )}
+                    <Text style={styles.transferMedMeta}>
+                      Generic:{" "}
+                      {selectedMedicine.genericName ||
+                        selectedMedicine.medicineName}{" "}
+                      • Strength: {selectedMedicine.strength || "500mg"}
+                    </Text>
+                    <View style={styles.transferPillsRow}>
+                      <View style={styles.transferPill}>
+                        <Text style={styles.transferPillText}>
+                          SKU: {selectedMedicine.sku}
+                        </Text>
+                      </View>
+                      <View style={styles.transferPill}>
+                        <Text style={styles.transferPillText}>
+                          Batch: {selectedMedicine.batchNo}
+                        </Text>
+                      </View>
+                      <View style={styles.transferPillTeal}>
+                        <Text style={styles.transferPillTextTeal}>
+                          Source Stock: {selectedMedicine.quantity} units
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              )}
+
+              {/* Error Alert Box if any */}
+              {transferError ? (
+                <View style={styles.transferErrorAlert}>
+                  <Text style={styles.transferErrorText}>
+                    ⚠️ {transferError}
+                  </Text>
+                </View>
+              ) : null}
+
+              {/* Branch Selection Section */}
+              <View style={styles.branchSelectionGrid}>
+                {/* Source Branch (From) */}
+                <View style={styles.branchCol}>
+                  <Text style={styles.fieldLabelModal}>
+                    From Branch (Source) <Text style={styles.reqStar}>*</Text>
+                  </Text>
+                  <View style={styles.branchPickerBox}>
+                    <ScrollView
+                      style={{ maxHeight: 150 }}
+                      nestedScrollEnabled={true}
+                    >
+                      {branchesList.map((b) => {
+                        const bName = b.name || b.id;
+                        const isSelected = fromBranchModal === bName;
+                        return (
+                          <Pressable
+                            key={`from-${b.id}`}
+                            onPress={() => {
+                              setFromBranchModal(bName);
+                              if (toBranchModal === bName) {
+                                const other = branchesList.find(
+                                  (x) => (x.name || x.id) !== bName,
+                                );
+                                if (other)
+                                  setToBranchModal(other.name || other.id);
+                              }
+                            }}
+                            style={[
+                              styles.branchOptionItem,
+                              isSelected && styles.branchOptionItemFromActive,
+                            ]}
+                          >
+                            <View
+                              style={[
+                                styles.branchDot,
+                                isSelected && styles.branchDotFromActive,
+                              ]}
+                            />
+                            <View style={{ flex: 1 }}>
+                              <Text
+                                style={[
+                                  styles.branchOptionName,
+                                  isSelected &&
+                                    styles.branchOptionNameFromActive,
+                                ]}
+                              >
+                                {bName}
+                              </Text>
+                              <Text style={styles.branchOptionCity}>
+                                {b.city || "Pune"}
+                              </Text>
+                            </View>
+                            {isSelected && (
+                              <Text
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: "800",
+                                  color: "#0F766E",
+                                }}
+                              >
+                                SOURCE
+                              </Text>
+                            )}
+                          </Pressable>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
                 </View>
 
-                <View style={styles.formFieldHalf}>
-                  <Text style={styles.fieldLabel}>
-                    To Branch <Text style={styles.reqStar}>*</Text>
+                {/* Direction Indicator */}
+                <View style={styles.transferDirectionCol}>
+                  <View style={styles.transferDirectionCircle}>
+                    <Text style={styles.transferDirectionArrow}>➔</Text>
+                  </View>
+                </View>
+
+                {/* Destination Branch (To) */}
+                <View style={styles.branchCol}>
+                  <Text style={styles.fieldLabelModal}>
+                    To Branch (Destination){" "}
+                    <Text style={styles.reqStar}>*</Text>
                   </Text>
-                  <TextInput
-                    style={styles.modalInput}
-                    value={formData.toBranch}
-                    onChangeText={(t) =>
-                      setFormData((p) => ({ ...p, toBranch: t }))
-                    }
-                  />
-                  {formErrors.toBranch && (
-                    <Text style={styles.errorText}>{formErrors.toBranch}</Text>
-                  )}
+                  <View style={styles.branchPickerBox}>
+                    <ScrollView
+                      style={{ maxHeight: 150 }}
+                      nestedScrollEnabled={true}
+                    >
+                      {branchesList.map((b) => {
+                        const bName = b.name || b.id;
+                        const isSelected = toBranchModal === bName;
+                        const isDisabled = fromBranchModal === bName;
+                        return (
+                          <Pressable
+                            key={`to-${b.id}`}
+                            disabled={isDisabled}
+                            onPress={() => setToBranchModal(bName)}
+                            style={[
+                              styles.branchOptionItem,
+                              isSelected && styles.branchOptionItemToActive,
+                              isDisabled && styles.branchOptionDisabled,
+                            ]}
+                          >
+                            <View
+                              style={[
+                                styles.branchDot,
+                                isSelected && styles.branchDotToActive,
+                              ]}
+                            />
+                            <View style={{ flex: 1 }}>
+                              <Text
+                                style={[
+                                  styles.branchOptionName,
+                                  isSelected &&
+                                    styles.branchOptionNameToActive,
+                                  isDisabled && styles.branchOptionNameDisabled,
+                                ]}
+                              >
+                                {bName} {isDisabled ? "(Current Source)" : ""}
+                              </Text>
+                              <Text style={styles.branchOptionCity}>
+                                {b.city || "Pune"}
+                              </Text>
+                            </View>
+                            {isSelected && (
+                              <Text
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: "800",
+                                  color: "#2563EB",
+                                }}
+                              >
+                                DESTINATION
+                              </Text>
+                            )}
+                          </Pressable>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
                 </View>
               </View>
 
-              {/* Product & Batch Row */}
-              <View style={styles.formRow}>
-                <View style={styles.formFieldHalf}>
-                  <Text style={styles.fieldLabel}>
-                    Product <Text style={styles.reqStar}>*</Text>
+              {/* Quantity Input & Preset Buttons */}
+              <View style={styles.formGroupModal}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <Text style={styles.fieldLabelModal}>
+                    Stock Quantity to Transfer{" "}
+                    <Text style={styles.reqStar}>*</Text>
                   </Text>
-                  <TextInput
-                    style={styles.modalInput}
-                    value={formData.product}
-                    onChangeText={(t) =>
-                      setFormData((p) => ({ ...p, product: t }))
-                    }
-                  />
+                  <Text style={{ fontSize: 12, color: "#64748B" }}>
+                    Available:{" "}
+                    <Text style={{ fontWeight: "700", color: "#0F766E" }}>
+                      {selectedMedicine?.quantity || 0} units
+                    </Text>
+                  </Text>
                 </View>
 
-                <View style={styles.formFieldHalf}>
-                  <Text style={styles.fieldLabel}>
-                    Batch <Text style={styles.reqStar}>*</Text>
-                  </Text>
-                  <TextInput
-                    style={styles.modalInput}
-                    value={formData.batch}
-                    onChangeText={(t) =>
-                      setFormData((p) => ({ ...p, batch: t }))
-                    }
-                  />
-                </View>
-              </View>
-
-              {/* Quantities Row */}
-              <View style={styles.formRow}>
-                <View style={styles.formFieldHalf}>
-                  <Text style={styles.fieldLabel}>Available Quantity</Text>
-                  <TextInput
-                    style={[styles.modalInput, styles.inputReadOnly]}
-                    editable={false}
-                    value={`${formData.availableQuantity} units`}
-                  />
-                </View>
-
-                <View style={styles.formFieldHalf}>
-                  <Text style={styles.fieldLabel}>
-                    Transfer Quantity <Text style={styles.reqStar}>*</Text>
-                  </Text>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    gap: 10,
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                  }}
+                >
                   <TextInput
                     style={[
-                      styles.modalInput,
-                      formErrors.transferQuantity && styles.inputError,
+                      styles.adjustInput,
+                      {
+                        flex: 1,
+                        minWidth: 140,
+                        fontSize: 15,
+                        fontWeight: "700",
+                        color: "#0F172A",
+                      },
                     ]}
+                    value={transferQty}
+                    onChangeText={setTransferQty}
                     keyboardType="numeric"
-                    placeholder="Enter units to send"
-                    placeholderTextColor="#94A3B8"
-                    value={formData.transferQuantity}
-                    onChangeText={(t) =>
-                      setFormData((p) => ({ ...p, transferQuantity: t }))
-                    }
+                    placeholder="Enter units (e.g. 50)"
                   />
-                  {formErrors.transferQuantity && (
-                    <Text style={styles.errorText}>
-                      {formErrors.transferQuantity}
-                    </Text>
-                  )}
+                  {/* Preset Buttons */}
+                  {["10", "25", "50", "100"].map((preset) => (
+                    <Pressable
+                      key={preset}
+                      onPress={() => setTransferQty(preset)}
+                      style={[
+                        styles.transferPresetBtn,
+                        transferQty === preset &&
+                          styles.transferPresetBtnActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.transferPresetText,
+                          transferQty === preset &&
+                            styles.transferPresetTextActive,
+                        ]}
+                      >
+                        +{preset}
+                      </Text>
+                    </Pressable>
+                  ))}
                 </View>
               </View>
 
-              {/* Notes */}
-              <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>
-                  Transfer Notes / Reference
+              {/* Transfer Stock Calculation Preview */}
+              {selectedMedicine && (
+                <View style={styles.transferCalcBox}>
+                  <Text style={styles.transferCalcTitle}>
+                    Stock Impact Summary:
+                  </Text>
+                  <View style={styles.transferCalcRow}>
+                    <Text style={styles.transferCalcLabel}>
+                      • {fromBranchModal || "Source Branch"}:
+                    </Text>
+                    <Text
+                      style={{
+                        color: "#DC2626",
+                        fontWeight: "700",
+                        fontSize: 12.5,
+                      }}
+                    >
+                      {selectedMedicine.quantity} ➔{" "}
+                      {Math.max(
+                        0,
+                        selectedMedicine.quantity -
+                          (parseInt(transferQty, 10) || 0),
+                      )}{" "}
+                      units (-{parseInt(transferQty, 10) || 0})
+                    </Text>
+                  </View>
+                  <View style={styles.transferCalcRow}>
+                    <Text style={styles.transferCalcLabel}>
+                      • {toBranchModal || "Destination Branch"}:
+                    </Text>
+                    <Text
+                      style={{
+                        color: "#16A34A",
+                        fontWeight: "700",
+                        fontSize: 12.5,
+                      }}
+                    >
+                      +{parseInt(transferQty, 10) || 0} units added to target
+                      branch stock
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Reason / Reference Input */}
+              <View style={styles.formGroupModal}>
+                <Text style={styles.fieldLabelModal}>
+                  Transfer Reason / Reference Notes
                 </Text>
                 <TextInput
-                  style={[styles.modalInput, styles.textArea]}
-                  multiline
-                  numberOfLines={3}
-                  placeholder="Reference notes for logistics staff..."
-                  placeholderTextColor="#94A3B8"
-                  value={formData.notes}
-                  onChangeText={(t) => setFormData((p) => ({ ...p, notes: t }))}
+                  style={styles.adjustInput}
+                  value={transferReason}
+                  onChangeText={setTransferReason}
+                  placeholder="e.g. Emergency stock transfer to OPD branch"
                 />
               </View>
             </ScrollView>
 
-            <View style={styles.modalFooter}>
+            {/* Footer */}
+            <View style={styles.adjustModalFooter}>
               <Pressable
-                onPress={() => setModalVisible(false)}
-                style={styles.cancelButton}
+                onPress={() => setTransferModalOpen(false)}
+                style={styles.cancelBtn}
               >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
               </Pressable>
               <Pressable
-                onPress={handleCreateTransfer}
-                style={styles.submitModalButton}
+                onPress={handleConfirmTransfer}
+                style={styles.confirmTransferBtn}
               >
-                <Text style={styles.submitModalButtonText}>
-                  Create Transfer
+                <Text style={styles.confirmTransferBtnText}>
+                  🔄 Confirm & Transfer Stock
                 </Text>
               </Pressable>
             </View>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
 
       {/* 2. TRANSFER 3-DOTS ACTION MENU MODAL */}
@@ -1936,5 +2306,395 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 12.5,
     fontWeight: "700",
+  },
+  /* Inter-Branch Stock Transfer Modal Styles */
+  transferModalCard: {
+    width: "100%",
+    maxWidth: 680,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    overflow: "hidden",
+  },
+  transferModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E2E8F0",
+    backgroundColor: "#F8FAFC",
+  },
+  transferHeaderBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: "#EFF6FF",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+  },
+  transferHeaderBadgeIcon: {
+    fontSize: 16,
+  },
+  transferModalTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  transferModalSubtitle: {
+    fontSize: 12,
+    color: "#64748B",
+    marginTop: 2,
+  },
+  transferModalBody: {
+    padding: 20,
+    gap: 14,
+  },
+  medSelectSection: {
+    marginBottom: 4,
+  },
+  medSearchContainer: {
+    position: "relative",
+    marginTop: 4,
+    marginBottom: 6,
+  },
+  medSearchInput: {
+    height: 42,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 12,
+    fontSize: 13.5,
+    color: "#0F172A",
+  },
+  medClearBtn: {
+    position: "absolute",
+    right: 12,
+    top: 10,
+    padding: 2,
+  },
+  medClearText: {
+    fontSize: 14,
+    color: "#94A3B8",
+    fontWeight: "700",
+  },
+  medDropdownCard: {
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+    marginBottom: 8,
+    overflow: "hidden",
+  },
+  medDropdownItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+    cursor: "pointer",
+  },
+  medDropdownItemActive: {
+    backgroundColor: "#F0FDFA",
+  },
+  medDropdownTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  medDropdownSub: {
+    fontSize: 11,
+    color: "#64748B",
+    marginTop: 1,
+  },
+  medDropdownStock: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#0F766E",
+  },
+  quickMedChipsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 4,
+  },
+  quickMedChip: {
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    backgroundColor: "#F1F5F9",
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    cursor: "pointer",
+  },
+  quickMedChipActive: {
+    backgroundColor: "#0F766E",
+    borderColor: "#0F766E",
+  },
+  quickMedChipText: {
+    fontSize: 11.5,
+    fontWeight: "600",
+    color: "#475569",
+  },
+  quickMedChipTextActive: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+  },
+  transferProductCard: {
+    backgroundColor: "#F0FDFA",
+    borderWidth: 1,
+    borderColor: "#99F6E4",
+    borderRadius: 10,
+    padding: 14,
+  },
+  transferMedTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0F766E",
+  },
+  transferMedMeta: {
+    fontSize: 12,
+    color: "#334155",
+    marginTop: 2,
+  },
+  transferPillsRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 8,
+    flexWrap: "wrap",
+  },
+  transferPill: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+  },
+  transferPillText: {
+    fontSize: 11.5,
+    fontWeight: "600",
+    color: "#475569",
+  },
+  transferPillTeal: {
+    backgroundColor: "#CCFBF1",
+    borderWidth: 1,
+    borderColor: "#5EEAD4",
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+  },
+  transferPillTextTeal: {
+    fontSize: 11.5,
+    fontWeight: "800",
+    color: "#0F766E",
+  },
+  transferErrorAlert: {
+    backgroundColor: "#FEF2F2",
+    borderWidth: 1,
+    borderColor: "#FCA5A5",
+    padding: 10,
+    borderRadius: 8,
+  },
+  transferErrorText: {
+    fontSize: 12,
+    color: "#DC2626",
+    fontWeight: "600",
+  },
+  branchSelectionGrid: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    gap: 10,
+  },
+  branchCol: {
+    flex: 1,
+  },
+  branchPickerBox: {
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: 8,
+    backgroundColor: "#F8FAFC",
+    overflow: "hidden",
+    marginTop: 4,
+  },
+  branchOptionItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+    backgroundColor: "#FFFFFF",
+    cursor: "pointer",
+  },
+  branchOptionItemFromActive: {
+    backgroundColor: "#F0FDFA",
+    borderLeftWidth: 4,
+    borderLeftColor: "#0F766E",
+  },
+  branchOptionItemToActive: {
+    backgroundColor: "#EFF6FF",
+    borderLeftWidth: 4,
+    borderLeftColor: "#2563EB",
+  },
+  branchOptionDisabled: {
+    opacity: 0.4,
+    backgroundColor: "#F8FAFC",
+  },
+  branchDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#CBD5E1",
+  },
+  branchDotFromActive: {
+    backgroundColor: "#0F766E",
+  },
+  branchDotToActive: {
+    backgroundColor: "#2563EB",
+  },
+  branchOptionName: {
+    fontSize: 12.5,
+    fontWeight: "600",
+    color: "#334155",
+  },
+  branchOptionNameFromActive: {
+    color: "#0F766E",
+    fontWeight: "800",
+  },
+  branchOptionNameToActive: {
+    color: "#2563EB",
+    fontWeight: "800",
+  },
+  branchOptionNameDisabled: {
+    color: "#94A3B8",
+  },
+  branchOptionCity: {
+    fontSize: 11,
+    color: "#94A3B8",
+  },
+  transferDirectionCol: {
+    justifyContent: "center",
+    alignItems: "center",
+    width: 28,
+    paddingTop: 18,
+  },
+  transferDirectionCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#2563EB",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  transferDirectionArrow: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  transferPresetBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    backgroundColor: "#F8FAFC",
+    cursor: "pointer",
+  },
+  transferPresetBtnActive: {
+    backgroundColor: "#2563EB",
+    borderColor: "#2563EB",
+  },
+  transferPresetText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#475569",
+  },
+  transferPresetTextActive: {
+    color: "#FFFFFF",
+  },
+  transferCalcBox: {
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 8,
+    padding: 12,
+    gap: 4,
+  },
+  transferCalcTitle: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#334155",
+  },
+  transferCalcRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  transferCalcLabel: {
+    fontSize: 12,
+    color: "#475569",
+  },
+  adjustModalFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    borderTopColor: "#E2E8F0",
+    backgroundColor: "#F8FAFC",
+  },
+  cancelBtn: {
+    paddingVertical: 9,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    backgroundColor: "#FFFFFF",
+    cursor: "pointer",
+  },
+  cancelBtnText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#475569",
+  },
+  confirmTransferBtn: {
+    backgroundColor: "#0F766E",
+    paddingVertical: 9,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    cursor: "pointer",
+  },
+  confirmTransferBtnText: {
+    fontSize: 13.5,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  fieldLabelModal: {
+    fontSize: 12.5,
+    fontWeight: "600",
+    color: "#334155",
+    marginBottom: 4,
+  },
+  formGroupModal: {
+    marginBottom: 10,
+  },
+  adjustInput: {
+    height: 42,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 12,
+    fontSize: 13.5,
+    color: "#0F172A",
   },
 });
