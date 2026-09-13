@@ -150,8 +150,10 @@ const openSession = async ({
           WHERE id = $3 AND organisation_id = $2 AND branch_id = $1
         ) AS register_exists,
         EXISTS (
-          SELECT 1 FROM organisation_memberships
-          WHERE user_id = $4 AND organisation_id = $2 AND status = 'ACTIVE'
+          SELECT 1 FROM users u
+          LEFT JOIN organisation_memberships om ON om.user_id = u.id AND om.organisation_id = $2
+          LEFT JOIN organisations o ON o.id = $2 AND o.owner_id = u.id
+          WHERE u.id = $4 AND (om.status = 'ACTIVE' OR u.is_platform_superadmin = TRUE OR o.id IS NOT NULL)
         ) AS cashier_exists;
     `;
 
@@ -466,7 +468,7 @@ const closeSession = async (
     const movementsRes = await dbClient.query(
       `
       SELECT
-        COALESCE(SUM(CASE WHEN cm.movement_type = 'IN' THEN cm.amount ELSE 0 END), 0) AS cash_in,
+        COALESCE(SUM(CASE WHEN cm.movement_type = 'IN' AND (cm.reason != 'Opening float balance' OR cm.reason IS NULL) THEN cm.amount ELSE 0 END), 0) AS cash_in,
         COALESCE(SUM(CASE WHEN cm.movement_type = 'OUT' THEN cm.amount ELSE 0 END), 0) AS cash_out
       FROM cash_movements cm
       WHERE cm.organisation_id = $1

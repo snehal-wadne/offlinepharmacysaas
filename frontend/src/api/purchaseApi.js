@@ -13,11 +13,11 @@ import { apiGet, apiPost, apiPut, apiDelete } from './apiClient';
  */
 export async function fetchPurchases(params = {}) {
   const query = new URLSearchParams();
-  if (params.status && params.status !== 'All Statuses') {
-    query.append('status', params.status.toUpperCase().replace(' ', '_'));
+  if (params.status && params.status !== "All Statuses") {
+    query.append("status", params.status.toUpperCase().replace(" ", "_"));
   }
   if (params.search) {
-    query.append('search', params.search);
+    query.append("search", params.search);
   }
 
   const queryString = query.toString() ? `?${query.toString()}` : '';
@@ -35,8 +35,6 @@ export async function createPurchaseOrder(poData) {
  * PATCH /api/purchases/:id/status
  */
 export async function updatePurchaseStatus(id, status) {
-  // Using apiPut or apiPost as workaround, but let's just use apiRequest if PATCH is needed
-  // Or we can import apiRequest from apiClient and do apiRequest(..., {method: 'PATCH', body: ...})
   return apiPut(`/purchases/${id}/status`, { status }, { method: 'PATCH' });
 }
 
@@ -52,7 +50,7 @@ export async function receivePurchaseStock(id, receiveData = {}) {
  */
 export async function fetchGoodsReceipts(params = {}) {
   const query = new URLSearchParams();
-  if (params.purchaseId) query.append('purchaseId', params.purchaseId);
+  if (params.purchaseId) query.append("purchaseId", params.purchaseId);
 
   const queryString = query.toString() ? `?${query.toString()}` : '';
   return apiGet(`/goods-receipts${queryString}`);
@@ -77,7 +75,7 @@ export async function updateGoodsReceiptStatus(id, status) {
  */
 export async function fetchSuppliers(params = {}) {
   const query = new URLSearchParams();
-  if (params.search) query.append('search', params.search);
+  if (params.search) query.append("search", params.search);
 
   const queryString = query.toString() ? `?${query.toString()}` : '';
   return apiGet(`/suppliers${queryString}`);
@@ -110,5 +108,3 @@ export async function updateSupplier(id, supplierData) {
 export async function deleteSupplier(id) {
   return apiDelete(`/suppliers/${id}`);
 }
-
-

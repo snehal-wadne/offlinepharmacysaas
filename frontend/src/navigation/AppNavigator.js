@@ -362,7 +362,7 @@ export default function AppNavigator() {
 
   return (
     <OfflineSyncProvider>
-      <PosProvider>
+      <PosProvider currentUser={currentUser}>
         <View style={styles.appContainer}>
           {/* 1. Fixed Left Sidebar for Desktop */}
           {!isMobile && (

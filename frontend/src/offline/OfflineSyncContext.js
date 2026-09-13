@@ -13,7 +13,9 @@ const localPersistenceService = new LocalPersistenceService(db);
 const OfflineSyncContext = createContext(null);
 
 export function OfflineSyncProvider({ children }) {
-  const [isOnline, setIsOnline] = useState(true);
+  const [isOnline, setIsOnline] = useState(
+    typeof navigator !== "undefined" ? navigator.onLine : true
+  );
   const [pendingCount, setPendingCount] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState(null);
@@ -39,14 +41,18 @@ export function OfflineSyncProvider({ children }) {
     });
 
     const loadData = async () => {
-      const prods = await db.products.toArray();
-      setProducts(prods);
+      try {
+        const prods = await db.products.toArray();
+        setProducts(prods);
 
-      const custs = await db.customers.toArray();
-      setCustomers(custs);
+        const custs = await db.customers.toArray();
+        setCustomers(custs);
 
-      const invRecords = await localPersistenceService.getRecentInvoices();
-      setInvoices(invRecords);
+        const invRecords = await localPersistenceService.getRecentInvoices();
+        setInvoices(invRecords);
+      } catch (err) {
+        console.warn("[OfflineSyncContext] Local data load warning:", err.message);
+      }
     };
     loadData();
 
@@ -96,7 +102,6 @@ export function OfflineSyncProvider({ children }) {
   }, []);
 
   const recordHoldBillOffline = useCallback(async (billData) => {
-    // Keep held bills simple in memory for now, or adapt as needed
     setHeldBills((prev) => {
       const draftId = billData.holdId || billData.billNo;
       return [billData, ...prev.filter((b) => (b.holdId || b.billNo) !== draftId)];
@@ -109,7 +114,6 @@ export function OfflineSyncProvider({ children }) {
   }, []);
 
   const recordPurchaseOffline = useCallback(async (poData) => {
-    // Simplified stub
     setPurchases((prev) => [poData, ...prev.filter((p) => p.poNumber !== poData.poNumber)]);
     return poData;
   }, []);

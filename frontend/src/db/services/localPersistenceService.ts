@@ -13,6 +13,10 @@ import {
   TransactionRecord,
   SyncOutboxRecord,
   SaleCommitResult,
+  CashRegisterRecord,
+  RegisterSessionRecord,
+  CashMovementRecord,
+  CashDenominationRecord,
 } from '../types';
 import { SyncMetadataRepository } from '../repositories/syncMetadataRepository';
 import { ProductRepository } from '../repositories/productRepository';
@@ -55,6 +59,16 @@ export class LocalPersistenceService {
     if (userId) this.defaultUserId = userId;
   }
 
+  getTenantContext(): { organisationId: string; branchId: string; userId: string; isDemo: boolean } {
+    const org = this.defaultOrgId || DEFAULT_ORG_ID;
+    return {
+      organisationId: org,
+      branchId: this.defaultBranchId || DEFAULT_BRANCH_ID,
+      userId: this.defaultUserId || DEFAULT_USER_ID,
+      isDemo: !this.defaultOrgId || this.defaultOrgId === DEFAULT_ORG_ID,
+    };
+  }
+
   /**
    * Initializes the local persistence layer:
    * - Ensures unique, durable deviceId exists
@@ -62,13 +76,19 @@ export class LocalPersistenceService {
    */
   async initialize(
     organisationId = DEFAULT_ORG_ID,
-    branchId = DEFAULT_BRANCH_ID
+    branchId = DEFAULT_BRANCH_ID,
+    options: { seedMockIfEmpty?: boolean } = {}
   ): Promise<{ deviceId: string; productCount: number }> {
+    this.defaultOrgId = organisationId;
+    this.defaultBranchId = branchId;
     const deviceId = await this.syncMetaRepo.getDeviceId();
 
-    // Check if products store has data
+    // In production offline mode, only seed mock data if explicitly requested or in default demo mode without real tenant context
+    const isMockDemo = organisationId === DEFAULT_ORG_ID;
+    const shouldSeedMock = options.seedMockIfEmpty ?? isMockDemo;
+
     const count = await this.db.products.count();
-    if (count === 0 && MOCK_POS_PRODUCTS && MOCK_POS_PRODUCTS.length > 0) {
+    if (count === 0 && shouldSeedMock && MOCK_POS_PRODUCTS && MOCK_POS_PRODUCTS.length > 0) {
       await this.seedInitialCatalog(organisationId, branchId);
     }
 
@@ -409,6 +429,74 @@ export class LocalPersistenceService {
   }
 
   /**
+   * Fetch local catalogue projection for POS UI:
+   * Aggregates products with their available branch batches, stock, and pricing.
+   */
+  async getCatalogForPos(
+    organisationId: string = this.defaultOrgId || DEFAULT_ORG_ID,
+    branchId: string = this.defaultBranchId || DEFAULT_BRANCH_ID
+  ): Promise<any[]> {
+    const products = await this.db.products
+      .where('organisationId')
+      .equals(organisationId)
+      .filter((p) => p.active !== false)
+      .toArray();
+
+    if (products.length === 0) {
+      return [];
+    }
+
+    const result = [];
+    for (const p of products) {
+      const batches = await this.db.inventory
+        .where('[branchId+productId]')
+        .equals([branchId, p.productId])
+        .toArray();
+
+      const totalStock = batches.reduce((sum, b) => sum + (b.availableQuantity || 0), 0);
+      const activeBatches = batches.filter((b) => b.availableQuantity > 0);
+      const primaryBatch = activeBatches[0] || batches[0] || null;
+
+      result.push({
+        id: p.productId,
+        name: p.name,
+        generic: p.genericName || '',
+        barcode: p.barcode || p.sku || '',
+        sku: p.sku || '',
+        category: p.category || 'General',
+        batch: primaryBatch?.batchNumber || '',
+        expiry: primaryBatch?.expiryDate || '',
+        mrp: primaryBatch?.mrp || p.mrp || 0,
+        sellingPrice: primaryBatch?.sellingPrice || p.sellingPrice || primaryBatch?.mrp || p.mrp || 0,
+        stock: totalStock,
+        gstRate: p.gstRate || 5,
+        pack: p.packSize ? String(p.packSize) : 'Unit',
+        batches: batches.map((b) => ({
+          batch: b.batchNumber,
+          expiry: b.expiryDate,
+          stock: b.availableQuantity,
+          price: b.sellingPrice,
+          mrp: b.mrp,
+        })),
+      });
+    }
+
+    return result;
+  }
+
+  /**
+   * Fetch local customers list for POS UI
+   */
+  async getCustomersForPos(
+    organisationId: string = this.defaultOrgId || DEFAULT_ORG_ID
+  ): Promise<CustomerRecord[]> {
+    return this.db.customers
+      .where('organisationId')
+      .equals(organisationId)
+      .toArray();
+  }
+
+  /**
    * Search products by barcode or text query
    */
   async searchProducts(query: string, organisationId = DEFAULT_ORG_ID): Promise<ProductRecord[]> {
@@ -582,7 +670,7 @@ export class LocalPersistenceService {
       updatedAt: occurredAt,
     };
 
-    await this.db.transaction('rw', [this.db.customers, this.db.sync_outbox], async () => {
+    await this.db.transaction('rw', [this.db.customers, this.db.transactions, this.db.sync_outbox], async () => {
       const cust = await this.db.customers.get(paymentData.customerId);
       if (cust) {
         const currentBal = Number(cust.outstandingBalance || 0);
@@ -593,10 +681,84 @@ export class LocalPersistenceService {
           updatedAt: occurredAt,
         });
       }
+
+      await this.db.transactions.put({
+        transactionId: paymentId,
+        mutationId,
+        type: 'CUSTOMER_PAYMENT',
+        organisationId,
+        branchId,
+        userId,
+        deviceId,
+        invoiceNumber: receiptNumber,
+        payload: {
+          ...outboxRecord.payload,
+          customerName: cust?.name || '',
+          customerPhone: cust?.phone || '',
+        },
+        occurredAt,
+        status: 'LOCAL_COMMITTED',
+        syncStatus: 'PENDING',
+        createdAt: occurredAt,
+        updatedAt: occurredAt,
+      });
+
       await this.db.sync_outbox.add(outboxRecord as SyncOutboxRecord);
     });
 
     return { paymentId, mutationId, newBalance };
+  }
+
+  /**
+   * Fetch local customer payment receipts for UI and credit ledger
+   */
+  async getPaymentReceipts(
+    organisationId: string = this.defaultOrgId || DEFAULT_ORG_ID,
+    customerId?: string,
+    limit = 50
+  ): Promise<any[]> {
+    const records = await this.db.transactions
+      .where('type')
+      .equals('CUSTOMER_PAYMENT')
+      .reverse()
+      .sortBy('occurredAt');
+
+    const filtered = records
+      .filter((tx) => !organisationId || tx.organisationId === organisationId)
+      .filter((tx) => !customerId || tx.payload?.customerId === customerId)
+      .slice(0, limit);
+
+    return filtered.map((tx) => {
+      const p = tx.payload || {};
+      const amountVal = Number(p.amount || 0);
+      return {
+        id: p.receiptNumber || tx.invoiceNumber || `REC-${tx.transactionId.slice(0, 8)}`,
+        transactionId: tx.transactionId,
+        mutationId: tx.mutationId,
+        customerId: p.customerId,
+        customerName: p.customerName || 'Customer',
+        phone: p.customerPhone || '—',
+        amount: `₹${amountVal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
+        amountRaw: amountVal,
+        paymentMode: p.paymentMethod || 'Cash',
+        transactionRef: p.reference || 'DIRECT-RECEIPT',
+        linkedRef: p.allocations && p.allocations.length > 0
+          ? p.allocations.map((a: any) => a.invoiceId).join(', ')
+          : 'Ledger Dues',
+        date: new Date(tx.occurredAt).toLocaleString('en-GB', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+        status: tx.status === 'LOCAL_COMMITTED' ? 'Completed' : tx.status,
+        syncStatus: tx.syncStatus,
+        receivedBy: tx.userId || 'Pharmacist',
+        branch: tx.branchId || 'Main Branch',
+        notes: p.notes || '',
+      };
+    });
   }
 
   /**
@@ -728,6 +890,7 @@ export class LocalPersistenceService {
       purchaseId?: string;
       goodsReceiptId?: string;
       supplierId?: string;
+      supplierName?: string;
       purchaseNumber?: string;
       receiptNumber?: string;
       notes?: string;
@@ -788,7 +951,57 @@ export class LocalPersistenceService {
       updatedAt: occurredAt,
     };
 
-    await this.db.transaction('rw', [this.db.inventory, this.db.sync_outbox], async () => {
+    if (!purchaseData.items || !Array.isArray(purchaseData.items) || purchaseData.items.length === 0) {
+      throw new Error('Purchase receipt must contain at least one item');
+    }
+
+    for (const item of purchaseData.items) {
+      if (!item.productId || typeof item.productId !== 'string' || !item.productId.trim()) {
+        throw new Error('Valid productId is required for each received item');
+      }
+      if (!item.batchNumber || typeof item.batchNumber !== 'string' || !item.batchNumber.trim()) {
+        throw new Error('Valid batchNumber is required for each received item');
+      }
+      const qty = Number(item.quantity);
+      if (isNaN(qty) || qty <= 0) {
+        throw new Error('Valid positive quantity is required for each received item');
+      }
+    }
+
+    const transactionRecord: TransactionRecord = {
+      transactionId: goodsReceiptId,
+      mutationId,
+      type: 'PURCHASE',
+      organisationId,
+      branchId,
+      userId,
+      deviceId,
+      invoiceNumber: purchaseData.supplierInvoiceNumber || receiptNumber,
+      payload: {
+        purchaseId,
+        goodsReceiptId,
+        supplierId: purchaseData.supplierId,
+        supplierName: (purchaseData as any).supplierName || (purchaseData as any).supplier || 'Supplier',
+        purchaseNumber: purchaseData.purchaseNumber || `PO-${Date.now().toString().slice(-4)}`,
+        receiptNumber,
+        receivedDate: (purchaseData as any).receivedDate || new Date().toISOString().split('T')[0],
+        receivedBy: (purchaseData as any).receivedBy || 'Staff',
+        branchName: (purchaseData as any).branchName || 'Main Branch',
+        supplierInvoiceNumber: purchaseData.supplierInvoiceNumber || null,
+        packageCount: purchaseData.packageCount || 1,
+        itemsCount: (purchaseData.items || []).length,
+        notes: purchaseData.notes || null,
+        items: purchaseData.items || [],
+        status: 'Verified',
+      },
+      occurredAt,
+      status: 'LOCAL_COMMITTED',
+      syncStatus: 'PENDING',
+      createdAt: occurredAt,
+      updatedAt: occurredAt,
+    };
+
+    await this.db.transaction('rw', [this.db.inventory, this.db.transactions, this.db.sync_outbox], async () => {
       for (const item of purchaseData.items || []) {
         const qty = Number(item.quantity || 0);
         if (qty > 0 && item.productId && item.batchNumber) {
@@ -815,16 +1028,440 @@ export class LocalPersistenceService {
               availableQuantity: qty,
               costPrice: item.costPrice || 100,
               mrp: item.mrp || 130,
-              sellingPrice: item.sellingPrice || 130,
+              sellingPrice: item.sellingPrice || item.mrp || 130,
               updatedAt: occurredAt,
             });
           }
         }
       }
+      await this.db.transactions.put(transactionRecord);
       await this.db.sync_outbox.add(outboxRecord as SyncOutboxRecord);
     });
 
     return { purchaseId, goodsReceiptId, mutationId };
+  }
+
+  /**
+   * Retrieve locally persisted goods receipts / purchase transactions.
+   */
+  async getLocalPurchaseReceipts(
+    organisationId: string = this.defaultOrgId || DEFAULT_ORG_ID,
+    branchId?: string,
+    limit = 50
+  ): Promise<any[]> {
+    const records = await this.db.transactions
+      .where('type')
+      .equals('PURCHASE')
+      .reverse()
+      .sortBy('occurredAt');
+
+    const filtered = records
+      .filter((tx) => !organisationId || tx.organisationId === organisationId)
+      .filter((tx) => !branchId || tx.branchId === branchId)
+      .slice(0, limit);
+
+    return filtered.map((tx) => {
+      const p = tx.payload || {};
+      return {
+        realId: tx.transactionId,
+        id: p.receiptNumber || tx.invoiceNumber || `GRN-${tx.transactionId.slice(0, 8)}`,
+        poReference: p.purchaseNumber || 'PO-1026',
+        supplier: p.supplierName || p.supplier || 'Supplier',
+        receivedDate: p.receivedDate || new Date(tx.occurredAt).toLocaleDateString('en-GB', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+        }),
+        receivedBy: p.receivedBy || 'Staff',
+        itemsCount: p.itemsCount || (p.items ? p.items.length : 0),
+        packagesCount: p.packageCount || 1,
+        invoiceNo: p.supplierInvoiceNumber || tx.invoiceNumber || '—',
+        status: p.status || 'Verified',
+        branch: p.branchName || 'Main Branch',
+        syncStatus: tx.syncStatus,
+        transactionId: tx.transactionId,
+        mutationId: tx.mutationId,
+        items: p.items || [],
+      };
+    });
+  }
+
+  /**
+   * Adjust inventory batch stock locally while offline:
+   * 1. Validates delta, product, and batch; asserts newQuantity >= 0.
+   * 2. Atomically updates local batch in `db.inventory`:
+   *    newQuantity = currentQuantity + deltaQuantity.
+   * 3. Appends transaction record (type: 'ADJUSTMENT') in `db.transactions`.
+   * 4. Enqueues durable `ADJUST_STOCK` mutation into `db.sync_outbox`.
+   */
+  async adjustLocalStock(
+    adjustmentData: {
+      adjustmentId?: string;
+      adjustmentNumber?: string;
+      productId: string;
+      productName?: string;
+      batchNumber: string;
+      deltaQuantity: number;
+      adjustmentType?: string;
+      reason?: string;
+      notes?: string;
+    },
+    context: {
+      organisationId?: string;
+      branchId?: string;
+      userId?: string;
+      deviceId?: string;
+    } = {}
+  ): Promise<{ adjustmentId: string; mutationId: string; newQuantity: number }> {
+    const organisationId = context.organisationId || this.defaultOrgId || DEFAULT_ORG_ID;
+    const branchId = context.branchId || this.defaultBranchId || DEFAULT_BRANCH_ID;
+    const userId = context.userId || this.defaultUserId || DEFAULT_USER_ID;
+    const deviceId = context.deviceId || (await this.syncMetaRepo.getDeviceId());
+
+    if (!adjustmentData.productId || typeof adjustmentData.productId !== 'string' || !adjustmentData.productId.trim()) {
+      throw new Error('Valid productId is required for stock adjustment');
+    }
+    if (!adjustmentData.batchNumber || typeof adjustmentData.batchNumber !== 'string' || !adjustmentData.batchNumber.trim()) {
+      throw new Error('Valid batchNumber is required for stock adjustment');
+    }
+    const delta = Number(adjustmentData.deltaQuantity);
+    if (isNaN(delta) || delta === 0) {
+      throw new Error('Valid non-zero deltaQuantity is required for stock adjustment');
+    }
+
+    // Find the batch in Dexie
+    const batch = await this.db.inventory
+      .where('[branchId+productId]')
+      .equals([branchId, adjustmentData.productId])
+      .filter((b) => b.batchNumber === adjustmentData.batchNumber)
+      .first();
+
+    if (!batch) {
+      throw new Error(`Inventory batch not found for product ${adjustmentData.productId} and batch ${adjustmentData.batchNumber} at branch ${branchId}`);
+    }
+
+    const currentQty = Number(batch.availableQuantity || 0);
+    const newQty = currentQty + delta;
+    if (newQty < 0) {
+      throw new Error(`Stock adjustment would cause negative quantity: ${currentQty} + (${delta}) = ${newQty}`);
+    }
+
+    const adjustmentId = adjustmentData.adjustmentId || generateUUID();
+    const mutationId = generateUUID();
+    const occurredAt = new Date().toISOString();
+    const adjustmentNumber =
+      adjustmentData.adjustmentNumber || `ADJ-${Date.now().toString().slice(-6)}`;
+    const reason = adjustmentData.reason || adjustmentData.adjustmentType || 'Stock count adjustment';
+
+    const outboxRecord: Omit<SyncOutboxRecord, 'sequence'> = {
+      mutationId,
+      mutationType: 'ADJUST_STOCK',
+      organisationId,
+      branchId,
+      deviceId,
+      userId,
+      payload: {
+        adjustmentId,
+        adjustmentNumber,
+        productId: adjustmentData.productId,
+        productName: adjustmentData.productName || batch.productId,
+        batchNumber: adjustmentData.batchNumber,
+        deltaQuantity: delta,
+        previousQuantity: currentQty,
+        newQuantity: newQty,
+        adjustmentType: adjustmentData.adjustmentType || 'CYCLE_COUNT',
+        reason,
+        notes: adjustmentData.notes || null,
+        occurredAt,
+      },
+      status: 'PENDING',
+      attemptCount: 0,
+      createdAt: occurredAt,
+      updatedAt: occurredAt,
+    };
+
+    const transactionRecord: TransactionRecord = {
+      transactionId: adjustmentId,
+      mutationId,
+      type: 'ADJUSTMENT',
+      organisationId,
+      branchId,
+      userId,
+      deviceId,
+      invoiceNumber: adjustmentNumber,
+      payload: {
+        adjustmentId,
+        adjustmentNumber,
+        productId: adjustmentData.productId,
+        productName: adjustmentData.productName || batch.productId,
+        batchNumber: adjustmentData.batchNumber,
+        deltaQuantity: delta,
+        previousQuantity: currentQty,
+        newQuantity: newQty,
+        adjustmentType: adjustmentData.adjustmentType || 'CYCLE_COUNT',
+        reason,
+        notes: adjustmentData.notes || null,
+      },
+      occurredAt,
+      status: 'LOCAL_COMMITTED',
+      syncStatus: 'PENDING',
+      createdAt: occurredAt,
+      updatedAt: occurredAt,
+    };
+
+    await this.db.transaction('rw', [this.db.inventory, this.db.transactions, this.db.sync_outbox], async () => {
+      await this.db.inventory.put({
+        ...batch,
+        availableQuantity: newQty,
+        updatedAt: occurredAt,
+      });
+      await this.db.transactions.put(transactionRecord);
+      await this.db.sync_outbox.add(outboxRecord as SyncOutboxRecord);
+    });
+
+    return { adjustmentId, mutationId, newQuantity: newQty };
+  }
+
+  /**
+   * Retrieve locally persisted stock adjustment records.
+   */
+  async getLocalStockAdjustments(
+    organisationId: string = this.defaultOrgId || DEFAULT_ORG_ID,
+    branchId?: string,
+    limit = 50
+  ): Promise<any[]> {
+    const records = await this.db.transactions
+      .where('type')
+      .equals('ADJUSTMENT')
+      .reverse()
+      .sortBy('occurredAt');
+
+    const filtered = records
+      .filter((tx) => !organisationId || tx.organisationId === organisationId)
+      .filter((tx) => !branchId || tx.branchId === branchId)
+      .slice(0, limit);
+
+    return filtered.map((tx) => {
+      const p = tx.payload || {};
+      return {
+        realId: tx.transactionId,
+        id: p.adjustmentNumber || tx.invoiceNumber || `ADJ-${tx.transactionId.slice(0, 8)}`,
+        adjustmentId: tx.transactionId,
+        productId: p.productId,
+        productName: p.productName || 'Medicine Item',
+        batchNumber: p.batchNumber,
+        deltaQuantity: p.deltaQuantity,
+        newQuantity: p.newQuantity,
+        previousQuantity: p.previousQuantity,
+        reason: p.reason,
+        adjustmentType: p.adjustmentType || 'CYCLE_COUNT',
+        occurredAt: tx.occurredAt,
+        syncStatus: tx.syncStatus,
+        mutationId: tx.mutationId,
+      };
+    });
+  }
+
+  /**
+   * Transfer inventory stock locally while offline:
+   * 1. Validates different source and destination branches.
+   * 2. Validates product, batch, and sufficient local source stock.
+   * 3. Decrements source branch stock in `db.inventory`.
+   * 4. Logs transfer transaction in `db.transactions` (type: 'TRANSFER').
+   * 5. Enqueues durable `TRANSFER_STOCK` mutation in `db.sync_outbox`.
+   */
+  async transferLocalStock(
+    transferData: {
+      transferId?: string;
+      transferNumber?: string;
+      fromBranchId?: string;
+      toBranchId: string;
+      toBranchName?: string;
+      transferDate?: string;
+      notes?: string;
+      items: Array<{
+        productId: string;
+        productName?: string;
+        batchNumber: string;
+        quantity: number;
+      }>;
+    },
+    context: {
+      organisationId?: string;
+      branchId?: string;
+      userId?: string;
+      deviceId?: string;
+    } = {}
+  ): Promise<{ transferId: string; transferNumber: string; mutationId: string }> {
+    const organisationId = context.organisationId || this.defaultOrgId || DEFAULT_ORG_ID;
+    const fromBranchId = transferData.fromBranchId || context.branchId || this.defaultBranchId || DEFAULT_BRANCH_ID;
+    const toBranchId = transferData.toBranchId;
+    const userId = context.userId || this.defaultUserId || DEFAULT_USER_ID;
+    const deviceId = context.deviceId || (await this.syncMetaRepo.getDeviceId());
+
+    if (!toBranchId || typeof toBranchId !== 'string' || !toBranchId.trim()) {
+      throw new Error('Destination branch (toBranchId) is required');
+    }
+    if (fromBranchId === toBranchId) {
+      throw new Error('Source and destination branches must be different');
+    }
+    if (!transferData.items || !Array.isArray(transferData.items) || transferData.items.length === 0) {
+      throw new Error('Transfer must contain at least one line item');
+    }
+
+    // Pre-validate all items have sufficient local stock in source branch
+    const batchesToUpdate: Array<{ batch: any; newQty: number }> = [];
+    for (const item of transferData.items) {
+      if (!item.productId || typeof item.productId !== 'string' || !item.productId.trim()) {
+        throw new Error('Valid productId is required for each transferred item');
+      }
+      if (!item.batchNumber || typeof item.batchNumber !== 'string' || !item.batchNumber.trim()) {
+        throw new Error('Valid batchNumber is required for each transferred item');
+      }
+      const qty = Number(item.quantity);
+      if (isNaN(qty) || qty <= 0) {
+        throw new Error('Valid positive transfer quantity is required for each item');
+      }
+
+      const batch = await this.db.inventory
+        .where('[branchId+productId]')
+        .equals([fromBranchId, item.productId])
+        .filter((b) => b.batchNumber === item.batchNumber)
+        .first();
+
+      if (!batch) {
+        throw new Error(`Source batch not found for product ${item.productId} and batch ${item.batchNumber} at branch ${fromBranchId}`);
+      }
+
+      const avail = Number(batch.availableQuantity || 0);
+      if (avail < qty) {
+        throw new Error(`Insufficient stock for product ${item.productName || item.productId} (batch ${item.batchNumber}): available ${avail}, requested ${qty}`);
+      }
+
+      batchesToUpdate.push({ batch, newQty: avail - qty });
+    }
+
+    const transferId = transferData.transferId || generateUUID();
+    const mutationId = generateUUID();
+    const occurredAt = new Date().toISOString();
+    const transferDate = transferData.transferDate || occurredAt.split('T')[0];
+    const transferNumber =
+      transferData.transferNumber || `TR-${Date.now().toString().slice(-6)}`;
+    const totalQuantity = transferData.items.reduce((sum, it) => sum + Number(it.quantity || 0), 0);
+
+    const outboxRecord: Omit<SyncOutboxRecord, 'sequence'> = {
+      mutationId,
+      mutationType: 'TRANSFER_STOCK',
+      organisationId,
+      branchId: fromBranchId,
+      deviceId,
+      userId,
+      payload: {
+        transferId,
+        transferNumber,
+        fromBranchId,
+        toBranchId,
+        toBranchName: transferData.toBranchName || 'Destination Branch',
+        transferDate,
+        notes: transferData.notes || null,
+        status: 'IN_TRANSIT',
+        items: transferData.items,
+        totalQuantity,
+        occurredAt,
+      },
+      status: 'PENDING',
+      attemptCount: 0,
+      createdAt: occurredAt,
+      updatedAt: occurredAt,
+    };
+
+    const transactionRecord: TransactionRecord = {
+      transactionId: transferId,
+      mutationId,
+      type: 'TRANSFER',
+      organisationId,
+      branchId: fromBranchId,
+      userId,
+      deviceId,
+      invoiceNumber: transferNumber,
+      payload: {
+        transferId,
+        transferNumber,
+        fromBranchId,
+        toBranchId,
+        toBranchName: transferData.toBranchName || 'Destination Branch',
+        transferDate,
+        notes: transferData.notes || null,
+        status: 'In Transit',
+        items: transferData.items,
+        totalQuantity,
+        itemsCount: transferData.items.length,
+      },
+      occurredAt,
+      status: 'LOCAL_COMMITTED',
+      syncStatus: 'PENDING',
+      createdAt: occurredAt,
+      updatedAt: occurredAt,
+    };
+
+    await this.db.transaction('rw', [this.db.inventory, this.db.transactions, this.db.sync_outbox], async () => {
+      for (const update of batchesToUpdate) {
+        await this.db.inventory.put({
+          ...update.batch,
+          availableQuantity: update.newQty,
+          updatedAt: occurredAt,
+        });
+      }
+      await this.db.transactions.put(transactionRecord);
+      await this.db.sync_outbox.add(outboxRecord as SyncOutboxRecord);
+    });
+
+    return { transferId, transferNumber, mutationId };
+  }
+
+  /**
+   * Retrieve locally persisted stock transfer records.
+   */
+  async getLocalTransfers(
+    organisationId: string = this.defaultOrgId || DEFAULT_ORG_ID,
+    branchId?: string,
+    limit = 50
+  ): Promise<any[]> {
+    const records = await this.db.transactions
+      .where('type')
+      .equals('TRANSFER')
+      .reverse()
+      .sortBy('occurredAt');
+
+    const filtered = records
+      .filter((tx) => !organisationId || tx.organisationId === organisationId)
+      .filter((tx) => !branchId || tx.branchId === branchId)
+      .slice(0, limit);
+
+    return filtered.map((tx) => {
+      const p = tx.payload || {};
+      return {
+        realId: tx.transactionId,
+        id: p.transferNumber || tx.invoiceNumber || `TR-${tx.transactionId.slice(0, 8)}`,
+        transferId: tx.transactionId,
+        fromBranch: p.fromBranchName || (p.fromBranchId === branchId ? 'This Branch' : p.fromBranchId) || 'Main Branch',
+        fromBranchId: p.fromBranchId,
+        toBranch: p.toBranchName || p.toBranchId || 'Destination Branch',
+        toBranchId: p.toBranchId,
+        transferDate: p.transferDate || new Date(tx.occurredAt).toLocaleDateString('en-GB', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+        }),
+        items: p.itemsCount || (p.items ? p.items.length : 1),
+        totalQuantity: p.totalQuantity || 0,
+        status: p.status || 'In Transit',
+        notes: p.notes || '',
+        syncStatus: tx.syncStatus,
+        mutationId: tx.mutationId,
+        createdBy: 'Staff',
+      };
+    });
   }
 
   /**
@@ -880,6 +1517,566 @@ export class LocalPersistenceService {
     await this.db.sync_outbox.add(outboxRecord as SyncOutboxRecord);
 
     return { movementId, mutationId };
+  }
+
+  // ==========================================
+  // PHASE 5: CASH REGISTER & MOVEMENTS
+  // ==========================================
+
+  /**
+   * Retrieve all cash registers configured for this branch.
+   */
+  async getLocalRegisters(
+    organisationId = this.defaultOrgId || DEFAULT_ORG_ID,
+    branchId = this.defaultBranchId || DEFAULT_BRANCH_ID
+  ): Promise<CashRegisterRecord[]> {
+    return this.db.cash_registers
+      .where('[organisationId+branchId]')
+      .equals([organisationId, branchId])
+      .toArray();
+  }
+
+  /**
+   * Retrieve the active OPEN or CLOSE_PENDING register session for this branch.
+   */
+  async getLocalOpenRegisterSession(
+    organisationId = this.defaultOrgId || DEFAULT_ORG_ID,
+    branchId = this.defaultBranchId || DEFAULT_BRANCH_ID
+  ): Promise<RegisterSessionRecord | null> {
+    const sessions = await this.db.register_sessions
+      .where('[organisationId+branchId]')
+      .equals([organisationId, branchId])
+      .filter((s) => s.status === 'OPEN' || s.status === 'CLOSE_PENDING')
+      .reverse()
+      .sortBy('openedAt');
+
+    return sessions.length > 0 ? sessions[0] : null;
+  }
+
+  /**
+   * Atomically open a new register session locally in Dexie:
+   * 1. Validates no other session is currently OPEN for the register/branch.
+   * 2. Persists session record into `db.register_sessions` (status: 'OPEN').
+   * 3. If opening balance > 0, creates initial float movement in `db.cash_movements`.
+   * 4. Persists append-only business transaction in `db.transactions`.
+   * 5. Enqueues durable `OPEN_REGISTER_SESSION` mutation in `db.sync_outbox`.
+   */
+  async openLocalRegisterSession(
+    sessionData: {
+      sessionId?: string;
+      cashRegisterId?: string;
+      openingBalance?: number;
+      shiftName?: string;
+      notes?: string;
+    },
+    context: {
+      organisationId?: string;
+      branchId?: string;
+      userId?: string;
+      deviceId?: string;
+    } = {}
+  ): Promise<{ session: RegisterSessionRecord; mutationId: string }> {
+    const organisationId = context.organisationId || this.defaultOrgId || DEFAULT_ORG_ID;
+    const branchId = context.branchId || this.defaultBranchId || DEFAULT_BRANCH_ID;
+    const userId = context.userId || this.defaultUserId || DEFAULT_USER_ID;
+    const deviceId = context.deviceId || (await this.syncMetaRepo.getDeviceId());
+
+    const sessionId = sessionData.sessionId || generateUUID();
+    const mutationId = generateUUID();
+    const occurredAt = new Date().toISOString();
+    const openingBalance = Math.max(0, Number(sessionData.openingBalance || 0));
+    const sessionNumber = `REG-${Date.now().toString().slice(-6)}`;
+    const shiftName = sessionData.shiftName || 'Day Shift';
+
+    return this.db.transaction(
+      'rw',
+      [
+        this.db.register_sessions,
+        this.db.cash_registers,
+        this.db.cash_movements,
+        this.db.transactions,
+        this.db.sync_outbox,
+      ],
+      async () => {
+        // 1. Resolve or create cash register
+        let cashRegisterId = sessionData.cashRegisterId;
+        if (!cashRegisterId) {
+          const existingRegs = await this.db.cash_registers
+            .where('[organisationId+branchId]')
+            .equals([organisationId, branchId])
+            .toArray();
+
+          if (existingRegs.length > 0) {
+            cashRegisterId = existingRegs[0].id;
+          } else {
+            cashRegisterId = generateUUID();
+            await this.db.cash_registers.put({
+              id: cashRegisterId,
+              organisationId,
+              branchId,
+              name: 'Main Counter',
+              identifier: 'POS-01',
+              isActive: true,
+              createdAt: occurredAt,
+              updatedAt: occurredAt,
+            });
+          }
+        }
+
+        // 2. Enforce only one OPEN session per register
+        const activeSessions = await this.db.register_sessions
+          .where('cashRegisterId')
+          .equals(cashRegisterId)
+          .filter((s) => s.status === 'OPEN')
+          .toArray();
+
+        if (activeSessions.length > 0) {
+          throw new Error('A session is already open for this cash register.');
+        }
+
+        // 3. Persist local session
+        const sessionRecord: RegisterSessionRecord = {
+          id: sessionId,
+          organisationId,
+          branchId,
+          cashRegisterId,
+          cashierId: userId,
+          sessionNumber,
+          shiftName,
+          openingBalance,
+          status: 'OPEN',
+          openingNotes: sessionData.notes || undefined,
+          openedAt: occurredAt,
+          syncStatus: 'PENDING',
+          updatedAt: occurredAt,
+        };
+        await this.db.register_sessions.put(sessionRecord);
+
+        // 4. Record opening float in movements if > 0
+        let openingFloatMovementId: string | undefined = undefined;
+        if (openingBalance > 0) {
+          openingFloatMovementId = generateUUID();
+          await this.db.cash_movements.put({
+            id: openingFloatMovementId,
+            organisationId,
+            branchId,
+            cashRegisterSessionId: sessionId,
+            cashierId: userId,
+            movementNumber: `PC-${Date.now().toString().slice(-6)}`,
+            movementType: 'IN',
+            amount: openingBalance,
+            reason: 'Opening float balance',
+            occurredAt,
+            syncStatus: 'PENDING',
+            updatedAt: occurredAt,
+          });
+        }
+
+        // 5. Append-only transaction audit log
+        const transactionRecord: TransactionRecord = {
+          transactionId: generateUUID(),
+          mutationId,
+          type: 'REGISTER_OPEN',
+          organisationId,
+          branchId,
+          userId,
+          deviceId,
+          payload: {
+            sessionId,
+            cashRegisterId,
+            sessionNumber,
+            openingBalance,
+            shiftName,
+            notes: sessionData.notes,
+            openingFloatMovementId,
+          },
+          occurredAt,
+          status: 'LOCAL_COMMITTED',
+          syncStatus: 'PENDING',
+          createdAt: occurredAt,
+          updatedAt: occurredAt,
+        };
+        await this.db.transactions.put(transactionRecord);
+
+        // 6. Enqueue OPEN_REGISTER_SESSION in sync_outbox
+        const outboxRecord: Omit<SyncOutboxRecord, 'sequence'> = {
+          mutationId,
+          mutationType: 'OPEN_REGISTER_SESSION',
+          organisationId,
+          branchId,
+          deviceId,
+          userId,
+          payload: {
+            sessionId,
+            cashRegisterId,
+            sessionNumber,
+            openingBalance,
+            shiftName,
+            notes: sessionData.notes,
+            openingFloatMovementId,
+          },
+          status: 'PENDING',
+          attemptCount: 0,
+          createdAt: occurredAt,
+          updatedAt: occurredAt,
+        };
+        await this.db.sync_outbox.add(outboxRecord as SyncOutboxRecord);
+
+        return { session: sessionRecord, mutationId };
+      }
+    );
+  }
+
+  /**
+   * Atomically record a petty cash movement (IN or OUT) in Dexie:
+   * 1. Validates active session exists and is OPEN.
+   * 2. Persists movement into `db.cash_movements`.
+   * 3. Persists transaction log into `db.transactions`.
+   * 4. Enqueues durable `RECORD_CASH_MOVEMENT` mutation in `db.sync_outbox`.
+   */
+  async recordLocalCashMovement(
+    movementData: {
+      movementId?: string;
+      cashRegisterSessionId?: string;
+      movementType: 'IN' | 'OUT';
+      amount: number;
+      reason: string;
+      movementNumber?: string;
+    },
+    context: {
+      organisationId?: string;
+      branchId?: string;
+      userId?: string;
+      deviceId?: string;
+    } = {}
+  ): Promise<{ movement: CashMovementRecord; mutationId: string }> {
+    const organisationId = context.organisationId || this.defaultOrgId || DEFAULT_ORG_ID;
+    const branchId = context.branchId || this.defaultBranchId || DEFAULT_BRANCH_ID;
+    const userId = context.userId || this.defaultUserId || DEFAULT_USER_ID;
+    const deviceId = context.deviceId || (await this.syncMetaRepo.getDeviceId());
+
+    const amount = Number(movementData.amount);
+    if (isNaN(amount) || amount <= 0) {
+      throw new Error('Movement amount must be greater than 0.');
+    }
+
+    const type = movementData.movementType.toUpperCase() === 'IN' ? 'IN' : 'OUT';
+    const movementId = movementData.movementId || generateUUID();
+    const mutationId = generateUUID();
+    const occurredAt = new Date().toISOString();
+    const movementNumber =
+      movementData.movementNumber || `PC-${Date.now().toString().slice(-6)}`;
+
+    return this.db.transaction(
+      'rw',
+      [
+        this.db.register_sessions,
+        this.db.cash_movements,
+        this.db.transactions,
+        this.db.sync_outbox,
+      ],
+      async () => {
+        // 1. Resolve session
+        let sessionId = movementData.cashRegisterSessionId;
+        if (!sessionId) {
+          const activeSession = await this.db.register_sessions
+            .where('[organisationId+branchId]')
+            .equals([organisationId, branchId])
+            .filter((s) => s.status === 'OPEN')
+            .first();
+
+          if (!activeSession) {
+            throw new Error('Cannot record cash movement without an active open register session.');
+          }
+          sessionId = activeSession.id;
+        } else {
+          const sess = await this.db.register_sessions.get(sessionId);
+          if (!sess) {
+            throw new Error(`Register session ${sessionId} not found.`);
+          }
+          if (sess.status === 'CLOSED' || sess.status === 'CLOSE_PENDING') {
+            throw new Error(`Register session ${sessionId} is ${sess.status.toLowerCase()}. Movements cannot be added.`);
+          }
+        }
+
+        // 2. Persist movement record
+        const movementRecord: CashMovementRecord = {
+          id: movementId,
+          organisationId,
+          branchId,
+          cashRegisterSessionId: sessionId,
+          cashierId: userId,
+          movementNumber,
+          movementType: type,
+          amount,
+          reason: movementData.reason || (type === 'IN' ? 'Cash float addition' : 'General payout'),
+          occurredAt,
+          syncStatus: 'PENDING',
+          updatedAt: occurredAt,
+        };
+        await this.db.cash_movements.put(movementRecord);
+
+        // 3. Audit transaction log
+        const transactionRecord: TransactionRecord = {
+          transactionId: generateUUID(),
+          mutationId,
+          type: 'CASH_MOVEMENT',
+          organisationId,
+          branchId,
+          userId,
+          deviceId,
+          payload: {
+            movementId,
+            cashRegisterSessionId: sessionId,
+            movementNumber,
+            movementType: type,
+            amount,
+            reason: movementRecord.reason,
+          },
+          occurredAt,
+          status: 'LOCAL_COMMITTED',
+          syncStatus: 'PENDING',
+          createdAt: occurredAt,
+          updatedAt: occurredAt,
+        };
+        await this.db.transactions.put(transactionRecord);
+
+        // 4. Enqueue RECORD_CASH_MOVEMENT in outbox
+        const outboxRecord: Omit<SyncOutboxRecord, 'sequence'> = {
+          mutationId,
+          mutationType: 'RECORD_CASH_MOVEMENT',
+          organisationId,
+          branchId,
+          deviceId,
+          userId,
+          payload: {
+            movementId,
+            cashRegisterSessionId: sessionId,
+            movementNumber,
+            movementType: type,
+            amount,
+            reason: movementRecord.reason,
+          },
+          status: 'PENDING',
+          attemptCount: 0,
+          createdAt: occurredAt,
+          updatedAt: occurredAt,
+        };
+        await this.db.sync_outbox.add(outboxRecord as SyncOutboxRecord);
+
+        return { movement: movementRecord, mutationId };
+      }
+    );
+  }
+
+  /**
+   * Retrieve all cash movements for a given session.
+   */
+  async getLocalCashMovements(
+    sessionId: string,
+    organisationId = this.defaultOrgId || DEFAULT_ORG_ID,
+    branchId = this.defaultBranchId || DEFAULT_BRANCH_ID
+  ): Promise<CashMovementRecord[]> {
+    return this.db.cash_movements
+      .where('cashRegisterSessionId')
+      .equals(sessionId)
+      .toArray();
+  }
+
+  /**
+   * Save denomination counts entered during register reconciliation.
+   */
+  async saveLocalDenominations(
+    sessionId: string,
+    denominations: Record<string | number, number>,
+    context: { organisationId?: string } = {}
+  ): Promise<void> {
+    const organisationId = context.organisationId || this.defaultOrgId || DEFAULT_ORG_ID;
+    const now = new Date().toISOString();
+
+    for (const [val, count] of Object.entries(denominations)) {
+      const denomVal = Number(val);
+      const denomCount = Number(count);
+      if (denomVal > 0 && denomCount >= 0) {
+        await this.db.cash_denominations.put({
+          id: `${sessionId}_${denomVal}`,
+          organisationId,
+          cashRegisterSessionId: sessionId,
+          denominationValue: denomVal,
+          denominationCount: denomCount,
+          updatedAt: now,
+        });
+      }
+    }
+  }
+
+  /**
+   * Prepare local register close & reconciliation:
+   * 1. Marks session as CLOSE_PENDING locally (does NOT mark CLOSED offline!).
+   * 2. Computes expected cash, counted cash, and variance.
+   * 3. Stores closing denominations in Dexie.
+   * 4. Enqueues durable `CLOSE_REGISTER_SESSION` mutation to push to authoritative server.
+   */
+  async prepareLocalDayClose(
+    closeData: {
+      sessionId?: string;
+      countedCash: number;
+      notes?: string;
+      denominations?: Record<string | number, number>;
+    },
+    context: {
+      organisationId?: string;
+      branchId?: string;
+      userId?: string;
+      deviceId?: string;
+    } = {}
+  ): Promise<{ session: RegisterSessionRecord; mutationId: string }> {
+    const organisationId = context.organisationId || this.defaultOrgId || DEFAULT_ORG_ID;
+    const branchId = context.branchId || this.defaultBranchId || DEFAULT_BRANCH_ID;
+    const userId = context.userId || this.defaultUserId || DEFAULT_USER_ID;
+    const deviceId = context.deviceId || (await this.syncMetaRepo.getDeviceId());
+
+    const mutationId = generateUUID();
+    const occurredAt = new Date().toISOString();
+    const countedCash = Number(Number(closeData.countedCash || 0).toFixed(2));
+
+    return this.db.transaction(
+      'rw',
+      [
+        this.db.register_sessions,
+        this.db.cash_movements,
+        this.db.cash_denominations,
+        this.db.transactions,
+        this.db.sync_outbox,
+      ],
+      async () => {
+        let sessionId = closeData.sessionId;
+        if (!sessionId) {
+          const activeSession = await this.db.register_sessions
+            .where('[organisationId+branchId]')
+            .equals([organisationId, branchId])
+            .filter((s) => s.status === 'OPEN' || s.status === 'CLOSE_PENDING')
+            .first();
+
+          if (!activeSession) {
+            throw new Error('No open cash register session found to close.');
+          }
+          sessionId = activeSession.id;
+        }
+
+        const session = await this.db.register_sessions.get(sessionId);
+        if (!session) {
+          throw new Error(`Register session ${sessionId} not found.`);
+        }
+        if (session.status === 'CLOSED') {
+          throw new Error(`Register session ${sessionId} is already closed.`);
+        }
+
+        // Calculate expected cash from local movements & opening float
+        const movements = await this.db.cash_movements
+          .where('cashRegisterSessionId')
+          .equals(sessionId)
+          .toArray();
+
+        const cashIn = movements
+          .filter((m) => m.movementType === 'IN' && m.reason !== 'Opening float balance')
+          .reduce((sum, m) => sum + Number(m.amount), 0);
+
+        const cashOut = movements
+          .filter((m) => m.movementType === 'OUT')
+          .reduce((sum, m) => sum + Number(m.amount), 0);
+
+        // Authoritative formula: openingBalance + cashIn - cashOut (+ cashSales will be reconciled on server)
+        const expectedCash = Number((session.openingBalance + cashIn - cashOut).toFixed(2));
+        const variance = Number((countedCash - expectedCash).toFixed(2));
+        const varianceStatus: 'BALANCED' | 'SHORTAGE' | 'OVERAGE' =
+          variance === 0 ? 'BALANCED' : variance > 0 ? 'OVERAGE' : 'SHORTAGE';
+
+        // Update local session to CLOSE_PENDING (server push is authoritative for CLOSED)
+        const updatedSession: RegisterSessionRecord = {
+          ...session,
+          status: 'CLOSE_PENDING',
+          countedCash,
+          expectedCash,
+          variance,
+          varianceStatus,
+          closingNotes: closeData.notes || undefined,
+          syncStatus: 'PENDING',
+          updatedAt: occurredAt,
+        };
+        await this.db.register_sessions.put(updatedSession);
+
+        // Save denominations if provided
+        if (closeData.denominations && typeof closeData.denominations === 'object') {
+          for (const [val, count] of Object.entries(closeData.denominations)) {
+            const denomVal = Number(val);
+            const denomCount = Number(count);
+            if (denomVal > 0 && denomCount >= 0) {
+              await this.db.cash_denominations.put({
+                id: `${sessionId}_${denomVal}`,
+                organisationId,
+                cashRegisterSessionId: sessionId,
+                denominationValue: denomVal,
+                denominationCount: denomCount,
+                updatedAt: occurredAt,
+              });
+            }
+          }
+        }
+
+        // Transaction record
+        const transactionRecord: TransactionRecord = {
+          transactionId: generateUUID(),
+          mutationId,
+          type: 'REGISTER_CLOSE',
+          organisationId,
+          branchId,
+          userId,
+          deviceId,
+          payload: {
+            sessionId,
+            countedCash,
+            expectedCash,
+            variance,
+            varianceStatus,
+            notes: closeData.notes,
+            denominations: closeData.denominations,
+          },
+          occurredAt,
+          status: 'LOCAL_COMMITTED',
+          syncStatus: 'PENDING',
+          createdAt: occurredAt,
+          updatedAt: occurredAt,
+        };
+        await this.db.transactions.put(transactionRecord);
+
+        // Enqueue CLOSE_REGISTER_SESSION in sync_outbox
+        const outboxRecord: Omit<SyncOutboxRecord, 'sequence'> = {
+          mutationId,
+          mutationType: 'CLOSE_REGISTER_SESSION',
+          organisationId,
+          branchId,
+          deviceId,
+          userId,
+          payload: {
+            sessionId,
+            countedCash,
+            expectedCash,
+            variance,
+            varianceStatus,
+            notes: closeData.notes,
+            denominations: closeData.denominations,
+          },
+          status: 'PENDING',
+          attemptCount: 0,
+          createdAt: occurredAt,
+          updatedAt: occurredAt,
+        };
+        await this.db.sync_outbox.add(outboxRecord as SyncOutboxRecord);
+
+        return { session: updatedSession, mutationId };
+      }
+    );
   }
 }
 

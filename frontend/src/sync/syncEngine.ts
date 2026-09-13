@@ -339,7 +339,11 @@ export class SyncEngine {
 
       for (const item of eligibleBatch) {
         const result = resultMap.get(item.mutationId);
-        const txId = item.payload?.clientTransactionId || item.payload?.transactionId;
+        let txId = item.payload?.clientTransactionId || item.payload?.transactionId || item.payload?.paymentId || item.payload?.returnId;
+        if (!txId) {
+          const tx = await this.txRepo.getTransactionByMutationId(item.mutationId);
+          if (tx) txId = tx.transactionId;
+        }
 
         if (!result) {
           // Unacknowledged mutation: treat as retryable
@@ -377,6 +381,44 @@ export class SyncEngine {
                 syncStatus: 'SYNCED',
                 updatedAt: new Date().toISOString(),
               });
+            }
+          }
+          if (item.mutationType === 'OPEN_REGISTER_SESSION') {
+            const sessId = item.payload?.sessionId || item.payload?.id;
+            if (sessId) {
+              const sess = await this.db.register_sessions.get(sessId);
+              if (sess) {
+                await this.db.register_sessions.put({
+                  ...sess,
+                  syncStatus: 'SYNCED',
+                  updatedAt: new Date().toISOString(),
+                });
+              }
+            }
+          } else if (item.mutationType === 'RECORD_CASH_MOVEMENT') {
+            const movId = item.payload?.movementId || item.payload?.id;
+            if (movId) {
+              const mov = await this.db.cash_movements.get(movId);
+              if (mov) {
+                await this.db.cash_movements.put({
+                  ...mov,
+                  syncStatus: 'SYNCED',
+                  updatedAt: new Date().toISOString(),
+                });
+              }
+            }
+          } else if (item.mutationType === 'CLOSE_REGISTER_SESSION') {
+            const sessId = item.payload?.sessionId || item.payload?.id;
+            if (sessId) {
+              const sess = await this.db.register_sessions.get(sessId);
+              if (sess) {
+                await this.db.register_sessions.put({
+                  ...sess,
+                  status: 'CLOSED',
+                  syncStatus: 'SYNCED',
+                  updatedAt: new Date().toISOString(),
+                });
+              }
             }
           }
           logSyncEvent('mutation_succeeded', {

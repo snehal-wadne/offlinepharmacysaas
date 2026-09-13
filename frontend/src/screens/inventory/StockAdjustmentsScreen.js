@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -9,11 +9,18 @@ import {
   useWindowDimensions,
   Platform,
   Modal,
-} from 'react-native';
-import InventoryStatCard from '../../components/inventory/InventoryStatCard';
-import { SkeletonKpiCard, SkeletonTableRow, SkeletonItemCard } from '../../components/common/SkeletonLoader';
-import PaginationControls from '../../components/common/PaginationControls';
-import { CURRENT_STOCK_KPIS, MOCK_STOCK_ITEMS } from '../../data/currentStockMockData';
+} from "react-native";
+import InventoryStatCard from "../../components/inventory/InventoryStatCard";
+import {
+  SkeletonKpiCard,
+  SkeletonTableRow,
+  SkeletonItemCard,
+} from "../../components/common/SkeletonLoader";
+import PaginationControls from "../../components/common/PaginationControls";
+import {
+  CURRENT_STOCK_KPIS,
+  MOCK_STOCK_ITEMS,
+} from "../../data/currentStockMockData";
 import {
   fetchInventory,
   saveInventoryEntry,
@@ -21,10 +28,15 @@ import {
   deleteInventoryEntry,
   recordStockMovementApi,
   fetchItemBarcode,
-} from '../../api/inventoryApi';
-import { API_URL } from '../../config';
+} from "../../api/inventoryApi";
+import { API_URL } from "../../config";
+import { localPersistenceService } from "../../db";
+import { syncEngine } from "../../sync";
 
-export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = true }) {
+export default function StockAdjustmentsScreen({
+  onShowToast,
+  isMultiBranch = true,
+}) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
   const isMobile = width < 768;
@@ -33,42 +45,131 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
   const [stockItems, setStockItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingItemId, setEditingItemId] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
+    let isMounted = true;
     loadInventoryData();
     loadBranchesData();
+
+    const subscribeFn =
+      typeof syncEngine?.onStateChange === "function"
+        ? syncEngine.onStateChange.bind(syncEngine)
+        : typeof syncEngine?.subscribe === "function"
+          ? syncEngine.subscribe.bind(syncEngine)
+          : null;
+
+    const unsubscribe = subscribeFn
+      ? subscribeFn(() => {
+          if (isMounted) loadInventoryData();
+        })
+      : null;
+
+    return () => {
+      isMounted = false;
+      if (unsubscribe) unsubscribe();
+    };
   }, []);
 
   const loadInventoryData = async () => {
     try {
       setLoading(true);
-      const res = await fetchInventory();
-      if (res && res.data && Array.isArray(res.data) && res.data.length > 0) {
-        setStockItems(
-          res.data.map((item, idx) => ({
-            ...item,
-            isActive: item.isActive !== undefined ? item.isActive : true,
-            rxRequired: item.rxRequired !== undefined ? item.rxRequired : idx % 2 === 0,
-          }))
-        );
+      const tenantCtx =
+        typeof localPersistenceService?.getTenantContext === "function"
+          ? localPersistenceService.getTenantContext()
+          : { isDemo: true, branchId: "Main Store" };
+
+      let localProds = [];
+      if (typeof localPersistenceService?.getCatalogForPos === "function") {
+        const cat = await localPersistenceService.getCatalogForPos();
+        if (Array.isArray(cat) && cat.length > 0) {
+          localProds = cat.flatMap((prod) => {
+            if (Array.isArray(prod.batches) && prod.batches.length > 0) {
+              return prod.batches.map((b, bIdx) => ({
+                id: b.id || `${prod.productId}_${b.batchNumber}`,
+                productId: prod.productId || prod.id,
+                medicineName: prod.name,
+                brandName: prod.name,
+                genericName: prod.genericName || prod.name,
+                strength: prod.strength || "",
+                packSize: prod.packSize || "",
+                manufacturer: prod.manufacturer || "Pharma Lab",
+                supplierName: b.supplierName || "Distributor",
+                sku: prod.sku || `SKU-${prod.productId?.slice(0, 4)}`,
+                batchNo: b.batchNumber,
+                batchNumber: b.batchNumber,
+                quantity: Number(b.availableQuantity ?? b.quantity ?? 0),
+                amount: `₹${Number(b.mrp || 0).toFixed(2)}`,
+                branchId: b.branchId || tenantCtx.branchId || "Main Store",
+                shelfLocation: b.shelfLocation || "A-1",
+                updatedBy: "Staff",
+                lastUpdated: new Date().toISOString().split("T")[0],
+                status:
+                  Number(b.availableQuantity) < 50
+                    ? Number(b.availableQuantity) === 0
+                      ? "Out of Stock"
+                      : "Low Stock"
+                    : "In Stock",
+                isActive: true,
+                rxRequired: bIdx % 2 === 0,
+                syncStatus: "SYNCED",
+              }));
+            }
+            return [
+              {
+                id: prod.productId || prod.id,
+                productId: prod.productId || prod.id,
+                medicineName: prod.name,
+                brandName: prod.name,
+                genericName: prod.name,
+                strength: "",
+                packSize: "",
+                manufacturer: "Pharma Lab",
+                supplierName: "Direct",
+                sku: prod.sku || "",
+                batchNo: "B-1001",
+                batchNumber: "B-1001",
+                quantity: Number(prod.stock || 0),
+                amount: `₹${Number(prod.price || 0).toFixed(2)}`,
+                branchId: tenantCtx.branchId || "Main Store",
+                shelfLocation: "A-1",
+                updatedBy: "Staff",
+                lastUpdated: new Date().toISOString().split("T")[0],
+                status: Number(prod.stock) < 50 ? "Low Stock" : "In Stock",
+                isActive: true,
+                rxRequired: false,
+                syncStatus: "SYNCED",
+              },
+            ];
+          });
+        }
+      }
+
+      if (localProds.length > 0) {
+        setStockItems(localProds);
+      } else if (!tenantCtx.isDemo) {
+        // Authenticated real tenant with 0 items: display empty real state
+        setStockItems([]);
       } else {
+        // Fall back to mock items ONLY in unauthenticated / demo mode
         setStockItems(
           MOCK_STOCK_ITEMS.map((item, idx) => ({
             ...item,
             isActive: item.isActive !== undefined ? item.isActive : true,
-            rxRequired: item.rxRequired !== undefined ? item.rxRequired : idx % 2 === 0,
-          }))
+            rxRequired:
+              item.rxRequired !== undefined ? item.rxRequired : idx % 2 === 0,
+          })),
         );
       }
     } catch (err) {
-      console.warn('Failed to load inventory from backend DB:', err.message);
+      console.warn("Failed to load inventory:", err.message);
       setStockItems(
         MOCK_STOCK_ITEMS.map((item, idx) => ({
           ...item,
           isActive: item.isActive !== undefined ? item.isActive : true,
-          rxRequired: item.rxRequired !== undefined ? item.rxRequired : idx % 2 === 0,
-        }))
+          rxRequired:
+            item.rxRequired !== undefined ? item.rxRequired : idx % 2 === 0,
+        })),
       );
     } finally {
       setLoading(false);
@@ -83,25 +184,28 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
   const [selectedItemForAction, setSelectedItemForAction] = useState(null);
   const [actionMenuModalOpen, setActionMenuModalOpen] = useState(false);
 
-
   // Quick Quantity Adjustment Modal State
   const [adjustModalOpen, setAdjustModalOpen] = useState(false);
-  const [adjustDelta, setAdjustDelta] = useState('10');
-  const [adjustType, setAdjustType] = useState('CYCLE_COUNT');
-  const [adjustReason, setAdjustReason] = useState('Physical stock count adjustment');
+  const [adjustDelta, setAdjustDelta] = useState("10");
+  const [adjustType, setAdjustType] = useState("CYCLE_COUNT");
+  const [adjustReason, setAdjustReason] = useState(
+    "Physical stock count adjustment",
+  );
 
   // Inter-Branch Transfer Modal State
   const [transferModalOpen, setTransferModalOpen] = useState(false);
-  const [fromBranch, setFromBranch] = useState('');
-  const [toBranch, setToBranch] = useState('');
-  const [transferQty, setTransferQty] = useState('50');
-  const [transferReason, setTransferReason] = useState('Inter-branch stock rebalancing');
-  const [transferError, setTransferError] = useState('');
+  const [fromBranch, setFromBranch] = useState("");
+  const [toBranch, setToBranch] = useState("");
+  const [transferQty, setTransferQty] = useState("50");
+  const [transferReason, setTransferReason] = useState(
+    "Inter-branch stock rebalancing",
+  );
+  const [transferError, setTransferError] = useState("");
   const [branchesList, setBranchesList] = useState([
-    { id: 'BR-01', name: 'FIT Main Campus Hospital Pharmacy', city: 'Pune' },
-    { id: 'BR-02', name: 'FIT Pune City OPD Pharmacy', city: 'Pune' },
-    { id: 'BR-03', name: 'FIT Central Medical Warehouse', city: 'Pune' },
-    { id: 'BR-04', name: 'FIT Student Health Center Dispensary', city: 'Pune' },
+    { id: "BR-01", name: "FIT Main Campus Hospital Pharmacy", city: "Pune" },
+    { id: "BR-02", name: "FIT Pune City OPD Pharmacy", city: "Pune" },
+    { id: "BR-03", name: "FIT Central Medical Warehouse", city: "Pune" },
+    { id: "BR-04", name: "FIT Student Health Center Dispensary", city: "Pune" },
   ]);
 
   // Barcode & Thermal Shelf Tag Modal State
@@ -109,8 +213,8 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
   const [barcodeItemData, setBarcodeItemData] = useState(null);
   const [barcodeLoading, setBarcodeLoading] = useState(false);
   const [barcodeConfig, setBarcodeConfig] = useState({
-    format: 'thermal_50x25',
-    copies: '1',
+    format: "thermal_50x25",
+    copies: "1",
     showPrice: true,
     showExpiry: true,
     showBatch: true,
@@ -134,37 +238,37 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
         const json = await res.json();
         if (json.success && Array.isArray(json.data) && json.data.length > 0) {
           const activeOnly = json.data.filter(
-            (b) => b.status === 'ACTIVE' || b.status === 'Active' || !b.status
+            (b) => b.status === "ACTIVE" || b.status === "Active" || !b.status,
           );
           setBranchesList(
             activeOnly.map((b, idx) => ({
               id: b.id || `BR-0${idx + 1}`,
               name: b.name,
-              city: b.city || 'Pune',
-            }))
+              city: b.city || "Pune",
+            })),
           );
         }
       }
     } catch (e) {
-      console.warn('Failed to fetch branches from API:', e.message);
+      console.warn("Failed to fetch branches from API:", e.message);
     }
   };
 
   // Add/Edit Medicine Entry Form State
   const [formData, setFormData] = useState({
-    medicineName: '',
-    brandName: '',
-    genericName: '',
-    strength: '',
-    packSize: '',
-    manufacturer: '',
-    supplierName: '',
-    amount: '',
-    sku: '',
-    batchNo: '',
-    quantity: '',
-    branchId: 'Main Store',
-    shelfLocation: '',
+    medicineName: "",
+    brandName: "",
+    genericName: "",
+    strength: "",
+    packSize: "",
+    manufacturer: "",
+    supplierName: "",
+    amount: "",
+    sku: "",
+    batchNo: "",
+    quantity: "",
+    branchId: "Main Store",
+    shelfLocation: "",
   });
   const [formErrors, setFormErrors] = useState({});
 
@@ -183,14 +287,14 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
           if (onShowToast) {
             onShowToast(
               `[PATCH /api/inventory/${item.sku}/status] ${item.brandName || item.medicineName} status: ${
-                nextActive ? 'Active (Live in billing)' : 'Deactivated / Hidden'
-              }`
+                nextActive ? "Active (Live in billing)" : "Deactivated / Hidden"
+              }`,
             );
           }
           return { ...item, isActive: nextActive };
         }
         return item;
-      })
+      }),
     );
   };
 
@@ -202,14 +306,14 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
           if (onShowToast) {
             onShowToast(
               `[PATCH /api/inventory/${item.sku}/rx] ${item.brandName || item.medicineName}: Prescription required: ${
-                nextRx ? 'YES (Rx Needed)' : 'NO (OTC)'
-              }`
+                nextRx ? "YES (Rx Needed)" : "NO (OTC)"
+              }`,
             );
           }
           return { ...item, rxRequired: nextRx };
         }
         return item;
-      })
+      }),
     );
   };
 
@@ -223,73 +327,88 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
     setActionMenuModalOpen(false);
     if (!item) return;
 
-
-    if (actionKey === 'adjust') {
-      setAdjustDelta('10');
+    if (actionKey === "adjust") {
+      setAdjustDelta("10");
       setAdjustModalOpen(true);
       return;
     }
 
-    if (actionKey === 'transfer') {
+    if (actionKey === "transfer") {
       if (!isMultiBranch) {
-        if (onShowToast) onShowToast('Inter-branch transfers are only available in Multi-Branch mode.');
+        if (onShowToast)
+          onShowToast(
+            "Inter-branch transfers are only available in Multi-Branch mode.",
+          );
         return;
       }
-      const currentBranch = item.branchId || 'FIT Main Campus Hospital Pharmacy';
+      const currentBranch =
+        item.branchId || "FIT Main Campus Hospital Pharmacy";
       setFromBranch(currentBranch);
 
       const destCandidate =
-        branchesList.find((b) => b.name !== currentBranch && b.id !== currentBranch) ||
+        branchesList.find(
+          (b) => b.name !== currentBranch && b.id !== currentBranch,
+        ) ||
         branchesList[1] ||
         branchesList[0];
-      setToBranch(destCandidate ? destCandidate.name || destCandidate.id : 'FIT Pune City OPD Pharmacy');
-      setTransferQty(item.quantity > 50 ? '50' : String(Math.max(1, Math.floor(item.quantity / 2))));
-      setTransferReason('Inter-branch stock rebalancing');
-      setTransferError('');
+      setToBranch(
+        destCandidate
+          ? destCandidate.name || destCandidate.id
+          : "FIT Pune City OPD Pharmacy",
+      );
+      setTransferQty(
+        item.quantity > 50
+          ? "50"
+          : String(Math.max(1, Math.floor(item.quantity / 2))),
+      );
+      setTransferReason("Inter-branch stock rebalancing");
+      setTransferError("");
       setTransferModalOpen(true);
       return;
     }
 
-    if (actionKey === 'barcode') {
+    if (actionKey === "barcode") {
       handleOpenBarcodeModal(item);
       return;
     }
 
-    if (actionKey === 'edit') {
+    if (actionKey === "edit") {
       setEditingItemId(item.id);
       setFormData({
-        medicineName: item.medicineName || item.genericName || '',
-        brandName: item.brandName || '',
-        genericName: item.genericName || item.medicineName || '',
-        strength: item.strength || '',
-        packSize: item.packSize || '',
-        manufacturer: item.manufacturer || '',
-        supplierName: item.supplierName || '',
-        amount: item.amount ? String(item.amount).replace(/[^0-9.]/g, '') : '',
-        sku: item.sku || '',
-        batchNo: item.batchNo || '',
-        quantity: item.quantity !== undefined ? String(item.quantity) : '',
-        branchId: item.branchId || 'Main Store',
-        shelfLocation: item.shelfLocation || '',
+        medicineName: item.medicineName || item.genericName || "",
+        brandName: item.brandName || "",
+        genericName: item.genericName || item.medicineName || "",
+        strength: item.strength || "",
+        packSize: item.packSize || "",
+        manufacturer: item.manufacturer || "",
+        supplierName: item.supplierName || "",
+        amount: item.amount ? String(item.amount).replace(/[^0-9.]/g, "") : "",
+        sku: item.sku || "",
+        batchNo: item.batchNo || "",
+        quantity: item.quantity !== undefined ? String(item.quantity) : "",
+        branchId: item.branchId || "Main Store",
+        shelfLocation: item.shelfLocation || "",
       });
       if (onShowToast) {
         onShowToast(
-          `✏️ Loaded "${item.brandName}" details into form below for editing.`
+          `✏️ Loaded "${item.brandName}" details into form below for editing.`,
         );
       }
       return;
     }
 
-    if (actionKey === 'delete') {
+    if (actionKey === "delete") {
       deleteInventoryEntry(item.id)
         .then(() => {
           setStockItems((prev) => prev.filter((i) => i.id !== item.id));
           if (onShowToast) {
-            onShowToast(`[DELETE /api/inventory/${item.id}] Removed "${item.brandName}" from database.`);
+            onShowToast(
+              `[DELETE /api/inventory/${item.id}] Removed "${item.brandName}" from database.`,
+            );
           }
         })
         .catch((err) => {
-          console.error('Delete failed:', err);
+          console.error("Delete failed:", err);
           setStockItems((prev) => prev.filter((i) => i.id !== item.id));
           if (onShowToast) {
             onShowToast(`Removed "${item.brandName}" from inventory.`);
@@ -302,70 +421,89 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
   const handleSaveAdjustment = async () => {
     if (!selectedItemForAction) return;
     const deltaNum = parseInt(adjustDelta, 10);
-    if (isNaN(deltaNum)) {
-      if (onShowToast) onShowToast('Please enter a valid quantity change number');
+    if (isNaN(deltaNum) || deltaNum === 0) {
+      if (onShowToast)
+        onShowToast("Please enter a valid non-zero quantity change number");
       return;
     }
 
-    const newQty = Math.max(0, selectedItemForAction.quantity + deltaNum);
-    const updatedPayload = {
-      ...selectedItemForAction,
-      quantity: newQty,
-    };
-
-    try {
-      await updateInventoryEntry(selectedItemForAction.id, updatedPayload);
-      try {
-        await recordStockMovementApi({
-          branchName: selectedItemForAction.branchId || 'Main Branch',
-          type: 'Adjustment',
-          item: selectedItemForAction.brandName || selectedItemForAction.medicineName || 'Medicine Item',
-          quantity: deltaNum > 0 ? `+${deltaNum}` : `${deltaNum}`,
-          reference: selectedItemForAction.batchNo || 'ADJ-1001',
-          status: 'Completed',
-        });
-      } catch (err) {
-        console.warn('Failed to record stock movement:', err.message);
-        if (onShowToast) onShowToast('⚠️ Adjustment saved, but failed to log movement history');
-      }
-
-      setStockItems((prev) =>
-        prev.map((i) => {
-          if (i.id === selectedItemForAction.id) {
-            return {
-              ...i,
-              quantity: newQty,
-              lastUpdated: new Date().toISOString().split('T')[0],
-              status: newQty < 50 ? 'Low Stock' : 'In Stock',
-            };
-          }
-          return i;
-        })
-      );
+    const currentQty = Number(selectedItemForAction.quantity || 0);
+    const newQty = currentQty + deltaNum;
+    if (newQty < 0) {
       if (onShowToast) {
         onShowToast(
-          `[POST /api/inventory] Updated ${selectedItemForAction.brandName} by ${
-            deltaNum > 0 ? `+${deltaNum}` : deltaNum
-          } units in database. Reason: ${adjustReason}`
+          `Adjustment would cause negative stock (${currentQty} + (${deltaNum}) = ${newQty})`,
         );
       }
-    } catch (err) {
-      console.warn('Quantity update error:', err.message);
-      setStockItems((prev) =>
-        prev.map((i) => {
-          if (i.id === selectedItemForAction.id) {
-            return {
-              ...i,
-              quantity: newQty,
-              lastUpdated: new Date().toISOString().split('T')[0],
-              status: newQty < 50 ? 'Low Stock' : 'In Stock',
-            };
-          }
-          return i;
-        })
-      );
+      return;
     }
-    setAdjustModalOpen(false);
+
+    try {
+      if (typeof localPersistenceService?.adjustLocalStock === "function") {
+        await localPersistenceService.adjustLocalStock({
+          productId:
+            selectedItemForAction.productId || selectedItemForAction.id,
+          productName:
+            selectedItemForAction.brandName ||
+            selectedItemForAction.medicineName,
+          batchNumber:
+            selectedItemForAction.batchNo ||
+            selectedItemForAction.batchNumber ||
+            "B-1001",
+          deltaQuantity: deltaNum,
+          adjustmentType: adjustType,
+          reason: adjustReason,
+        });
+
+        setStockItems((prev) =>
+          prev.map((i) => {
+            if (i.id === selectedItemForAction.id) {
+              return {
+                ...i,
+                quantity: newQty,
+                lastUpdated: new Date().toISOString().split("T")[0],
+                status:
+                  newQty < 50
+                    ? newQty === 0
+                      ? "Out of Stock"
+                      : "Low Stock"
+                    : "In Stock",
+                syncStatus: "PENDING",
+              };
+            }
+            return i;
+          }),
+        );
+        setAdjustModalOpen(false);
+
+        if (onShowToast) {
+          onShowToast(
+            `✓ Stock adjustment of ${deltaNum > 0 ? `+${deltaNum}` : deltaNum} units saved locally!`,
+          );
+        }
+
+        if (typeof syncEngine?.sync === "function") {
+          syncEngine.sync().catch(() => {});
+        }
+      } else {
+        const updatedPayload = {
+          ...selectedItemForAction,
+          quantity: newQty,
+        };
+        await updateInventoryEntry(selectedItemForAction.id, updatedPayload);
+        setStockItems((prev) =>
+          prev.map((i) =>
+            i.id === selectedItemForAction.id ? { ...i, quantity: newQty } : i,
+          ),
+        );
+        setAdjustModalOpen(false);
+      }
+    } catch (err) {
+      console.error("[StockAdjustments] Error adjusting stock:", err);
+      if (onShowToast) {
+        onShowToast(`Error adjusting stock: ${err.message}`);
+      }
+    }
   };
 
   const handleConfirmTransfer = async () => {
@@ -373,23 +511,25 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
 
     const qtyNum = parseInt(transferQty, 10);
     if (isNaN(qtyNum) || qtyNum <= 0) {
-      setTransferError('Please enter a valid transfer quantity greater than 0.');
+      setTransferError(
+        "Please enter a valid transfer quantity greater than 0.",
+      );
       return;
     }
 
     if (qtyNum > selectedItemForAction.quantity) {
       setTransferError(
-        `Transfer quantity cannot exceed source branch stock (${selectedItemForAction.quantity} units).`
+        `Transfer quantity cannot exceed source branch stock (${selectedItemForAction.quantity} units).`,
       );
       return;
     }
 
     if (fromBranch === toBranch) {
-      setTransferError('Source and Destination branches must be different.');
+      setTransferError("Source and Destination branches must be different.");
       return;
     }
 
-    setTransferError('');
+    setTransferError("");
 
     const sourceItem = selectedItemForAction;
     const remainingSourceQty = sourceItem.quantity - qtyNum;
@@ -398,8 +538,13 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
     const updatedSourceItem = {
       ...sourceItem,
       quantity: remainingSourceQty,
-      lastUpdated: new Date().toISOString().split('T')[0],
-      status: remainingSourceQty < 50 ? (remainingSourceQty === 0 ? 'Out of Stock' : 'Low Stock') : 'In Stock',
+      lastUpdated: new Date().toISOString().split("T")[0],
+      status:
+        remainingSourceQty < 50
+          ? remainingSourceQty === 0
+            ? "Out of Stock"
+            : "Low Stock"
+          : "In Stock",
     };
 
     // 2. Check if item exists in target branch
@@ -408,7 +553,7 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
         i.sku === sourceItem.sku &&
         i.batchNo === sourceItem.batchNo &&
         (i.branchId === toBranch || i.branchName === toBranch) &&
-        i.id !== sourceItem.id
+        i.id !== sourceItem.id,
     );
 
     let updatedStockList = [];
@@ -419,8 +564,8 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
       const updatedDestItem = {
         ...destItem,
         quantity: newDestQty,
-        lastUpdated: new Date().toISOString().split('T')[0],
-        status: newDestQty < 50 ? 'Low Stock' : 'In Stock',
+        lastUpdated: new Date().toISOString().split("T")[0],
+        status: newDestQty < 50 ? "Low Stock" : "In Stock",
       };
 
       updatedStockList = stockItems.map((item, idx) => {
@@ -433,7 +578,7 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
         await updateInventoryEntry(sourceItem.id, updatedSourceItem);
         await updateInventoryEntry(destItem.id, updatedDestItem);
       } catch (e) {
-        console.warn('Backend transfer sync notice:', e.message);
+        console.warn("Backend transfer sync notice:", e.message);
       }
     } else {
       const newDestItem = {
@@ -441,13 +586,13 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
         id: `stk-trf-${Date.now()}`,
         branchId: toBranch,
         quantity: qtyNum,
-        lastUpdated: new Date().toISOString().split('T')[0],
-        status: qtyNum < 50 ? 'Low Stock' : 'In Stock',
-        updatedBy: 'Transfer System',
+        lastUpdated: new Date().toISOString().split("T")[0],
+        status: qtyNum < 50 ? "Low Stock" : "In Stock",
+        updatedBy: "Transfer System",
       };
 
       updatedStockList = stockItems.map((item) =>
-        item.id === sourceItem.id ? updatedSourceItem : item
+        item.id === sourceItem.id ? updatedSourceItem : item,
       );
       updatedStockList.unshift(newDestItem);
 
@@ -455,7 +600,7 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
         await updateInventoryEntry(sourceItem.id, updatedSourceItem);
         await saveInventoryEntry(newDestItem);
       } catch (e) {
-        console.warn('Backend transfer creation notice:', e.message);
+        console.warn("Backend transfer creation notice:", e.message);
       }
     }
 
@@ -464,7 +609,7 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
 
     if (onShowToast) {
       onShowToast(
-        `✓ Inter-Branch Transfer Success: ${qtyNum} units of "${sourceItem.brandName}" transferred from "${fromBranch}" to "${toBranch}". Stock updated!`
+        `✓ Inter-Branch Transfer Success: ${qtyNum} units of "${sourceItem.brandName}" transferred from "${fromBranch}" to "${toBranch}". Stock updated!`,
       );
     }
   };
@@ -474,23 +619,23 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
     setBarcodeModalOpen(true);
     setBarcodeLoading(true);
 
-    const fallbackBarcode = item.barcode || item.sku || 'MED-001';
+    const fallbackBarcode = item.barcode || item.sku || "MED-001";
     const initialData = {
       id: item.id,
       productId: item.productId || item.id,
-      medicineName: item.medicineName || item.genericName || 'Medicine',
-      brandName: item.brandName || item.medicineName || 'Medicine',
-      genericName: item.genericName || item.medicineName || '',
-      strength: item.strength || '500mg',
-      packSize: item.packSize || '10 Tablets',
-      sku: item.sku || 'SKU-001',
+      medicineName: item.medicineName || item.genericName || "Medicine",
+      brandName: item.brandName || item.medicineName || "Medicine",
+      genericName: item.genericName || item.medicineName || "",
+      strength: item.strength || "500mg",
+      packSize: item.packSize || "10 Tablets",
+      sku: item.sku || "SKU-001",
       barcode: fallbackBarcode,
-      batchNo: item.batchNo || 'B-1001',
-      expiryDate: item.expiryDate || '2028-12-31',
-      mrp: item.amount || '₹25.00',
-      shelfLocation: item.shelfLocation || 'Rack A1-S1',
-      branchName: item.branchId || 'Main Store',
-      pharmacyName: 'Falah Pharmacy',
+      batchNo: item.batchNo || "B-1001",
+      expiryDate: item.expiryDate || "2028-12-31",
+      mrp: item.amount || "₹25.00",
+      shelfLocation: item.shelfLocation || "Rack A1-S1",
+      branchName: item.branchId || "Main Store",
+      pharmacyName: "Falah Pharmacy",
     };
     setBarcodeItemData(initialData);
 
@@ -500,7 +645,7 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
         setBarcodeItemData(res.data);
       }
     } catch (err) {
-      console.warn('Using local item data for barcode modal:', err.message);
+      console.warn("Using local item data for barcode modal:", err.message);
     } finally {
       setBarcodeLoading(false);
     }
@@ -509,46 +654,49 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
   const handlePrintBarcodeLabel = () => {
     if (!barcodeItemData) return;
     const copies = parseInt(barcodeConfig.copies, 10) || 1;
-    const { format, showPrice, showExpiry, showBatch, showShelf, showGeneric } = barcodeConfig;
-    const isShelfTag = format === 'shelf_70x35';
-    const isA4 = format === 'sheet_a4';
+    const { format, showPrice, showExpiry, showBatch, showShelf, showGeneric } =
+      barcodeConfig;
+    const isShelfTag = format === "shelf_70x35";
+    const isA4 = format === "sheet_a4";
 
     if (onShowToast) {
-      onShowToast(`🖨️ Printing ${copies} label(s) for ${barcodeItemData.brandName}...`);
+      onShowToast(
+        `🖨️ Printing ${copies} label(s) for ${barcodeItemData.brandName}...`,
+      );
     }
 
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const labelWidth = isShelfTag ? '70mm' : isA4 ? '62mm' : '50mm';
-      const labelHeight = isShelfTag ? '35mm' : isA4 ? '30mm' : '25mm';
-      const pageMargin = isA4 ? '8mm' : '0mm';
-      const pageSize = isShelfTag ? '70mm 35mm' : isA4 ? 'A4' : '50mm 25mm';
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      const labelWidth = isShelfTag ? "70mm" : isA4 ? "62mm" : "50mm";
+      const labelHeight = isShelfTag ? "35mm" : isA4 ? "30mm" : "25mm";
+      const pageMargin = isA4 ? "8mm" : "0mm";
+      const pageSize = isShelfTag ? "70mm 35mm" : isA4 ? "A4" : "50mm 25mm";
 
       const singleLabelHtml = `
-        <div class="label-card ${isShelfTag ? 'shelf-tag' : ''}">
-          <div class="pharmacy-title">${barcodeItemData.pharmacyName || 'FALAH PHARMACY'}</div>
-          <div class="med-name">${barcodeItemData.brandName} ${barcodeItemData.strength || ''}</div>
-          ${showGeneric && barcodeItemData.genericName ? `<div class="generic-name">${barcodeItemData.genericName}</div>` : ''}
+        <div class="label-card ${isShelfTag ? "shelf-tag" : ""}">
+          <div class="pharmacy-title">${barcodeItemData.pharmacyName || "FALAH PHARMACY"}</div>
+          <div class="med-name">${barcodeItemData.brandName} ${barcodeItemData.strength || ""}</div>
+          ${showGeneric && barcodeItemData.genericName ? `<div class="generic-name">${barcodeItemData.genericName}</div>` : ""}
           <div class="meta-row">
-            ${showBatch ? `<span>B: ${barcodeItemData.batchNo}</span>` : ''}
-            ${showExpiry ? `<span>EXP: ${barcodeItemData.expiryDate}</span>` : ''}
-            ${showPrice ? `<span class="mrp-text">${barcodeItemData.mrp}</span>` : ''}
+            ${showBatch ? `<span>B: ${barcodeItemData.batchNo}</span>` : ""}
+            ${showExpiry ? `<span>EXP: ${barcodeItemData.expiryDate}</span>` : ""}
+            ${showPrice ? `<span class="mrp-text">${barcodeItemData.mrp}</span>` : ""}
           </div>
           <div class="meta-row">
-            ${showShelf ? `<span>Rack: ${barcodeItemData.shelfLocation || 'A1'}</span>` : ''}
-            <span>Pack: ${barcodeItemData.packSize || 'Units'}</span>
+            ${showShelf ? `<span>Rack: ${barcodeItemData.shelfLocation || "A1"}</span>` : ""}
+            <span>Pack: ${barcodeItemData.packSize || "Units"}</span>
           </div>
           <div class="barcode-container">
-            ${barcodeItemData.svgBarcode || ''}
+            ${barcodeItemData.svgBarcode || ""}
           </div>
         </div>
       `;
 
-      let labelsHtml = '';
+      let labelsHtml = "";
       for (let i = 0; i < copies; i++) {
         labelsHtml += singleLabelHtml;
       }
 
-      const printWindow = window.open('', '_blank', 'width=680,height=560');
+      const printWindow = window.open("", "_blank", "width=680,height=560");
       if (printWindow) {
         printWindow.document.write(`
           <!DOCTYPE html>
@@ -563,23 +711,23 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
                 background: #fff;
                 color: #000;
-                ${isA4 ? 'display: grid; grid-template-columns: repeat(3, 1fr); gap: 4mm; padding: 8mm;' : ''}
+                ${isA4 ? "display: grid; grid-template-columns: repeat(3, 1fr); gap: 4mm; padding: 8mm;" : ""}
               }
               .label-card {
                 width: ${labelWidth};
                 height: ${labelHeight};
-                padding: ${isShelfTag ? '3mm 4mm' : '2mm 2.5mm'};
+                padding: ${isShelfTag ? "3mm 4mm" : "2mm 2.5mm"};
                 display: flex;
                 flex-direction: column;
                 justify-content: space-between;
-                page-break-after: ${isA4 ? 'auto' : 'always'};
-                break-after: ${isA4 ? 'auto' : 'always'};
+                page-break-after: ${isA4 ? "auto" : "always"};
+                break-after: ${isA4 ? "auto" : "always"};
                 border: 0.5px dashed #bbb;
                 box-sizing: border-box;
                 overflow: hidden;
               }
               .pharmacy-title {
-                font-size: ${isShelfTag ? '9px' : '7.5px'};
+                font-size: ${isShelfTag ? "9px" : "7.5px"};
                 font-weight: 800;
                 text-align: center;
                 letter-spacing: 0.5px;
@@ -588,7 +736,7 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
                 text-transform: uppercase;
               }
               .med-name {
-                font-size: ${isShelfTag ? '11px' : '9px'};
+                font-size: ${isShelfTag ? "11px" : "9px"};
                 font-weight: 800;
                 margin-top: 1px;
                 white-space: nowrap;
@@ -596,7 +744,7 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
                 text-overflow: ellipsis;
               }
               .generic-name {
-                font-size: ${isShelfTag ? '8.5px' : '7px'};
+                font-size: ${isShelfTag ? "8.5px" : "7px"};
                 color: #333;
                 white-space: nowrap;
                 overflow: hidden;
@@ -605,11 +753,11 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
               .meta-row {
                 display: flex;
                 justify-content: space-between;
-                font-size: ${isShelfTag ? '8px' : '6.8px'};
+                font-size: ${isShelfTag ? "8px" : "6.8px"};
                 font-weight: 600;
               }
               .mrp-text {
-                font-size: ${isShelfTag ? '9.5px' : '8px'};
+                font-size: ${isShelfTag ? "9.5px" : "8px"};
                 font-weight: 800;
               }
               .barcode-container {
@@ -619,8 +767,8 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
                 margin-top: 1px;
               }
               .barcode-container svg {
-                width: ${isShelfTag ? '58mm' : '44mm'};
-                height: ${isShelfTag ? '13mm' : '10.5mm'};
+                width: ${isShelfTag ? "58mm" : "44mm"};
+                height: ${isShelfTag ? "13mm" : "10.5mm"};
               }
             </style>
           </head>
@@ -643,7 +791,7 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
   const handleCopyBarcode = () => {
     if (!barcodeItemData) return;
     const textToCopy = barcodeItemData.barcode || barcodeItemData.sku;
-    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
       navigator.clipboard.writeText(textToCopy);
     }
     if (onShowToast) {
@@ -653,30 +801,36 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
 
   const handleDownloadSvg = () => {
     if (!barcodeItemData || !barcodeItemData.svgBarcode) return;
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const blob = new Blob([barcodeItemData.svgBarcode], { type: 'image/svg+xml' });
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      const blob = new Blob([barcodeItemData.svgBarcode], {
+        type: "image/svg+xml",
+      });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
-      a.download = `Barcode-${barcodeItemData.sku || 'MED'}.svg`;
+      a.download = `Barcode-${barcodeItemData.sku || "MED"}.svg`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       if (onShowToast) {
-        onShowToast(`📥 Downloaded barcode SVG for ${barcodeItemData.brandName}`);
+        onShowToast(
+          `📥 Downloaded barcode SVG for ${barcodeItemData.brandName}`,
+        );
       }
     }
   };
 
   // Active KPI Filter State
-  const [activeKpiFilter, setActiveKpiFilter] = useState('ALL');
+  const [activeKpiFilter, setActiveKpiFilter] = useState("ALL");
 
   // Dynamic 4 KPI Cards calculated from stockItems
   const totalProductsCount = stockItems.length;
-  const lowStockCount = stockItems.filter((i) => Number(i.quantity) < 50).length;
+  const lowStockCount = stockItems.filter(
+    (i) => Number(i.quantity) < 50,
+  ).length;
   const nearExpiryCount = stockItems.filter((i) => {
-    if (i.status === 'Near Expiry') return true;
+    if (i.status === "Near Expiry") return true;
     if (i.expiryDate || i.expiry_date) {
       const d = new Date(i.expiryDate || i.expiry_date);
       const now = new Date();
@@ -686,7 +840,7 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
     return false;
   }).length;
   const expiredCount = stockItems.filter((i) => {
-    if (i.status === 'Expired') return true;
+    if (i.status === "Expired") return true;
     if (i.expiryDate || i.expiry_date) {
       return new Date(i.expiryDate || i.expiry_date) < new Date();
     }
@@ -695,42 +849,54 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
 
   const dynamicKpis = [
     {
-      id: 'kpi-total-products',
-      label: 'TOTAL PRODUCTS',
+      id: "kpi-total-products",
+      label: "TOTAL PRODUCTS",
       value: totalProductsCount.toLocaleString(),
-      subtext: activeKpiFilter === 'ALL' ? 'Showing all products' : 'Click to view all',
-      variant: 'teal',
-      key: 'ALL',
+      subtext:
+        activeKpiFilter === "ALL"
+          ? "Showing all products"
+          : "Click to view all",
+      variant: "teal",
+      key: "ALL",
     },
     {
-      id: 'kpi-low-stock',
-      label: 'LOW STOCK ITEMS',
+      id: "kpi-low-stock",
+      label: "LOW STOCK ITEMS",
       value: lowStockCount.toLocaleString(),
-      subtext: activeKpiFilter === 'LOW_STOCK' ? 'Filtered: Qty < 50' : 'Quantity < 50 units',
-      variant: 'amber',
-      key: 'LOW_STOCK',
+      subtext:
+        activeKpiFilter === "LOW_STOCK"
+          ? "Filtered: Qty < 50"
+          : "Quantity < 50 units",
+      variant: "amber",
+      key: "LOW_STOCK",
     },
     {
-      id: 'kpi-near-expiry',
-      label: 'NEAR EXPIRY ITEMS',
+      id: "kpi-near-expiry",
+      label: "NEAR EXPIRY ITEMS",
       value: nearExpiryCount.toLocaleString(),
-      subtext: activeKpiFilter === 'NEAR_EXPIRY' ? 'Filtered: Expiring < 90d' : 'Expiring < 90 days',
-      variant: 'blue',
-      key: 'NEAR_EXPIRY',
+      subtext:
+        activeKpiFilter === "NEAR_EXPIRY"
+          ? "Filtered: Expiring < 90d"
+          : "Expiring < 90 days",
+      variant: "blue",
+      key: "NEAR_EXPIRY",
     },
     {
-      id: 'kpi-expired',
-      label: 'EXPIRED ITEMS',
+      id: "kpi-expired",
+      label: "EXPIRED ITEMS",
       value: expiredCount.toLocaleString(),
-      subtext: activeKpiFilter === 'EXPIRED' ? 'Filtered: Out of stock / expired' : 'Expired / Out of stock',
-      variant: 'red',
-      key: 'EXPIRED',
+      subtext:
+        activeKpiFilter === "EXPIRED"
+          ? "Filtered: Out of stock / expired"
+          : "Expired / Out of stock",
+      variant: "red",
+      key: "EXPIRED",
     },
   ];
 
   const handleKpiCardPress = (kpiKey, label) => {
-    if (activeKpiFilter === kpiKey && kpiKey !== 'ALL') {
-      setActiveKpiFilter('ALL');
+    if (activeKpiFilter === kpiKey && kpiKey !== "ALL") {
+      setActiveKpiFilter("ALL");
       if (onShowToast) onShowToast(`Reset filter: Showing all products`);
     } else {
       setActiveKpiFilter(kpiKey);
@@ -739,9 +905,10 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
   };
 
   const displayedStockItems = stockItems.filter((item) => {
-    if (activeKpiFilter === 'LOW_STOCK' && Number(item.quantity) >= 50) return false;
-    if (activeKpiFilter === 'NEAR_EXPIRY') {
-      if (item.status === 'Near Expiry') return true;
+    if (activeKpiFilter === "LOW_STOCK" && Number(item.quantity) >= 50)
+      return false;
+    if (activeKpiFilter === "NEAR_EXPIRY") {
+      if (item.status === "Near Expiry") return true;
       if (item.expiryDate || item.expiry_date) {
         const d = new Date(item.expiryDate || item.expiry_date);
         const now = new Date();
@@ -750,8 +917,8 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
       }
       return false;
     }
-    if (activeKpiFilter === 'EXPIRED') {
-      if (item.status === 'Expired') return true;
+    if (activeKpiFilter === "EXPIRED") {
+      if (item.status === "Expired") return true;
       if (item.expiryDate || item.expiry_date) {
         return new Date(item.expiryDate || item.expiry_date) < new Date();
       }
@@ -761,9 +928,18 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
     if (filterActiveOnly && item.isActive === false) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase().trim();
-      const matchName = (item.medicine || item.brandName || item.medicineName || '').toLowerCase().includes(q);
-      const matchBatch = (item.batchNo || item.batch || '').toLowerCase().includes(q);
-      const matchSku = (item.sku || '').toLowerCase().includes(q);
+      const matchName = (
+        item.medicine ||
+        item.brandName ||
+        item.medicineName ||
+        ""
+      )
+        .toLowerCase()
+        .includes(q);
+      const matchBatch = (item.batchNo || item.batch || "")
+        .toLowerCase()
+        .includes(q);
+      const matchSku = (item.sku || "").toLowerCase().includes(q);
       if (!matchName && !matchBatch && !matchSku) return false;
     }
     return true;
@@ -782,7 +958,10 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
   const totalItems = displayedStockItems.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
   const startIndex = (page - 1) * pageSize;
-  const paginatedStockItems = displayedStockItems.slice(startIndex, startIndex + pageSize);
+  const paginatedStockItems = displayedStockItems.slice(
+    startIndex,
+    startIndex + pageSize,
+  );
 
   const handlePageChange = (newPage) => {
     setIsPageLoading(true);
@@ -799,17 +978,24 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
 
   const handleAddOrUpdateMedicine = async () => {
     const errors = {};
-    if (!formData.medicineName.trim()) errors.medicineName = 'Medicine Name is required (e.g. Paracetamol)';
-    if (!formData.brandName.trim()) errors.brandName = 'Brand Name is required (e.g. Crocin 500 / Dolo 650)';
-    if (!formData.sku.trim()) errors.sku = 'SKU is required';
-    if (!formData.batchNo.trim()) errors.batchNo = 'Batch No. is required';
-    if (!formData.quantity.trim() || isNaN(formData.quantity) || Number(formData.quantity) <= 0) {
-      errors.quantity = 'Valid quantity is required';
+    if (!formData.medicineName.trim())
+      errors.medicineName = "Medicine Name is required (e.g. Paracetamol)";
+    if (!formData.brandName.trim())
+      errors.brandName = "Brand Name is required (e.g. Crocin 500 / Dolo 650)";
+    if (!formData.sku.trim()) errors.sku = "SKU is required";
+    if (!formData.batchNo.trim()) errors.batchNo = "Batch No. is required";
+    if (
+      !formData.quantity.trim() ||
+      isNaN(formData.quantity) ||
+      Number(formData.quantity) <= 0
+    ) {
+      errors.quantity = "Valid quantity is required";
     }
 
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
-      if (onShowToast) onShowToast('Please fill in required medicine, brand & batch details.');
+      if (onShowToast)
+        onShowToast("Please fill in required medicine, brand & batch details.");
       return;
     }
 
@@ -818,16 +1004,24 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
       medicineName: formData.medicineName,
       brandName: formData.brandName,
       genericName: formData.genericName || formData.medicineName,
-      strength: formData.strength || '500mg',
-      packSize: formData.packSize || '15 Tablets',
-      manufacturer: formData.manufacturer || 'GSK',
-      supplierName: formData.supplierName || (formData.manufacturer ? `${formData.manufacturer} Distribution` : 'GSK Pharmaceuticals'),
-      amount: formData.amount ? (formData.amount.startsWith('₹') ? formData.amount : `₹${formData.amount}`) : '₹15.00',
+      strength: formData.strength || "500mg",
+      packSize: formData.packSize || "15 Tablets",
+      manufacturer: formData.manufacturer || "GSK",
+      supplierName:
+        formData.supplierName ||
+        (formData.manufacturer
+          ? `${formData.manufacturer} Distribution`
+          : "GSK Pharmaceuticals"),
+      amount: formData.amount
+        ? formData.amount.startsWith("₹")
+          ? formData.amount
+          : `₹${formData.amount}`
+        : "₹15.00",
       sku: formData.sku,
       batchNo: formData.batchNo,
       quantity: Number(formData.quantity),
-      branchId: isMultiBranch ? (formData.branchId || 'BR-01') : 'Main Store',
-      shelfLocation: formData.shelfLocation || 'A1-S1',
+      branchId: isMultiBranch ? formData.branchId || "BR-01" : "Main Store",
+      shelfLocation: formData.shelfLocation || "A1-S1",
     };
 
     try {
@@ -842,10 +1036,11 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
                   ...item,
                   ...updatedItem,
                   isActive: item.isActive !== undefined ? item.isActive : true,
-                  rxRequired: item.rxRequired !== undefined ? item.rxRequired : false,
+                  rxRequired:
+                    item.rxRequired !== undefined ? item.rxRequired : false,
                 }
-              : item
-          )
+              : item,
+          ),
         );
 
         if (onShowToast) {
@@ -856,9 +1051,9 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
         const newItem = res?.data || {
           ...payload,
           id: `adj-stk-${Date.now()}`,
-          updatedBy: 'Manager',
-          lastUpdated: new Date().toISOString().split('T')[0],
-          status: Number(formData.quantity) < 50 ? 'Low Stock' : 'In Stock',
+          updatedBy: "Manager",
+          lastUpdated: new Date().toISOString().split("T")[0],
+          status: Number(formData.quantity) < 50 ? "Low Stock" : "In Stock",
           isActive: true,
           rxRequired: false,
         };
@@ -866,11 +1061,16 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
         setStockItems((prev) => [newItem, ...prev]);
 
         if (onShowToast) {
-          onShowToast(`✓ Added "${newItem.brandName}" to database products table!`);
+          onShowToast(
+            `✓ Added "${newItem.brandName}" to database products table!`,
+          );
         }
       }
     } catch (err) {
-      console.warn('API save/update failed, performing fallback in state:', err.message);
+      console.warn(
+        "API save/update failed, performing fallback in state:",
+        err.message,
+      );
       if (editingItemId) {
         setStockItems((prev) =>
           prev.map((item) =>
@@ -879,17 +1079,17 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
                   ...item,
                   ...payload,
                 }
-              : item
-          )
+              : item,
+          ),
         );
         if (onShowToast) onShowToast(`✓ Updated "${payload.brandName}"!`);
       } else {
         const newItem = {
           ...payload,
           id: `adj-stk-${Date.now()}`,
-          updatedBy: 'Manager',
-          lastUpdated: new Date().toISOString().split('T')[0],
-          status: Number(formData.quantity) < 50 ? 'Low Stock' : 'In Stock',
+          updatedBy: "Manager",
+          lastUpdated: new Date().toISOString().split("T")[0],
+          status: Number(formData.quantity) < 50 ? "Low Stock" : "In Stock",
           isActive: true,
           rxRequired: false,
         };
@@ -900,19 +1100,19 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
 
     setEditingItemId(null);
     setFormData({
-      medicineName: '',
-      brandName: '',
-      genericName: '',
-      strength: '',
-      packSize: '',
-      manufacturer: '',
-      supplierName: '',
-      amount: '',
-      sku: '',
-      batchNo: '',
-      quantity: '',
-      branchId: 'Main Store',
-      shelfLocation: '',
+      medicineName: "",
+      brandName: "",
+      genericName: "",
+      strength: "",
+      packSize: "",
+      manufacturer: "",
+      supplierName: "",
+      amount: "",
+      sku: "",
+      batchNo: "",
+      quantity: "",
+      branchId: "Main Store",
+      shelfLocation: "",
     });
     setFormErrors({});
   };
@@ -920,33 +1120,38 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
   const handleCancelEdit = () => {
     setEditingItemId(null);
     setFormData({
-      medicineName: '',
-      brandName: '',
-      genericName: '',
-      strength: '',
-      packSize: '',
-      manufacturer: '',
-      supplierName: '',
-      amount: '',
-      sku: '',
-      batchNo: '',
-      quantity: '',
-      branchId: 'Main Store',
-      shelfLocation: '',
+      medicineName: "",
+      brandName: "",
+      genericName: "",
+      strength: "",
+      packSize: "",
+      manufacturer: "",
+      supplierName: "",
+      amount: "",
+      sku: "",
+      batchNo: "",
+      quantity: "",
+      branchId: "Main Store",
+      shelfLocation: "",
     });
     setFormErrors({});
   };
 
   const handleEditOrDelete = (item) => {
     if (onShowToast) {
-      onShowToast(`Modify / Adjust action for ${item.brandName} (${item.medicineName} - ${item.sku})`);
+      onShowToast(
+        `Modify / Adjust action for ${item.brandName} (${item.medicineName} - ${item.sku})`,
+      );
     }
   };
 
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={[styles.contentContainer, isMobile && styles.contentContainerMobile]}
+      contentContainerStyle={[
+        styles.contentContainer,
+        isMobile && styles.contentContainerMobile,
+      ]}
       showsVerticalScrollIndicator={true}
     >
       {/* Top 4 KPI Cards */}
@@ -976,16 +1181,24 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
       <View style={styles.cardContainer}>
         <View style={[styles.cardHeader, isMobile && styles.cardHeaderMobile]}>
           <View style={{ flex: 1, minWidth: 240 }}>
-            <Text style={styles.cardTitle}>Stock Information & Adjustments</Text>
+            <Text style={styles.cardTitle}>
+              Stock Information & Adjustments
+            </Text>
             <Text style={styles.cardSubtitle}>
-              Showing {displayedStockItems.length} of {stockItems.length} items • Toggle switches for live status & 3 dots (⋮) for actions
+              Showing {displayedStockItems.length} of {stockItems.length} items
+              • Toggle switches for live status & 3 dots (⋮) for actions
             </Text>
           </View>
 
           {/* Quick Filter Toggles & Search */}
           <View style={styles.headerControlsRow}>
             {/* Search Input */}
-            <View style={[styles.stockSearchBox, isMobile && styles.stockSearchBoxMobile]}>
+            <View
+              style={[
+                styles.stockSearchBox,
+                isMobile && styles.stockSearchBoxMobile,
+              ]}
+            >
               <Text style={styles.stockSearchIcon}>🔍</Text>
               <TextInput
                 style={styles.stockSearchInput}
@@ -995,8 +1208,11 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
                 placeholderTextColor="#94A3B8"
               />
               {searchQuery ? (
-                <Pressable onPress={() => setSearchQuery('')} style={{ padding: 4 }}>
-                  <Text style={{ color: '#94A3B8', fontSize: 13 }}>✕</Text>
+                <Pressable
+                  onPress={() => setSearchQuery("")}
+                  style={{ padding: 4 }}
+                >
+                  <Text style={{ color: "#94A3B8", fontSize: 13 }}>✕</Text>
                 </Pressable>
               ) : null}
             </View>
@@ -1053,7 +1269,6 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
                 Active Catalog
               </Text>
             </Pressable>
-
           </View>
         </View>
 
@@ -1088,7 +1303,9 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
                 <View style={styles.mobileStockCardHeader}>
                   <View style={styles.mobileStockTitleCol}>
                     <Text style={styles.mobileBrandName}>{item.brandName}</Text>
-                    <Text style={styles.mobileMedName}>{item.medicineName || item.genericName}</Text>
+                    <Text style={styles.mobileMedName}>
+                      {item.medicineName || item.genericName}
+                    </Text>
                   </View>
 
                   <View style={styles.mobileBadgesRow}>
@@ -1096,16 +1313,20 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
                     <View
                       style={[
                         styles.mobileStatusBadge,
-                        item.quantity < 50 ? styles.statusBadgeLow : styles.statusBadgeInStock,
+                        item.quantity < 50
+                          ? styles.statusBadgeLow
+                          : styles.statusBadgeInStock,
                       ]}
                     >
                       <Text
                         style={[
                           styles.mobileStatusText,
-                          item.quantity < 50 ? styles.statusTextLow : styles.statusTextInStock,
+                          item.quantity < 50
+                            ? styles.statusTextLow
+                            : styles.statusTextInStock,
                         ]}
                       >
-                        {item.quantity < 50 ? 'Low Stock' : 'In Stock'}
+                        {item.quantity < 50 ? "Low Stock" : "In Stock"}
                       </Text>
                     </View>
 
@@ -1114,7 +1335,9 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
                       onPress={() => handleToggleStatus(item.id)}
                       style={[
                         styles.miniToggleTrack,
-                        item.isActive ? styles.miniToggleTrackActive : styles.miniToggleTrackInactive,
+                        item.isActive
+                          ? styles.miniToggleTrackActive
+                          : styles.miniToggleTrackInactive,
                       ]}
                       accessibilityRole="switch"
                       accessibilityState={{ checked: item.isActive }}
@@ -1123,7 +1346,9 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
                       <View
                         style={[
                           styles.miniToggleThumb,
-                          item.isActive ? styles.miniToggleThumbActive : styles.miniToggleThumbInactive,
+                          item.isActive
+                            ? styles.miniToggleThumbActive
+                            : styles.miniToggleThumbInactive,
                         ]}
                       />
                     </Pressable>
@@ -1138,40 +1363,52 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
                   </View>
                   <View style={styles.mobileGridItem}>
                     <Text style={styles.mobileItemLabel}>Batch No.</Text>
-                    <Text style={styles.mobileItemValueBold}>{item.batchNo}</Text>
+                    <Text style={styles.mobileItemValueBold}>
+                      {item.batchNo}
+                    </Text>
                   </View>
                   <View style={styles.mobileGridItem}>
                     <Text style={styles.mobileItemLabel}>Qty Available</Text>
-                    <Text style={[styles.mobileItemValueBold, { color: '#0F766E' }]}>
+                    <Text
+                      style={[styles.mobileItemValueBold, { color: "#0F766E" }]}
+                    >
                       {item.quantity} units
                     </Text>
                   </View>
                   <View style={styles.mobileGridItem}>
                     <Text style={styles.mobileItemLabel}>MRP Price</Text>
-                    <Text style={[styles.mobileItemValueBold, { color: '#0F172A' }]}>
+                    <Text
+                      style={[styles.mobileItemValueBold, { color: "#0F172A" }]}
+                    >
                       {item.amount}
                     </Text>
                   </View>
                   <View style={styles.mobileGridItem}>
                     <Text style={styles.mobileItemLabel}>Strength & Pack</Text>
                     <Text style={styles.mobileItemValue} numberOfLines={1}>
-                      {item.strength ? `${item.strength} • ${item.packSize || ''}` : '500mg • 15 Tabs'}
+                      {item.strength
+                        ? `${item.strength} • ${item.packSize || ""}`
+                        : "500mg • 15 Tabs"}
                     </Text>
                   </View>
                   <View style={styles.mobileGridItem}>
                     <Text style={styles.mobileItemLabel}>Shelf Location</Text>
-                    <Text style={styles.mobileItemValue}>{item.shelfLocation || 'A1-S1'}</Text>
+                    <Text style={styles.mobileItemValue}>
+                      {item.shelfLocation || "A1-S1"}
+                    </Text>
                   </View>
                   {isMultiBranch && (
                     <View style={styles.mobileGridItem}>
                       <Text style={styles.mobileItemLabel}>Branch ID</Text>
-                      <Text style={styles.mobileItemValue}>{item.branchId}</Text>
+                      <Text style={styles.mobileItemValue}>
+                        {item.branchId}
+                      </Text>
                     </View>
                   )}
                   <View style={styles.mobileGridItem}>
                     <Text style={styles.mobileItemLabel}>Supplier</Text>
                     <Text style={styles.mobileItemValue} numberOfLines={1}>
-                      {item.supplierName || item.manufacturer || 'GSK'}
+                      {item.supplierName || item.manufacturer || "GSK"}
                     </Text>
                   </View>
                 </View>
@@ -1179,7 +1416,8 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
                 {/* Card Footer: Last Updated & 3-Dots Action Button */}
                 <View style={styles.mobileStockFooter}>
                   <Text style={styles.mobileUpdatedText}>
-                    Updated: {item.lastUpdated} • {item.isActive ? 'Active' : 'Disabled'}
+                    Updated: {item.lastUpdated} •{" "}
+                    {item.isActive ? "Active" : "Disabled"}
                   </Text>
                   <Pressable
                     onPress={() => handleOpenActionMenu(item)}
@@ -1199,25 +1437,59 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
             <View style={styles.tableWrapper}>
               {/* Table Header */}
               <View style={styles.tableHeader}>
-                <Text style={[styles.thCell, { width: 130 }]}>Medicine Name</Text>
+                <Text style={[styles.thCell, { width: 130 }]}>
+                  Medicine Name
+                </Text>
                 <Text style={[styles.thCell, { width: 130 }]}>Brand Name</Text>
-                <Text style={[styles.thCell, { width: 130 }]}>Strength & Pack</Text>
-                <Text style={[styles.thCell, { width: 110 }]}>Manufacturer</Text>
-                <Text style={[styles.thCell, { width: 130 }]}>Supplier Name</Text>
+                <Text style={[styles.thCell, { width: 130 }]}>
+                  Strength & Pack
+                </Text>
+                <Text style={[styles.thCell, { width: 110 }]}>
+                  Manufacturer
+                </Text>
+                <Text style={[styles.thCell, { width: 130 }]}>
+                  Supplier Name
+                </Text>
                 <Text style={[styles.thCell, { width: 100 }]}>SKU</Text>
                 <Text style={[styles.thCell, { width: 90 }]}>Batch No.</Text>
-                <Text style={[styles.thCell, { width: 100, textAlign: 'center' }]}>
+                <Text
+                  style={[styles.thCell, { width: 100, textAlign: "center" }]}
+                >
                   Qty Available
                 </Text>
-                <Text style={[styles.thCell, { width: 80, textAlign: 'right' }]}>MRP</Text>
+                <Text
+                  style={[styles.thCell, { width: 80, textAlign: "right" }]}
+                >
+                  MRP
+                </Text>
                 {isMultiBranch && (
-                  <Text style={[styles.thCell, { width: 85, textAlign: 'center' }]}>Branch ID</Text>
+                  <Text
+                    style={[styles.thCell, { width: 85, textAlign: "center" }]}
+                  >
+                    Branch ID
+                  </Text>
                 )}
-                <Text style={[styles.thCell, { width: 95, textAlign: 'center' }]}>Shelf Loc</Text>
-                <Text style={[styles.thCell, { width: 85, textAlign: 'center' }]}>STATUS</Text>
-                <Text style={[styles.thCell, { width: 75, textAlign: 'center' }]}>RX</Text>
+                <Text
+                  style={[styles.thCell, { width: 95, textAlign: "center" }]}
+                >
+                  Shelf Loc
+                </Text>
+                <Text
+                  style={[styles.thCell, { width: 85, textAlign: "center" }]}
+                >
+                  STATUS
+                </Text>
+                <Text
+                  style={[styles.thCell, { width: 75, textAlign: "center" }]}
+                >
+                  RX
+                </Text>
                 <Text style={[styles.thCell, { width: 95 }]}>Last Updated</Text>
-                <Text style={[styles.thCell, { width: 70, textAlign: 'center' }]}>ACTIONS</Text>
+                <Text
+                  style={[styles.thCell, { width: 70, textAlign: "center" }]}
+                >
+                  ACTIONS
+                </Text>
               </View>
 
               {/* Table Rows */}
@@ -1231,55 +1503,99 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
                   ]}
                 >
                   {/* Medicine Name */}
-                  <Text style={[styles.tdCell, styles.medNameCell, { width: 130 }]} numberOfLines={1}>
+                  <Text
+                    style={[styles.tdCell, styles.medNameCell, { width: 130 }]}
+                    numberOfLines={1}
+                  >
                     {item.medicineName || item.genericName}
                   </Text>
 
                   {/* Brand Name */}
-                  <Text style={[styles.tdCell, styles.brandNameCell, { width: 130 }]} numberOfLines={1}>
+                  <Text
+                    style={[
+                      styles.tdCell,
+                      styles.brandNameCell,
+                      { width: 130 },
+                    ]}
+                    numberOfLines={1}
+                  >
                     {item.brandName}
                   </Text>
 
                   {/* Strength & Pack */}
-                  <Text style={[styles.tdCell, styles.strengthCell, { width: 130 }]} numberOfLines={1}>
-                    {item.strength ? `${item.strength} • ${item.packSize || ''}` : '500mg • 15 Tabs'}
+                  <Text
+                    style={[styles.tdCell, styles.strengthCell, { width: 130 }]}
+                    numberOfLines={1}
+                  >
+                    {item.strength
+                      ? `${item.strength} • ${item.packSize || ""}`
+                      : "500mg • 15 Tabs"}
                   </Text>
 
                   {/* Manufacturer */}
-                  <Text style={[styles.tdCell, styles.mfgCell, { width: 110 }]} numberOfLines={1}>
-                    {item.manufacturer || 'GSK'}
+                  <Text
+                    style={[styles.tdCell, styles.mfgCell, { width: 110 }]}
+                    numberOfLines={1}
+                  >
+                    {item.manufacturer || "GSK"}
                   </Text>
 
                   {/* Supplier Name */}
-                  <Text style={[styles.tdCell, styles.supplierCell, { width: 130 }]} numberOfLines={1}>
-                    {item.supplierName || `${item.manufacturer || 'GSK'} Distribution`}
+                  <Text
+                    style={[styles.tdCell, styles.supplierCell, { width: 130 }]}
+                    numberOfLines={1}
+                  >
+                    {item.supplierName ||
+                      `${item.manufacturer || "GSK"} Distribution`}
                   </Text>
 
                   {/* SKU */}
-                  <Text style={[styles.tdCell, styles.skuCell, { width: 100 }]}>{item.sku}</Text>
+                  <Text style={[styles.tdCell, styles.skuCell, { width: 100 }]}>
+                    {item.sku}
+                  </Text>
 
                   {/* Batch No */}
-                  <Text style={[styles.tdCell, { width: 90 }]}>{item.batchNo}</Text>
+                  <Text style={[styles.tdCell, { width: 90 }]}>
+                    {item.batchNo}
+                  </Text>
 
                   {/* Quantity */}
-                  <Text style={[styles.tdCell, { width: 100, textAlign: 'center', fontWeight: '700' }]}>
+                  <Text
+                    style={[
+                      styles.tdCell,
+                      { width: 100, textAlign: "center", fontWeight: "700" },
+                    ]}
+                  >
                     {item.quantity}
                   </Text>
 
                   {/* Amount / MRP */}
-                  <Text style={[styles.tdCell, styles.amountCell, { width: 80, textAlign: 'right' }]}>
+                  <Text
+                    style={[
+                      styles.tdCell,
+                      styles.amountCell,
+                      { width: 80, textAlign: "right" },
+                    ]}
+                  >
                     {item.amount}
                   </Text>
 
                   {/* Branch ID (Multi-Branch only) */}
                   {isMultiBranch && (
-                    <Text style={[styles.tdCell, { width: 85, textAlign: 'center' }]}>
+                    <Text
+                      style={[
+                        styles.tdCell,
+                        { width: 85, textAlign: "center" },
+                      ]}
+                    >
                       {item.branchId}
                     </Text>
                   )}
 
                   {/* Shelf Location */}
-                  <Text style={[styles.tdCell, { width: 95, textAlign: 'center' }]}>
+                  <Text
+                    style={[styles.tdCell, { width: 95, textAlign: "center" }]}
+                  >
                     {item.shelfLocation}
                   </Text>
 
@@ -1289,7 +1605,9 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
                       onPress={() => handleToggleStatus(item.id)}
                       style={[
                         styles.tableToggleTrack,
-                        item.isActive ? styles.tableToggleActive : styles.tableToggleInactive,
+                        item.isActive
+                          ? styles.tableToggleActive
+                          : styles.tableToggleInactive,
                       ]}
                       accessibilityRole="switch"
                       accessibilityState={{ checked: item.isActive }}
@@ -1298,7 +1616,9 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
                       <View
                         style={[
                           styles.tableToggleThumb,
-                          item.isActive ? styles.tableToggleThumbActive : styles.tableToggleThumbInactive,
+                          item.isActive
+                            ? styles.tableToggleThumbActive
+                            : styles.tableToggleThumbInactive,
                         ]}
                       />
                     </Pressable>
@@ -1310,7 +1630,9 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
                       onPress={() => handleToggleRx(item.id)}
                       style={[
                         styles.rxTagPill,
-                        item.rxRequired ? styles.rxTagRequired : styles.rxTagOtc,
+                        item.rxRequired
+                          ? styles.rxTagRequired
+                          : styles.rxTagOtc,
                       ]}
                       accessibilityRole="button"
                       accessibilityLabel="Toggle prescription requirement"
@@ -1318,16 +1640,20 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
                       <Text
                         style={[
                           styles.rxTagPillText,
-                          item.rxRequired ? styles.rxTagTextRequired : styles.rxTagTextOtc,
+                          item.rxRequired
+                            ? styles.rxTagTextRequired
+                            : styles.rxTagTextOtc,
                         ]}
                       >
-                        {item.rxRequired ? 'Rx' : 'OTC'}
+                        {item.rxRequired ? "Rx" : "OTC"}
                       </Text>
                     </Pressable>
                   </View>
 
                   {/* Last Updated */}
-                  <Text style={[styles.tdCell, { width: 95 }]}>{item.lastUpdated}</Text>
+                  <Text style={[styles.tdCell, { width: 95 }]}>
+                    {item.lastUpdated}
+                  </Text>
 
                   {/* ACTION COLUMN: 3 DOTS (⋮) BUTTON */}
                   <View style={[styles.actionCellWrapper, { width: 70 }]}>
@@ -1362,23 +1688,38 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
       {/* Add / Edit Medicine Entry Form Card */}
       <View style={styles.cardContainer}>
         <View style={styles.formHeader}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
             <Text style={styles.cardTitle}>
-              {editingItemId ? 'Edit Medicine Entry' : 'Add Medicine Entry'}
+              {editingItemId ? "Edit Medicine Entry" : "Add Medicine Entry"}
             </Text>
             {editingItemId && (
               <Pressable
                 onPress={handleCancelEdit}
-                style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 }}
+                style={{
+                  backgroundColor: "#F1F5F9",
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  borderRadius: 6,
+                }}
               >
-                <Text style={{ color: '#64748B', fontWeight: '600', fontSize: 13 }}>Cancel Edit</Text>
+                <Text
+                  style={{ color: "#64748B", fontWeight: "600", fontSize: 13 }}
+                >
+                  Cancel Edit
+                </Text>
               </Pressable>
             )}
           </View>
           <Text style={styles.formSubtitle}>
             {editingItemId
-              ? 'Modify medicine details, brand, supplier, or batch stock. Changes will update the database.'
-              : 'Enter medicine name, brand variant, supplier details, and batch information to adjust inventory.'}
+              ? "Modify medicine details, brand, supplier, or batch stock. Changes will update the database."
+              : "Enter medicine name, brand variant, supplier details, and batch information to adjust inventory."}
           </Text>
         </View>
 
@@ -1390,11 +1731,14 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
               Medicine Name <Text style={styles.reqStar}>*</Text>
             </Text>
             <TextInput
-              style={[styles.formInput, formErrors.medicineName && styles.formInputError]}
+              style={[
+                styles.formInput,
+                formErrors.medicineName && styles.formInputError,
+              ]}
               placeholder="e.g., Paracetamol / Ibuprofen / Amoxicillin"
               placeholderTextColor="#94A3B8"
               value={formData.medicineName}
-              onChangeText={(t) => handleFormChange('medicineName', t)}
+              onChangeText={(t) => handleFormChange("medicineName", t)}
             />
             {formErrors.medicineName && (
               <Text style={styles.errorText}>{formErrors.medicineName}</Text>
@@ -1406,11 +1750,14 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
               Brand Name <Text style={styles.reqStar}>*</Text>
             </Text>
             <TextInput
-              style={[styles.formInput, formErrors.brandName && styles.formInputError]}
+              style={[
+                styles.formInput,
+                formErrors.brandName && styles.formInputError,
+              ]}
               placeholder="e.g., Crocin 500 / Calpol 500 / Dolo 650"
               placeholderTextColor="#94A3B8"
               value={formData.brandName}
-              onChangeText={(t) => handleFormChange('brandName', t)}
+              onChangeText={(t) => handleFormChange("brandName", t)}
             />
             {formErrors.brandName && (
               <Text style={styles.errorText}>{formErrors.brandName}</Text>
@@ -1425,7 +1772,7 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
               placeholder="e.g., 500mg / 650mg / 400mg"
               placeholderTextColor="#94A3B8"
               value={formData.strength}
-              onChangeText={(t) => handleFormChange('strength', t)}
+              onChangeText={(t) => handleFormChange("strength", t)}
             />
           </View>
 
@@ -1436,7 +1783,7 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
               placeholder="e.g., 15 Tablets / 10 Capsules"
               placeholderTextColor="#94A3B8"
               value={formData.packSize}
-              onChangeText={(t) => handleFormChange('packSize', t)}
+              onChangeText={(t) => handleFormChange("packSize", t)}
             />
           </View>
 
@@ -1447,7 +1794,7 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
               placeholder="e.g., GSK / Micro Labs / Abbott / Alkem"
               placeholderTextColor="#94A3B8"
               value={formData.manufacturer}
-              onChangeText={(t) => handleFormChange('manufacturer', t)}
+              onChangeText={(t) => handleFormChange("manufacturer", t)}
             />
           </View>
 
@@ -1459,7 +1806,7 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
               placeholder="e.g., GSK Pharmaceuticals / Sun Pharma Care / Cipla Ltd"
               placeholderTextColor="#94A3B8"
               value={formData.supplierName}
-              onChangeText={(t) => handleFormChange('supplierName', t)}
+              onChangeText={(t) => handleFormChange("supplierName", t)}
             />
           </View>
 
@@ -1471,7 +1818,7 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
               placeholderTextColor="#94A3B8"
               keyboardType="numeric"
               value={formData.amount}
-              onChangeText={(t) => handleFormChange('amount', t)}
+              onChangeText={(t) => handleFormChange("amount", t)}
             />
           </View>
 
@@ -1481,13 +1828,18 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
               SKU Code <Text style={styles.reqStar}>*</Text>
             </Text>
             <TextInput
-              style={[styles.formInput, formErrors.sku && styles.formInputError]}
+              style={[
+                styles.formInput,
+                formErrors.sku && styles.formInputError,
+              ]}
               placeholder="e.g., SKU-CRO-500"
               placeholderTextColor="#94A3B8"
               value={formData.sku}
-              onChangeText={(t) => handleFormChange('sku', t)}
+              onChangeText={(t) => handleFormChange("sku", t)}
             />
-            {formErrors.sku && <Text style={styles.errorText}>{formErrors.sku}</Text>}
+            {formErrors.sku && (
+              <Text style={styles.errorText}>{formErrors.sku}</Text>
+            )}
           </View>
 
           <View style={styles.formFieldThird}>
@@ -1495,13 +1847,18 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
               Batch No. <Text style={styles.reqStar}>*</Text>
             </Text>
             <TextInput
-              style={[styles.formInput, formErrors.batchNo && styles.formInputError]}
+              style={[
+                styles.formInput,
+                formErrors.batchNo && styles.formInputError,
+              ]}
               placeholder="e.g., B-1001"
               placeholderTextColor="#94A3B8"
               value={formData.batchNo}
-              onChangeText={(t) => handleFormChange('batchNo', t)}
+              onChangeText={(t) => handleFormChange("batchNo", t)}
             />
-            {formErrors.batchNo && <Text style={styles.errorText}>{formErrors.batchNo}</Text>}
+            {formErrors.batchNo && (
+              <Text style={styles.errorText}>{formErrors.batchNo}</Text>
+            )}
           </View>
 
           <View style={styles.formFieldThird}>
@@ -1509,14 +1866,19 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
               Quantity <Text style={styles.reqStar}>*</Text>
             </Text>
             <TextInput
-              style={[styles.formInput, formErrors.quantity && styles.formInputError]}
+              style={[
+                styles.formInput,
+                formErrors.quantity && styles.formInputError,
+              ]}
               placeholder="e.g., 500"
               placeholderTextColor="#94A3B8"
               keyboardType="numeric"
               value={formData.quantity}
-              onChangeText={(t) => handleFormChange('quantity', t)}
+              onChangeText={(t) => handleFormChange("quantity", t)}
             />
-            {formErrors.quantity && <Text style={styles.errorText}>{formErrors.quantity}</Text>}
+            {formErrors.quantity && (
+              <Text style={styles.errorText}>{formErrors.quantity}</Text>
+            )}
           </View>
 
           {/* Row 5: Shelf Location & (Branch ID only in Multi-Branch mode) */}
@@ -1527,7 +1889,7 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
               placeholder="e.g., A1-S1"
               placeholderTextColor="#94A3B8"
               value={formData.shelfLocation}
-              onChangeText={(t) => handleFormChange('shelfLocation', t)}
+              onChangeText={(t) => handleFormChange("shelfLocation", t)}
             />
           </View>
 
@@ -1539,7 +1901,7 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
                 placeholder="e.g., BR-01 / Main Branch"
                 placeholderTextColor="#94A3B8"
                 value={formData.branchId}
-                onChangeText={(t) => handleFormChange('branchId', t)}
+                onChangeText={(t) => handleFormChange("branchId", t)}
               />
             </View>
           ) : null}
@@ -1551,10 +1913,12 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
             onPress={handleAddOrUpdateMedicine}
             style={styles.blueSubmitButton}
             accessibilityRole="button"
-            accessibilityLabel={editingItemId ? 'Update Product Details' : 'Submit Medicine Entry'}
+            accessibilityLabel={
+              editingItemId ? "Update Product Details" : "Submit Medicine Entry"
+            }
           >
             <Text style={styles.blueSubmitButtonText}>
-              {editingItemId ? 'Update Product' : 'Submit'}
+              {editingItemId ? "Update Product" : "Submit"}
             </Text>
           </Pressable>
         </View>
@@ -1572,10 +1936,13 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
             <View style={styles.actionMenuHeader}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.actionMenuTitle}>
-                  {selectedItemForAction?.brandName || selectedItemForAction?.medicineName}
+                  {selectedItemForAction?.brandName ||
+                    selectedItemForAction?.medicineName}
                 </Text>
                 <Text style={styles.actionMenuSub}>
-                  SKU: {selectedItemForAction?.sku} • Batch: {selectedItemForAction?.batchNo} • Stock: {selectedItemForAction?.quantity} units
+                  SKU: {selectedItemForAction?.sku} • Batch:{" "}
+                  {selectedItemForAction?.batchNo} • Stock:{" "}
+                  {selectedItemForAction?.quantity} units
                 </Text>
               </View>
               <Pressable
@@ -1588,62 +1955,83 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
 
             <View style={styles.actionList}>
               <Pressable
-                onPress={() => handleExecuteAction('adjust')}
+                onPress={() => handleExecuteAction("adjust")}
                 style={styles.actionOptionRow}
               >
                 <Text style={styles.actionOptionIcon}>⚖️</Text>
                 <View style={styles.actionOptionTextCol}>
-                  <Text style={styles.actionOptionTitle}>Adjust Stock Quantity</Text>
-                  <Text style={styles.actionOptionDesc}>Cycle count, damage write-off, or physical correction</Text>
+                  <Text style={styles.actionOptionTitle}>
+                    Adjust Stock Quantity
+                  </Text>
+                  <Text style={styles.actionOptionDesc}>
+                    Cycle count, damage write-off, or physical correction
+                  </Text>
                 </View>
               </Pressable>
 
               {isMultiBranch && (
                 <Pressable
-                  onPress={() => handleExecuteAction('transfer')}
+                  onPress={() => handleExecuteAction("transfer")}
                   style={styles.actionOptionRow}
                 >
                   <Text style={styles.actionOptionIcon}>🔄</Text>
                   <View style={styles.actionOptionTextCol}>
-                    <Text style={styles.actionOptionTitle}>Initiate Inter-Branch Transfer</Text>
-                    <Text style={styles.actionOptionDesc}>Send stock to another store or hospital dispensary</Text>
+                    <Text style={styles.actionOptionTitle}>
+                      Initiate Inter-Branch Transfer
+                    </Text>
+                    <Text style={styles.actionOptionDesc}>
+                      Send stock to another store or hospital dispensary
+                    </Text>
                   </View>
                 </Pressable>
               )}
 
               <Pressable
-                onPress={() => handleExecuteAction('barcode')}
+                onPress={() => handleExecuteAction("barcode")}
                 style={styles.actionOptionRow}
               >
                 <Text style={styles.actionOptionIcon}>🏷️</Text>
                 <View style={styles.actionOptionTextCol}>
-                  <Text style={styles.actionOptionTitle}>Print Barcode / Shelf Tag</Text>
-                  <Text style={styles.actionOptionDesc}>Print thermal label with SKU, batch & MRP</Text>
+                  <Text style={styles.actionOptionTitle}>
+                    Print Barcode / Shelf Tag
+                  </Text>
+                  <Text style={styles.actionOptionDesc}>
+                    Print thermal label with SKU, batch & MRP
+                  </Text>
                 </View>
               </Pressable>
 
               <Pressable
-                onPress={() => handleExecuteAction('edit')}
+                onPress={() => handleExecuteAction("edit")}
                 style={styles.actionOptionRow}
               >
                 <Text style={styles.actionOptionIcon}>✏️</Text>
                 <View style={styles.actionOptionTextCol}>
-                  <Text style={styles.actionOptionTitle}>Edit Medicine Information</Text>
-                  <Text style={styles.actionOptionDesc}>Load into entry form to update strength, MRP or shelf</Text>
+                  <Text style={styles.actionOptionTitle}>
+                    Edit Medicine Information
+                  </Text>
+                  <Text style={styles.actionOptionDesc}>
+                    Load into entry form to update strength, MRP or shelf
+                  </Text>
                 </View>
               </Pressable>
 
               <Pressable
-                onPress={() => handleExecuteAction('delete')}
+                onPress={() => handleExecuteAction("delete")}
                 style={[styles.actionOptionRow, styles.actionOptionRowDanger]}
               >
                 <Text style={styles.actionOptionIcon}>🗑️</Text>
                 <View style={styles.actionOptionTextCol}>
-                  <Text style={[styles.actionOptionTitle, { color: '#DC2626' }]}>Deactivate / Remove Item</Text>
-                  <Text style={styles.actionOptionDesc}>Remove from active inventory listing</Text>
+                  <Text
+                    style={[styles.actionOptionTitle, { color: "#DC2626" }]}
+                  >
+                    Deactivate / Remove Item
+                  </Text>
+                  <Text style={styles.actionOptionDesc}>
+                    Remove from active inventory listing
+                  </Text>
                 </View>
               </Pressable>
-
             </View>
           </View>
         </View>
@@ -1664,10 +2052,14 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
                   Adjust Stock: {selectedItemForAction?.brandName}
                 </Text>
                 <Text style={styles.adjustModalSubtitle}>
-                  Current Stock: {selectedItemForAction?.quantity} units • SKU: {selectedItemForAction?.sku}
+                  Current Stock: {selectedItemForAction?.quantity} units • SKU:{" "}
+                  {selectedItemForAction?.sku}
                 </Text>
               </View>
-              <Pressable onPress={() => setAdjustModalOpen(false)} style={styles.closeActionBtn}>
+              <Pressable
+                onPress={() => setAdjustModalOpen(false)}
+                style={styles.closeActionBtn}
+              >
                 <Text style={styles.closeActionText}>✕</Text>
               </Pressable>
             </View>
@@ -1676,7 +2068,7 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
               <View style={styles.formGroupModal}>
                 <Text style={styles.fieldLabelModal}>Adjustment Type</Text>
                 <View style={styles.adjustTypeRow}>
-                  {['CYCLE_COUNT', 'DAMAGE_WRITEOFF', 'CORRECTION'].map((t) => (
+                  {["CYCLE_COUNT", "DAMAGE_WRITEOFF", "CORRECTION"].map((t) => (
                     <Pressable
                       key={t}
                       onPress={() => setAdjustType(t)}
@@ -1691,7 +2083,11 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
                           adjustType === t && styles.adjustTypeBtnTextActive,
                         ]}
                       >
-                        {t === 'CYCLE_COUNT' ? 'Cycle Count' : t === 'DAMAGE_WRITEOFF' ? 'Damage' : 'Correction'}
+                        {t === "CYCLE_COUNT"
+                          ? "Cycle Count"
+                          : t === "DAMAGE_WRITEOFF"
+                            ? "Damage"
+                            : "Correction"}
                       </Text>
                     </Pressable>
                   ))}
@@ -1699,7 +2095,9 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
               </View>
 
               <View style={styles.formGroupModal}>
-                <Text style={styles.fieldLabelModal}>Quantity Change (+ to add, - to subtract)</Text>
+                <Text style={styles.fieldLabelModal}>
+                  Quantity Change (+ to add, - to subtract)
+                </Text>
                 <TextInput
                   style={styles.adjustInput}
                   value={adjustDelta}
@@ -1710,7 +2108,9 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
               </View>
 
               <View style={styles.formGroupModal}>
-                <Text style={styles.fieldLabelModal}>Reason for Adjustment</Text>
+                <Text style={styles.fieldLabelModal}>
+                  Reason for Adjustment
+                </Text>
                 <TextInput
                   style={styles.adjustInput}
                   value={adjustReason}
@@ -1757,41 +2157,62 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
             {/* Header */}
             <View style={styles.transferModalHeader}>
               <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View
+                  style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+                >
                   <View style={styles.transferHeaderBadge}>
                     <Text style={styles.transferHeaderBadgeIcon}>🔄</Text>
                   </View>
-                  <Text style={styles.transferModalTitle}>Initiate Inter-Branch Stock Transfer</Text>
+                  <Text style={styles.transferModalTitle}>
+                    Initiate Inter-Branch Stock Transfer
+                  </Text>
                 </View>
                 <Text style={styles.transferModalSubtitle}>
-                  Move inventory stock between hospital main store, OPD clinics, and satellite branches
+                  Move inventory stock between hospital main store, OPD clinics,
+                  and satellite branches
                 </Text>
               </View>
-              <Pressable onPress={() => setTransferModalOpen(false)} style={styles.closeActionBtn}>
+              <Pressable
+                onPress={() => setTransferModalOpen(false)}
+                style={styles.closeActionBtn}
+              >
                 <Text style={styles.closeActionText}>✕</Text>
               </Pressable>
             </View>
 
             {/* Body */}
-            <ScrollView style={{ maxHeight: 520 }} contentContainerStyle={styles.transferModalBody}>
+            <ScrollView
+              style={{ maxHeight: 520 }}
+              contentContainerStyle={styles.transferModalBody}
+            >
               {/* Product Info Card */}
               <View style={styles.transferProductCard}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.transferMedTitle}>
-                    {selectedItemForAction?.brandName || selectedItemForAction?.medicineName}
+                    {selectedItemForAction?.brandName ||
+                      selectedItemForAction?.medicineName}
                   </Text>
                   <Text style={styles.transferMedMeta}>
-                    Generic: {selectedItemForAction?.medicineName || selectedItemForAction?.genericName} • Strength: {selectedItemForAction?.strength || '500mg'}
+                    Generic:{" "}
+                    {selectedItemForAction?.medicineName ||
+                      selectedItemForAction?.genericName}{" "}
+                    • Strength: {selectedItemForAction?.strength || "500mg"}
                   </Text>
                   <View style={styles.transferPillsRow}>
                     <View style={styles.transferPill}>
-                      <Text style={styles.transferPillText}>SKU: {selectedItemForAction?.sku}</Text>
+                      <Text style={styles.transferPillText}>
+                        SKU: {selectedItemForAction?.sku}
+                      </Text>
                     </View>
                     <View style={styles.transferPill}>
-                      <Text style={styles.transferPillText}>Batch: {selectedItemForAction?.batchNo}</Text>
+                      <Text style={styles.transferPillText}>
+                        Batch: {selectedItemForAction?.batchNo}
+                      </Text>
                     </View>
                     <View style={styles.transferPillTeal}>
-                      <Text style={styles.transferPillTextTeal}>Source Stock: {selectedItemForAction?.quantity} units</Text>
+                      <Text style={styles.transferPillTextTeal}>
+                        Source Stock: {selectedItemForAction?.quantity} units
+                      </Text>
                     </View>
                   </View>
                 </View>
@@ -1800,7 +2221,9 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
               {/* Error Alert Box if any */}
               {transferError ? (
                 <View style={styles.transferErrorAlert}>
-                  <Text style={styles.transferErrorText}>⚠️ {transferError}</Text>
+                  <Text style={styles.transferErrorText}>
+                    ⚠️ {transferError}
+                  </Text>
                 </View>
               ) : null}
 
@@ -1812,7 +2235,10 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
                     From Branch (Source) <Text style={styles.reqStar}>*</Text>
                   </Text>
                   <View style={styles.branchPickerBox}>
-                    <ScrollView style={{ maxHeight: 150 }} nestedScrollEnabled={true}>
+                    <ScrollView
+                      style={{ maxHeight: 150 }}
+                      nestedScrollEnabled={true}
+                    >
                       {branchesList.map((b) => {
                         const bName = b.name || b.id;
                         const isSelected = fromBranch === bName;
@@ -1822,7 +2248,9 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
                             onPress={() => {
                               setFromBranch(bName);
                               if (toBranch === bName) {
-                                const other = branchesList.find((x) => (x.name || x.id) !== bName);
+                                const other = branchesList.find(
+                                  (x) => (x.name || x.id) !== bName,
+                                );
                                 if (other) setToBranch(other.name || other.id);
                               }
                             }}
@@ -1831,14 +2259,37 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
                               isSelected && styles.branchOptionItemFromActive,
                             ]}
                           >
-                            <View style={[styles.branchDot, isSelected && styles.branchDotFromActive]} />
+                            <View
+                              style={[
+                                styles.branchDot,
+                                isSelected && styles.branchDotFromActive,
+                              ]}
+                            />
                             <View style={{ flex: 1 }}>
-                              <Text style={[styles.branchOptionName, isSelected && styles.branchOptionNameFromActive]}>
+                              <Text
+                                style={[
+                                  styles.branchOptionName,
+                                  isSelected &&
+                                    styles.branchOptionNameFromActive,
+                                ]}
+                              >
                                 {bName}
                               </Text>
-                              <Text style={styles.branchOptionCity}>{b.city || 'Pune'}</Text>
+                              <Text style={styles.branchOptionCity}>
+                                {b.city || "Pune"}
+                              </Text>
                             </View>
-                            {isSelected && <Text style={{ fontSize: 11, fontWeight: '800', color: '#0F766E' }}>SOURCE</Text>}
+                            {isSelected && (
+                              <Text
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: "800",
+                                  color: "#0F766E",
+                                }}
+                              >
+                                SOURCE
+                              </Text>
+                            )}
                           </Pressable>
                         );
                       })}
@@ -1856,10 +2307,14 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
                 {/* Destination Branch (To) */}
                 <View style={styles.branchCol}>
                   <Text style={styles.fieldLabelModal}>
-                    To Branch (Destination) <Text style={styles.reqStar}>*</Text>
+                    To Branch (Destination){" "}
+                    <Text style={styles.reqStar}>*</Text>
                   </Text>
                   <View style={styles.branchPickerBox}>
-                    <ScrollView style={{ maxHeight: 150 }} nestedScrollEnabled={true}>
+                    <ScrollView
+                      style={{ maxHeight: 150 }}
+                      nestedScrollEnabled={true}
+                    >
                       {branchesList.map((b) => {
                         const bName = b.name || b.id;
                         const isSelected = toBranch === bName;
@@ -1875,7 +2330,12 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
                               isDisabled && styles.branchOptionDisabled,
                             ]}
                           >
-                            <View style={[styles.branchDot, isSelected && styles.branchDotToActive]} />
+                            <View
+                              style={[
+                                styles.branchDot,
+                                isSelected && styles.branchDotToActive,
+                              ]}
+                            />
                             <View style={{ flex: 1 }}>
                               <Text
                                 style={[
@@ -1884,11 +2344,23 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
                                   isDisabled && styles.branchOptionNameDisabled,
                                 ]}
                               >
-                                {bName} {isDisabled ? '(Current Source)' : ''}
+                                {bName} {isDisabled ? "(Current Source)" : ""}
                               </Text>
-                              <Text style={styles.branchOptionCity}>{b.city || 'Pune'}</Text>
+                              <Text style={styles.branchOptionCity}>
+                                {b.city || "Pune"}
+                              </Text>
                             </View>
-                            {isSelected && <Text style={{ fontSize: 11, fontWeight: '800', color: '#2563EB' }}>DESTINATION</Text>}
+                            {isSelected && (
+                              <Text
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: "800",
+                                  color: "#2563EB",
+                                }}
+                              >
+                                DESTINATION
+                              </Text>
+                            )}
                           </Pressable>
                         );
                       })}
@@ -1899,37 +2371,65 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
 
               {/* Quantity Input & Preset Buttons */}
               <View style={styles.formGroupModal}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
                   <Text style={styles.fieldLabelModal}>
-                    Stock Quantity to Transfer <Text style={styles.reqStar}>*</Text>
+                    Stock Quantity to Transfer{" "}
+                    <Text style={styles.reqStar}>*</Text>
                   </Text>
-                  <Text style={{ fontSize: 12, color: '#64748B' }}>
-                    Available: <Text style={{ fontWeight: '700', color: '#0F766E' }}>{selectedItemForAction?.quantity || 0} units</Text>
+                  <Text style={{ fontSize: 12, color: "#64748B" }}>
+                    Available:{" "}
+                    <Text style={{ fontWeight: "700", color: "#0F766E" }}>
+                      {selectedItemForAction?.quantity || 0} units
+                    </Text>
                   </Text>
                 </View>
 
-                <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    gap: 10,
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                  }}
+                >
                   <TextInput
-                    style={[styles.adjustInput, { flex: 1, minWidth: 140, fontSize: 15, fontWeight: '700', color: '#0F172A' }]}
+                    style={[
+                      styles.adjustInput,
+                      {
+                        flex: 1,
+                        minWidth: 140,
+                        fontSize: 15,
+                        fontWeight: "700",
+                        color: "#0F172A",
+                      },
+                    ]}
                     value={transferQty}
                     onChangeText={setTransferQty}
                     keyboardType="numeric"
                     placeholder="Enter units (e.g. 50)"
                   />
                   {/* Preset Buttons */}
-                  {['10', '25', '50', '100'].map((preset) => (
+                  {["10", "25", "50", "100"].map((preset) => (
                     <Pressable
                       key={preset}
                       onPress={() => setTransferQty(preset)}
                       style={[
                         styles.transferPresetBtn,
-                        transferQty === preset && styles.transferPresetBtnActive,
+                        transferQty === preset &&
+                          styles.transferPresetBtnActive,
                       ]}
                     >
                       <Text
                         style={[
                           styles.transferPresetText,
-                          transferQty === preset && styles.transferPresetTextActive,
+                          transferQty === preset &&
+                            styles.transferPresetTextActive,
                         ]}
                       >
                         +{preset}
@@ -1942,17 +2442,42 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
               {/* Transfer Stock Calculation Preview */}
               {selectedItemForAction && (
                 <View style={styles.transferCalcBox}>
-                  <Text style={styles.transferCalcTitle}>Stock Impact Summary:</Text>
+                  <Text style={styles.transferCalcTitle}>
+                    Stock Impact Summary:
+                  </Text>
                   <View style={styles.transferCalcRow}>
-                    <Text style={styles.transferCalcLabel}>• {fromBranch || 'Source Branch'}:</Text>
-                    <Text style={{ color: '#DC2626', fontWeight: '700', fontSize: 12.5 }}>
-                      {selectedItemForAction.quantity} ➔ {Math.max(0, selectedItemForAction.quantity - (parseInt(transferQty, 10) || 0))} units (-{parseInt(transferQty, 10) || 0})
+                    <Text style={styles.transferCalcLabel}>
+                      • {fromBranch || "Source Branch"}:
+                    </Text>
+                    <Text
+                      style={{
+                        color: "#DC2626",
+                        fontWeight: "700",
+                        fontSize: 12.5,
+                      }}
+                    >
+                      {selectedItemForAction.quantity} ➔{" "}
+                      {Math.max(
+                        0,
+                        selectedItemForAction.quantity -
+                          (parseInt(transferQty, 10) || 0),
+                      )}{" "}
+                      units (-{parseInt(transferQty, 10) || 0})
                     </Text>
                   </View>
                   <View style={styles.transferCalcRow}>
-                    <Text style={styles.transferCalcLabel}>• {toBranch || 'Destination Branch'}:</Text>
-                    <Text style={{ color: '#16A34A', fontWeight: '700', fontSize: 12.5 }}>
-                      +{parseInt(transferQty, 10) || 0} units added to target branch stock
+                    <Text style={styles.transferCalcLabel}>
+                      • {toBranch || "Destination Branch"}:
+                    </Text>
+                    <Text
+                      style={{
+                        color: "#16A34A",
+                        fontWeight: "700",
+                        fontSize: 12.5,
+                      }}
+                    >
+                      +{parseInt(transferQty, 10) || 0} units added to target
+                      branch stock
                     </Text>
                   </View>
                 </View>
@@ -1960,7 +2485,9 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
 
               {/* Reason / Reference Input */}
               <View style={styles.formGroupModal}>
-                <Text style={styles.fieldLabelModal}>Transfer Reason / Reference Notes</Text>
+                <Text style={styles.fieldLabelModal}>
+                  Transfer Reason / Reference Notes
+                </Text>
                 <TextInput
                   style={styles.adjustInput}
                   value={transferReason}
@@ -1972,11 +2499,19 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
 
             {/* Footer */}
             <View style={styles.adjustModalFooter}>
-              <Pressable onPress={() => setTransferModalOpen(false)} style={styles.cancelBtn}>
+              <Pressable
+                onPress={() => setTransferModalOpen(false)}
+                style={styles.cancelBtn}
+              >
                 <Text style={styles.cancelBtnText}>Cancel</Text>
               </Pressable>
-              <Pressable onPress={handleConfirmTransfer} style={styles.confirmTransferBtn}>
-                <Text style={styles.confirmTransferBtnText}>🔄 Confirm & Transfer Stock</Text>
+              <Pressable
+                onPress={handleConfirmTransfer}
+                style={styles.confirmTransferBtn}
+              >
+                <Text style={styles.confirmTransferBtnText}>
+                  🔄 Confirm & Transfer Stock
+                </Text>
               </Pressable>
             </View>
           </View>
@@ -1995,58 +2530,82 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
             {/* Header */}
             <View style={styles.barcodeModalHeader}>
               <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View
+                  style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+                >
                   <View style={styles.barcodeHeaderBadge}>
                     <Text style={{ fontSize: 18 }}>🏷️</Text>
                   </View>
-                  <Text style={styles.barcodeModalTitle}>Barcode & Shelf Tag Generator</Text>
+                  <Text style={styles.barcodeModalTitle}>
+                    Barcode & Shelf Tag Generator
+                  </Text>
                 </View>
                 <Text style={styles.barcodeModalSubtitle}>
-                  Print thermal labels and shelf edge tags for inventory scanning & shelf identification
+                  Print thermal labels and shelf edge tags for inventory
+                  scanning & shelf identification
                 </Text>
               </View>
-              <Pressable onPress={() => setBarcodeModalOpen(false)} style={styles.closeActionBtn}>
+              <Pressable
+                onPress={() => setBarcodeModalOpen(false)}
+                style={styles.closeActionBtn}
+              >
                 <Text style={styles.closeActionText}>✕</Text>
               </Pressable>
             </View>
 
             {/* Modal Body */}
-            <ScrollView style={{ maxHeight: 520 }} contentContainerStyle={styles.barcodeModalBody}>
-              
+            <ScrollView
+              style={{ maxHeight: 520 }}
+              contentContainerStyle={styles.barcodeModalBody}
+            >
               {/* Top: Live Print Preview Box */}
               <View style={styles.previewSectionWrapper}>
                 <View style={styles.previewSectionHeader}>
                   <Text style={styles.previewSectionTitle}>
-                    LIVE LABEL PREVIEW ({barcodeConfig.format === 'thermal_50x25' ? '50mm × 25mm Thermal' : barcodeConfig.format === 'shelf_70x35' ? '70mm × 35mm Shelf Edge' : 'A4 Multi-Grid Sheet'})
+                    LIVE LABEL PREVIEW (
+                    {barcodeConfig.format === "thermal_50x25"
+                      ? "50mm × 25mm Thermal"
+                      : barcodeConfig.format === "shelf_70x35"
+                        ? "70mm × 35mm Shelf Edge"
+                        : "A4 Multi-Grid Sheet"}
+                    )
                   </Text>
                   <View style={styles.liveTagBadge}>
                     <View style={styles.liveTagDot} />
                     <Text style={styles.liveTagBadgeText}>
-                      {barcodeLoading ? 'Fetching from DB...' : 'Ready to Print'}
+                      {barcodeLoading
+                        ? "Fetching from DB..."
+                        : "Ready to Print"}
                     </Text>
                   </View>
                 </View>
 
                 {/* The Physical Label Preview Card */}
-                <View style={[
-                  styles.physicalLabelCard,
-                  barcodeConfig.format === 'shelf_70x35' && styles.physicalLabelCardShelf,
-                  barcodeConfig.format === 'sheet_a4' && styles.physicalLabelCardA4,
-                ]}>
+                <View
+                  style={[
+                    styles.physicalLabelCard,
+                    barcodeConfig.format === "shelf_70x35" &&
+                      styles.physicalLabelCardShelf,
+                    barcodeConfig.format === "sheet_a4" &&
+                      styles.physicalLabelCardA4,
+                  ]}
+                >
                   {/* Pharmacy Banner */}
                   <View style={styles.labelHeaderRow}>
                     <Text style={styles.labelPharmacyName}>
-                      🏥 {barcodeItemData?.pharmacyName || 'FALAH PHARMACY'}
+                      🏥 {barcodeItemData?.pharmacyName || "FALAH PHARMACY"}
                     </Text>
                     <Text style={styles.labelBranchText}>
-                      {barcodeItemData?.branchName || 'Main Store'}
+                      {barcodeItemData?.branchName || "Main Store"}
                     </Text>
                   </View>
 
                   {/* Medicine Name & Strength */}
                   <View style={styles.labelMedInfoRow}>
                     <Text style={styles.labelMedName} numberOfLines={1}>
-                      {barcodeItemData?.brandName || barcodeItemData?.medicineName || 'Medicine Item'}
+                      {barcodeItemData?.brandName ||
+                        barcodeItemData?.medicineName ||
+                        "Medicine Item"}
                     </Text>
                     {barcodeItemData?.strength ? (
                       <Text style={styles.labelMedStrength}>
@@ -2067,19 +2626,23 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
                     {barcodeConfig.showBatch && (
                       <View style={styles.labelMetaItem}>
                         <Text style={styles.labelMetaLabel}>BATCH:</Text>
-                        <Text style={styles.labelMetaValue}>{barcodeItemData?.batchNo || 'B-1001'}</Text>
+                        <Text style={styles.labelMetaValue}>
+                          {barcodeItemData?.batchNo || "B-1001"}
+                        </Text>
                       </View>
                     )}
                     {barcodeConfig.showExpiry && (
                       <View style={styles.labelMetaItem}>
                         <Text style={styles.labelMetaLabel}>EXP:</Text>
-                        <Text style={styles.labelMetaValue}>{barcodeItemData?.expiryDate || 'N/A'}</Text>
+                        <Text style={styles.labelMetaValue}>
+                          {barcodeItemData?.expiryDate || "N/A"}
+                        </Text>
                       </View>
                     )}
                     {barcodeConfig.showPrice && (
                       <View style={styles.labelMetaItemPrice}>
                         <Text style={styles.labelPriceTag}>
-                          MRP {barcodeItemData?.mrp || '₹0.00'}
+                          MRP {barcodeItemData?.mrp || "₹0.00"}
                         </Text>
                       </View>
                     )}
@@ -2090,39 +2653,48 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
                     {barcodeConfig.showShelf && (
                       <View style={styles.shelfTagBadge}>
                         <Text style={styles.shelfTagText}>
-                          📍 {barcodeItemData?.shelfLocation || 'Rack A1'}
+                          📍 {barcodeItemData?.shelfLocation || "Rack A1"}
                         </Text>
                       </View>
                     )}
                     <Text style={styles.labelPackSizeText}>
-                      Pack: {barcodeItemData?.packSize || '10s'}
+                      Pack: {barcodeItemData?.packSize || "10s"}
                     </Text>
                   </View>
 
                   {/* Barcode Visualization */}
                   <View style={styles.labelBarcodeWrapper}>
-                    {Platform.OS === 'web' && barcodeItemData?.svgBarcode ? (
+                    {Platform.OS === "web" && barcodeItemData?.svgBarcode ? (
                       <View
                         style={styles.labelBarcodeSvgBox}
-                        dangerouslySetInnerHTML={{ __html: barcodeItemData.svgBarcode }}
+                        dangerouslySetInnerHTML={{
+                          __html: barcodeItemData.svgBarcode,
+                        }}
                       />
                     ) : (
                       <View style={styles.labelBarcodeFallback}>
                         <View style={styles.barcodeStripeRow}>
-                          {[2,1,3,1,2,3,1,1,2,1,3,2,1,2,1,3,1,2,1,1,3,2,1,3,2,1,2,3,1,2,1,1,3,1,2,3,2,1,1,3,2,1,2,1,3,1].map((w, idx) => (
+                          {[
+                            2, 1, 3, 1, 2, 3, 1, 1, 2, 1, 3, 2, 1, 2, 1, 3, 1,
+                            2, 1, 1, 3, 2, 1, 3, 2, 1, 2, 3, 1, 2, 1, 1, 3, 1,
+                            2, 3, 2, 1, 1, 3, 2, 1, 2, 1, 3, 1,
+                          ].map((w, idx) => (
                             <View
                               key={`bar-${idx}`}
                               style={{
                                 width: w * 2,
                                 height: 38,
-                                backgroundColor: idx % 2 === 0 ? '#0F172A' : '#FFFFFF',
+                                backgroundColor:
+                                  idx % 2 === 0 ? "#0F172A" : "#FFFFFF",
                                 marginRight: 1,
                               }}
                             />
                           ))}
                         </View>
                         <Text style={styles.barcodeFallbackText}>
-                          {barcodeItemData?.barcode || barcodeItemData?.sku || 'SKU-001'}
+                          {barcodeItemData?.barcode ||
+                            barcodeItemData?.sku ||
+                            "SKU-001"}
                         </Text>
                       </View>
                     )}
@@ -2132,90 +2704,158 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
 
               {/* Bottom: Configuration & Controls */}
               <View style={styles.barcodeConfigGrid}>
-                
                 {/* 1. Label Format Selector */}
                 <View style={styles.barcodeConfigCard}>
-                  <Text style={styles.barcodeConfigCardTitle}>📐 Label Format & Size</Text>
+                  <Text style={styles.barcodeConfigCardTitle}>
+                    📐 Label Format & Size
+                  </Text>
                   <View style={styles.formatOptionsRow}>
                     <Pressable
-                      onPress={() => setBarcodeConfig((prev) => ({ ...prev, format: 'thermal_50x25' }))}
+                      onPress={() =>
+                        setBarcodeConfig((prev) => ({
+                          ...prev,
+                          format: "thermal_50x25",
+                        }))
+                      }
                       style={[
                         styles.formatOptionBtn,
-                        barcodeConfig.format === 'thermal_50x25' && styles.formatOptionBtnActive,
+                        barcodeConfig.format === "thermal_50x25" &&
+                          styles.formatOptionBtnActive,
                       ]}
                     >
-                      <Text style={[
-                        styles.formatOptionTitle,
-                        barcodeConfig.format === 'thermal_50x25' && styles.formatOptionTitleActive,
-                      ]}>
+                      <Text
+                        style={[
+                          styles.formatOptionTitle,
+                          barcodeConfig.format === "thermal_50x25" &&
+                            styles.formatOptionTitleActive,
+                        ]}
+                      >
                         🏷️ 50 × 25 mm
                       </Text>
-                      <Text style={styles.formatOptionDesc}>Thermal Strip (Box/Strip)</Text>
+                      <Text style={styles.formatOptionDesc}>
+                        Thermal Strip (Box/Strip)
+                      </Text>
                     </Pressable>
 
                     <Pressable
-                      onPress={() => setBarcodeConfig((prev) => ({ ...prev, format: 'shelf_70x35' }))}
+                      onPress={() =>
+                        setBarcodeConfig((prev) => ({
+                          ...prev,
+                          format: "shelf_70x35",
+                        }))
+                      }
                       style={[
                         styles.formatOptionBtn,
-                        barcodeConfig.format === 'shelf_70x35' && styles.formatOptionBtnActive,
+                        barcodeConfig.format === "shelf_70x35" &&
+                          styles.formatOptionBtnActive,
                       ]}
                     >
-                      <Text style={[
-                        styles.formatOptionTitle,
-                        barcodeConfig.format === 'shelf_70x35' && styles.formatOptionTitleActive,
-                      ]}>
+                      <Text
+                        style={[
+                          styles.formatOptionTitle,
+                          barcodeConfig.format === "shelf_70x35" &&
+                            styles.formatOptionTitleActive,
+                        ]}
+                      >
                         📋 70 × 35 mm
                       </Text>
-                      <Text style={styles.formatOptionDesc}>Shelf Edge Tag (Bin/Rack)</Text>
+                      <Text style={styles.formatOptionDesc}>
+                        Shelf Edge Tag (Bin/Rack)
+                      </Text>
                     </Pressable>
 
                     <Pressable
-                      onPress={() => setBarcodeConfig((prev) => ({ ...prev, format: 'sheet_a4' }))}
+                      onPress={() =>
+                        setBarcodeConfig((prev) => ({
+                          ...prev,
+                          format: "sheet_a4",
+                        }))
+                      }
                       style={[
                         styles.formatOptionBtn,
-                        barcodeConfig.format === 'sheet_a4' && styles.formatOptionBtnActive,
+                        barcodeConfig.format === "sheet_a4" &&
+                          styles.formatOptionBtnActive,
                       ]}
                     >
-                      <Text style={[
-                        styles.formatOptionTitle,
-                        barcodeConfig.format === 'sheet_a4' && styles.formatOptionTitleActive,
-                      ]}>
+                      <Text
+                        style={[
+                          styles.formatOptionTitle,
+                          barcodeConfig.format === "sheet_a4" &&
+                            styles.formatOptionTitleActive,
+                        ]}
+                      >
                         📄 A4 Sheet
                       </Text>
-                      <Text style={styles.formatOptionDesc}>24 Labels Multi-Grid</Text>
+                      <Text style={styles.formatOptionDesc}>
+                        24 Labels Multi-Grid
+                      </Text>
                     </Pressable>
                   </View>
                 </View>
 
                 {/* 2. Number of Copies */}
                 <View style={styles.barcodeConfigCard}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Text style={styles.barcodeConfigCardTitle}>🔢 Number of Copies to Print</Text>
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#0F766E' }}>
-                      Total: {barcodeConfig.copies} Label{Number(barcodeConfig.copies) > 1 ? 's' : ''}
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <Text style={styles.barcodeConfigCardTitle}>
+                      🔢 Number of Copies to Print
+                    </Text>
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontWeight: "700",
+                        color: "#0F766E",
+                      }}
+                    >
+                      Total: {barcodeConfig.copies} Label
+                      {Number(barcodeConfig.copies) > 1 ? "s" : ""}
                     </Text>
                   </View>
 
-                  <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      gap: 8,
+                      alignItems: "center",
+                      marginTop: 8,
+                      flexWrap: "wrap",
+                    }}
+                  >
                     <TextInput
                       style={styles.copiesInput}
                       value={String(barcodeConfig.copies)}
-                      onChangeText={(val) => setBarcodeConfig((prev) => ({ ...prev, copies: val }))}
+                      onChangeText={(val) =>
+                        setBarcodeConfig((prev) => ({ ...prev, copies: val }))
+                      }
                       keyboardType="numeric"
                     />
-                    {['1', '2', '5', '10', '25', '50'].map((preset) => (
+                    {["1", "2", "5", "10", "25", "50"].map((preset) => (
                       <Pressable
                         key={`preset-${preset}`}
-                        onPress={() => setBarcodeConfig((prev) => ({ ...prev, copies: preset }))}
+                        onPress={() =>
+                          setBarcodeConfig((prev) => ({
+                            ...prev,
+                            copies: preset,
+                          }))
+                        }
                         style={[
                           styles.presetPill,
-                          String(barcodeConfig.copies) === preset && styles.presetPillActive,
+                          String(barcodeConfig.copies) === preset &&
+                            styles.presetPillActive,
                         ]}
                       >
-                        <Text style={[
-                          styles.presetPillText,
-                          String(barcodeConfig.copies) === preset && styles.presetPillTextActive,
-                        ]}>
+                        <Text
+                          style={[
+                            styles.presetPillText,
+                            String(barcodeConfig.copies) === preset &&
+                              styles.presetPillTextActive,
+                          ]}
+                        >
                           {preset}
                         </Text>
                       </Pressable>
@@ -2225,50 +2865,122 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
 
                 {/* 3. Include / Toggle Elements */}
                 <View style={styles.barcodeConfigCard}>
-                  <Text style={styles.barcodeConfigCardTitle}>👁️ Elements to Include on Tag</Text>
+                  <Text style={styles.barcodeConfigCardTitle}>
+                    👁️ Elements to Include on Tag
+                  </Text>
                   <View style={styles.togglesWrapRow}>
                     <Pressable
-                      onPress={() => setBarcodeConfig((prev) => ({ ...prev, showPrice: !prev.showPrice }))}
-                      style={[styles.toggleChip, barcodeConfig.showPrice && styles.toggleChipActive]}
+                      onPress={() =>
+                        setBarcodeConfig((prev) => ({
+                          ...prev,
+                          showPrice: !prev.showPrice,
+                        }))
+                      }
+                      style={[
+                        styles.toggleChip,
+                        barcodeConfig.showPrice && styles.toggleChipActive,
+                      ]}
                     >
-                      <Text style={[styles.toggleChipText, barcodeConfig.showPrice && styles.toggleChipTextActive]}>
-                        {barcodeConfig.showPrice ? '✓' : '+'} MRP (₹)
+                      <Text
+                        style={[
+                          styles.toggleChipText,
+                          barcodeConfig.showPrice &&
+                            styles.toggleChipTextActive,
+                        ]}
+                      >
+                        {barcodeConfig.showPrice ? "✓" : "+"} MRP (₹)
                       </Text>
                     </Pressable>
 
                     <Pressable
-                      onPress={() => setBarcodeConfig((prev) => ({ ...prev, showExpiry: !prev.showExpiry }))}
-                      style={[styles.toggleChip, barcodeConfig.showExpiry && styles.toggleChipActive]}
+                      onPress={() =>
+                        setBarcodeConfig((prev) => ({
+                          ...prev,
+                          showExpiry: !prev.showExpiry,
+                        }))
+                      }
+                      style={[
+                        styles.toggleChip,
+                        barcodeConfig.showExpiry && styles.toggleChipActive,
+                      ]}
                     >
-                      <Text style={[styles.toggleChipText, barcodeConfig.showExpiry && styles.toggleChipTextActive]}>
-                        {barcodeConfig.showExpiry ? '✓' : '+'} Expiry Date
+                      <Text
+                        style={[
+                          styles.toggleChipText,
+                          barcodeConfig.showExpiry &&
+                            styles.toggleChipTextActive,
+                        ]}
+                      >
+                        {barcodeConfig.showExpiry ? "✓" : "+"} Expiry Date
                       </Text>
                     </Pressable>
 
                     <Pressable
-                      onPress={() => setBarcodeConfig((prev) => ({ ...prev, showBatch: !prev.showBatch }))}
-                      style={[styles.toggleChip, barcodeConfig.showBatch && styles.toggleChipActive]}
+                      onPress={() =>
+                        setBarcodeConfig((prev) => ({
+                          ...prev,
+                          showBatch: !prev.showBatch,
+                        }))
+                      }
+                      style={[
+                        styles.toggleChip,
+                        barcodeConfig.showBatch && styles.toggleChipActive,
+                      ]}
                     >
-                      <Text style={[styles.toggleChipText, barcodeConfig.showBatch && styles.toggleChipTextActive]}>
-                        {barcodeConfig.showBatch ? '✓' : '+'} Batch No
+                      <Text
+                        style={[
+                          styles.toggleChipText,
+                          barcodeConfig.showBatch &&
+                            styles.toggleChipTextActive,
+                        ]}
+                      >
+                        {barcodeConfig.showBatch ? "✓" : "+"} Batch No
                       </Text>
                     </Pressable>
 
                     <Pressable
-                      onPress={() => setBarcodeConfig((prev) => ({ ...prev, showShelf: !prev.showShelf }))}
-                      style={[styles.toggleChip, barcodeConfig.showShelf && styles.toggleChipActive]}
+                      onPress={() =>
+                        setBarcodeConfig((prev) => ({
+                          ...prev,
+                          showShelf: !prev.showShelf,
+                        }))
+                      }
+                      style={[
+                        styles.toggleChip,
+                        barcodeConfig.showShelf && styles.toggleChipActive,
+                      ]}
                     >
-                      <Text style={[styles.toggleChipText, barcodeConfig.showShelf && styles.toggleChipTextActive]}>
-                        {barcodeConfig.showShelf ? '✓' : '+'} Shelf Location
+                      <Text
+                        style={[
+                          styles.toggleChipText,
+                          barcodeConfig.showShelf &&
+                            styles.toggleChipTextActive,
+                        ]}
+                      >
+                        {barcodeConfig.showShelf ? "✓" : "+"} Shelf Location
                       </Text>
                     </Pressable>
 
                     <Pressable
-                      onPress={() => setBarcodeConfig((prev) => ({ ...prev, showGeneric: !prev.showGeneric }))}
-                      style={[styles.toggleChip, barcodeConfig.showGeneric && styles.toggleChipActive]}
+                      onPress={() =>
+                        setBarcodeConfig((prev) => ({
+                          ...prev,
+                          showGeneric: !prev.showGeneric,
+                        }))
+                      }
+                      style={[
+                        styles.toggleChip,
+                        barcodeConfig.showGeneric && styles.toggleChipActive,
+                      ]}
                     >
-                      <Text style={[styles.toggleChipText, barcodeConfig.showGeneric && styles.toggleChipTextActive]}>
-                        {barcodeConfig.showGeneric ? '✓' : '+'} Generic Name
+                      <Text
+                        style={[
+                          styles.toggleChipText,
+                          barcodeConfig.showGeneric &&
+                            styles.toggleChipTextActive,
+                        ]}
+                      >
+                        {barcodeConfig.showGeneric ? "✓" : "+"} Generic Name
                       </Text>
                     </Pressable>
                   </View>
@@ -2276,42 +2988,75 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
 
                 {/* 4. Backend Route Status Alert */}
                 <View style={styles.apiPreviewBox}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981' }} />
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 6,
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: 4,
+                        backgroundColor: "#10B981",
+                      }}
+                    />
                     <Text style={styles.apiPreviewText}>
-                      Backend Connected: GET /api/inventory/{barcodeItemData?.id || barcodeItemData?.sku}/barcode
+                      Backend Connected: GET /api/inventory/
+                      {barcodeItemData?.id || barcodeItemData?.sku}/barcode
                     </Text>
                   </View>
                 </View>
-
               </View>
             </ScrollView>
 
             {/* Footer Actions */}
             <View style={styles.barcodeModalFooter}>
-              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-                <Pressable onPress={handleCopyBarcode} style={styles.secondaryActionBtn}>
-                  <Text style={styles.secondaryActionBtnText}>📋 Copy Barcode</Text>
+              <View
+                style={{ flexDirection: "row", gap: 8, alignItems: "center" }}
+              >
+                <Pressable
+                  onPress={handleCopyBarcode}
+                  style={styles.secondaryActionBtn}
+                >
+                  <Text style={styles.secondaryActionBtnText}>
+                    📋 Copy Barcode
+                  </Text>
                 </Pressable>
-                <Pressable onPress={handleDownloadSvg} style={styles.secondaryActionBtn}>
-                  <Text style={styles.secondaryActionBtnText}>💾 Export SVG</Text>
+                <Pressable
+                  onPress={handleDownloadSvg}
+                  style={styles.secondaryActionBtn}
+                >
+                  <Text style={styles.secondaryActionBtnText}>
+                    💾 Export SVG
+                  </Text>
                 </Pressable>
               </View>
 
-              <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
-                <Pressable onPress={() => setBarcodeModalOpen(false)} style={styles.cancelBtn}>
+              <View
+                style={{ flexDirection: "row", gap: 10, alignItems: "center" }}
+              >
+                <Pressable
+                  onPress={() => setBarcodeModalOpen(false)}
+                  style={styles.cancelBtn}
+                >
                   <Text style={styles.cancelBtnText}>Cancel</Text>
                 </Pressable>
-                <Pressable onPress={handlePrintBarcodeLabel} style={styles.printBarcodePrimaryBtn}>
-                  <Text style={styles.printBarcodePrimaryBtnText}>🖨️ Print Thermal Label ({barcodeConfig.copies})</Text>
+                <Pressable
+                  onPress={handlePrintBarcodeLabel}
+                  style={styles.printBarcodePrimaryBtn}
+                >
+                  <Text style={styles.printBarcodePrimaryBtnText}>
+                    🖨️ Print Thermal Label ({barcodeConfig.copies})
+                  </Text>
                 </Pressable>
               </View>
             </View>
-
           </View>
         </View>
       </Modal>
-
     </ScrollView>
   );
 }
@@ -2333,22 +3078,23 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   kpiRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 16,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
   },
   kpiRowCompact: {
     gap: 12,
   },
   cardContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    overflow: 'hidden',
+    borderColor: "#E2E8F0",
+    overflow: "hidden",
     ...Platform.select({
       web: {
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)',
+        boxShadow:
+          "0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)",
       },
       default: {
         elevation: 1,
@@ -2359,16 +3105,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: "#E2E8F0",
   },
   cardTitle: {
     fontSize: 16,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   cardSubtitle: {
     fontSize: 12.5,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 2,
   },
   /* Mobile Card List Styles */
@@ -2377,14 +3123,14 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   mobileStockCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     padding: 14,
     ...Platform.select({
       web: {
-        boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
+        boxShadow: "0 1px 2px rgba(0, 0, 0, 0.04)",
       },
       default: {
         elevation: 1,
@@ -2392,12 +3138,12 @@ const styles = StyleSheet.create({
     }),
   },
   mobileStockCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
     paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: "#F1F5F9",
     gap: 8,
   },
   mobileStockTitleCol: {
@@ -2405,13 +3151,13 @@ const styles = StyleSheet.create({
   },
   mobileBrandName: {
     fontSize: 15,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   mobileMedName: {
     fontSize: 12.5,
-    fontWeight: '600',
-    color: '#0F766E',
+    fontWeight: "600",
+    color: "#0F766E",
     marginTop: 2,
   },
   mobileStatusBadge: {
@@ -2420,176 +3166,176 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   statusBadgeInStock: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: "#DCFCE7",
   },
   statusBadgeLow: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: "#FEF3C7",
   },
   mobileStatusText: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   statusTextInStock: {
-    color: '#15803D',
+    color: "#15803D",
   },
   statusTextLow: {
-    color: '#B45309',
+    color: "#B45309",
   },
   mobileGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     paddingVertical: 10,
     gap: 10,
   },
   mobileGridItem: {
-    width: '47%',
+    width: "47%",
   },
   mobileItemLabel: {
     fontSize: 11,
-    fontWeight: '600',
-    color: '#94A3B8',
-    textTransform: 'uppercase',
+    fontWeight: "600",
+    color: "#94A3B8",
+    textTransform: "uppercase",
     letterSpacing: 0.3,
   },
   mobileItemValue: {
     fontSize: 12.5,
-    fontWeight: '500',
-    color: '#334155',
+    fontWeight: "500",
+    color: "#334155",
     marginTop: 1,
   },
   mobileItemValueBold: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
     marginTop: 1,
   },
   mobileStockFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: "#F1F5F9",
     marginTop: 4,
     gap: 8,
   },
   mobileUpdatedText: {
     fontSize: 11,
-    color: '#94A3B8',
+    color: "#94A3B8",
     flex: 1,
   },
   mobileEditBtn: {
-    backgroundColor: '#E0F2FE',
+    backgroundColor: "#E0F2FE",
     borderWidth: 1,
-    borderColor: '#BAE6FD',
+    borderColor: "#BAE6FD",
     paddingVertical: 5,
     paddingHorizontal: 12,
     borderRadius: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   mobileEditBtnText: {
     fontSize: 11.5,
-    fontWeight: '700',
-    color: '#0369A1',
+    fontWeight: "700",
+    color: "#0369A1",
   },
   tableWrapper: {
     minWidth: 1520,
     paddingHorizontal: 8,
   },
   tableHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderBottomColor: "#E2E8F0",
+    backgroundColor: "#F8FAFC",
   },
   thCell: {
     fontSize: 11.5,
-    fontWeight: '700',
-    color: '#64748B',
+    fontWeight: "700",
+    color: "#64748B",
     paddingHorizontal: 6,
     letterSpacing: 0.3,
   },
   tableRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 13,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: "#F1F5F9",
   },
   tableRowAlt: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
   },
   tdCell: {
     fontSize: 13,
-    color: '#334155',
+    color: "#334155",
     paddingHorizontal: 6,
   },
   medNameCell: {
-    fontWeight: '700',
-    color: '#0F766E',
+    fontWeight: "700",
+    color: "#0F766E",
   },
   brandNameCell: {
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   strengthCell: {
-    color: '#475569',
-    fontWeight: '500',
+    color: "#475569",
+    fontWeight: "500",
     fontSize: 12.5,
   },
   mfgCell: {
-    color: '#334155',
-    fontWeight: '600',
+    color: "#334155",
+    fontWeight: "600",
   },
   supplierCell: {
-    color: '#0369A1',
-    fontWeight: '600',
+    color: "#0369A1",
+    fontWeight: "600",
   },
   skuCell: {
-    fontWeight: '600',
-    color: '#64748B',
+    fontWeight: "600",
+    color: "#64748B",
   },
   amountCell: {
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   modifyWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   modifyButton: {
-    backgroundColor: '#E0F2FE',
+    backgroundColor: "#E0F2FE",
     borderWidth: 1,
-    borderColor: '#BAE6FD',
+    borderColor: "#BAE6FD",
     borderRadius: 6,
     paddingVertical: 4,
     paddingHorizontal: 10,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   modifyButtonText: {
     fontSize: 11.5,
-    fontWeight: '700',
-    color: '#0369A1',
+    fontWeight: "700",
+    color: "#0369A1",
   },
   formHeader: {
     paddingHorizontal: 20,
     paddingTop: 18,
     paddingBottom: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: "#F1F5F9",
   },
   formSubtitle: {
     fontSize: 12.5,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 3,
   },
   formGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     paddingHorizontal: 20,
     paddingVertical: 16,
     gap: 16,
@@ -2604,148 +3350,148 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
     fontSize: 12.5,
-    fontWeight: '600',
-    color: '#334155',
+    fontWeight: "600",
+    color: "#334155",
     marginBottom: 6,
   },
   reqStar: {
-    color: '#DC2626',
+    color: "#DC2626",
   },
   formInput: {
     height: 40,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
     borderRadius: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     paddingHorizontal: 12,
     fontSize: 13,
-    color: '#0F172A',
-    outlineStyle: 'none',
+    color: "#0F172A",
+    outlineStyle: "none",
   },
   formInputError: {
-    borderColor: '#DC2626',
-    backgroundColor: '#FEF2F2',
+    borderColor: "#DC2626",
+    backgroundColor: "#FEF2F2",
   },
   errorText: {
     fontSize: 11,
-    color: '#DC2626',
+    color: "#DC2626",
     marginTop: 3,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   formFooter: {
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    backgroundColor: '#FAFAFA',
-    alignItems: 'flex-start',
+    borderTopColor: "#F1F5F9",
+    backgroundColor: "#FAFAFA",
+    alignItems: "flex-start",
   },
   blueSubmitButton: {
-    backgroundColor: '#2563EB',
+    backgroundColor: "#2563EB",
     paddingVertical: 9,
     paddingHorizontal: 28,
     borderRadius: 8,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   blueSubmitButtonText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 13.5,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   headerControlsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
     marginTop: 8,
   },
   filterTogglePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
     paddingVertical: 5,
     paddingHorizontal: 10,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#F8FAFC',
-    cursor: 'pointer',
+    borderColor: "#CBD5E1",
+    backgroundColor: "#F8FAFC",
+    cursor: "pointer",
   },
   filterTogglePillActive: {
-    backgroundColor: '#F0FDFA',
-    borderColor: '#0F766E',
+    backgroundColor: "#F0FDFA",
+    borderColor: "#0F766E",
   },
   filterToggleDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#94A3B8',
+    backgroundColor: "#94A3B8",
   },
   filterToggleDotActive: {
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
   },
   filterToggleText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
+    fontWeight: "600",
+    color: "#64748B",
   },
   filterToggleTextActive: {
-    color: '#0F766E',
-    fontWeight: '700',
+    color: "#0F766E",
+    fontWeight: "700",
   },
   devGuideHeaderBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: "#F1F5F9",
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
     paddingVertical: 5,
     paddingHorizontal: 10,
     borderRadius: 8,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   devGuideHeaderBtnIcon: {
     fontSize: 13,
   },
   devGuideHeaderBtnText: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#334155',
+    fontWeight: "700",
+    color: "#334155",
   },
   stockSearchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
     borderRadius: 8,
     paddingHorizontal: 10,
     height: 36,
     minWidth: 220,
   },
   stockSearchBoxMobile: {
-    width: '100%',
-    minWidth: '100%',
+    width: "100%",
+    minWidth: "100%",
   },
   stockSearchIcon: {
     fontSize: 12,
     marginRight: 6,
-    color: '#64748B',
+    color: "#64748B",
   },
   stockSearchInput: {
     flex: 1,
     fontSize: 12.5,
-    color: '#0F172A',
-    ...Platform.select({ web: { outlineStyle: 'none' } }),
+    color: "#0F172A",
+    ...Platform.select({ web: { outlineStyle: "none" } }),
   },
   cardHeaderMobile: {
-    flexDirection: 'column',
+    flexDirection: "column",
     gap: 10,
   },
   mobileBadgesRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   miniToggleTrack: {
@@ -2753,52 +3499,52 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     padding: 2,
-    justifyContent: 'center',
-    cursor: 'pointer',
+    justifyContent: "center",
+    cursor: "pointer",
   },
   miniToggleTrackActive: {
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
   },
   miniToggleTrackInactive: {
-    backgroundColor: '#CBD5E1',
+    backgroundColor: "#CBD5E1",
   },
   miniToggleThumb: {
     width: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
   },
   miniToggleThumbActive: {
-    alignSelf: 'flex-end',
+    alignSelf: "flex-end",
   },
   miniToggleThumbInactive: {
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
   },
   mobileStockCardInactive: {
     opacity: 0.65,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
   },
   mobileDotsActionBtn: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: "#F1F5F9",
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
     borderRadius: 6,
     paddingVertical: 4,
     paddingHorizontal: 10,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   mobileDotsActionText: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#334155',
+    fontWeight: "700",
+    color: "#334155",
   },
   tableRowInactive: {
     opacity: 0.65,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
   },
   tdCenterCell: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 6,
   },
   tableToggleTrack: {
@@ -2806,138 +3552,138 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     padding: 2,
-    justifyContent: 'center',
-    cursor: 'pointer',
+    justifyContent: "center",
+    cursor: "pointer",
   },
   tableToggleActive: {
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
   },
   tableToggleInactive: {
-    backgroundColor: '#CBD5E1',
+    backgroundColor: "#CBD5E1",
   },
   tableToggleThumb: {
     width: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
   },
   tableToggleThumbActive: {
-    alignSelf: 'flex-end',
+    alignSelf: "flex-end",
   },
   tableToggleThumbInactive: {
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
   },
   rxTagPill: {
     paddingVertical: 3,
     paddingHorizontal: 8,
     borderRadius: 4,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   rxTagRequired: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: "#FEE2E2",
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: "#FECACA",
   },
   rxTagOtc: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: "#F1F5F9",
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
   },
   rxTagPillText: {
     fontSize: 10.5,
-    fontWeight: '800',
+    fontWeight: "800",
   },
   rxTagTextRequired: {
-    color: '#DC2626',
+    color: "#DC2626",
   },
   rxTagTextOtc: {
-    color: '#64748B',
+    color: "#64748B",
   },
   actionCellWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   actionDotsButton: {
     width: 32,
     height: 32,
     borderRadius: 6,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#F1F5F9",
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    cursor: 'pointer',
+    borderColor: "#E2E8F0",
+    cursor: "pointer",
   },
   actionDotsButtonText: {
     fontSize: 16,
-    fontWeight: '800',
-    color: '#334155',
+    fontWeight: "800",
+    color: "#334155",
     lineHeight: 18,
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(15, 23, 42, 0.65)",
+    justifyContent: "center",
+    alignItems: "center",
     padding: 16,
   },
   actionMenuCard: {
-    width: '100%',
+    width: "100%",
     maxWidth: 480,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    overflow: 'hidden',
+    borderColor: "#CBD5E1",
+    overflow: "hidden",
   },
   actionMenuHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     padding: 18,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderBottomColor: "#E2E8F0",
+    backgroundColor: "#F8FAFC",
   },
   actionMenuTitle: {
     fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   actionMenuSub: {
     fontSize: 11.5,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 2,
   },
   closeActionBtn: {
     padding: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   closeActionText: {
     fontSize: 18,
-    color: '#64748B',
-    fontWeight: '700',
+    color: "#64748B",
+    fontWeight: "700",
   },
   actionList: {
     padding: 10,
     gap: 4,
   },
   actionOptionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
     padding: 12,
     borderRadius: 8,
-    backgroundColor: '#FFFFFF',
-    cursor: 'pointer',
+    backgroundColor: "#FFFFFF",
+    cursor: "pointer",
   },
   actionOptionRowDanger: {
-    backgroundColor: '#FEF2F2',
+    backgroundColor: "#FEF2F2",
   },
   actionOptionRowDev: {
-    backgroundColor: '#F0FDFA',
+    backgroundColor: "#F0FDFA",
     borderWidth: 1,
-    borderColor: '#99F6E4',
+    borderColor: "#99F6E4",
     marginTop: 4,
   },
   actionOptionIcon: {
@@ -2948,40 +3694,40 @@ const styles = StyleSheet.create({
   },
   actionOptionTitle: {
     fontSize: 13.5,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   actionOptionDesc: {
     fontSize: 11.5,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 1,
   },
   adjustModalCard: {
-    width: '100%',
+    width: "100%",
     maxWidth: 500,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    overflow: 'hidden',
+    borderColor: "#CBD5E1",
+    overflow: "hidden",
   },
   adjustModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     padding: 18,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderBottomColor: "#E2E8F0",
+    backgroundColor: "#F8FAFC",
   },
   adjustModalTitle: {
     fontSize: 15,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   adjustModalSubtitle: {
     fontSize: 11.5,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 2,
   },
   adjustModalBody: {
@@ -2993,11 +3739,11 @@ const styles = StyleSheet.create({
   },
   fieldLabelModal: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#334155',
+    fontWeight: "600",
+    color: "#334155",
   },
   adjustTypeRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 8,
   },
   adjustTypeBtn: {
@@ -3005,124 +3751,124 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
-    alignItems: 'center',
-    cursor: 'pointer',
+    borderColor: "#E2E8F0",
+    backgroundColor: "#F8FAFC",
+    alignItems: "center",
+    cursor: "pointer",
   },
   adjustTypeBtnActive: {
-    borderColor: '#0F766E',
-    backgroundColor: '#0F766E',
+    borderColor: "#0F766E",
+    backgroundColor: "#0F766E",
   },
   adjustTypeBtnText: {
     fontSize: 11.5,
-    fontWeight: '600',
-    color: '#475569',
+    fontWeight: "600",
+    color: "#475569",
   },
   adjustTypeBtnTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
+    color: "#FFFFFF",
+    fontWeight: "700",
   },
   adjustInput: {
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
     fontSize: 13,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
   },
   apiPreviewBox: {
-    backgroundColor: '#F0FDFA',
+    backgroundColor: "#F0FDFA",
     borderWidth: 1,
-    borderColor: '#99F6E4',
+    borderColor: "#99F6E4",
     padding: 8,
     borderRadius: 6,
   },
   apiPreviewText: {
     fontSize: 11,
-    color: '#0F766E',
-    fontFamily: Platform.select({ web: 'monospace', default: 'System' }),
-    fontWeight: '600',
+    color: "#0F766E",
+    fontFamily: Platform.select({ web: "monospace", default: "System" }),
+    fontWeight: "600",
   },
   adjustModalFooter: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
+    flexDirection: "row",
+    justifyContent: "flex-end",
     gap: 10,
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderTopColor: "#E2E8F0",
+    backgroundColor: "#F8FAFC",
   },
   cancelBtn: {
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    cursor: 'pointer',
+    borderColor: "#CBD5E1",
+    cursor: "pointer",
   },
   cancelBtnText: {
     fontSize: 12.5,
-    color: '#64748B',
-    fontWeight: '600',
+    color: "#64748B",
+    fontWeight: "600",
   },
   saveAdjustBtn: {
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
     paddingVertical: 8,
     paddingHorizontal: 18,
     borderRadius: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   saveAdjustBtnText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 12.5,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   devGuideModalCard: {
-    width: '100%',
+    width: "100%",
     maxWidth: 780,
-    maxHeight: '90%',
-    backgroundColor: '#FFFFFF',
+    maxHeight: "90%",
+    backgroundColor: "#FFFFFF",
     borderRadius: 14,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   devGuideModalCardMobile: {
-    maxHeight: '95%',
+    maxHeight: "95%",
   },
   devGuideModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     padding: 18,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderBottomColor: "#E2E8F0",
+    backgroundColor: "#F8FAFC",
   },
   devGuideTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
   },
   devGuideIconBadge: {
     width: 36,
     height: 36,
     borderRadius: 8,
-    backgroundColor: '#0F766E',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#0F766E",
+    alignItems: "center",
+    justifyContent: "center",
   },
   devGuideIconText: {
     fontSize: 18,
   },
   devGuideModalTitle: {
     fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   devGuideModalSubtitle: {
     fontSize: 12,
-    color: '#64748B',
+    color: "#64748B",
   },
   devGuideModalBody: {
     padding: 20,
@@ -3132,127 +3878,130 @@ const styles = StyleSheet.create({
   },
   guideSecTitle: {
     fontSize: 14,
-    fontWeight: '800',
-    color: '#0F766E',
+    fontWeight: "800",
+    color: "#0F766E",
     marginBottom: 6,
   },
   guideSecDesc: {
     fontSize: 12,
-    color: '#475569',
+    color: "#475569",
     marginBottom: 8,
   },
   codeSnippet: {
-    backgroundColor: '#0F172A',
+    backgroundColor: "#0F172A",
     borderRadius: 8,
     padding: 12,
     marginTop: 6,
   },
   codeSnippetText: {
-    color: '#38BDF8',
+    color: "#38BDF8",
     fontSize: 11.5,
-    fontFamily: Platform.select({ web: 'Consolas, Monaco, monospace', default: 'System' }),
+    fontFamily: Platform.select({
+      web: "Consolas, Monaco, monospace",
+      default: "System",
+    }),
     lineHeight: 17,
   },
   endpointCard: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     borderRadius: 8,
     padding: 12,
     marginBottom: 10,
   },
   endpointHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     marginBottom: 4,
   },
   methodPatch: {
-    backgroundColor: '#8B5CF6',
+    backgroundColor: "#8B5CF6",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
   },
   methodPost: {
-    backgroundColor: '#16A34A',
+    backgroundColor: "#16A34A",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
   },
   methodText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 10,
-    fontWeight: '800',
+    fontWeight: "800",
   },
   endpointRoute: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-    fontFamily: Platform.select({ web: 'monospace', default: 'System' }),
+    fontWeight: "700",
+    color: "#0F172A",
+    fontFamily: Platform.select({ web: "monospace", default: "System" }),
   },
   endpointDesc: {
     fontSize: 12,
-    color: '#475569',
+    color: "#475569",
   },
   devGuideModalFooter: {
     padding: 14,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
-    alignItems: 'flex-end',
+    borderTopColor: "#E2E8F0",
+    backgroundColor: "#F8FAFC",
+    alignItems: "flex-end",
   },
   closeDevGuideModalBtn: {
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
     paddingVertical: 8,
     paddingHorizontal: 18,
     borderRadius: 8,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   closeDevGuideModalBtnText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 12.5,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   /* Inter-Branch Stock Transfer Modal Styles */
   transferModalCard: {
-    width: '100%',
+    width: "100%",
     maxWidth: 680,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    overflow: 'hidden',
+    borderColor: "#CBD5E1",
+    overflow: "hidden",
   },
   transferModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     padding: 18,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderBottomColor: "#E2E8F0",
+    backgroundColor: "#F8FAFC",
   },
   transferHeaderBadge: {
     width: 32,
     height: 32,
     borderRadius: 8,
-    backgroundColor: '#EFF6FF',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#EFF6FF",
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: 1,
-    borderColor: '#BFDBFE',
+    borderColor: "#BFDBFE",
   },
   transferHeaderBadgeIcon: {
     fontSize: 16,
   },
   transferModalTitle: {
     fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   transferModalSubtitle: {
     fontSize: 12,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 2,
   },
   transferModalBody: {
@@ -3260,69 +4009,69 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   transferProductCard: {
-    backgroundColor: '#F0FDFA',
+    backgroundColor: "#F0FDFA",
     borderWidth: 1,
-    borderColor: '#99F6E4',
+    borderColor: "#99F6E4",
     borderRadius: 10,
     padding: 14,
   },
   transferMedTitle: {
     fontSize: 16,
-    fontWeight: '800',
-    color: '#0F766E',
+    fontWeight: "800",
+    color: "#0F766E",
   },
   transferMedMeta: {
     fontSize: 12,
-    color: '#334155',
+    color: "#334155",
     marginTop: 2,
   },
   transferPillsRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 8,
     marginTop: 8,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
   },
   transferPill: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
     paddingVertical: 3,
     paddingHorizontal: 8,
     borderRadius: 6,
   },
   transferPillText: {
     fontSize: 11.5,
-    fontWeight: '600',
-    color: '#475569',
+    fontWeight: "600",
+    color: "#475569",
   },
   transferPillTeal: {
-    backgroundColor: '#CCFBF1',
+    backgroundColor: "#CCFBF1",
     borderWidth: 1,
-    borderColor: '#5EEAD4',
+    borderColor: "#5EEAD4",
     paddingVertical: 3,
     paddingHorizontal: 8,
     borderRadius: 6,
   },
   transferPillTextTeal: {
     fontSize: 11.5,
-    fontWeight: '800',
-    color: '#0F766E',
+    fontWeight: "800",
+    color: "#0F766E",
   },
   transferErrorAlert: {
-    backgroundColor: '#FEF2F2',
+    backgroundColor: "#FEF2F2",
     borderWidth: 1,
-    borderColor: '#FCA5A5',
+    borderColor: "#FCA5A5",
     padding: 10,
     borderRadius: 8,
   },
   transferErrorText: {
     fontSize: 12,
-    color: '#DC2626',
-    fontWeight: '600',
+    color: "#DC2626",
+    fontWeight: "600",
   },
   branchSelectionGrid: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
+    flexDirection: "row",
+    alignItems: "stretch",
     gap: 10,
   },
   branchCol: {
@@ -3330,71 +4079,71 @@ const styles = StyleSheet.create({
   },
   branchPickerBox: {
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
     borderRadius: 8,
-    backgroundColor: '#F8FAFC',
-    overflow: 'hidden',
+    backgroundColor: "#F8FAFC",
+    overflow: "hidden",
     marginTop: 4,
   },
   branchOptionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     padding: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    backgroundColor: '#FFFFFF',
-    cursor: 'pointer',
+    borderBottomColor: "#F1F5F9",
+    backgroundColor: "#FFFFFF",
+    cursor: "pointer",
   },
   branchOptionItemFromActive: {
-    backgroundColor: '#F0FDFA',
+    backgroundColor: "#F0FDFA",
     borderLeftWidth: 4,
-    borderLeftColor: '#0F766E',
+    borderLeftColor: "#0F766E",
   },
   branchOptionItemToActive: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: "#EFF6FF",
     borderLeftWidth: 4,
-    borderLeftColor: '#2563EB',
+    borderLeftColor: "#2563EB",
   },
   branchOptionDisabled: {
     opacity: 0.4,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
   },
   branchDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#CBD5E1',
+    backgroundColor: "#CBD5E1",
   },
   branchDotFromActive: {
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
   },
   branchDotToActive: {
-    backgroundColor: '#2563EB',
+    backgroundColor: "#2563EB",
   },
   branchOptionName: {
     fontSize: 12.5,
-    fontWeight: '600',
-    color: '#334155',
+    fontWeight: "600",
+    color: "#334155",
   },
   branchOptionNameFromActive: {
-    color: '#0F766E',
-    fontWeight: '800',
+    color: "#0F766E",
+    fontWeight: "800",
   },
   branchOptionNameToActive: {
-    color: '#2563EB',
-    fontWeight: '800',
+    color: "#2563EB",
+    fontWeight: "800",
   },
   branchOptionNameDisabled: {
-    color: '#94A3B8',
+    color: "#94A3B8",
   },
   branchOptionCity: {
     fontSize: 11,
-    color: '#94A3B8',
+    color: "#94A3B8",
   },
   transferDirectionCol: {
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     width: 28,
     paddingTop: 18,
   },
@@ -3402,84 +4151,85 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#2563EB',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#2563EB",
+    alignItems: "center",
+    justifyContent: "center",
   },
   transferDirectionArrow: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: "800",
   },
   transferPresetBtn: {
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#F8FAFC',
-    cursor: 'pointer',
+    borderColor: "#CBD5E1",
+    backgroundColor: "#F8FAFC",
+    cursor: "pointer",
   },
   transferPresetBtnActive: {
-    backgroundColor: '#2563EB',
-    borderColor: '#2563EB',
+    backgroundColor: "#2563EB",
+    borderColor: "#2563EB",
   },
   transferPresetText: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#475569',
+    fontWeight: "700",
+    color: "#475569",
   },
   transferPresetTextActive: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
   transferCalcBox: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     borderRadius: 8,
     padding: 12,
     gap: 4,
   },
   transferCalcTitle: {
     fontSize: 12,
-    fontWeight: '800',
-    color: '#334155',
+    fontWeight: "800",
+    color: "#334155",
   },
   transferCalcRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
   },
   transferCalcLabel: {
     fontSize: 12,
-    color: '#475569',
-    fontWeight: '600',
+    color: "#475569",
+    fontWeight: "600",
   },
   confirmTransferBtn: {
-    backgroundColor: '#2563EB',
+    backgroundColor: "#2563EB",
     paddingVertical: 8,
     paddingHorizontal: 18,
     borderRadius: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   confirmTransferBtnText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 12.5,
-    fontWeight: '700',
+    fontWeight: "700",
   },
 
   // Barcode & Thermal Shelf Tag Modal Styles
   barcodeModalCard: {
-    width: '92%',
+    width: "92%",
     maxWidth: 680,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    overflow: 'hidden',
+    borderColor: "#E2E8F0",
+    overflow: "hidden",
     ...Platform.select({
       web: {
-        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+        boxShadow:
+          "0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
       },
       default: {
         elevation: 8,
@@ -3487,97 +4237,97 @@ const styles = StyleSheet.create({
     }),
   },
   barcodeModalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    backgroundColor: '#FFFFFF',
+    borderBottomColor: "#F1F5F9",
+    backgroundColor: "#FFFFFF",
   },
   barcodeHeaderBadge: {
     width: 34,
     height: 34,
     borderRadius: 8,
-    backgroundColor: '#ECFDF5',
+    backgroundColor: "#ECFDF5",
     borderWidth: 1,
-    borderColor: '#A7F3D0',
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderColor: "#A7F3D0",
+    justifyContent: "center",
+    alignItems: "center",
   },
   barcodeModalTitle: {
     fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   barcodeModalSubtitle: {
     fontSize: 12,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 2,
   },
   barcodeModalBody: {
     padding: 20,
     gap: 18,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
   },
   previewSectionWrapper: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     padding: 16,
-    alignItems: 'center',
+    alignItems: "center",
   },
   previewSectionHeader: {
-    width: '100%',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    width: "100%",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 14,
   },
   previewSectionTitle: {
     fontSize: 11,
-    fontWeight: '800',
-    color: '#64748B',
+    fontWeight: "800",
+    color: "#64748B",
     letterSpacing: 0.5,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
   },
   liveTagBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
-    backgroundColor: '#F0FDF4',
+    backgroundColor: "#F0FDF4",
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#BBF7D0',
+    borderColor: "#BBF7D0",
   },
   liveTagDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#16A34A',
+    backgroundColor: "#16A34A",
   },
   liveTagBadgeText: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#16A34A',
+    fontWeight: "700",
+    color: "#16A34A",
   },
   physicalLabelCard: {
     width: 320,
     minHeight: 160,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 8,
     borderWidth: 1.5,
-    borderColor: '#0F172A',
-    borderStyle: 'dashed',
+    borderColor: "#0F172A",
+    borderStyle: "dashed",
     padding: 12,
-    justifyContent: 'space-between',
+    justifyContent: "space-between",
     ...Platform.select({
       web: {
-        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.08)',
+        boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.08)",
       },
     }),
   },
@@ -3585,142 +4335,142 @@ const styles = StyleSheet.create({
     width: 380,
     minHeight: 180,
     padding: 14,
-    borderColor: '#0F766E',
+    borderColor: "#0F766E",
   },
   physicalLabelCardA4: {
     width: 300,
     minHeight: 150,
   },
   labelHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     borderBottomWidth: 1,
-    borderBottomColor: '#0F172A',
+    borderBottomColor: "#0F172A",
     paddingBottom: 4,
     marginBottom: 6,
   },
   labelPharmacyName: {
     fontSize: 10.5,
-    fontWeight: '900',
-    color: '#0F172A',
+    fontWeight: "900",
+    color: "#0F172A",
     letterSpacing: 0.5,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
   },
   labelBranchText: {
     fontSize: 9.5,
-    fontWeight: '700',
-    color: '#475569',
+    fontWeight: "700",
+    color: "#475569",
   },
   labelMedInfoRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
+    flexDirection: "row",
+    alignItems: "baseline",
     gap: 6,
   },
   labelMedName: {
     fontSize: 13,
-    fontWeight: '900',
-    color: '#0F172A',
+    fontWeight: "900",
+    color: "#0F172A",
     flexShrink: 1,
   },
   labelMedStrength: {
     fontSize: 11,
-    fontWeight: '800',
-    color: '#0F766E',
+    fontWeight: "800",
+    color: "#0F766E",
   },
   labelGenericName: {
     fontSize: 10,
-    color: '#475569',
-    fontStyle: 'italic',
+    color: "#475569",
+    fontStyle: "italic",
     marginTop: 1,
   },
   labelMetaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginVertical: 4,
   },
   labelMetaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
   },
   labelMetaLabel: {
     fontSize: 9,
-    fontWeight: '800',
-    color: '#64748B',
+    fontWeight: "800",
+    color: "#64748B",
   },
   labelMetaValue: {
     fontSize: 10,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   labelMetaItemPrice: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: "#FEF3C7",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
     borderWidth: 0.5,
-    borderColor: '#F59E0B',
+    borderColor: "#F59E0B",
   },
   labelPriceTag: {
     fontSize: 11,
-    fontWeight: '900',
-    color: '#92400E',
+    fontWeight: "900",
+    color: "#92400E",
   },
   labelShelfRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 6,
   },
   shelfTagBadge: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: "#F1F5F9",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
     borderWidth: 0.5,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
   },
   shelfTagText: {
     fontSize: 9.5,
-    fontWeight: '800',
-    color: '#334155',
+    fontWeight: "800",
+    color: "#334155",
   },
   labelPackSizeText: {
     fontSize: 9.5,
-    fontWeight: '700',
-    color: '#64748B',
+    fontWeight: "700",
+    color: "#64748B",
   },
   labelBarcodeWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginTop: 4,
     paddingTop: 4,
     borderTopWidth: 0.5,
-    borderTopColor: '#E2E8F0',
+    borderTopColor: "#E2E8F0",
   },
   labelBarcodeSvgBox: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
   },
   labelBarcodeFallback: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
   },
   barcodeStripeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 2,
   },
   barcodeFallbackText: {
     fontSize: 10,
-    fontFamily: Platform.OS === 'web' ? 'monospace' : 'monospace',
-    fontWeight: '700',
-    color: '#0F172A',
+    fontFamily: Platform.OS === "web" ? "monospace" : "monospace",
+    fontWeight: "700",
+    color: "#0F172A",
     letterSpacing: 2,
     marginTop: 2,
   },
@@ -3728,87 +4478,87 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   barcodeConfigCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     padding: 14,
   },
   barcodeConfigCardTitle: {
     fontSize: 12.5,
-    fontWeight: '800',
-    color: '#1E293B',
+    fontWeight: "800",
+    color: "#1E293B",
     marginBottom: 8,
   },
   formatOptionsRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 10,
   },
   formatOptionBtn: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
     borderWidth: 1.5,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     borderRadius: 8,
     paddingVertical: 10,
     paddingHorizontal: 8,
-    alignItems: 'center',
-    cursor: 'pointer',
+    alignItems: "center",
+    cursor: "pointer",
   },
   formatOptionBtnActive: {
-    backgroundColor: '#F0FDF4',
-    borderColor: '#10B981',
+    backgroundColor: "#F0FDF4",
+    borderColor: "#10B981",
   },
   formatOptionTitle: {
     fontSize: 12,
-    fontWeight: '800',
-    color: '#334155',
+    fontWeight: "800",
+    color: "#334155",
   },
   formatOptionTitleActive: {
-    color: '#0F766E',
+    color: "#0F766E",
   },
   formatOptionDesc: {
     fontSize: 10,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 2,
-    textAlign: 'center',
+    textAlign: "center",
   },
   copiesInput: {
     width: 60,
     height: 36,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderWidth: 1.5,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
     borderRadius: 6,
-    textAlign: 'center',
+    textAlign: "center",
     fontSize: 14,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   presetPill: {
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
-    cursor: 'pointer',
+    borderColor: "#CBD5E1",
+    backgroundColor: "#FFFFFF",
+    cursor: "pointer",
   },
   presetPillActive: {
-    backgroundColor: '#0F766E',
-    borderColor: '#0F766E',
+    backgroundColor: "#0F766E",
+    borderColor: "#0F766E",
   },
   presetPillText: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#475569',
+    fontWeight: "700",
+    color: "#475569",
   },
   presetPillTextActive: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
   togglesWrapRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
   },
   toggleChip: {
@@ -3816,32 +4566,32 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
-    cursor: 'pointer',
+    borderColor: "#E2E8F0",
+    backgroundColor: "#F8FAFC",
+    cursor: "pointer",
   },
   toggleChipActive: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#3B82F6',
+    backgroundColor: "#EFF6FF",
+    borderColor: "#3B82F6",
   },
   toggleChipText: {
     fontSize: 11.5,
-    fontWeight: '700',
-    color: '#64748B',
+    fontWeight: "700",
+    color: "#64748B",
   },
   toggleChipTextActive: {
-    color: '#1D4ED8',
+    color: "#1D4ED8",
   },
   barcodeModalFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: 20,
     paddingVertical: 14,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    backgroundColor: '#FFFFFF',
-    flexWrap: 'wrap',
+    borderTopColor: "#F1F5F9",
+    backgroundColor: "#FFFFFF",
+    flexWrap: "wrap",
     gap: 10,
   },
   secondaryActionBtn: {
@@ -3849,28 +4599,28 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#F8FAFC',
-    cursor: 'pointer',
+    borderColor: "#CBD5E1",
+    backgroundColor: "#F8FAFC",
+    cursor: "pointer",
   },
   secondaryActionBtnText: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#334155',
+    fontWeight: "700",
+    color: "#334155",
   },
   printBarcodePrimaryBtn: {
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
     paddingVertical: 9,
     paddingHorizontal: 20,
     borderRadius: 6,
-    cursor: 'pointer',
-    flexDirection: 'row',
-    alignItems: 'center',
+    cursor: "pointer",
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
   },
   printBarcodePrimaryBtnText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: "800",
   },
 });

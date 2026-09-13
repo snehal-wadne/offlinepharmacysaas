@@ -82,7 +82,21 @@ export interface ServerChangeItem {
   sequence: string | number;
   organisationId: string;
   branchId?: string;
-  entityType: 'PRODUCT' | 'CUSTOMER' | 'INVENTORY' | 'INVOICE' | 'PAYMENT' | 'RETURN' | 'PURCHASE' | 'EXPENSE';
+  entityType:
+    | 'PRODUCT'
+    | 'CUSTOMER'
+    | 'INVENTORY'
+    | 'INVOICE'
+    | 'PAYMENT'
+    | 'RETURN'
+    | 'PURCHASE'
+    | 'EXPENSE'
+    | 'ADJUSTMENT'
+    | 'TRANSFER'
+    | 'REGISTER'
+    | 'CASH_REGISTER'
+    | 'REGISTER_SESSION'
+    | 'CASH_MOVEMENT';
   entityId: string;
   operation: 'INSERT' | 'UPDATE' | 'DELETE';
   changedAt: string;

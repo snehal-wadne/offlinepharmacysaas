@@ -21,6 +21,10 @@ import {
   TransactionRecord,
   SyncOutboxRecord,
   SyncMetadataRecord,
+  CashRegisterRecord,
+  RegisterSessionRecord,
+  CashMovementRecord,
+  CashDenominationRecord,
 } from './types';
 
 export class PharmaFlowDatabase extends Dexie {
@@ -30,6 +34,10 @@ export class PharmaFlowDatabase extends Dexie {
   transactions!: Table<TransactionRecord, string>;
   sync_outbox!: Table<SyncOutboxRecord, number>;
   sync_metadata!: Table<SyncMetadataRecord, string>;
+  cash_registers!: Table<CashRegisterRecord, string>;
+  register_sessions!: Table<RegisterSessionRecord, string>;
+  cash_movements!: Table<CashMovementRecord, string>;
+  cash_denominations!: Table<CashDenominationRecord, string>;
 
   constructor(dbName = 'pharmaflow_local') {
     super(dbName);
@@ -42,6 +50,14 @@ export class PharmaFlowDatabase extends Dexie {
       transactions: 'transactionId, mutationId, type, organisationId, branchId, userId, deviceId, occurredAt, status, syncStatus, createdAt, [organisationId+branchId]',
       sync_outbox: '++sequence, mutationId, mutationType, organisationId, branchId, status, nextRetryAt, createdAt, [organisationId+branchId]',
       sync_metadata: 'key',
+    });
+
+    // Schema definition for Version 2: Cash Register & Movements
+    this.version(2).stores({
+      cash_registers: 'id, organisationId, branchId, identifier, [organisationId+branchId]',
+      register_sessions: 'id, organisationId, branchId, cashRegisterId, status, sessionNumber, [organisationId+branchId], [branchId+status]',
+      cash_movements: 'id, organisationId, branchId, cashRegisterSessionId, movementType, movementNumber, occurredAt, [organisationId+branchId], [cashRegisterSessionId+movementType]',
+      cash_denominations: 'id, organisationId, cashRegisterSessionId, denominationValue, [cashRegisterSessionId+denominationValue]',
     });
   }
 }

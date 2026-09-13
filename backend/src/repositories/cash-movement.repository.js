@@ -107,8 +107,9 @@ const validateCashier = async (db, organisationId, cashierId) => {
   const result = await db.query(
     `SELECT u.id
        FROM users u
-       INNER JOIN organisation_memberships om ON om.user_id = u.id
-       WHERE u.id = $1 AND om.organisation_id = $2 AND om.status = 'ACTIVE';`,
+       LEFT JOIN organisation_memberships om ON om.user_id = u.id AND om.organisation_id = $2
+       LEFT JOIN organisations o ON o.id = $2 AND o.owner_id = u.id
+       WHERE u.id = $1 AND (om.status = 'ACTIVE' OR u.is_platform_superadmin = TRUE OR o.id IS NOT NULL);`,
     [cashierId, organisationId],
   );
 

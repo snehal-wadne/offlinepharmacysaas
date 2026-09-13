@@ -4,10 +4,14 @@
  * Business logic for inventory stock adjustments and batch management.
  */
 
-const { pool } = require('../db/connection');
+const { pool } = require("../db/connection");
 
-const getInventory = async ({ organisationId, search, limit = 100, offset = 0 }) => {
-
+const getInventory = async ({
+  organisationId,
+  search,
+  limit = 100,
+  offset = 0,
+}) => {
   try {
     const query = `
       SELECT
@@ -35,7 +39,7 @@ const getInventory = async ({ organisationId, search, limit = 100, offset = 0 })
       INNER JOIN suppliers s ON s.id = ib.supplier_id
       LEFT JOIN users u ON u.id = ib.updated_by
       WHERE p.organisation_id = $1
-        ${search ? `AND (p.medicine_name ILIKE $4 OR p.brand_name ILIKE $4 OR p.sku ILIKE $4 OR ib.batch_number ILIKE $4 OR s.name ILIKE $4)` : ''}
+        ${search ? `AND (p.medicine_name ILIKE $4 OR p.brand_name ILIKE $4 OR p.sku ILIKE $4 OR ib.batch_number ILIKE $4 OR s.name ILIKE $4)` : ""}
       ORDER BY ib.updated_at DESC, ib.created_at DESC
       LIMIT $2 OFFSET $3;
     `;
@@ -51,27 +55,29 @@ const getInventory = async ({ organisationId, search, limit = 100, offset = 0 })
       medicineName: row.medicineName,
       brandName: row.brandName,
       genericName: row.medicineName,
-      strength: row.strength || '',
-      packSize: row.packSize || '',
-      manufacturer: row.manufacturer || '',
-      supplierName: row.supplierName || '',
+      strength: row.strength || "",
+      packSize: row.packSize || "",
+      manufacturer: row.manufacturer || "",
+      supplierName: row.supplierName || "",
       sku: row.sku,
       batchNo: row.batchNo,
-      expiryDate: row.expiryDate ? new Date(row.expiryDate).toISOString().split('T')[0] : null,
+      expiryDate: row.expiryDate
+        ? new Date(row.expiryDate).toISOString().split("T")[0]
+        : null,
       quantity: Number(row.quantity),
       amount: `₹${parseFloat(row.mrp || 0).toFixed(2)}`,
-      branchId: row.branchName || 'Main Store',
-      shelfLocation: row.shelfLocation || '',
-      updatedBy: row.updatedBy || 'Manager',
+      branchId: row.branchName || "Main Store",
+      shelfLocation: row.shelfLocation || "",
+      updatedBy: row.updatedBy || "Manager",
       lastUpdated: row.updated_at
-        ? new Date(row.updated_at).toISOString().split('T')[0]
-        : new Date().toISOString().split('T')[0],
-      status: Number(row.quantity) < 50 ? 'Low Stock' : 'In Stock',
+        ? new Date(row.updated_at).toISOString().split("T")[0]
+        : new Date().toISOString().split("T")[0],
+      status: Number(row.quantity) < 50 ? "Low Stock" : "In Stock",
       isActive: true,
       rxRequired: false,
     }));
   } catch (err) {
-    console.error('Inventory query failed on PostgreSQL:', err.message);
+    console.error("Inventory query failed on PostgreSQL:", err.message);
     throw err;
   }
 };
@@ -82,39 +88,39 @@ const saveOrUpdateInventory = async (organisationId, itemData) => {
     medicineName,
     brandName,
     genericName,
-    strength = '500mg',
-    packSize = '15 Tablets',
-    manufacturer = 'GSK',
-    supplierName = 'GSK Pharmaceuticals',
-    amount = '15.00',
-    sku = 'SKU-001',
-    batchNo = 'B-1001',
+    strength = "500mg",
+    packSize = "15 Tablets",
+    manufacturer = "GSK",
+    supplierName = "GSK Pharmaceuticals",
+    amount = "15.00",
+    sku = "SKU-001",
+    batchNo = "B-1001",
     quantity = 100,
-    branchId = 'Main Store',
-    shelfLocation = 'A1-S1',
+    branchId = "Main Store",
+    shelfLocation = "A1-S1",
   } = itemData;
 
   if (!organisationId) {
-    throw new Error('organisationId is required');
+    throw new Error("organisationId is required");
   }
 
   const medName = medicineName || genericName || brandName;
   const brdName = brandName || medicineName;
-  const numMrp = parseFloat(String(amount).replace(/[^0-9.]/g, '')) || 15.0;
+  const numMrp = parseFloat(String(amount).replace(/[^0-9.]/g, "")) || 15.0;
   const numQty = parseInt(quantity, 10) || 0;
 
   // 1. Resolve Supplier
   let sId;
   const sRes = await pool.query(
     `SELECT id FROM suppliers WHERE organisation_id = $1 AND LOWER(name) = LOWER($2) LIMIT 1;`,
-    [organisationId, supplierName]
+    [organisationId, supplierName],
   );
   if (sRes.rows.length > 0) {
     sId = sRes.rows[0].id;
   } else {
     const newS = await pool.query(
       `INSERT INTO suppliers (organisation_id, name) VALUES ($1, $2) RETURNING id;`,
-      [organisationId, supplierName]
+      [organisationId, supplierName],
     );
     sId = newS.rows[0].id;
   }
@@ -123,14 +129,14 @@ const saveOrUpdateInventory = async (organisationId, itemData) => {
   let bId;
   const bRes = await pool.query(
     `SELECT id FROM branches WHERE organisation_id = $1 LIMIT 1;`,
-    [organisationId]
+    [organisationId],
   );
   if (bRes.rows.length > 0) {
     bId = bRes.rows[0].id;
   } else {
     const newB = await pool.query(
       `INSERT INTO branches (organisation_id, name) VALUES ($1, $2) RETURNING id;`,
-      [organisationId, branchId || 'Main Branch']
+      [organisationId, branchId || "Main Branch"],
     );
     bId = newB.rows[0].id;
   }
@@ -142,7 +148,7 @@ const saveOrUpdateInventory = async (organisationId, itemData) => {
   if (id) {
     const batchRes = await pool.query(
       `SELECT id, product_id FROM inventory_batches WHERE id::text = $1 OR batch_number = $1 LIMIT 1;`,
-      [id]
+      [id],
     );
     if (batchRes.rows.length > 0) {
       existingBatch = batchRes.rows[0];
@@ -156,13 +162,13 @@ const saveOrUpdateInventory = async (organisationId, itemData) => {
       `UPDATE products
        SET medicine_name = $1, brand_name = $2, strength = $3, pack_size = $4, manufacturer = $5, sku = $6, updated_at = CURRENT_TIMESTAMP
        WHERE id = $7;`,
-      [medName, brdName, strength, packSize, manufacturer, sku, productId]
+      [medName, brdName, strength, packSize, manufacturer, sku, productId],
     );
   } else {
     // Search by SKU or brand name
     const pRes = await pool.query(
       `SELECT id FROM products WHERE organisation_id = $1 AND (LOWER(sku) = LOWER($2) OR LOWER(brand_name) = LOWER($3)) LIMIT 1;`,
-      [organisationId, sku, brdName]
+      [organisationId, sku, brdName],
     );
 
     if (pRes.rows.length > 0) {
@@ -171,13 +177,21 @@ const saveOrUpdateInventory = async (organisationId, itemData) => {
         `UPDATE products
          SET medicine_name = $1, brand_name = $2, strength = $3, pack_size = $4, manufacturer = $5, updated_at = CURRENT_TIMESTAMP
          WHERE id = $6;`,
-        [medName, brdName, strength, packSize, manufacturer, productId]
+        [medName, brdName, strength, packSize, manufacturer, productId],
       );
     } else {
       const newP = await pool.query(
         `INSERT INTO products (organisation_id, medicine_name, brand_name, strength, pack_size, manufacturer, sku)
          VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id;`,
-        [organisationId, medName, brdName, strength, packSize, manufacturer, sku]
+        [
+          organisationId,
+          medName,
+          brdName,
+          strength,
+          packSize,
+          manufacturer,
+          sku,
+        ],
       );
       productId = newP.rows[0].id;
     }
@@ -190,7 +204,15 @@ const saveOrUpdateInventory = async (organisationId, itemData) => {
       `UPDATE inventory_batches
        SET product_id = $1, supplier_id = $2, batch_number = $3, mrp = $4, quantity = $5, shelf_location = $6, updated_at = CURRENT_TIMESTAMP
        WHERE id = $7 RETURNING *;`,
-      [productId, sId, batchNo, numMrp, numQty, shelfLocation, existingBatch.id]
+      [
+        productId,
+        sId,
+        batchNo,
+        numMrp,
+        numQty,
+        shelfLocation,
+        existingBatch.id,
+      ],
     );
     batchRecord = updated.rows[0];
   } else {
@@ -200,21 +222,30 @@ const saveOrUpdateInventory = async (organisationId, itemData) => {
     const inserted = await pool.query(
       `INSERT INTO inventory_batches (product_id, branch_id, supplier_id, batch_number, expiry_date, mrp, quantity, shelf_location)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *;`,
-      [productId, bId, sId, batchNo, expiryDate.toISOString().split('T')[0], numMrp, numQty, shelfLocation]
+      [
+        productId,
+        bId,
+        sId,
+        batchNo,
+        expiryDate.toISOString().split("T")[0],
+        numMrp,
+        numQty,
+        shelfLocation,
+      ],
     );
     batchRecord = inserted.rows[0];
   }
 
   // Record activity in stock_movements table
-  const movementType = id ? 'Adjustment' : 'Purchase';
+  const movementType = id ? "Adjustment" : "Purchase";
   const qtyDisplay = numQty >= 0 ? `+${numQty}` : `${numQty}`;
   recordStockMovement(organisationId, {
-    branchName: branchId || 'Main Branch',
+    branchName: branchId || "Main Branch",
     type: movementType,
     item: `${brdName} (${strength})`,
     quantity: qtyDisplay,
-    reference: batchNo || 'ADJ-1001',
-    status: 'Completed',
+    reference: batchNo || "ADJ-1001",
+    status: "Completed",
   });
 
   return {
@@ -231,11 +262,11 @@ const saveOrUpdateInventory = async (organisationId, itemData) => {
     sku,
     batchNo,
     quantity: numQty,
-    branchId: branchId || 'Main Store',
+    branchId: branchId || "Main Store",
     shelfLocation,
-    updatedBy: 'Manager',
-    lastUpdated: new Date().toISOString().split('T')[0],
-    status: numQty < 50 ? 'Low Stock' : 'In Stock',
+    updatedBy: "Manager",
+    lastUpdated: new Date().toISOString().split("T")[0],
+    status: numQty < 50 ? "Low Stock" : "In Stock",
     isActive: true,
     rxRequired: false,
   };
@@ -243,14 +274,14 @@ const saveOrUpdateInventory = async (organisationId, itemData) => {
 
 const deleteInventoryEntry = async (organisationId, batchId) => {
   if (!organisationId || !batchId) {
-    throw new Error('organisationId and batchId are required');
+    throw new Error("organisationId and batchId are required");
   }
 
   const res = await pool.query(
     `DELETE FROM inventory_batches
      WHERE (id::text = $1 OR batch_number = $1)
      RETURNING id;`,
-    [batchId]
+    [batchId],
   );
 
   return res.rowCount > 0;
@@ -258,7 +289,7 @@ const deleteInventoryEntry = async (organisationId, batchId) => {
 
 const getInventorySummary = async (organisationId) => {
   if (!organisationId) {
-    throw new Error('organisationId is required');
+    throw new Error("organisationId is required");
   }
 
   const kpiQuery = `
@@ -287,15 +318,33 @@ const getInventorySummary = async (organisationId) => {
   };
 };
 
-const recordStockMovement = async (organisationId, { branchName = 'Main Branch', type, item, quantity, reference = 'ADJ-1001', status = 'Completed' }) => {
+const recordStockMovement = async (
+  organisationId,
+  {
+    branchName = "Main Branch",
+    type,
+    item,
+    quantity,
+    reference = "ADJ-1001",
+    status = "Completed",
+  },
+) => {
   try {
     await pool.query(
       `INSERT INTO stock_movements (organisation_id, branch_name, movement_type, item_name, quantity, reference, status)
        VALUES ($1, $2, $3, $4, $5, $6, $7);`,
-      [organisationId, branchName, type, item, String(quantity), reference, status]
+      [
+        organisationId,
+        branchName,
+        type,
+        item,
+        String(quantity),
+        reference,
+        status,
+      ],
     );
   } catch (err) {
-    console.warn('Failed to record stock movement:', err.message);
+    console.warn("Failed to record stock movement:", err.message);
   }
 };
 
@@ -314,14 +363,21 @@ const getStockMovements = async (organisationId, limit = 10) => {
        FROM stock_movements
        ORDER BY created_at DESC
        LIMIT $1;`,
-      [limit]
+      [limit],
     );
 
     if (res.rows.length > 0) {
       return res.rows.map((r) => {
         const d = new Date(r.created_at);
-        const dateStr = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-        const timeStr = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+        const dateStr = d.toLocaleDateString("en-GB", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+        });
+        const timeStr = d.toLocaleTimeString("en-GB", {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
         return {
           id: r.id,
           date: `${dateStr}, ${timeStr}`,
@@ -329,32 +385,130 @@ const getStockMovements = async (organisationId, limit = 10) => {
           item: r.item,
           quantity: r.quantity,
           reference: r.reference,
-          status: r.status || 'Completed',
+          status: r.status || "Completed",
         };
       });
     }
   } catch (e) {
-    console.warn('Failed to fetch stock_movements from DB:', e.message);
+    console.warn("Failed to fetch stock_movements from DB:", e.message);
   }
   return null;
 };
 
 const CODE128_PATTERNS = [
-  "212222", "222122", "222221", "121223", "121322", "131222", "122213", "122312", "132212", "221213",
-  "221312", "231212", "112232", "122132", "122231", "113222", "123122", "123221", "223211", "221132",
-  "221231", "213212", "223112", "312131", "311222", "321122", "321221", "312212", "322112", "322211",
-  "212123", "212321", "232121", "111323", "131123", "131321", "112313", "132113", "132311", "211313",
-  "231113", "231311", "112133", "112331", "132131", "113123", "113321", "133121", "313121", "211331",
-  "231131", "213113", "213311", "213131", "311123", "311321", "331121", "312113", "312311", "332111",
-  "314111", "221411", "431111", "111224", "111422", "121124", "121421", "141122", "141221", "112214",
-  "112412", "122114", "122411", "142112", "142211", "241211", "221114", "413111", "241112", "134111",
-  "111242", "121142", "121241", "114212", "124112", "124211", "411212", "421112", "421211", "212141",
-  "214121", "412121", "111143", "111341", "131141", "114113", "114311", "411113", "411311", "113141",
-  "114131", "311141", "411131", "211412", "211214", "211232", "2331112"
+  "212222",
+  "222122",
+  "222221",
+  "121223",
+  "121322",
+  "131222",
+  "122213",
+  "122312",
+  "132212",
+  "221213",
+  "221312",
+  "231212",
+  "112232",
+  "122132",
+  "122231",
+  "113222",
+  "123122",
+  "123221",
+  "223211",
+  "221132",
+  "221231",
+  "213212",
+  "223112",
+  "312131",
+  "311222",
+  "321122",
+  "321221",
+  "312212",
+  "322112",
+  "322211",
+  "212123",
+  "212321",
+  "232121",
+  "111323",
+  "131123",
+  "131321",
+  "112313",
+  "132113",
+  "132311",
+  "211313",
+  "231113",
+  "231311",
+  "112133",
+  "112331",
+  "132131",
+  "113123",
+  "113321",
+  "133121",
+  "313121",
+  "211331",
+  "231131",
+  "213113",
+  "213311",
+  "213131",
+  "311123",
+  "311321",
+  "331121",
+  "312113",
+  "312311",
+  "332111",
+  "314111",
+  "221411",
+  "431111",
+  "111224",
+  "111422",
+  "121124",
+  "121421",
+  "141122",
+  "141221",
+  "112214",
+  "112412",
+  "122114",
+  "122411",
+  "142112",
+  "142211",
+  "241211",
+  "221114",
+  "413111",
+  "241112",
+  "134111",
+  "111242",
+  "121142",
+  "121241",
+  "114212",
+  "124112",
+  "124211",
+  "411212",
+  "421112",
+  "421211",
+  "212141",
+  "214121",
+  "412121",
+  "111143",
+  "111341",
+  "131141",
+  "114113",
+  "114311",
+  "411113",
+  "411311",
+  "113141",
+  "114131",
+  "311141",
+  "411131",
+  "211412",
+  "211214",
+  "211232",
+  "2331112",
 ];
 
 function generateCode128Svg(text, barHeight = 44, moduleWidth = 2) {
-  const clean = String(text || 'MED-001').toUpperCase().replace(/[^ -~]/g, '');
+  const clean = String(text || "MED-001")
+    .toUpperCase()
+    .replace(/[^ -~]/g, "");
   const chars = [104];
   let checksum = 104;
 
@@ -383,7 +537,7 @@ function generateCode128Svg(text, barHeight = 44, moduleWidth = 2) {
   const svgHeight = barHeight + 16;
 
   let x = quietZone * moduleWidth;
-  let rects = '';
+  let rects = "";
   for (const seg of segments) {
     const w = seg.width * moduleWidth;
     if (seg.isBar) {
@@ -404,7 +558,7 @@ function generateCode128Svg(text, barHeight = 44, moduleWidth = 2) {
 
 const getItemBarcodeData = async (organisationId, identifier) => {
   if (!identifier) {
-    throw new Error('Item identifier (ID, SKU, or Batch) is required');
+    throw new Error("Item identifier (ID, SKU, or Batch) is required");
   }
 
   const query = `
@@ -422,7 +576,7 @@ const getItemBarcodeData = async (organisationId, identifier) => {
       p.pack_size AS "packSize",
       p.manufacturer,
       p.sku,
-      COALESCE(p.barcode, p.sku) AS "barcode",
+      p.sku AS "barcode",
       s.name AS "supplierName",
       b.name AS "branchName",
       o.name AS "organisationName"
@@ -442,7 +596,7 @@ const getItemBarcodeData = async (organisationId, identifier) => {
       item = res.rows[0];
     }
   } catch (err) {
-    console.warn('Batch barcode lookup query failed:', err.message);
+    console.warn("Batch barcode lookup query failed:", err.message);
   }
 
   if (!item) {
@@ -455,8 +609,8 @@ const getItemBarcodeData = async (organisationId, identifier) => {
         p.pack_size AS "packSize",
         p.manufacturer,
         p.sku,
-        COALESCE(p.barcode, p.sku) AS "barcode",
-        p.mrp,
+        p.sku AS "barcode",
+        25.0 AS mrp,
         o.name AS "organisationName"
       FROM products p
       LEFT JOIN organisations o ON o.id = p.organisation_id
@@ -468,11 +622,13 @@ const getItemBarcodeData = async (organisationId, identifier) => {
       const p = prodRes.rows[0];
       item = {
         batchId: identifier,
-        batchNo: 'B-1001',
-        expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        batchNo: "B-1001",
+        expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .split("T")[0],
         quantity: 50,
         mrp: p.mrp || 25.0,
-        shelfLocation: 'Rack A1',
+        shelfLocation: "Rack A1",
         productId: p.productId,
         medicineName: p.medicineName,
         brandName: p.brandName,
@@ -481,7 +637,7 @@ const getItemBarcodeData = async (organisationId, identifier) => {
         manufacturer: p.manufacturer,
         sku: p.sku,
         barcode: p.barcode,
-        branchName: 'Main Store',
+        branchName: "Main Store",
         organisationName: p.organisationName,
       };
     }
@@ -491,29 +647,31 @@ const getItemBarcodeData = async (organisationId, identifier) => {
     // Fallback stub for UI preview
     item = {
       batchId: identifier,
-      batchNo: 'B-1001',
-      expiryDate: '2028-12-31',
+      batchNo: "B-1001",
+      expiryDate: "2028-12-31",
       quantity: 50,
       mrp: 35.0,
-      shelfLocation: 'Rack A1-S1',
-      productId: 'PROD-001',
-      medicineName: 'Medicine Item',
+      shelfLocation: "Rack A1-S1",
+      productId: "PROD-001",
+      medicineName: "Medicine Item",
       brandName: identifier,
-      strength: '500mg',
-      packSize: '10 Tablets',
-      manufacturer: 'Pharma Lab',
+      strength: "500mg",
+      packSize: "10 Tablets",
+      manufacturer: "Pharma Lab",
       sku: identifier,
       barcode: identifier,
-      branchName: 'Main Store',
-      organisationName: 'Falah Pharmacy',
+      branchName: "Main Store",
+      organisationName: "Falah Pharmacy",
     };
   }
 
   const barcodeValue = String(item.barcode || item.sku || identifier).trim();
   const svgBarcode = generateCode128Svg(barcodeValue);
-  const formattedExpiry = item.expiryDate ? new Date(item.expiryDate).toISOString().split('T')[0] : 'N/A';
+  const formattedExpiry = item.expiryDate
+    ? new Date(item.expiryDate).toISOString().split("T")[0]
+    : "N/A";
   const mrpNum = parseFloat(item.mrp || 0).toFixed(2);
-  const pharmacyName = item.organisationName || 'Falah Pharmacy';
+  const pharmacyName = item.organisationName || "Falah Pharmacy";
 
   const thermalHtml = `
 <!DOCTYPE html>
@@ -545,15 +703,15 @@ const getItemBarcodeData = async (organisationId, identifier) => {
 </head>
 <body onload="window.print()">
   <div class="header">${pharmacyName}</div>
-  <div class="name">${item.brandName || item.medicineName} ${item.strength || ''}</div>
+  <div class="name">${item.brandName || item.medicineName} ${item.strength || ""}</div>
   <div class="meta-row">
     <span>B: ${item.batchNo}</span>
     <span>EXP: ${formattedExpiry}</span>
     <span class="price">MRP ₹${mrpNum}</span>
   </div>
   <div class="meta-row">
-    <span>Rack: ${item.shelfLocation || 'A1'}</span>
-    <span>Pack: ${item.packSize || 'Units'}</span>
+    <span>Rack: ${item.shelfLocation || "A1"}</span>
+    <span>Pack: ${item.packSize || "Units"}</span>
   </div>
   <div class="barcode-box">
     ${svgBarcode}
@@ -568,9 +726,9 @@ const getItemBarcodeData = async (organisationId, identifier) => {
     medicineName: item.medicineName,
     brandName: item.brandName || item.medicineName,
     genericName: item.medicineName,
-    strength: item.strength || '',
-    packSize: item.packSize || '',
-    manufacturer: item.manufacturer || '',
+    strength: item.strength || "",
+    packSize: item.packSize || "",
+    manufacturer: item.manufacturer || "",
     sku: item.sku,
     barcode: barcodeValue,
     batchNo: item.batchNo,
@@ -578,8 +736,8 @@ const getItemBarcodeData = async (organisationId, identifier) => {
     quantity: Number(item.quantity || 0),
     mrp: `₹${mrpNum}`,
     mrpNumeric: parseFloat(mrpNum),
-    shelfLocation: item.shelfLocation || 'A1-S1',
-    branchName: item.branchName || 'Main Store',
+    shelfLocation: item.shelfLocation || "A1-S1",
+    branchName: item.branchName || "Main Store",
     pharmacyName: pharmacyName,
     svgBarcode: svgBarcode,
     thermalHtml: thermalHtml,

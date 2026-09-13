@@ -617,23 +617,37 @@ async function runSyncEngineTests() {
     }).then((r) => r.json());
     assert(pushChangeSale.results[0].status === 'SUCCESS', 'Sale mutation processed successfully');
 
-    // Pull changes from server
-    const pullRes1 = await fetch(
-      `http://localhost:5000/api/sync/pull?cursor=0&limit=500`,
-      {
-        headers: {
-          Authorization: `Bearer ${TEST_AUTH_TOKEN}`,
-          'x-organisation-id': TEST_ORG_ID,
-          'x-branch-id': TEST_BRANCH_ID,
-        },
-      }
-    ).then((r) => r.json());
+    // Pull changes from server with pagination support
+    let createdChangeEvent: any = undefined;
+    let pullCursor = '0';
+    let pullRes1: any = null;
+    let iterations = 0;
 
-    assert(pullRes1.success === true, 'GET /api/sync/pull returned success: true');
-    assert(Array.isArray(pullRes1.changes) && pullRes1.changes.length > 0, 'sync_changes contains recorded events');
-    const createdChangeEvent = pullRes1.changes.find(
-      (c: any) => c.payload?.invoiceNumber === pullSaleInvNo
-    );
+    while (!createdChangeEvent && iterations < 20) {
+      iterations++;
+      pullRes1 = await fetch(
+        `http://localhost:5000/api/sync/pull?cursor=${encodeURIComponent(pullCursor)}&limit=100`,
+        {
+          headers: {
+            Authorization: `Bearer ${TEST_AUTH_TOKEN}`,
+            'x-organisation-id': TEST_ORG_ID,
+            'x-branch-id': TEST_BRANCH_ID,
+          },
+        }
+      ).then((r) => r.json());
+
+      assert(pullRes1.success === true, 'GET /api/sync/pull returned success: true');
+      if (Array.isArray(pullRes1.changes)) {
+        createdChangeEvent = pullRes1.changes.find(
+          (c: any) => c.payload?.invoiceNumber === pullSaleInvNo
+        );
+      }
+      if (createdChangeEvent || !pullRes1.hasMore || pullRes1.nextCursor === pullCursor) {
+        break;
+      }
+      pullCursor = pullRes1.nextCursor;
+    }
+
     assert(createdChangeEvent !== undefined, 'Found change event created atomically in the same transaction');
     assert(createdChangeEvent.entityType === 'INVOICE', 'Change entityType is INVOICE');
     assert(createdChangeEvent.operation === 'INSERT', 'Change operation is INSERT');

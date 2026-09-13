@@ -11,10 +11,14 @@
 export type TransactionType =
   | 'SALE'
   | 'RETURN'
+  | 'CUSTOMER_PAYMENT'
+  | 'PURCHASE'
   | 'EXPENSE'
+  | 'CASH_MOVEMENT'
   | 'REGISTER_OPEN'
   | 'REGISTER_CLOSE'
-  | 'ADJUSTMENT';
+  | 'ADJUSTMENT'
+  | 'TRANSFER';
 
 export type TransactionStatus =
   | 'DRAFT'
@@ -45,8 +49,13 @@ export type MutationType =
   | 'RECEIVE_PURCHASE'
   | 'RECORD_CASH_EXPENSE'
   | 'UPDATE_INVENTORY'
+  | 'ADJUST_STOCK'
+  | 'TRANSFER_STOCK'
   | 'REGISTER_OPEN'
-  | 'REGISTER_CLOSE';
+  | 'REGISTER_CLOSE'
+  | 'OPEN_REGISTER_SESSION'
+  | 'RECORD_CASH_MOVEMENT'
+  | 'CLOSE_REGISTER_SESSION';
 
 // ==========================================
 // 2. STORE RECORDS
@@ -169,6 +178,79 @@ export interface SyncOutboxRecord {
 export interface SyncMetadataRecord {
   key: string;                 // Primary Key
   value: any;
+  updatedAt: string;
+}
+
+/**
+  * Cash Registers Store
+  * Physical counter workstation / terminal local cache.
+  */
+export interface CashRegisterRecord {
+  id: string;                  // Primary Key
+  organisationId: string;      // Indexed
+  branchId: string;            // Indexed
+  name: string;
+  identifier: string;          // e.g. POS-01
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+  * Register Sessions Store
+  * Shift lifecycle, float balance, reconciliation state.
+  */
+export interface RegisterSessionRecord {
+  id: string;                  // Primary Key (UUID)
+  organisationId: string;      // Indexed
+  branchId: string;            // Indexed
+  cashRegisterId: string;      // Indexed
+  cashierId: string;
+  sessionNumber: string;
+  shiftName?: string;
+  openingBalance: number;
+  countedCash?: number;
+  expectedCash?: number;
+  variance?: number;
+  status: 'OPEN' | 'CLOSED' | 'CLOSE_PENDING';
+  varianceStatus?: 'BALANCED' | 'SHORTAGE' | 'OVERAGE';
+  openingNotes?: string;
+  closingNotes?: string;
+  openedAt: string;
+  closedAt?: string;
+  syncStatus: SyncStatus;
+  updatedAt: string;
+}
+
+/**
+  * Cash Movements Store
+  * Petty cash additions and payouts.
+  */
+export interface CashMovementRecord {
+  id: string;                  // Primary Key (UUID)
+  organisationId: string;      // Indexed
+  branchId: string;            // Indexed
+  cashRegisterSessionId: string; // Indexed
+  cashierId: string;
+  movementNumber: string;
+  movementType: 'IN' | 'OUT';
+  amount: number;
+  reason: string;
+  occurredAt: string;
+  syncStatus: SyncStatus;
+  updatedAt: string;
+}
+
+/**
+  * Cash Denominations Store
+  * Drawer closing note/coin count breakdown.
+  */
+export interface CashDenominationRecord {
+  id: string;                  // Primary Key
+  organisationId: string;
+  cashRegisterSessionId: string;
+  denominationValue: number;
+  denominationCount: number;
   updatedAt: string;
 }
 
