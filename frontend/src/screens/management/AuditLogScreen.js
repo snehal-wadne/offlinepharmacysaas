@@ -112,7 +112,9 @@ export default function AuditLogScreen({ onShowToast, onNavigate }) {
       targetRoute = 'stock-adjustments';
     } else if (mod.includes('sale') || mod.includes('pos') || mod.includes('billing') || act.includes('price')) {
       targetRoute = 'new-sale';
-    } else if (mod.includes('customer') || mod.includes('khata')) {
+    } else if (mod.includes('ledger') || mod.includes('khata') || act.includes('credit') || act.includes('due') || act.includes('settle')) {
+      targetRoute = 'customer-ledger';
+    } else if (mod.includes('customer')) {
       targetRoute = 'customers-patients';
     } else if (mod.includes('purchase') || mod.includes('receiving')) {
       targetRoute = 'purchases';

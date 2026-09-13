@@ -19,6 +19,7 @@ import {
 } from '../../data/customersMockData';
 import { SkeletonTableRow, SkeletonItemCard } from '../../components/common/SkeletonLoader';
 import PaginationControls from '../../components/common/PaginationControls';
+import { exportCustomerLedgerStatement } from '../../utils/exportUtils';
 
 export default function CustomerLedgerScreen({ onShowToast, onNavigate }) {
   const { width } = useWindowDimensions();
@@ -72,30 +73,43 @@ export default function CustomerLedgerScreen({ onShowToast, onNavigate }) {
   };
 
   const handleOpenSettle = (acc) => {
+    if (!acc) return;
     setSettleAccount(acc);
-    const numericBalance = acc.currentBalance.replace(/[^0-9.]/g, '');
+    const balanceStr = String(acc.currentBalance || acc.currentDue || '0');
+    const numericBalance = balanceStr.replace(/[^0-9.]/g, '') || '0';
     setSettleAmount(numericBalance);
+    setSettleMode('UPI / QR');
     setSettleModalVisible(true);
   };
 
   const handleProcessSettlement = () => {
-    if (!settleAmount || isNaN(settleAmount) || Number(settleAmount) <= 0) {
-      if (onShowToast) onShowToast('Please enter a valid settlement amount');
+    if (!settleAccount) return;
+    const cleanAmountStr = String(settleAmount || '').replace(/[^0-9.]/g, '');
+    const paidVal = parseFloat(cleanAmountStr);
+
+    if (isNaN(paidVal) || paidVal <= 0) {
+      if (onShowToast) onShowToast('⚠️ Please enter a valid settlement amount greater than 0');
       return;
     }
 
-    const paidVal = Number(settleAmount);
     const updatedAccounts = ledgerAccounts.map((acc) => {
       if (acc.id === settleAccount.id) {
-        const currentVal = Number(acc.currentBalance.replace(/[^0-9.]/g, ''));
+        const balanceStr = String(acc.currentBalance || acc.currentDue || '0');
+        const currentVal = parseFloat(balanceStr.replace(/[^0-9.]/g, '')) || 0;
         const newBalanceVal = Math.max(0, currentVal - paidVal);
+        const limitStr = String(acc.creditLimit || '0').replace(/[^0-9.]/g, '');
+        const limitVal = parseFloat(limitStr) || 1;
+        const newUtilPct = Math.min(100, Math.round((newBalanceVal / limitVal) * 100));
+
         return {
           ...acc,
           currentBalance: `₹${newBalanceVal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
+          currentDue: `₹${newBalanceVal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
           lastPaymentDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-          lastPaymentAmount: `₹${paidVal.toLocaleString('en-IN')}`,
-          creditStatus: newBalanceVal === 0 ? 'Healthy' : acc.creditStatus,
+          lastPaymentAmount: `₹${paidVal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
+          creditStatus: newBalanceVal === 0 ? 'Healthy' : newUtilPct > 90 ? 'Limit Exceeded' : 'Active Account',
           agingBucket: newBalanceVal === 0 ? 'Settled' : acc.agingBucket,
+          utilizationPercent: `${newUtilPct}%`,
         };
       }
       return acc;
@@ -104,14 +118,18 @@ export default function CustomerLedgerScreen({ onShowToast, onNavigate }) {
     setLedgerAccounts(updatedAccounts);
     setSettleModalVisible(false);
 
+    const rcptNum = `RCP-${Date.now().toString().slice(-4)}`;
     if (onShowToast) {
-      onShowToast(`✓ Recorded dues settlement of ₹${paidVal} for ${settleAccount.name} via ${settleMode}! (RX-06 Ledger Updated)`);
+      onShowToast(`✓ Processed ₹${paidVal.toLocaleString('en-IN')} payment for ${settleAccount.name} via ${settleMode}! Voucher #${rcptNum} generated.`);
     }
   };
 
   const handleExportStatement = (acc) => {
+    if (!acc) return;
+    const rows = MOCK_PATIENT_STATEMENTS[acc.id] || [];
+    exportCustomerLedgerStatement(acc, rows);
     if (onShowToast) {
-      onShowToast(`✓ Exported Ledger Statement for ${acc.name} (${acc.id}) as PDF! (RX-07 Audit Logged)`);
+      onShowToast(`✓ Opening Ledger Statement for ${acc.name} (${acc.id}) (Print / Save as PDF)...`);
     }
   };
 

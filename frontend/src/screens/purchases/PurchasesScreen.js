@@ -24,6 +24,7 @@ import {
 import { useOfflineSync } from '../../offline/OfflineSyncContext';
 import { SkeletonTableRow, SkeletonItemCard } from '../../components/common/SkeletonLoader';
 import PaginationControls from '../../components/common/PaginationControls';
+import { exportTaxInvoice } from '../../utils/exportUtils';
 
 const PO_STATUS_BADGES = {
   Draft: { bg: '#F1F5F9', text: '#475569' },
@@ -153,6 +154,7 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
     medicine: 'Paracetamol 500mg (Box of 100)',
     quantity: '10',
     unitPrice: '120.00',
+    taxRate: '12%',
     notes: '',
     isCustomerOrder: false,
     customerName: '',
@@ -200,6 +202,7 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
       medicine: 'Paracetamol 500mg (Box of 100)',
       quantity: '10',
       unitPrice: '120.00',
+      taxRate: '12%',
       notes: '',
       isCustomerOrder: activeTab === 'customer_orders',
       customerName: '',
@@ -228,7 +231,11 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
 
     const qtyNum = Number(formData.quantity);
     const unitCostNum = Number(formData.unitPrice || 100);
-    const calculatedTotal = (qtyNum * unitCostNum).toFixed(2);
+    const subtotalNum = qtyNum * unitCostNum;
+    const taxRateNum = parseFloat(String(formData.taxRate || '12%').replace('%', '')) || 0;
+    const taxAmountNum = (subtotalNum * taxRateNum) / 100;
+    const grandTotalNum = subtotalNum + taxAmountNum;
+    const calculatedTotal = grandTotalNum.toFixed(2);
     const isDraft = targetStatus === 'Draft';
     const poNum = isDraft ? `PO-DRAFT-${Date.now().toString().slice(-4)}` : `PO-${1026 + orders.length}`;
 
@@ -243,12 +250,19 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
       customerName: formData.customerName.trim(),
       customerPhone: formData.customerPhone.trim(),
       prescriptionRef: formData.prescriptionRef.trim(),
+      subtotal: subtotalNum,
+      taxRate: `${taxRateNum}%`,
+      taxAmount: taxAmountNum,
+      totalAmount: grandTotalNum,
       items: [
         {
           medicineName: formData.medicine,
           brandName: formData.medicine,
           orderedQuantity: qtyNum,
           unitCost: unitCostNum,
+          taxRate: taxRateNum,
+          taxAmount: taxAmountNum,
+          total: grandTotalNum,
         },
       ],
     };
@@ -265,6 +279,10 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
         expectedDate: formData.expectedDate || '05 Sep 2026',
         amount: `₹${Number(calculatedTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
         numericAmount: Number(calculatedTotal),
+        subtotal: subtotalNum,
+        taxRate: `${taxRateNum}%`,
+        taxAmount: taxAmountNum,
+        unitPrice: unitCostNum,
         itemsCount: qtyNum,
         status: isDraft ? 'Draft' : 'Pending',
         branch: formData.branch || 'Main Branch',
@@ -284,7 +302,7 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
       setModalVisible(false);
 
       if (onShowToast) {
-        onShowToast(isDraft ? `✓ Saved Purchase Order ${newPO.id} as Draft!` : `✓ Created Purchase Order ${newPO.id}!`);
+        onShowToast(isDraft ? `✓ Saved Purchase Order ${newPO.id} as Draft (Taxes Included: ₹${Number(calculatedTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })})!` : `✓ Created Purchase Order ${newPO.id} (Total: ₹${Number(calculatedTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })})!`);
       }
     } catch (err) {
       console.warn('Backend PO create error, saving locally in offline storage:', err.message);
@@ -295,6 +313,10 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
         expectedDate: formData.expectedDate || '05 Sep 2026',
         amount: `₹${Number(calculatedTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
         numericAmount: Number(calculatedTotal),
+        subtotal: subtotalNum,
+        taxRate: `${taxRateNum}%`,
+        taxAmount: taxAmountNum,
+        unitPrice: unitCostNum,
         itemsCount: qtyNum,
         status: isDraft ? 'Draft' : 'Pending',
         branch: formData.branch || 'Main Branch',
@@ -314,7 +336,7 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
       setModalVisible(false);
 
       if (onShowToast) {
-        onShowToast(isDraft ? `✓ Saved Purchase Order ${newPO.id} as Draft (Offline)!` : `✓ Created Purchase Order ${newPO.id} (Saved Offline)!`);
+        onShowToast(isDraft ? `✓ Saved Purchase Order ${newPO.id} as Draft (Offline, Taxes Included)!` : `✓ Created Purchase Order ${newPO.id} (Saved Offline, Taxes Included)!`);
       }
     }
   };
@@ -401,12 +423,14 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
         );
       }
     } else if (actionKey === 'print') {
+      exportTaxInvoice(po);
       if (onShowToast) {
         onShowToast(`🖨️ Generating Gate Pass & Print Sheet for ${po.id}...`);
       }
     } else if (actionKey === 'invoice') {
+      exportTaxInvoice(po);
       if (onShowToast) {
-        onShowToast(`📄 GST Invoice downloaded for ${po.id} (Supplier: ${po.supplier})`);
+        onShowToast(`📄 Opening GST Tax Invoice for ${po.id} (Print / Save as PDF)...`);
       }
     }
   };
@@ -1021,6 +1045,68 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
                     onChangeText={(t) => setFormData((p) => ({ ...p, unitPrice: t }))}
                   />
                 </View>
+              </View>
+
+              {/* GST Tax Rate Selection & Calculation */}
+              <View style={{ marginTop: 6, marginBottom: 14, backgroundColor: '#F8FAFC', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                <Text style={[styles.fieldLabel, { marginBottom: 6 }]}>
+                  Applicable GST Tax Rate <Text style={styles.reqStar}>*</Text>
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                  {['0%', '5%', '12%', '18%', '28%'].map((rate) => {
+                    const isSelected = (formData.taxRate || '12%') === rate;
+                    return (
+                      <Pressable
+                        key={rate}
+                        onPress={() => setFormData((p) => ({ ...p, taxRate: rate }))}
+                        style={{
+                          paddingHorizontal: 12,
+                          paddingVertical: 6,
+                          borderRadius: 6,
+                          backgroundColor: isSelected ? '#0F766E' : '#FFFFFF',
+                          borderWidth: 1,
+                          borderColor: isSelected ? '#0F766E' : '#CBD5E1',
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            fontWeight: isSelected ? '700' : '500',
+                            color: isSelected ? '#FFFFFF' : '#334155',
+                          }}
+                        >
+                          {rate} GST
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                {/* Live Tax & Total Calculation */}
+                {(() => {
+                  const qty = Number(formData.quantity) || 0;
+                  const unitP = Number(formData.unitPrice) || 0;
+                  const sub = qty * unitP;
+                  const rateNum = parseFloat(String(formData.taxRate || '12%').replace('%', '')) || 0;
+                  const tax = (sub * rateNum) / 100;
+                  const total = sub + tax;
+                  return (
+                    <View style={{ backgroundColor: '#FFFFFF', padding: 10, borderRadius: 6, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <Text style={{ fontSize: 12, color: '#64748B' }}>Taxable Subtotal ({qty} units × ₹{unitP.toFixed(2)}):</Text>
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: '#0F172A' }}>₹{sub.toFixed(2)}</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <Text style={{ fontSize: 12, color: '#64748B' }}>GST Tax ({formData.taxRate || '12%'}):</Text>
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: '#0F766E' }}>+₹{tax.toFixed(2)} (CGST {(rateNum / 2).toFixed(1)}% + SGST {(rateNum / 2).toFixed(1)}%)</Text>
+                      </View>
+                      <View style={{ borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 6, flexDirection: 'row', justifyContent: 'space-between' }}>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }}>Total PO Amount (Taxes Included):</Text>
+                        <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F766E' }}>₹{total.toFixed(2)}</Text>
+                      </View>
+                    </View>
+                  );
+                })()}
               </View>
 
               <View style={styles.fieldGroup}>

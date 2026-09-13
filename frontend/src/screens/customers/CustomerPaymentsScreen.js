@@ -20,6 +20,7 @@ import { SkeletonTableRow, SkeletonItemCard } from '../../components/common/Skel
 import PaginationControls from '../../components/common/PaginationControls';
 import { localPersistenceService } from "../../db";
 import { syncEngine } from "../../sync";
+import { printPaymentReceipt } from "../../utils/exportUtils";
 
 const PAYMENT_MODE_BADGES = {
   "UPI / QR": { bg: "#DBEAFE", text: "#1D4ED8" },
@@ -273,9 +274,11 @@ export default function CustomerPaymentsScreen({ onShowToast, onNavigate }) {
   };
 
   const handlePrintReceipt = (receipt) => {
+    if (!receipt) return;
+    printPaymentReceipt(receipt);
     if (onShowToast) {
       onShowToast(
-        `✓ Sent Receipt Voucher ${receipt.id} to Thermal Receipt Printer!`,
+        `✓ Opening Receipt Voucher #${receipt.id} (Print / Save as PDF)...`,
       );
     }
   };
