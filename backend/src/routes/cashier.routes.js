@@ -15,6 +15,22 @@ const router = express.Router();
 const cashierController = require('../controllers/cashier.controller');
 const { requireSyncAuth } = require('../middleware/sync-auth.middleware');
 
+// --- Base Cashier Directory Route ---
+router.get('/', (req, res) => {
+  res.json({
+    success: true,
+    service: 'Cashier POS & Register API',
+    status: 'ONLINE',
+    endpoints: {
+      products: '/api/cashier/products',
+      registers: '/api/cashier/registers',
+      currentRegister: '/api/cashier/register/current',
+      recentSales: '/api/cashier/sales/recent',
+      heldBills: '/api/cashier/held-bills',
+    },
+  });
+});
+
 // --- Register Management & Sessions (Strict Multi-Tenant Auth) ---
 router.get('/registers', requireSyncAuth, cashierController.getBranchRegisters);
 router.get('/register/registers', requireSyncAuth, cashierController.getBranchRegisters);
