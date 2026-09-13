@@ -322,6 +322,107 @@ export class PullWorker {
             case 'EXPENSE':
               break;
 
+            case 'ADJUSTMENT':
+              if (!alreadyApplied && itemData) {
+                // Avoid double-applying on originating device that already applied locally
+                const localTx = await this.db.transactions.get(itemData.adjustmentId || change.entityId);
+                if (!localTx) {
+                  const branch = itemData.branchId || change.branchId || '';
+                  let existingBatch: any = null;
+                  if (itemData.productId && itemData.batchNumber && branch) {
+                    existingBatch = await this.db.inventory
+                      .where('[branchId+productId]')
+                      .equals([branch, itemData.productId])
+                      .filter((b) => b.batchNumber === itemData.batchNumber)
+                      .first();
+                  }
+                  if (!existingBatch && itemData.batchNumber) {
+                    existingBatch = await this.db.inventory
+                      .where('batchNumber')
+                      .equals(itemData.batchNumber)
+                      .filter((b) => !branch || b.branchId === branch)
+                      .first();
+                  }
+
+                  if (existingBatch) {
+                    const delta = Number(itemData.deltaQuantity || 0);
+                    const newQty = Math.max(0, existingBatch.availableQuantity + delta);
+                    await this.db.inventory.put({
+                      ...existingBatch,
+                      availableQuantity: newQty,
+                      updatedAt: new Date().toISOString(),
+                    });
+                  }
+                }
+              }
+              break;
+
+            case 'TRANSFER':
+              if (!alreadyApplied && itemData) {
+                const localTx = await this.db.transactions.get(itemData.transferId || change.entityId);
+
+                // Source branch peer: decrement stock if this device wasn't the origin
+                if (!localTx && itemData.fromBranchId && Array.isArray(itemData.items)) {
+                  for (const it of itemData.items) {
+                    if (it.productId && it.batchNumber) {
+                      const sourceBatch = await this.db.inventory
+                        .where('[branchId+productId]')
+                        .equals([itemData.fromBranchId, it.productId])
+                        .filter((b) => b.batchNumber === it.batchNumber)
+                        .first();
+                      if (sourceBatch) {
+                        const qty = Number(it.quantity || 0);
+                        await this.db.inventory.put({
+                          ...sourceBatch,
+                          availableQuantity: Math.max(0, sourceBatch.availableQuantity - qty),
+                          updatedAt: new Date().toISOString(),
+                        });
+                      }
+                    }
+                  }
+                }
+
+                // Destination branch peer: restock/create batch when transfer is completed or received
+                if (
+                  (itemData.status === 'COMPLETED' || itemData.status === 'RECEIVED') &&
+                  itemData.toBranchId &&
+                  Array.isArray(itemData.items)
+                ) {
+                  for (const it of itemData.items) {
+                    if (it.productId && it.batchNumber) {
+                      const destBatch = await this.db.inventory
+                        .where('[branchId+productId]')
+                        .equals([itemData.toBranchId, it.productId])
+                        .filter((b) => b.batchNumber === it.batchNumber)
+                        .first();
+                      const qty = Number(it.quantity || 0);
+                      if (destBatch) {
+                        await this.db.inventory.put({
+                          ...destBatch,
+                          availableQuantity: destBatch.availableQuantity + qty,
+                          updatedAt: new Date().toISOString(),
+                        });
+                      } else {
+                        await this.db.inventory.put({
+                          id: `${itemData.toBranchId}_${it.batchNumber}_${it.productId}`,
+                          organisationId: itemData.organisationId || change.organisationId || '',
+                          branchId: itemData.toBranchId,
+                          productId: it.productId,
+                          batchNumber: it.batchNumber,
+                          expiryDate: it.expiryDate || '2028-12-31',
+                          availableQuantity: qty,
+                          costPrice: Number(it.costPrice || 100),
+                          mrp: Number(it.mrp || 130),
+                          sellingPrice: Number(it.mrp || 130),
+                          updatedAt: new Date().toISOString(),
+                        });
+                      }
+                    }
+                  }
+                }
+              }
+              break;
+
             default:
               break;
           }

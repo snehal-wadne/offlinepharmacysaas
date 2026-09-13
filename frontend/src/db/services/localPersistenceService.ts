@@ -55,6 +55,16 @@ export class LocalPersistenceService {
     if (userId) this.defaultUserId = userId;
   }
 
+  getTenantContext(): { organisationId: string; branchId: string; userId: string; isDemo: boolean } {
+    const org = this.defaultOrgId || DEFAULT_ORG_ID;
+    return {
+      organisationId: org,
+      branchId: this.defaultBranchId || DEFAULT_BRANCH_ID,
+      userId: this.defaultUserId || DEFAULT_USER_ID,
+      isDemo: !this.defaultOrgId || this.defaultOrgId === DEFAULT_ORG_ID,
+    };
+  }
+
   /**
    * Initializes the local persistence layer:
    * - Ensures unique, durable deviceId exists
@@ -1065,6 +1075,384 @@ export class LocalPersistenceService {
         transactionId: tx.transactionId,
         mutationId: tx.mutationId,
         items: p.items || [],
+      };
+    });
+  }
+
+  /**
+   * Adjust inventory batch stock locally while offline:
+   * 1. Validates delta, product, and batch; asserts newQuantity >= 0.
+   * 2. Atomically updates local batch in `db.inventory`:
+   *    newQuantity = currentQuantity + deltaQuantity.
+   * 3. Appends transaction record (type: 'ADJUSTMENT') in `db.transactions`.
+   * 4. Enqueues durable `ADJUST_STOCK` mutation into `db.sync_outbox`.
+   */
+  async adjustLocalStock(
+    adjustmentData: {
+      adjustmentId?: string;
+      adjustmentNumber?: string;
+      productId: string;
+      productName?: string;
+      batchNumber: string;
+      deltaQuantity: number;
+      adjustmentType?: string;
+      reason?: string;
+      notes?: string;
+    },
+    context: {
+      organisationId?: string;
+      branchId?: string;
+      userId?: string;
+      deviceId?: string;
+    } = {}
+  ): Promise<{ adjustmentId: string; mutationId: string; newQuantity: number }> {
+    const organisationId = context.organisationId || this.defaultOrgId || DEFAULT_ORG_ID;
+    const branchId = context.branchId || this.defaultBranchId || DEFAULT_BRANCH_ID;
+    const userId = context.userId || this.defaultUserId || DEFAULT_USER_ID;
+    const deviceId = context.deviceId || (await this.syncMetaRepo.getDeviceId());
+
+    if (!adjustmentData.productId || typeof adjustmentData.productId !== 'string' || !adjustmentData.productId.trim()) {
+      throw new Error('Valid productId is required for stock adjustment');
+    }
+    if (!adjustmentData.batchNumber || typeof adjustmentData.batchNumber !== 'string' || !adjustmentData.batchNumber.trim()) {
+      throw new Error('Valid batchNumber is required for stock adjustment');
+    }
+    const delta = Number(adjustmentData.deltaQuantity);
+    if (isNaN(delta) || delta === 0) {
+      throw new Error('Valid non-zero deltaQuantity is required for stock adjustment');
+    }
+
+    // Find the batch in Dexie
+    const batch = await this.db.inventory
+      .where('[branchId+productId]')
+      .equals([branchId, adjustmentData.productId])
+      .filter((b) => b.batchNumber === adjustmentData.batchNumber)
+      .first();
+
+    if (!batch) {
+      throw new Error(`Inventory batch not found for product ${adjustmentData.productId} and batch ${adjustmentData.batchNumber} at branch ${branchId}`);
+    }
+
+    const currentQty = Number(batch.availableQuantity || 0);
+    const newQty = currentQty + delta;
+    if (newQty < 0) {
+      throw new Error(`Stock adjustment would cause negative quantity: ${currentQty} + (${delta}) = ${newQty}`);
+    }
+
+    const adjustmentId = adjustmentData.adjustmentId || generateUUID();
+    const mutationId = generateUUID();
+    const occurredAt = new Date().toISOString();
+    const adjustmentNumber =
+      adjustmentData.adjustmentNumber || `ADJ-${Date.now().toString().slice(-6)}`;
+    const reason = adjustmentData.reason || adjustmentData.adjustmentType || 'Stock count adjustment';
+
+    const outboxRecord: Omit<SyncOutboxRecord, 'sequence'> = {
+      mutationId,
+      mutationType: 'ADJUST_STOCK',
+      organisationId,
+      branchId,
+      deviceId,
+      userId,
+      payload: {
+        adjustmentId,
+        adjustmentNumber,
+        productId: adjustmentData.productId,
+        productName: adjustmentData.productName || batch.productId,
+        batchNumber: adjustmentData.batchNumber,
+        deltaQuantity: delta,
+        previousQuantity: currentQty,
+        newQuantity: newQty,
+        adjustmentType: adjustmentData.adjustmentType || 'CYCLE_COUNT',
+        reason,
+        notes: adjustmentData.notes || null,
+        occurredAt,
+      },
+      status: 'PENDING',
+      attemptCount: 0,
+      createdAt: occurredAt,
+      updatedAt: occurredAt,
+    };
+
+    const transactionRecord: TransactionRecord = {
+      transactionId: adjustmentId,
+      mutationId,
+      type: 'ADJUSTMENT',
+      organisationId,
+      branchId,
+      userId,
+      deviceId,
+      invoiceNumber: adjustmentNumber,
+      payload: {
+        adjustmentId,
+        adjustmentNumber,
+        productId: adjustmentData.productId,
+        productName: adjustmentData.productName || batch.productId,
+        batchNumber: adjustmentData.batchNumber,
+        deltaQuantity: delta,
+        previousQuantity: currentQty,
+        newQuantity: newQty,
+        adjustmentType: adjustmentData.adjustmentType || 'CYCLE_COUNT',
+        reason,
+        notes: adjustmentData.notes || null,
+      },
+      occurredAt,
+      status: 'LOCAL_COMMITTED',
+      syncStatus: 'PENDING',
+      createdAt: occurredAt,
+      updatedAt: occurredAt,
+    };
+
+    await this.db.transaction('rw', [this.db.inventory, this.db.transactions, this.db.sync_outbox], async () => {
+      await this.db.inventory.put({
+        ...batch,
+        availableQuantity: newQty,
+        updatedAt: occurredAt,
+      });
+      await this.db.transactions.put(transactionRecord);
+      await this.db.sync_outbox.add(outboxRecord as SyncOutboxRecord);
+    });
+
+    return { adjustmentId, mutationId, newQuantity: newQty };
+  }
+
+  /**
+   * Retrieve locally persisted stock adjustment records.
+   */
+  async getLocalStockAdjustments(
+    organisationId: string = this.defaultOrgId || DEFAULT_ORG_ID,
+    branchId?: string,
+    limit = 50
+  ): Promise<any[]> {
+    const records = await this.db.transactions
+      .where('type')
+      .equals('ADJUSTMENT')
+      .reverse()
+      .sortBy('occurredAt');
+
+    const filtered = records
+      .filter((tx) => !organisationId || tx.organisationId === organisationId)
+      .filter((tx) => !branchId || tx.branchId === branchId)
+      .slice(0, limit);
+
+    return filtered.map((tx) => {
+      const p = tx.payload || {};
+      return {
+        realId: tx.transactionId,
+        id: p.adjustmentNumber || tx.invoiceNumber || `ADJ-${tx.transactionId.slice(0, 8)}`,
+        adjustmentId: tx.transactionId,
+        productId: p.productId,
+        productName: p.productName || 'Medicine Item',
+        batchNumber: p.batchNumber,
+        deltaQuantity: p.deltaQuantity,
+        newQuantity: p.newQuantity,
+        previousQuantity: p.previousQuantity,
+        reason: p.reason,
+        adjustmentType: p.adjustmentType || 'CYCLE_COUNT',
+        occurredAt: tx.occurredAt,
+        syncStatus: tx.syncStatus,
+        mutationId: tx.mutationId,
+      };
+    });
+  }
+
+  /**
+   * Transfer inventory stock locally while offline:
+   * 1. Validates different source and destination branches.
+   * 2. Validates product, batch, and sufficient local source stock.
+   * 3. Decrements source branch stock in `db.inventory`.
+   * 4. Logs transfer transaction in `db.transactions` (type: 'TRANSFER').
+   * 5. Enqueues durable `TRANSFER_STOCK` mutation in `db.sync_outbox`.
+   */
+  async transferLocalStock(
+    transferData: {
+      transferId?: string;
+      transferNumber?: string;
+      fromBranchId?: string;
+      toBranchId: string;
+      toBranchName?: string;
+      transferDate?: string;
+      notes?: string;
+      items: Array<{
+        productId: string;
+        productName?: string;
+        batchNumber: string;
+        quantity: number;
+      }>;
+    },
+    context: {
+      organisationId?: string;
+      branchId?: string;
+      userId?: string;
+      deviceId?: string;
+    } = {}
+  ): Promise<{ transferId: string; transferNumber: string; mutationId: string }> {
+    const organisationId = context.organisationId || this.defaultOrgId || DEFAULT_ORG_ID;
+    const fromBranchId = transferData.fromBranchId || context.branchId || this.defaultBranchId || DEFAULT_BRANCH_ID;
+    const toBranchId = transferData.toBranchId;
+    const userId = context.userId || this.defaultUserId || DEFAULT_USER_ID;
+    const deviceId = context.deviceId || (await this.syncMetaRepo.getDeviceId());
+
+    if (!toBranchId || typeof toBranchId !== 'string' || !toBranchId.trim()) {
+      throw new Error('Destination branch (toBranchId) is required');
+    }
+    if (fromBranchId === toBranchId) {
+      throw new Error('Source and destination branches must be different');
+    }
+    if (!transferData.items || !Array.isArray(transferData.items) || transferData.items.length === 0) {
+      throw new Error('Transfer must contain at least one line item');
+    }
+
+    // Pre-validate all items have sufficient local stock in source branch
+    const batchesToUpdate: Array<{ batch: any; newQty: number }> = [];
+    for (const item of transferData.items) {
+      if (!item.productId || typeof item.productId !== 'string' || !item.productId.trim()) {
+        throw new Error('Valid productId is required for each transferred item');
+      }
+      if (!item.batchNumber || typeof item.batchNumber !== 'string' || !item.batchNumber.trim()) {
+        throw new Error('Valid batchNumber is required for each transferred item');
+      }
+      const qty = Number(item.quantity);
+      if (isNaN(qty) || qty <= 0) {
+        throw new Error('Valid positive transfer quantity is required for each item');
+      }
+
+      const batch = await this.db.inventory
+        .where('[branchId+productId]')
+        .equals([fromBranchId, item.productId])
+        .filter((b) => b.batchNumber === item.batchNumber)
+        .first();
+
+      if (!batch) {
+        throw new Error(`Source batch not found for product ${item.productId} and batch ${item.batchNumber} at branch ${fromBranchId}`);
+      }
+
+      const avail = Number(batch.availableQuantity || 0);
+      if (avail < qty) {
+        throw new Error(`Insufficient stock for product ${item.productName || item.productId} (batch ${item.batchNumber}): available ${avail}, requested ${qty}`);
+      }
+
+      batchesToUpdate.push({ batch, newQty: avail - qty });
+    }
+
+    const transferId = transferData.transferId || generateUUID();
+    const mutationId = generateUUID();
+    const occurredAt = new Date().toISOString();
+    const transferDate = transferData.transferDate || occurredAt.split('T')[0];
+    const transferNumber =
+      transferData.transferNumber || `TR-${Date.now().toString().slice(-6)}`;
+    const totalQuantity = transferData.items.reduce((sum, it) => sum + Number(it.quantity || 0), 0);
+
+    const outboxRecord: Omit<SyncOutboxRecord, 'sequence'> = {
+      mutationId,
+      mutationType: 'TRANSFER_STOCK',
+      organisationId,
+      branchId: fromBranchId,
+      deviceId,
+      userId,
+      payload: {
+        transferId,
+        transferNumber,
+        fromBranchId,
+        toBranchId,
+        toBranchName: transferData.toBranchName || 'Destination Branch',
+        transferDate,
+        notes: transferData.notes || null,
+        status: 'IN_TRANSIT',
+        items: transferData.items,
+        totalQuantity,
+        occurredAt,
+      },
+      status: 'PENDING',
+      attemptCount: 0,
+      createdAt: occurredAt,
+      updatedAt: occurredAt,
+    };
+
+    const transactionRecord: TransactionRecord = {
+      transactionId: transferId,
+      mutationId,
+      type: 'TRANSFER',
+      organisationId,
+      branchId: fromBranchId,
+      userId,
+      deviceId,
+      invoiceNumber: transferNumber,
+      payload: {
+        transferId,
+        transferNumber,
+        fromBranchId,
+        toBranchId,
+        toBranchName: transferData.toBranchName || 'Destination Branch',
+        transferDate,
+        notes: transferData.notes || null,
+        status: 'In Transit',
+        items: transferData.items,
+        totalQuantity,
+        itemsCount: transferData.items.length,
+      },
+      occurredAt,
+      status: 'LOCAL_COMMITTED',
+      syncStatus: 'PENDING',
+      createdAt: occurredAt,
+      updatedAt: occurredAt,
+    };
+
+    await this.db.transaction('rw', [this.db.inventory, this.db.transactions, this.db.sync_outbox], async () => {
+      for (const update of batchesToUpdate) {
+        await this.db.inventory.put({
+          ...update.batch,
+          availableQuantity: update.newQty,
+          updatedAt: occurredAt,
+        });
+      }
+      await this.db.transactions.put(transactionRecord);
+      await this.db.sync_outbox.add(outboxRecord as SyncOutboxRecord);
+    });
+
+    return { transferId, transferNumber, mutationId };
+  }
+
+  /**
+   * Retrieve locally persisted stock transfer records.
+   */
+  async getLocalTransfers(
+    organisationId: string = this.defaultOrgId || DEFAULT_ORG_ID,
+    branchId?: string,
+    limit = 50
+  ): Promise<any[]> {
+    const records = await this.db.transactions
+      .where('type')
+      .equals('TRANSFER')
+      .reverse()
+      .sortBy('occurredAt');
+
+    const filtered = records
+      .filter((tx) => !organisationId || tx.organisationId === organisationId)
+      .filter((tx) => !branchId || tx.branchId === branchId)
+      .slice(0, limit);
+
+    return filtered.map((tx) => {
+      const p = tx.payload || {};
+      return {
+        realId: tx.transactionId,
+        id: p.transferNumber || tx.invoiceNumber || `TR-${tx.transactionId.slice(0, 8)}`,
+        transferId: tx.transactionId,
+        fromBranch: p.fromBranchName || (p.fromBranchId === branchId ? 'This Branch' : p.fromBranchId) || 'Main Branch',
+        fromBranchId: p.fromBranchId,
+        toBranch: p.toBranchName || p.toBranchId || 'Destination Branch',
+        toBranchId: p.toBranchId,
+        transferDate: p.transferDate || new Date(tx.occurredAt).toLocaleDateString('en-GB', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+        }),
+        items: p.itemsCount || (p.items ? p.items.length : 1),
+        totalQuantity: p.totalQuantity || 0,
+        status: p.status || 'In Transit',
+        notes: p.notes || '',
+        syncStatus: tx.syncStatus,
+        mutationId: tx.mutationId,
+        createdBy: 'Staff',
       };
     });
   }

@@ -16,7 +16,8 @@ export type TransactionType =
   | 'EXPENSE'
   | 'REGISTER_OPEN'
   | 'REGISTER_CLOSE'
-  | 'ADJUSTMENT';
+  | 'ADJUSTMENT'
+  | 'TRANSFER';
 
 export type TransactionStatus =
   | 'DRAFT'
@@ -47,6 +48,8 @@ export type MutationType =
   | 'RECEIVE_PURCHASE'
   | 'RECORD_CASH_EXPENSE'
   | 'UPDATE_INVENTORY'
+  | 'ADJUST_STOCK'
+  | 'TRANSFER_STOCK'
   | 'REGISTER_OPEN'
   | 'REGISTER_CLOSE';
 

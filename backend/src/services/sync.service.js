@@ -2197,6 +2197,555 @@ class SyncService {
   }
 
   /**
+   * Process a single ADJUST_STOCK mutation atomically in PostgreSQL:
+   * 1. Resolves tenant & branch context.
+   * 2. Locks the inventory batch with SELECT ... FOR UPDATE.
+   * 3. Calculates newQuantity = authoritativeQuantity + deltaQuantity.
+   * 4. If newQuantity < 0, returns CONFLICT (ADJUSTMENT_WOULD_CAUSE_NEGATIVE_STOCK).
+   * 5. Atomically updates inventory_batches.quantity and updated_at.
+   * 6. Appends audit entry in stock_movements.
+   * 7. Records idempotency in sync_mutations.
+   * 8. Emits sync_changes (entity_type: 'ADJUSTMENT').
+   */
+  async processStockAdjustment({
+    mutationId,
+    organisationId,
+    branchId,
+    effectiveUserId,
+    payload = {},
+    occurredAt,
+    deviceId,
+  }) {
+    const isUuid = (str) =>
+      typeof str === "string" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        str,
+      );
+
+    const deltaQuantity = Number(payload.deltaQuantity);
+    if (isNaN(deltaQuantity) || deltaQuantity === 0) {
+      return {
+        status: "FAILED",
+        errorCode: "VALIDATION_ERROR",
+        errorMessage: "Adjustment must specify a non-zero deltaQuantity.",
+      };
+    }
+
+    if (!payload.productId) {
+      return {
+        status: "FAILED",
+        errorCode: "VALIDATION_ERROR",
+        errorMessage: "Adjustment must specify a productId.",
+      };
+    }
+
+    if (!payload.batchNumber) {
+      return {
+        status: "FAILED",
+        errorCode: "VALIDATION_ERROR",
+        errorMessage: "Adjustment must specify a batchNumber.",
+      };
+    }
+
+    const { resolvedOrgId, resolvedBranchId } = await this.resolveTenantContext(
+      organisationId,
+      branchId,
+    );
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      // 1. Lock and retrieve authoritative inventory batch
+      let batchQuery;
+      let batchParams;
+      if (payload.batchId && isUuid(payload.batchId)) {
+        batchQuery = `
+          SELECT id, product_id, branch_id, batch_number, quantity, expiry_date, mrp
+          FROM inventory_batches
+          WHERE id = $1 AND branch_id = $2
+          FOR UPDATE
+        `;
+        batchParams = [payload.batchId, resolvedBranchId];
+      } else {
+        batchQuery = `
+          SELECT id, product_id, branch_id, batch_number, quantity, expiry_date, mrp
+          FROM inventory_batches
+          WHERE branch_id = $1 AND product_id::text = $2::text AND batch_number = $3
+          FOR UPDATE
+        `;
+        batchParams = [
+          resolvedBranchId,
+          payload.productId,
+          payload.batchNumber,
+        ];
+      }
+
+      let batchRes = await client.query(batchQuery, batchParams);
+
+      if (batchRes.rows.length === 0) {
+        // Fallback search by batch_number and branch if product UUID differed between client/server
+        const fallbackRes = await client.query(
+          `SELECT id, product_id, branch_id, batch_number, quantity, expiry_date, mrp
+           FROM inventory_batches
+           WHERE branch_id = $1 AND batch_number = $2
+           FOR UPDATE`,
+          [resolvedBranchId, payload.batchNumber],
+        );
+        if (fallbackRes.rows.length > 0) {
+          batchRes = fallbackRes;
+        }
+      }
+
+      if (batchRes.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return {
+          status: "CONFLICT",
+          errorCode: "BATCH_NOT_FOUND",
+          errorMessage: `Batch ${payload.batchNumber} for product ${payload.productId} not found at branch ${resolvedBranchId}.`,
+        };
+      }
+
+      const currentBatch = batchRes.rows[0];
+      const authoritativeCurrentQty = Number(currentBatch.quantity || 0);
+      const newQuantity = authoritativeCurrentQty + deltaQuantity;
+
+      // 2. Validate resulting quantity cannot become negative
+      if (newQuantity < 0) {
+        await client.query("ROLLBACK");
+        return {
+          status: "CONFLICT",
+          errorCode: "ADJUSTMENT_WOULD_CAUSE_NEGATIVE_STOCK",
+          errorMessage: `Adjustment delta (${deltaQuantity}) would cause negative stock for batch ${currentBatch.batch_number} (current: ${authoritativeCurrentQty}, resulting: ${newQuantity}).`,
+        };
+      }
+
+      // 3. Atomically update inventory batch quantity
+      await client.query(
+        `UPDATE inventory_batches
+         SET quantity = $1, updated_by = $2, updated_at = NOW()
+         WHERE id = $3`,
+        [newQuantity, effectiveUserId || null, currentBatch.id],
+      );
+
+      // 4. Log in stock_movements
+      const adjustmentId = payload.adjustmentId || crypto.randomUUID();
+      const adjustmentNumber =
+        payload.adjustmentNumber || `ADJ-${Date.now().toString().slice(-6)}`;
+      const reason =
+        payload.reason || payload.adjustmentType || "Stock adjustment";
+      const branchName = payload.branchName || "Main Branch";
+
+      pool
+        .query(
+          `INSERT INTO stock_movements (
+           organisation_id, branch_name, movement_type, item_name, quantity, reference, status
+         ) VALUES ($1, $2, 'Adjustment', $3, $4, $5, 'Completed')`,
+          [
+            resolvedOrgId,
+            branchName,
+            payload.productName || payload.productId,
+            deltaQuantity > 0 ? `+${deltaQuantity}` : `${deltaQuantity}`,
+            adjustmentNumber,
+          ],
+        )
+        .catch(() => {});
+
+      const resultData = {
+        adjustmentId,
+        adjustmentNumber,
+        productId: currentBatch.product_id,
+        productName: payload.productName || null,
+        batchNumber: currentBatch.batch_number,
+        batchId: currentBatch.id,
+        deltaQuantity,
+        previousQuantity: authoritativeCurrentQty,
+        newQuantity,
+        reason,
+        adjustmentType: payload.adjustmentType || "CYCLE_COUNT",
+        organisationId: resolvedOrgId,
+        branchId: resolvedBranchId,
+        status: "SUCCESS",
+      };
+
+      // 5. Record Idempotency in sync_mutations
+      await client.query(
+        `INSERT INTO sync_mutations (
+           mutation_id, organisation_id, branch_id, user_id, device_id, mutation_type,
+           occurred_at, status, payload, result, processed_at
+         ) VALUES ($1, $2, $3, $4, $5, 'ADJUST_STOCK', $6, 'PROCESSED', $7, $8, NOW())
+         ON CONFLICT (organisation_id, mutation_id) DO UPDATE
+         SET status = 'PROCESSED', result = EXCLUDED.result, processed_at = NOW()`,
+        [
+          mutationId,
+          resolvedOrgId,
+          resolvedBranchId || null,
+          effectiveUserId || null,
+          deviceId,
+          occurredAt || new Date().toISOString(),
+          JSON.stringify(payload),
+          JSON.stringify(resultData),
+        ],
+      );
+
+      // 6. Record sync_changes event atomically
+      await client.query(
+        `INSERT INTO sync_changes (
+           organisation_id, branch_id, entity_type, entity_id, operation, changed_at, payload
+         ) VALUES ($1, $2, 'ADJUSTMENT', $3, 'UPDATE', NOW(), $4)`,
+        [
+          resolvedOrgId,
+          resolvedBranchId || null,
+          adjustmentId,
+          JSON.stringify({
+            adjustmentId,
+            adjustmentNumber,
+            productId: currentBatch.product_id,
+            productName: payload.productName || null,
+            batchNumber: currentBatch.batch_number,
+            batchId: currentBatch.id,
+            branchId: resolvedBranchId,
+            organisationId: resolvedOrgId,
+            deltaQuantity,
+            resultingQuantity: newQuantity,
+            reason,
+            adjustmentType: payload.adjustmentType || "CYCLE_COUNT",
+            occurredAt: occurredAt || new Date().toISOString(),
+          }),
+        ],
+      );
+
+      await client.query("COMMIT");
+
+      return {
+        status: "SUCCESS",
+        result: resultData,
+      };
+    } catch (err) {
+      await client.query("ROLLBACK");
+      console.error(
+        `[SyncService] Error processing ADJUST_STOCK ${mutationId}:`,
+        err,
+      );
+      return {
+        status: "RETRYABLE_ERROR",
+        errorCode: "DATABASE_ERROR",
+        errorMessage: err.message,
+      };
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Process a single TRANSFER_STOCK mutation atomically in PostgreSQL:
+   * 1. Resolves tenant & source branch context.
+   * 2. Validates destination branch exists, belongs to same org, and fromBranchId != toBranchId.
+   * 3. Locks source inventory rows FOR UPDATE.
+   * 4. Validates sufficient source stock. If insufficient, returns CONFLICT (INSUFFICIENT_TRANSFER_STOCK).
+   * 5. Decrements source inventory_batches.
+   * 6. Inserts stock_transfers header (status = 'IN_TRANSIT') with transfer_number.
+   * 7. Inserts stock_transfer_items.
+   * 8. Records stock_movements for source branch.
+   * 9. Records idempotency in sync_mutations.
+   * 10. Emits sync_changes (entity_type: 'TRANSFER').
+   */
+  async processStockTransfer({
+    mutationId,
+    organisationId,
+    branchId,
+    effectiveUserId,
+    payload = {},
+    occurredAt,
+    deviceId,
+  }) {
+    const isUuid = (str) =>
+      typeof str === "string" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        str,
+      );
+
+    const { resolvedOrgId, resolvedBranchId } = await this.resolveTenantContext(
+      organisationId,
+      branchId,
+    );
+
+    const fromBranchId = payload.fromBranchId || resolvedBranchId;
+    const toBranchId = payload.toBranchId;
+
+    if (!toBranchId || !isUuid(toBranchId)) {
+      return {
+        status: "FAILED",
+        errorCode: "VALIDATION_ERROR",
+        errorMessage: "Valid UUID destination branch (toBranchId) is required.",
+      };
+    }
+
+    if (fromBranchId === toBranchId) {
+      return {
+        status: "FAILED",
+        errorCode: "VALIDATION_ERROR",
+        errorMessage: "Source and destination branches must be different.",
+      };
+    }
+
+    const items = Array.isArray(payload.items) ? payload.items : [];
+    if (items.length === 0) {
+      return {
+        status: "FAILED",
+        errorCode: "VALIDATION_ERROR",
+        errorMessage: "Transfer must contain at least one line item.",
+      };
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      // 1. Verify destination branch belongs to same organisation and is active
+      const toBranchRes = await client.query(
+        `SELECT id, name, status FROM branches
+         WHERE id = $1 AND organisation_id = $2`,
+        [toBranchId, resolvedOrgId],
+      );
+
+      if (toBranchRes.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return {
+          status: "CONFLICT",
+          errorCode: "INVALID_DESTINATION_BRANCH",
+          errorMessage:
+            "Destination branch does not exist or does not belong to the same organisation.",
+        };
+      }
+
+      const destBranch = toBranchRes.rows[0];
+      if (
+        destBranch.status &&
+        destBranch.status !== "ACTIVE" &&
+        destBranch.status !== "Active"
+      ) {
+        await client.query("ROLLBACK");
+        return {
+          status: "CONFLICT",
+          errorCode: "DESTINATION_BRANCH_INACTIVE",
+          errorMessage: `Destination branch ${destBranch.name} is not active.`,
+        };
+      }
+
+      // 2. Lock source batches and validate stock
+      const processedItems = [];
+      for (const it of items) {
+        const reqQty = Number(it.quantity || 0);
+        if (reqQty <= 0) {
+          await client.query("ROLLBACK");
+          return {
+            status: "FAILED",
+            errorCode: "VALIDATION_ERROR",
+            errorMessage: "Transfer item quantity must be greater than zero.",
+          };
+        }
+
+        // Find and lock source batch
+        let bRes = await client.query(
+          `          SELECT id, product_id, branch_id, batch_number, quantity, expiry_date, mrp, supplier_id
+          FROM inventory_batches
+          WHERE branch_id = $1 AND product_id::text = $2::text AND batch_number = $3
+          FOR UPDATE`,
+          [fromBranchId, it.productId, it.batchNumber],
+        );
+
+        if (bRes.rows.length === 0) {
+          // Fallback search by batch_number and branch
+          const fbRes = await client.query(
+            `SELECT id, product_id, branch_id, batch_number, quantity, expiry_date, mrp, supplier_id
+             FROM inventory_batches
+             WHERE branch_id = $1 AND batch_number = $2
+             FOR UPDATE`,
+            [fromBranchId, it.batchNumber],
+          );
+          if (fbRes.rows.length > 0) bRes = fbRes;
+        }
+
+        if (bRes.rows.length === 0) {
+          await client.query("ROLLBACK");
+          return {
+            status: "CONFLICT",
+            errorCode: "SOURCE_BATCH_NOT_FOUND",
+            errorMessage: `Source batch ${it.batchNumber} for product ${it.productId} not found at source branch.`,
+          };
+        }
+
+        const sourceBatch = bRes.rows[0];
+        const avail = Number(sourceBatch.quantity || 0);
+        if (avail < reqQty) {
+          await client.query("ROLLBACK");
+          return {
+            status: "CONFLICT",
+            errorCode: "INSUFFICIENT_TRANSFER_STOCK",
+            errorMessage: `Insufficient source stock for batch ${sourceBatch.batch_number}: available ${avail}, requested ${reqQty}.`,
+          };
+        }
+
+        // Decrement source batch
+        await client.query(
+          `UPDATE inventory_batches
+           SET quantity = quantity - $1, updated_by = $2, updated_at = NOW()
+           WHERE id = $3`,
+          [reqQty, effectiveUserId || null, sourceBatch.id],
+        );
+
+        processedItems.push({
+          sourceBatchId: sourceBatch.id,
+          productId: sourceBatch.product_id,
+          batchNumber: sourceBatch.batch_number,
+          quantity: reqQty,
+          expiryDate: sourceBatch.expiry_date,
+          mrp: sourceBatch.mrp,
+          supplierId: sourceBatch.supplier_id,
+        });
+      }
+
+      // 3. Create stock_transfers header
+      const transferId =
+        payload.transferId && isUuid(payload.transferId)
+          ? payload.transferId
+          : crypto.randomUUID();
+
+      let transferNumber =
+        payload.transferNumber || `TR-${Date.now().toString().slice(-6)}`;
+
+      const existingTR = await client.query(
+        "SELECT id, transfer_number FROM stock_transfers WHERE id = $1 OR (organisation_id = $2 AND transfer_number = $3)",
+        [transferId, resolvedOrgId, transferNumber],
+      );
+
+      if (existingTR.rows.length === 0) {
+        await client.query(
+          `INSERT INTO stock_transfers (
+             id, organisation_id, from_branch_id, to_branch_id,
+             transfer_date, status, transfer_number, notes, created_by, created_at, updated_at
+           ) VALUES ($1, $2, $3, $4, CURRENT_DATE, 'IN_TRANSIT', $5, $6, $7, NOW(), NOW())`,
+          [
+            transferId,
+            resolvedOrgId,
+            fromBranchId,
+            toBranchId,
+            transferNumber,
+            payload.notes || "Offline inter-branch stock transfer",
+            effectiveUserId || null,
+          ],
+        );
+
+        // 4. Insert stock_transfer_items
+        for (const pi of processedItems) {
+          await client.query(
+            `INSERT INTO stock_transfer_items (
+               transfer_id, inventory_batch_id, quantity, created_at
+             ) VALUES ($1, $2, $3, NOW())`,
+            [transferId, pi.sourceBatchId, pi.quantity],
+          );
+        }
+
+        // 5. Insert stock_movements for source branch
+        for (const pi of processedItems) {
+          pool
+            .query(
+              `INSERT INTO stock_movements (
+               organisation_id, branch_name, movement_type, item_name, quantity, reference, status
+             ) VALUES ($1, $2, 'Transfer Out', $3, $4, $5, 'In Transit')`,
+              [
+                resolvedOrgId,
+                payload.fromBranchName || "Source Branch",
+                pi.batchNumber,
+                `-${pi.quantity}`,
+                transferNumber,
+              ],
+            )
+            .catch(() => {});
+        }
+      } else {
+        transferNumber = existingTR.rows[0].transfer_number;
+      }
+
+      const resultData = {
+        transferId,
+        transferNumber,
+        fromBranchId,
+        toBranchId,
+        status: "IN_TRANSIT",
+        itemsCount: processedItems.length,
+        items: processedItems,
+        totalQuantity: processedItems.reduce((s, it) => s + it.quantity, 0),
+        organisationId: resolvedOrgId,
+      };
+
+      // 6. Record in sync_mutations
+      await client.query(
+        `INSERT INTO sync_mutations (
+           mutation_id, organisation_id, branch_id, user_id, device_id, mutation_type,
+           occurred_at, status, payload, result, processed_at
+         ) VALUES ($1, $2, $3, $4, $5, 'TRANSFER_STOCK', $6, 'PROCESSED', $7, $8, NOW())
+         ON CONFLICT (organisation_id, mutation_id) DO UPDATE
+         SET status = 'PROCESSED', result = EXCLUDED.result, processed_at = NOW()`,
+        [
+          mutationId,
+          resolvedOrgId,
+          fromBranchId,
+          effectiveUserId || null,
+          deviceId,
+          occurredAt || new Date().toISOString(),
+          JSON.stringify(payload),
+          JSON.stringify(resultData),
+        ],
+      );
+
+      // 7. Emit sync_changes event for TRANSFER
+      await client.query(
+        `INSERT INTO sync_changes (
+           organisation_id, branch_id, entity_type, entity_id, operation, changed_at, payload
+         ) VALUES ($1, $2, 'TRANSFER', $3, 'INSERT', NOW(), $4)`,
+        [
+          resolvedOrgId,
+          fromBranchId,
+          transferId,
+          JSON.stringify({
+            transferId,
+            transferNumber,
+            fromBranchId,
+            toBranchId,
+            status: "IN_TRANSIT",
+            items: processedItems,
+            totalQuantity: processedItems.reduce((s, it) => s + it.quantity, 0),
+            organisationId: resolvedOrgId,
+            occurredAt: occurredAt || new Date().toISOString(),
+          }),
+        ],
+      );
+
+      await client.query("COMMIT");
+
+      return {
+        status: "SUCCESS",
+        result: resultData,
+      };
+    } catch (err) {
+      await client.query("ROLLBACK");
+      console.error(
+        `[SyncService] Error processing TRANSFER_STOCK ${mutationId}:`,
+        err,
+      );
+      return {
+        status: "RETRYABLE_ERROR",
+        errorCode: "DATABASE_ERROR",
+        errorMessage: err.message,
+      };
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
    * Main Batch Push Handler
    * Processes a batch of mutations sent from frontend Sync Engine
    */
@@ -2405,6 +2954,26 @@ class SyncService {
             break;
           case "RECORD_CASH_EXPENSE":
             outcome = await this.processRecordCashExpense({
+              ...mutation,
+              organisationId: targetOrgId,
+              branchId: targetBranchId,
+              effectiveUserId,
+              userContext,
+              deviceId,
+            });
+            break;
+          case "ADJUST_STOCK":
+            outcome = await this.processStockAdjustment({
+              ...mutation,
+              organisationId: targetOrgId,
+              branchId: targetBranchId,
+              effectiveUserId,
+              userContext,
+              deviceId,
+            });
+            break;
+          case "TRANSFER_STOCK":
+            outcome = await this.processStockTransfer({
               ...mutation,
               organisationId: targetOrgId,
               branchId: targetBranchId,
