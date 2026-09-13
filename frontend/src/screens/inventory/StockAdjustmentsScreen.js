@@ -213,8 +213,8 @@ export default function StockAdjustmentsScreen({
   const [barcodeItemData, setBarcodeItemData] = useState(null);
   const [barcodeLoading, setBarcodeLoading] = useState(false);
   const [barcodeConfig, setBarcodeConfig] = useState({
-    format: 'thermal_50x25',
-    copies: '1',
+    format: "thermal_50x25",
+    copies: "1",
     showPrice: true,
     showExpiry: true,
     showBatch: true,
@@ -610,23 +610,23 @@ export default function StockAdjustmentsScreen({
     setBarcodeModalOpen(true);
     setBarcodeLoading(true);
 
-    const fallbackBarcode = item.barcode || item.sku || 'MED-001';
+    const fallbackBarcode = item.barcode || item.sku || "MED-001";
     const initialData = {
       id: item.id,
       productId: item.productId || item.id,
-      medicineName: item.medicineName || item.genericName || 'Medicine',
-      brandName: item.brandName || item.medicineName || 'Medicine',
-      genericName: item.genericName || item.medicineName || '',
-      strength: item.strength || '500mg',
-      packSize: item.packSize || '10 Tablets',
-      sku: item.sku || 'SKU-001',
+      medicineName: item.medicineName || item.genericName || "Medicine",
+      brandName: item.brandName || item.medicineName || "Medicine",
+      genericName: item.genericName || item.medicineName || "",
+      strength: item.strength || "500mg",
+      packSize: item.packSize || "10 Tablets",
+      sku: item.sku || "SKU-001",
       barcode: fallbackBarcode,
-      batchNo: item.batchNo || 'B-1001',
-      expiryDate: item.expiryDate || '2028-12-31',
-      mrp: item.amount || '₹25.00',
-      shelfLocation: item.shelfLocation || 'Rack A1-S1',
-      branchName: item.branchId || 'Main Store',
-      pharmacyName: 'Falah Pharmacy',
+      batchNo: item.batchNo || "B-1001",
+      expiryDate: item.expiryDate || "2028-12-31",
+      mrp: item.amount || "₹25.00",
+      shelfLocation: item.shelfLocation || "Rack A1-S1",
+      branchName: item.branchId || "Main Store",
+      pharmacyName: "Falah Pharmacy",
     };
     setBarcodeItemData(initialData);
 
@@ -636,7 +636,7 @@ export default function StockAdjustmentsScreen({
         setBarcodeItemData(res.data);
       }
     } catch (err) {
-      console.warn('Using local item data for barcode modal:', err.message);
+      console.warn("Using local item data for barcode modal:", err.message);
     } finally {
       setBarcodeLoading(false);
     }
@@ -645,46 +645,49 @@ export default function StockAdjustmentsScreen({
   const handlePrintBarcodeLabel = () => {
     if (!barcodeItemData) return;
     const copies = parseInt(barcodeConfig.copies, 10) || 1;
-    const { format, showPrice, showExpiry, showBatch, showShelf, showGeneric } = barcodeConfig;
-    const isShelfTag = format === 'shelf_70x35';
-    const isA4 = format === 'sheet_a4';
+    const { format, showPrice, showExpiry, showBatch, showShelf, showGeneric } =
+      barcodeConfig;
+    const isShelfTag = format === "shelf_70x35";
+    const isA4 = format === "sheet_a4";
 
     if (onShowToast) {
-      onShowToast(`🖨️ Printing ${copies} label(s) for ${barcodeItemData.brandName}...`);
+      onShowToast(
+        `🖨️ Printing ${copies} label(s) for ${barcodeItemData.brandName}...`,
+      );
     }
 
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const labelWidth = isShelfTag ? '70mm' : isA4 ? '62mm' : '50mm';
-      const labelHeight = isShelfTag ? '35mm' : isA4 ? '30mm' : '25mm';
-      const pageMargin = isA4 ? '8mm' : '0mm';
-      const pageSize = isShelfTag ? '70mm 35mm' : isA4 ? 'A4' : '50mm 25mm';
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      const labelWidth = isShelfTag ? "70mm" : isA4 ? "62mm" : "50mm";
+      const labelHeight = isShelfTag ? "35mm" : isA4 ? "30mm" : "25mm";
+      const pageMargin = isA4 ? "8mm" : "0mm";
+      const pageSize = isShelfTag ? "70mm 35mm" : isA4 ? "A4" : "50mm 25mm";
 
       const singleLabelHtml = `
-        <div class="label-card ${isShelfTag ? 'shelf-tag' : ''}">
-          <div class="pharmacy-title">${barcodeItemData.pharmacyName || 'FALAH PHARMACY'}</div>
-          <div class="med-name">${barcodeItemData.brandName} ${barcodeItemData.strength || ''}</div>
-          ${showGeneric && barcodeItemData.genericName ? `<div class="generic-name">${barcodeItemData.genericName}</div>` : ''}
+        <div class="label-card ${isShelfTag ? "shelf-tag" : ""}">
+          <div class="pharmacy-title">${barcodeItemData.pharmacyName || "FALAH PHARMACY"}</div>
+          <div class="med-name">${barcodeItemData.brandName} ${barcodeItemData.strength || ""}</div>
+          ${showGeneric && barcodeItemData.genericName ? `<div class="generic-name">${barcodeItemData.genericName}</div>` : ""}
           <div class="meta-row">
-            ${showBatch ? `<span>B: ${barcodeItemData.batchNo}</span>` : ''}
-            ${showExpiry ? `<span>EXP: ${barcodeItemData.expiryDate}</span>` : ''}
-            ${showPrice ? `<span class="mrp-text">${barcodeItemData.mrp}</span>` : ''}
+            ${showBatch ? `<span>B: ${barcodeItemData.batchNo}</span>` : ""}
+            ${showExpiry ? `<span>EXP: ${barcodeItemData.expiryDate}</span>` : ""}
+            ${showPrice ? `<span class="mrp-text">${barcodeItemData.mrp}</span>` : ""}
           </div>
           <div class="meta-row">
-            ${showShelf ? `<span>Rack: ${barcodeItemData.shelfLocation || 'A1'}</span>` : ''}
-            <span>Pack: ${barcodeItemData.packSize || 'Units'}</span>
+            ${showShelf ? `<span>Rack: ${barcodeItemData.shelfLocation || "A1"}</span>` : ""}
+            <span>Pack: ${barcodeItemData.packSize || "Units"}</span>
           </div>
           <div class="barcode-container">
-            ${barcodeItemData.svgBarcode || ''}
+            ${barcodeItemData.svgBarcode || ""}
           </div>
         </div>
       `;
 
-      let labelsHtml = '';
+      let labelsHtml = "";
       for (let i = 0; i < copies; i++) {
         labelsHtml += singleLabelHtml;
       }
 
-      const printWindow = window.open('', '_blank', 'width=680,height=560');
+      const printWindow = window.open("", "_blank", "width=680,height=560");
       if (printWindow) {
         printWindow.document.write(`
           <!DOCTYPE html>
@@ -699,23 +702,23 @@ export default function StockAdjustmentsScreen({
                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
                 background: #fff;
                 color: #000;
-                ${isA4 ? 'display: grid; grid-template-columns: repeat(3, 1fr); gap: 4mm; padding: 8mm;' : ''}
+                ${isA4 ? "display: grid; grid-template-columns: repeat(3, 1fr); gap: 4mm; padding: 8mm;" : ""}
               }
               .label-card {
                 width: ${labelWidth};
                 height: ${labelHeight};
-                padding: ${isShelfTag ? '3mm 4mm' : '2mm 2.5mm'};
+                padding: ${isShelfTag ? "3mm 4mm" : "2mm 2.5mm"};
                 display: flex;
                 flex-direction: column;
                 justify-content: space-between;
-                page-break-after: ${isA4 ? 'auto' : 'always'};
-                break-after: ${isA4 ? 'auto' : 'always'};
+                page-break-after: ${isA4 ? "auto" : "always"};
+                break-after: ${isA4 ? "auto" : "always"};
                 border: 0.5px dashed #bbb;
                 box-sizing: border-box;
                 overflow: hidden;
               }
               .pharmacy-title {
-                font-size: ${isShelfTag ? '9px' : '7.5px'};
+                font-size: ${isShelfTag ? "9px" : "7.5px"};
                 font-weight: 800;
                 text-align: center;
                 letter-spacing: 0.5px;
@@ -724,7 +727,7 @@ export default function StockAdjustmentsScreen({
                 text-transform: uppercase;
               }
               .med-name {
-                font-size: ${isShelfTag ? '11px' : '9px'};
+                font-size: ${isShelfTag ? "11px" : "9px"};
                 font-weight: 800;
                 margin-top: 1px;
                 white-space: nowrap;
@@ -732,7 +735,7 @@ export default function StockAdjustmentsScreen({
                 text-overflow: ellipsis;
               }
               .generic-name {
-                font-size: ${isShelfTag ? '8.5px' : '7px'};
+                font-size: ${isShelfTag ? "8.5px" : "7px"};
                 color: #333;
                 white-space: nowrap;
                 overflow: hidden;
@@ -741,11 +744,11 @@ export default function StockAdjustmentsScreen({
               .meta-row {
                 display: flex;
                 justify-content: space-between;
-                font-size: ${isShelfTag ? '8px' : '6.8px'};
+                font-size: ${isShelfTag ? "8px" : "6.8px"};
                 font-weight: 600;
               }
               .mrp-text {
-                font-size: ${isShelfTag ? '9.5px' : '8px'};
+                font-size: ${isShelfTag ? "9.5px" : "8px"};
                 font-weight: 800;
               }
               .barcode-container {
@@ -755,8 +758,8 @@ export default function StockAdjustmentsScreen({
                 margin-top: 1px;
               }
               .barcode-container svg {
-                width: ${isShelfTag ? '58mm' : '44mm'};
-                height: ${isShelfTag ? '13mm' : '10.5mm'};
+                width: ${isShelfTag ? "58mm" : "44mm"};
+                height: ${isShelfTag ? "13mm" : "10.5mm"};
               }
             </style>
           </head>
@@ -779,7 +782,7 @@ export default function StockAdjustmentsScreen({
   const handleCopyBarcode = () => {
     if (!barcodeItemData) return;
     const textToCopy = barcodeItemData.barcode || barcodeItemData.sku;
-    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
       navigator.clipboard.writeText(textToCopy);
     }
     if (onShowToast) {
@@ -789,18 +792,22 @@ export default function StockAdjustmentsScreen({
 
   const handleDownloadSvg = () => {
     if (!barcodeItemData || !barcodeItemData.svgBarcode) return;
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const blob = new Blob([barcodeItemData.svgBarcode], { type: 'image/svg+xml' });
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      const blob = new Blob([barcodeItemData.svgBarcode], {
+        type: "image/svg+xml",
+      });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
-      a.download = `Barcode-${barcodeItemData.sku || 'MED'}.svg`;
+      a.download = `Barcode-${barcodeItemData.sku || "MED"}.svg`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       if (onShowToast) {
-        onShowToast(`📥 Downloaded barcode SVG for ${barcodeItemData.brandName}`);
+        onShowToast(
+          `📥 Downloaded barcode SVG for ${barcodeItemData.brandName}`,
+        );
       }
     }
   };
@@ -2514,58 +2521,82 @@ export default function StockAdjustmentsScreen({
             {/* Header */}
             <View style={styles.barcodeModalHeader}>
               <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View
+                  style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+                >
                   <View style={styles.barcodeHeaderBadge}>
                     <Text style={{ fontSize: 18 }}>🏷️</Text>
                   </View>
-                  <Text style={styles.barcodeModalTitle}>Barcode & Shelf Tag Generator</Text>
+                  <Text style={styles.barcodeModalTitle}>
+                    Barcode & Shelf Tag Generator
+                  </Text>
                 </View>
                 <Text style={styles.barcodeModalSubtitle}>
-                  Print thermal labels and shelf edge tags for inventory scanning & shelf identification
+                  Print thermal labels and shelf edge tags for inventory
+                  scanning & shelf identification
                 </Text>
               </View>
-              <Pressable onPress={() => setBarcodeModalOpen(false)} style={styles.closeActionBtn}>
+              <Pressable
+                onPress={() => setBarcodeModalOpen(false)}
+                style={styles.closeActionBtn}
+              >
                 <Text style={styles.closeActionText}>✕</Text>
               </Pressable>
             </View>
 
             {/* Modal Body */}
-            <ScrollView style={{ maxHeight: 520 }} contentContainerStyle={styles.barcodeModalBody}>
-              
+            <ScrollView
+              style={{ maxHeight: 520 }}
+              contentContainerStyle={styles.barcodeModalBody}
+            >
               {/* Top: Live Print Preview Box */}
               <View style={styles.previewSectionWrapper}>
                 <View style={styles.previewSectionHeader}>
                   <Text style={styles.previewSectionTitle}>
-                    LIVE LABEL PREVIEW ({barcodeConfig.format === 'thermal_50x25' ? '50mm × 25mm Thermal' : barcodeConfig.format === 'shelf_70x35' ? '70mm × 35mm Shelf Edge' : 'A4 Multi-Grid Sheet'})
+                    LIVE LABEL PREVIEW (
+                    {barcodeConfig.format === "thermal_50x25"
+                      ? "50mm × 25mm Thermal"
+                      : barcodeConfig.format === "shelf_70x35"
+                        ? "70mm × 35mm Shelf Edge"
+                        : "A4 Multi-Grid Sheet"}
+                    )
                   </Text>
                   <View style={styles.liveTagBadge}>
                     <View style={styles.liveTagDot} />
                     <Text style={styles.liveTagBadgeText}>
-                      {barcodeLoading ? 'Fetching from DB...' : 'Ready to Print'}
+                      {barcodeLoading
+                        ? "Fetching from DB..."
+                        : "Ready to Print"}
                     </Text>
                   </View>
                 </View>
 
                 {/* The Physical Label Preview Card */}
-                <View style={[
-                  styles.physicalLabelCard,
-                  barcodeConfig.format === 'shelf_70x35' && styles.physicalLabelCardShelf,
-                  barcodeConfig.format === 'sheet_a4' && styles.physicalLabelCardA4,
-                ]}>
+                <View
+                  style={[
+                    styles.physicalLabelCard,
+                    barcodeConfig.format === "shelf_70x35" &&
+                      styles.physicalLabelCardShelf,
+                    barcodeConfig.format === "sheet_a4" &&
+                      styles.physicalLabelCardA4,
+                  ]}
+                >
                   {/* Pharmacy Banner */}
                   <View style={styles.labelHeaderRow}>
                     <Text style={styles.labelPharmacyName}>
-                      🏥 {barcodeItemData?.pharmacyName || 'FALAH PHARMACY'}
+                      🏥 {barcodeItemData?.pharmacyName || "FALAH PHARMACY"}
                     </Text>
                     <Text style={styles.labelBranchText}>
-                      {barcodeItemData?.branchName || 'Main Store'}
+                      {barcodeItemData?.branchName || "Main Store"}
                     </Text>
                   </View>
 
                   {/* Medicine Name & Strength */}
                   <View style={styles.labelMedInfoRow}>
                     <Text style={styles.labelMedName} numberOfLines={1}>
-                      {barcodeItemData?.brandName || barcodeItemData?.medicineName || 'Medicine Item'}
+                      {barcodeItemData?.brandName ||
+                        barcodeItemData?.medicineName ||
+                        "Medicine Item"}
                     </Text>
                     {barcodeItemData?.strength ? (
                       <Text style={styles.labelMedStrength}>
@@ -2586,19 +2617,23 @@ export default function StockAdjustmentsScreen({
                     {barcodeConfig.showBatch && (
                       <View style={styles.labelMetaItem}>
                         <Text style={styles.labelMetaLabel}>BATCH:</Text>
-                        <Text style={styles.labelMetaValue}>{barcodeItemData?.batchNo || 'B-1001'}</Text>
+                        <Text style={styles.labelMetaValue}>
+                          {barcodeItemData?.batchNo || "B-1001"}
+                        </Text>
                       </View>
                     )}
                     {barcodeConfig.showExpiry && (
                       <View style={styles.labelMetaItem}>
                         <Text style={styles.labelMetaLabel}>EXP:</Text>
-                        <Text style={styles.labelMetaValue}>{barcodeItemData?.expiryDate || 'N/A'}</Text>
+                        <Text style={styles.labelMetaValue}>
+                          {barcodeItemData?.expiryDate || "N/A"}
+                        </Text>
                       </View>
                     )}
                     {barcodeConfig.showPrice && (
                       <View style={styles.labelMetaItemPrice}>
                         <Text style={styles.labelPriceTag}>
-                          MRP {barcodeItemData?.mrp || '₹0.00'}
+                          MRP {barcodeItemData?.mrp || "₹0.00"}
                         </Text>
                       </View>
                     )}
@@ -2609,39 +2644,48 @@ export default function StockAdjustmentsScreen({
                     {barcodeConfig.showShelf && (
                       <View style={styles.shelfTagBadge}>
                         <Text style={styles.shelfTagText}>
-                          📍 {barcodeItemData?.shelfLocation || 'Rack A1'}
+                          📍 {barcodeItemData?.shelfLocation || "Rack A1"}
                         </Text>
                       </View>
                     )}
                     <Text style={styles.labelPackSizeText}>
-                      Pack: {barcodeItemData?.packSize || '10s'}
+                      Pack: {barcodeItemData?.packSize || "10s"}
                     </Text>
                   </View>
 
                   {/* Barcode Visualization */}
                   <View style={styles.labelBarcodeWrapper}>
-                    {Platform.OS === 'web' && barcodeItemData?.svgBarcode ? (
+                    {Platform.OS === "web" && barcodeItemData?.svgBarcode ? (
                       <View
                         style={styles.labelBarcodeSvgBox}
-                        dangerouslySetInnerHTML={{ __html: barcodeItemData.svgBarcode }}
+                        dangerouslySetInnerHTML={{
+                          __html: barcodeItemData.svgBarcode,
+                        }}
                       />
                     ) : (
                       <View style={styles.labelBarcodeFallback}>
                         <View style={styles.barcodeStripeRow}>
-                          {[2,1,3,1,2,3,1,1,2,1,3,2,1,2,1,3,1,2,1,1,3,2,1,3,2,1,2,3,1,2,1,1,3,1,2,3,2,1,1,3,2,1,2,1,3,1].map((w, idx) => (
+                          {[
+                            2, 1, 3, 1, 2, 3, 1, 1, 2, 1, 3, 2, 1, 2, 1, 3, 1,
+                            2, 1, 1, 3, 2, 1, 3, 2, 1, 2, 3, 1, 2, 1, 1, 3, 1,
+                            2, 3, 2, 1, 1, 3, 2, 1, 2, 1, 3, 1,
+                          ].map((w, idx) => (
                             <View
                               key={`bar-${idx}`}
                               style={{
                                 width: w * 2,
                                 height: 38,
-                                backgroundColor: idx % 2 === 0 ? '#0F172A' : '#FFFFFF',
+                                backgroundColor:
+                                  idx % 2 === 0 ? "#0F172A" : "#FFFFFF",
                                 marginRight: 1,
                               }}
                             />
                           ))}
                         </View>
                         <Text style={styles.barcodeFallbackText}>
-                          {barcodeItemData?.barcode || barcodeItemData?.sku || 'SKU-001'}
+                          {barcodeItemData?.barcode ||
+                            barcodeItemData?.sku ||
+                            "SKU-001"}
                         </Text>
                       </View>
                     )}
@@ -2651,90 +2695,158 @@ export default function StockAdjustmentsScreen({
 
               {/* Bottom: Configuration & Controls */}
               <View style={styles.barcodeConfigGrid}>
-                
                 {/* 1. Label Format Selector */}
                 <View style={styles.barcodeConfigCard}>
-                  <Text style={styles.barcodeConfigCardTitle}>📐 Label Format & Size</Text>
+                  <Text style={styles.barcodeConfigCardTitle}>
+                    📐 Label Format & Size
+                  </Text>
                   <View style={styles.formatOptionsRow}>
                     <Pressable
-                      onPress={() => setBarcodeConfig((prev) => ({ ...prev, format: 'thermal_50x25' }))}
+                      onPress={() =>
+                        setBarcodeConfig((prev) => ({
+                          ...prev,
+                          format: "thermal_50x25",
+                        }))
+                      }
                       style={[
                         styles.formatOptionBtn,
-                        barcodeConfig.format === 'thermal_50x25' && styles.formatOptionBtnActive,
+                        barcodeConfig.format === "thermal_50x25" &&
+                          styles.formatOptionBtnActive,
                       ]}
                     >
-                      <Text style={[
-                        styles.formatOptionTitle,
-                        barcodeConfig.format === 'thermal_50x25' && styles.formatOptionTitleActive,
-                      ]}>
+                      <Text
+                        style={[
+                          styles.formatOptionTitle,
+                          barcodeConfig.format === "thermal_50x25" &&
+                            styles.formatOptionTitleActive,
+                        ]}
+                      >
                         🏷️ 50 × 25 mm
                       </Text>
-                      <Text style={styles.formatOptionDesc}>Thermal Strip (Box/Strip)</Text>
+                      <Text style={styles.formatOptionDesc}>
+                        Thermal Strip (Box/Strip)
+                      </Text>
                     </Pressable>
 
                     <Pressable
-                      onPress={() => setBarcodeConfig((prev) => ({ ...prev, format: 'shelf_70x35' }))}
+                      onPress={() =>
+                        setBarcodeConfig((prev) => ({
+                          ...prev,
+                          format: "shelf_70x35",
+                        }))
+                      }
                       style={[
                         styles.formatOptionBtn,
-                        barcodeConfig.format === 'shelf_70x35' && styles.formatOptionBtnActive,
+                        barcodeConfig.format === "shelf_70x35" &&
+                          styles.formatOptionBtnActive,
                       ]}
                     >
-                      <Text style={[
-                        styles.formatOptionTitle,
-                        barcodeConfig.format === 'shelf_70x35' && styles.formatOptionTitleActive,
-                      ]}>
+                      <Text
+                        style={[
+                          styles.formatOptionTitle,
+                          barcodeConfig.format === "shelf_70x35" &&
+                            styles.formatOptionTitleActive,
+                        ]}
+                      >
                         📋 70 × 35 mm
                       </Text>
-                      <Text style={styles.formatOptionDesc}>Shelf Edge Tag (Bin/Rack)</Text>
+                      <Text style={styles.formatOptionDesc}>
+                        Shelf Edge Tag (Bin/Rack)
+                      </Text>
                     </Pressable>
 
                     <Pressable
-                      onPress={() => setBarcodeConfig((prev) => ({ ...prev, format: 'sheet_a4' }))}
+                      onPress={() =>
+                        setBarcodeConfig((prev) => ({
+                          ...prev,
+                          format: "sheet_a4",
+                        }))
+                      }
                       style={[
                         styles.formatOptionBtn,
-                        barcodeConfig.format === 'sheet_a4' && styles.formatOptionBtnActive,
+                        barcodeConfig.format === "sheet_a4" &&
+                          styles.formatOptionBtnActive,
                       ]}
                     >
-                      <Text style={[
-                        styles.formatOptionTitle,
-                        barcodeConfig.format === 'sheet_a4' && styles.formatOptionTitleActive,
-                      ]}>
+                      <Text
+                        style={[
+                          styles.formatOptionTitle,
+                          barcodeConfig.format === "sheet_a4" &&
+                            styles.formatOptionTitleActive,
+                        ]}
+                      >
                         📄 A4 Sheet
                       </Text>
-                      <Text style={styles.formatOptionDesc}>24 Labels Multi-Grid</Text>
+                      <Text style={styles.formatOptionDesc}>
+                        24 Labels Multi-Grid
+                      </Text>
                     </Pressable>
                   </View>
                 </View>
 
                 {/* 2. Number of Copies */}
                 <View style={styles.barcodeConfigCard}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Text style={styles.barcodeConfigCardTitle}>🔢 Number of Copies to Print</Text>
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#0F766E' }}>
-                      Total: {barcodeConfig.copies} Label{Number(barcodeConfig.copies) > 1 ? 's' : ''}
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <Text style={styles.barcodeConfigCardTitle}>
+                      🔢 Number of Copies to Print
+                    </Text>
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontWeight: "700",
+                        color: "#0F766E",
+                      }}
+                    >
+                      Total: {barcodeConfig.copies} Label
+                      {Number(barcodeConfig.copies) > 1 ? "s" : ""}
                     </Text>
                   </View>
 
-                  <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      gap: 8,
+                      alignItems: "center",
+                      marginTop: 8,
+                      flexWrap: "wrap",
+                    }}
+                  >
                     <TextInput
                       style={styles.copiesInput}
                       value={String(barcodeConfig.copies)}
-                      onChangeText={(val) => setBarcodeConfig((prev) => ({ ...prev, copies: val }))}
+                      onChangeText={(val) =>
+                        setBarcodeConfig((prev) => ({ ...prev, copies: val }))
+                      }
                       keyboardType="numeric"
                     />
-                    {['1', '2', '5', '10', '25', '50'].map((preset) => (
+                    {["1", "2", "5", "10", "25", "50"].map((preset) => (
                       <Pressable
                         key={`preset-${preset}`}
-                        onPress={() => setBarcodeConfig((prev) => ({ ...prev, copies: preset }))}
+                        onPress={() =>
+                          setBarcodeConfig((prev) => ({
+                            ...prev,
+                            copies: preset,
+                          }))
+                        }
                         style={[
                           styles.presetPill,
-                          String(barcodeConfig.copies) === preset && styles.presetPillActive,
+                          String(barcodeConfig.copies) === preset &&
+                            styles.presetPillActive,
                         ]}
                       >
-                        <Text style={[
-                          styles.presetPillText,
-                          String(barcodeConfig.copies) === preset && styles.presetPillTextActive,
-                        ]}>
+                        <Text
+                          style={[
+                            styles.presetPillText,
+                            String(barcodeConfig.copies) === preset &&
+                              styles.presetPillTextActive,
+                          ]}
+                        >
                           {preset}
                         </Text>
                       </Pressable>
@@ -2744,50 +2856,122 @@ export default function StockAdjustmentsScreen({
 
                 {/* 3. Include / Toggle Elements */}
                 <View style={styles.barcodeConfigCard}>
-                  <Text style={styles.barcodeConfigCardTitle}>👁️ Elements to Include on Tag</Text>
+                  <Text style={styles.barcodeConfigCardTitle}>
+                    👁️ Elements to Include on Tag
+                  </Text>
                   <View style={styles.togglesWrapRow}>
                     <Pressable
-                      onPress={() => setBarcodeConfig((prev) => ({ ...prev, showPrice: !prev.showPrice }))}
-                      style={[styles.toggleChip, barcodeConfig.showPrice && styles.toggleChipActive]}
+                      onPress={() =>
+                        setBarcodeConfig((prev) => ({
+                          ...prev,
+                          showPrice: !prev.showPrice,
+                        }))
+                      }
+                      style={[
+                        styles.toggleChip,
+                        barcodeConfig.showPrice && styles.toggleChipActive,
+                      ]}
                     >
-                      <Text style={[styles.toggleChipText, barcodeConfig.showPrice && styles.toggleChipTextActive]}>
-                        {barcodeConfig.showPrice ? '✓' : '+'} MRP (₹)
+                      <Text
+                        style={[
+                          styles.toggleChipText,
+                          barcodeConfig.showPrice &&
+                            styles.toggleChipTextActive,
+                        ]}
+                      >
+                        {barcodeConfig.showPrice ? "✓" : "+"} MRP (₹)
                       </Text>
                     </Pressable>
 
                     <Pressable
-                      onPress={() => setBarcodeConfig((prev) => ({ ...prev, showExpiry: !prev.showExpiry }))}
-                      style={[styles.toggleChip, barcodeConfig.showExpiry && styles.toggleChipActive]}
+                      onPress={() =>
+                        setBarcodeConfig((prev) => ({
+                          ...prev,
+                          showExpiry: !prev.showExpiry,
+                        }))
+                      }
+                      style={[
+                        styles.toggleChip,
+                        barcodeConfig.showExpiry && styles.toggleChipActive,
+                      ]}
                     >
-                      <Text style={[styles.toggleChipText, barcodeConfig.showExpiry && styles.toggleChipTextActive]}>
-                        {barcodeConfig.showExpiry ? '✓' : '+'} Expiry Date
+                      <Text
+                        style={[
+                          styles.toggleChipText,
+                          barcodeConfig.showExpiry &&
+                            styles.toggleChipTextActive,
+                        ]}
+                      >
+                        {barcodeConfig.showExpiry ? "✓" : "+"} Expiry Date
                       </Text>
                     </Pressable>
 
                     <Pressable
-                      onPress={() => setBarcodeConfig((prev) => ({ ...prev, showBatch: !prev.showBatch }))}
-                      style={[styles.toggleChip, barcodeConfig.showBatch && styles.toggleChipActive]}
+                      onPress={() =>
+                        setBarcodeConfig((prev) => ({
+                          ...prev,
+                          showBatch: !prev.showBatch,
+                        }))
+                      }
+                      style={[
+                        styles.toggleChip,
+                        barcodeConfig.showBatch && styles.toggleChipActive,
+                      ]}
                     >
-                      <Text style={[styles.toggleChipText, barcodeConfig.showBatch && styles.toggleChipTextActive]}>
-                        {barcodeConfig.showBatch ? '✓' : '+'} Batch No
+                      <Text
+                        style={[
+                          styles.toggleChipText,
+                          barcodeConfig.showBatch &&
+                            styles.toggleChipTextActive,
+                        ]}
+                      >
+                        {barcodeConfig.showBatch ? "✓" : "+"} Batch No
                       </Text>
                     </Pressable>
 
                     <Pressable
-                      onPress={() => setBarcodeConfig((prev) => ({ ...prev, showShelf: !prev.showShelf }))}
-                      style={[styles.toggleChip, barcodeConfig.showShelf && styles.toggleChipActive]}
+                      onPress={() =>
+                        setBarcodeConfig((prev) => ({
+                          ...prev,
+                          showShelf: !prev.showShelf,
+                        }))
+                      }
+                      style={[
+                        styles.toggleChip,
+                        barcodeConfig.showShelf && styles.toggleChipActive,
+                      ]}
                     >
-                      <Text style={[styles.toggleChipText, barcodeConfig.showShelf && styles.toggleChipTextActive]}>
-                        {barcodeConfig.showShelf ? '✓' : '+'} Shelf Location
+                      <Text
+                        style={[
+                          styles.toggleChipText,
+                          barcodeConfig.showShelf &&
+                            styles.toggleChipTextActive,
+                        ]}
+                      >
+                        {barcodeConfig.showShelf ? "✓" : "+"} Shelf Location
                       </Text>
                     </Pressable>
 
                     <Pressable
-                      onPress={() => setBarcodeConfig((prev) => ({ ...prev, showGeneric: !prev.showGeneric }))}
-                      style={[styles.toggleChip, barcodeConfig.showGeneric && styles.toggleChipActive]}
+                      onPress={() =>
+                        setBarcodeConfig((prev) => ({
+                          ...prev,
+                          showGeneric: !prev.showGeneric,
+                        }))
+                      }
+                      style={[
+                        styles.toggleChip,
+                        barcodeConfig.showGeneric && styles.toggleChipActive,
+                      ]}
                     >
-                      <Text style={[styles.toggleChipText, barcodeConfig.showGeneric && styles.toggleChipTextActive]}>
-                        {barcodeConfig.showGeneric ? '✓' : '+'} Generic Name
+                      <Text
+                        style={[
+                          styles.toggleChipText,
+                          barcodeConfig.showGeneric &&
+                            styles.toggleChipTextActive,
+                        ]}
+                      >
+                        {barcodeConfig.showGeneric ? "✓" : "+"} Generic Name
                       </Text>
                     </Pressable>
                   </View>
@@ -2795,38 +2979,72 @@ export default function StockAdjustmentsScreen({
 
                 {/* 4. Backend Route Status Alert */}
                 <View style={styles.apiPreviewBox}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981' }} />
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 6,
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: 4,
+                        backgroundColor: "#10B981",
+                      }}
+                    />
                     <Text style={styles.apiPreviewText}>
-                      Backend Connected: GET /api/inventory/{barcodeItemData?.id || barcodeItemData?.sku}/barcode
+                      Backend Connected: GET /api/inventory/
+                      {barcodeItemData?.id || barcodeItemData?.sku}/barcode
                     </Text>
                   </View>
                 </View>
-
               </View>
             </ScrollView>
 
             {/* Footer Actions */}
             <View style={styles.barcodeModalFooter}>
-              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-                <Pressable onPress={handleCopyBarcode} style={styles.secondaryActionBtn}>
-                  <Text style={styles.secondaryActionBtnText}>📋 Copy Barcode</Text>
+              <View
+                style={{ flexDirection: "row", gap: 8, alignItems: "center" }}
+              >
+                <Pressable
+                  onPress={handleCopyBarcode}
+                  style={styles.secondaryActionBtn}
+                >
+                  <Text style={styles.secondaryActionBtnText}>
+                    📋 Copy Barcode
+                  </Text>
                 </Pressable>
-                <Pressable onPress={handleDownloadSvg} style={styles.secondaryActionBtn}>
-                  <Text style={styles.secondaryActionBtnText}>💾 Export SVG</Text>
+                <Pressable
+                  onPress={handleDownloadSvg}
+                  style={styles.secondaryActionBtn}
+                >
+                  <Text style={styles.secondaryActionBtnText}>
+                    💾 Export SVG
+                  </Text>
                 </Pressable>
               </View>
 
-              <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
-                <Pressable onPress={() => setBarcodeModalOpen(false)} style={styles.cancelBtn}>
+              <View
+                style={{ flexDirection: "row", gap: 10, alignItems: "center" }}
+              >
+                <Pressable
+                  onPress={() => setBarcodeModalOpen(false)}
+                  style={styles.cancelBtn}
+                >
                   <Text style={styles.cancelBtnText}>Cancel</Text>
                 </Pressable>
-                <Pressable onPress={handlePrintBarcodeLabel} style={styles.printBarcodePrimaryBtn}>
-                  <Text style={styles.printBarcodePrimaryBtnText}>🖨️ Print Thermal Label ({barcodeConfig.copies})</Text>
+                <Pressable
+                  onPress={handlePrintBarcodeLabel}
+                  style={styles.printBarcodePrimaryBtn}
+                >
+                  <Text style={styles.printBarcodePrimaryBtnText}>
+                    🖨️ Print Thermal Label ({barcodeConfig.copies})
+                  </Text>
                 </Pressable>
               </View>
             </View>
-
           </View>
         </View>
       </Modal>
@@ -3992,16 +4210,17 @@ const styles = StyleSheet.create({
 
   // Barcode & Thermal Shelf Tag Modal Styles
   barcodeModalCard: {
-    width: '92%',
+    width: "92%",
     maxWidth: 680,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    overflow: 'hidden',
+    borderColor: "#E2E8F0",
+    overflow: "hidden",
     ...Platform.select({
       web: {
-        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+        boxShadow:
+          "0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
       },
       default: {
         elevation: 8,
@@ -4009,97 +4228,97 @@ const styles = StyleSheet.create({
     }),
   },
   barcodeModalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    backgroundColor: '#FFFFFF',
+    borderBottomColor: "#F1F5F9",
+    backgroundColor: "#FFFFFF",
   },
   barcodeHeaderBadge: {
     width: 34,
     height: 34,
     borderRadius: 8,
-    backgroundColor: '#ECFDF5',
+    backgroundColor: "#ECFDF5",
     borderWidth: 1,
-    borderColor: '#A7F3D0',
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderColor: "#A7F3D0",
+    justifyContent: "center",
+    alignItems: "center",
   },
   barcodeModalTitle: {
     fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   barcodeModalSubtitle: {
     fontSize: 12,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 2,
   },
   barcodeModalBody: {
     padding: 20,
     gap: 18,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
   },
   previewSectionWrapper: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     padding: 16,
-    alignItems: 'center',
+    alignItems: "center",
   },
   previewSectionHeader: {
-    width: '100%',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    width: "100%",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 14,
   },
   previewSectionTitle: {
     fontSize: 11,
-    fontWeight: '800',
-    color: '#64748B',
+    fontWeight: "800",
+    color: "#64748B",
     letterSpacing: 0.5,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
   },
   liveTagBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
-    backgroundColor: '#F0FDF4',
+    backgroundColor: "#F0FDF4",
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#BBF7D0',
+    borderColor: "#BBF7D0",
   },
   liveTagDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#16A34A',
+    backgroundColor: "#16A34A",
   },
   liveTagBadgeText: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#16A34A',
+    fontWeight: "700",
+    color: "#16A34A",
   },
   physicalLabelCard: {
     width: 320,
     minHeight: 160,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 8,
     borderWidth: 1.5,
-    borderColor: '#0F172A',
-    borderStyle: 'dashed',
+    borderColor: "#0F172A",
+    borderStyle: "dashed",
     padding: 12,
-    justifyContent: 'space-between',
+    justifyContent: "space-between",
     ...Platform.select({
       web: {
-        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.08)',
+        boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.08)",
       },
     }),
   },
@@ -4107,142 +4326,142 @@ const styles = StyleSheet.create({
     width: 380,
     minHeight: 180,
     padding: 14,
-    borderColor: '#0F766E',
+    borderColor: "#0F766E",
   },
   physicalLabelCardA4: {
     width: 300,
     minHeight: 150,
   },
   labelHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     borderBottomWidth: 1,
-    borderBottomColor: '#0F172A',
+    borderBottomColor: "#0F172A",
     paddingBottom: 4,
     marginBottom: 6,
   },
   labelPharmacyName: {
     fontSize: 10.5,
-    fontWeight: '900',
-    color: '#0F172A',
+    fontWeight: "900",
+    color: "#0F172A",
     letterSpacing: 0.5,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
   },
   labelBranchText: {
     fontSize: 9.5,
-    fontWeight: '700',
-    color: '#475569',
+    fontWeight: "700",
+    color: "#475569",
   },
   labelMedInfoRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
+    flexDirection: "row",
+    alignItems: "baseline",
     gap: 6,
   },
   labelMedName: {
     fontSize: 13,
-    fontWeight: '900',
-    color: '#0F172A',
+    fontWeight: "900",
+    color: "#0F172A",
     flexShrink: 1,
   },
   labelMedStrength: {
     fontSize: 11,
-    fontWeight: '800',
-    color: '#0F766E',
+    fontWeight: "800",
+    color: "#0F766E",
   },
   labelGenericName: {
     fontSize: 10,
-    color: '#475569',
-    fontStyle: 'italic',
+    color: "#475569",
+    fontStyle: "italic",
     marginTop: 1,
   },
   labelMetaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginVertical: 4,
   },
   labelMetaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
   },
   labelMetaLabel: {
     fontSize: 9,
-    fontWeight: '800',
-    color: '#64748B',
+    fontWeight: "800",
+    color: "#64748B",
   },
   labelMetaValue: {
     fontSize: 10,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   labelMetaItemPrice: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: "#FEF3C7",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
     borderWidth: 0.5,
-    borderColor: '#F59E0B',
+    borderColor: "#F59E0B",
   },
   labelPriceTag: {
     fontSize: 11,
-    fontWeight: '900',
-    color: '#92400E',
+    fontWeight: "900",
+    color: "#92400E",
   },
   labelShelfRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 6,
   },
   shelfTagBadge: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: "#F1F5F9",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
     borderWidth: 0.5,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
   },
   shelfTagText: {
     fontSize: 9.5,
-    fontWeight: '800',
-    color: '#334155',
+    fontWeight: "800",
+    color: "#334155",
   },
   labelPackSizeText: {
     fontSize: 9.5,
-    fontWeight: '700',
-    color: '#64748B',
+    fontWeight: "700",
+    color: "#64748B",
   },
   labelBarcodeWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginTop: 4,
     paddingTop: 4,
     borderTopWidth: 0.5,
-    borderTopColor: '#E2E8F0',
+    borderTopColor: "#E2E8F0",
   },
   labelBarcodeSvgBox: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
   },
   labelBarcodeFallback: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
   },
   barcodeStripeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 2,
   },
   barcodeFallbackText: {
     fontSize: 10,
-    fontFamily: Platform.OS === 'web' ? 'monospace' : 'monospace',
-    fontWeight: '700',
-    color: '#0F172A',
+    fontFamily: Platform.OS === "web" ? "monospace" : "monospace",
+    fontWeight: "700",
+    color: "#0F172A",
     letterSpacing: 2,
     marginTop: 2,
   },
@@ -4250,87 +4469,87 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   barcodeConfigCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     padding: 14,
   },
   barcodeConfigCardTitle: {
     fontSize: 12.5,
-    fontWeight: '800',
-    color: '#1E293B',
+    fontWeight: "800",
+    color: "#1E293B",
     marginBottom: 8,
   },
   formatOptionsRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 10,
   },
   formatOptionBtn: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
     borderWidth: 1.5,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     borderRadius: 8,
     paddingVertical: 10,
     paddingHorizontal: 8,
-    alignItems: 'center',
-    cursor: 'pointer',
+    alignItems: "center",
+    cursor: "pointer",
   },
   formatOptionBtnActive: {
-    backgroundColor: '#F0FDF4',
-    borderColor: '#10B981',
+    backgroundColor: "#F0FDF4",
+    borderColor: "#10B981",
   },
   formatOptionTitle: {
     fontSize: 12,
-    fontWeight: '800',
-    color: '#334155',
+    fontWeight: "800",
+    color: "#334155",
   },
   formatOptionTitleActive: {
-    color: '#0F766E',
+    color: "#0F766E",
   },
   formatOptionDesc: {
     fontSize: 10,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 2,
-    textAlign: 'center',
+    textAlign: "center",
   },
   copiesInput: {
     width: 60,
     height: 36,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderWidth: 1.5,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
     borderRadius: 6,
-    textAlign: 'center',
+    textAlign: "center",
     fontSize: 14,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   presetPill: {
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
-    cursor: 'pointer',
+    borderColor: "#CBD5E1",
+    backgroundColor: "#FFFFFF",
+    cursor: "pointer",
   },
   presetPillActive: {
-    backgroundColor: '#0F766E',
-    borderColor: '#0F766E',
+    backgroundColor: "#0F766E",
+    borderColor: "#0F766E",
   },
   presetPillText: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#475569',
+    fontWeight: "700",
+    color: "#475569",
   },
   presetPillTextActive: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
   togglesWrapRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
   },
   toggleChip: {
@@ -4338,32 +4557,32 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
-    cursor: 'pointer',
+    borderColor: "#E2E8F0",
+    backgroundColor: "#F8FAFC",
+    cursor: "pointer",
   },
   toggleChipActive: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#3B82F6',
+    backgroundColor: "#EFF6FF",
+    borderColor: "#3B82F6",
   },
   toggleChipText: {
     fontSize: 11.5,
-    fontWeight: '700',
-    color: '#64748B',
+    fontWeight: "700",
+    color: "#64748B",
   },
   toggleChipTextActive: {
-    color: '#1D4ED8',
+    color: "#1D4ED8",
   },
   barcodeModalFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: 20,
     paddingVertical: 14,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    backgroundColor: '#FFFFFF',
-    flexWrap: 'wrap',
+    borderTopColor: "#F1F5F9",
+    backgroundColor: "#FFFFFF",
+    flexWrap: "wrap",
     gap: 10,
   },
   secondaryActionBtn: {
@@ -4371,28 +4590,28 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#F8FAFC',
-    cursor: 'pointer',
+    borderColor: "#CBD5E1",
+    backgroundColor: "#F8FAFC",
+    cursor: "pointer",
   },
   secondaryActionBtnText: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#334155',
+    fontWeight: "700",
+    color: "#334155",
   },
   printBarcodePrimaryBtn: {
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
     paddingVertical: 9,
     paddingHorizontal: 20,
     borderRadius: 6,
-    cursor: 'pointer',
-    flexDirection: 'row',
-    alignItems: 'center',
+    cursor: "pointer",
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
   },
   printBarcodePrimaryBtnText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: "800",
   },
 });

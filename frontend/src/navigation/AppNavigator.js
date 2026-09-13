@@ -360,93 +360,95 @@ export default function AppNavigator() {
     <OfflineSyncProvider>
       <PosProvider currentUser={currentUser}>
         <View style={styles.appContainer}>
-        {/* 1. Fixed Left Sidebar for Desktop */}
-        {!isMobile && (
-          <Sidebar
-            activeItem={currentRoute}
-            onNavigate={handleNavigate}
-            isMultiBranch={isMultiBranch}
-            currentUser={currentUser}
-          />
-        )}
+          {/* 1. Fixed Left Sidebar for Desktop */}
+          {!isMobile && (
+            <Sidebar
+              activeItem={currentRoute}
+              onNavigate={handleNavigate}
+              isMultiBranch={isMultiBranch}
+              currentUser={currentUser}
+            />
+          )}
 
-        {/* Mobile Drawer Navigation Modal (Positioned on Left) */}
-        {isMobile && (
-          <Modal
-            visible={mobileMenuOpen}
-            animationType="fade"
-            transparent={true}
-            onRequestClose={() => setMobileMenuOpen(false)}
-          >
-            <View style={styles.mobileDrawerOverlay}>
-              <View style={styles.mobileDrawerContent}>
-                <View style={styles.mobileDrawerHeader}>
-                  <View style={styles.drawerBrandRow}>
-                    <View style={styles.drawerBrandIcon}>
-                      <Text style={styles.drawerBrandIconText}>Rx</Text>
+          {/* Mobile Drawer Navigation Modal (Positioned on Left) */}
+          {isMobile && (
+            <Modal
+              visible={mobileMenuOpen}
+              animationType="fade"
+              transparent={true}
+              onRequestClose={() => setMobileMenuOpen(false)}
+            >
+              <View style={styles.mobileDrawerOverlay}>
+                <View style={styles.mobileDrawerContent}>
+                  <View style={styles.mobileDrawerHeader}>
+                    <View style={styles.drawerBrandRow}>
+                      <View style={styles.drawerBrandIcon}>
+                        <Text style={styles.drawerBrandIconText}>Rx</Text>
+                      </View>
+                      <Text style={styles.mobileDrawerTitle}>
+                        PharmaFlow ERP
+                      </Text>
                     </View>
-                    <Text style={styles.mobileDrawerTitle}>PharmaFlow ERP</Text>
+                    <Pressable
+                      onPress={() => setMobileMenuOpen(false)}
+                      style={styles.mobileCloseButton}
+                      accessibilityRole="button"
+                      accessibilityLabel="Close navigation menu"
+                    >
+                      <Text style={styles.mobileCloseText}>✕</Text>
+                    </Pressable>
                   </View>
-                  <Pressable
-                    onPress={() => setMobileMenuOpen(false)}
-                    style={styles.mobileCloseButton}
-                    accessibilityRole="button"
-                    accessibilityLabel="Close navigation menu"
-                  >
-                    <Text style={styles.mobileCloseText}>✕</Text>
-                  </Pressable>
+                  <Sidebar
+                    activeItem={currentRoute}
+                    onNavigate={handleNavigate}
+                    isMultiBranch={isMultiBranch}
+                    isMobile={true}
+                    currentUser={currentUser}
+                  />
                 </View>
-                <Sidebar
-                  activeItem={currentRoute}
-                  onNavigate={handleNavigate}
-                  isMultiBranch={isMultiBranch}
-                  isMobile={true}
-                  currentUser={currentUser}
+                <Pressable
+                  style={styles.mobileDrawerBackdrop}
+                  onPress={() => setMobileMenuOpen(false)}
+                  accessibilityLabel="Dismiss menu"
                 />
               </View>
-              <Pressable
-                style={styles.mobileDrawerBackdrop}
-                onPress={() => setMobileMenuOpen(false)}
-                accessibilityLabel="Dismiss menu"
-              />
-            </View>
-          </Modal>
-        )}
+            </Modal>
+          )}
 
-        {/* 2. Main Application Wrapper */}
-        <View style={styles.mainWrapper}>
-          {/* Top Header with Multi/Single Branch Mode */}
-          <Header
-            currentBranch={selectedBranch}
-            onBranchChange={(b) => {
-              setSelectedBranch(b);
-              showToast(`Switched active branch to ${b}`);
-            }}
-            isMultiBranch={isMultiBranch}
-            onTogglePharmacyMode={handleTogglePharmacyMode}
-            onSetPharmacyMode={handleSetPharmacyMode}
-            currentUser={currentUser}
-            onSignOut={handleSignOut}
-            syncStatus="online"
-            isMobile={isMobile}
-            onToggleMobileMenu={() => setMobileMenuOpen(true)}
-            onNavigate={handleNavigate}
-            branchRefreshKey={branchRefreshKey}
-          />
+          {/* 2. Main Application Wrapper */}
+          <View style={styles.mainWrapper}>
+            {/* Top Header with Multi/Single Branch Mode */}
+            <Header
+              currentBranch={selectedBranch}
+              onBranchChange={(b) => {
+                setSelectedBranch(b);
+                showToast(`Switched active branch to ${b}`);
+              }}
+              isMultiBranch={isMultiBranch}
+              onTogglePharmacyMode={handleTogglePharmacyMode}
+              onSetPharmacyMode={handleSetPharmacyMode}
+              currentUser={currentUser}
+              onSignOut={handleSignOut}
+              syncStatus="online"
+              isMobile={isMobile}
+              onToggleMobileMenu={() => setMobileMenuOpen(true)}
+              onNavigate={handleNavigate}
+              branchRefreshKey={branchRefreshKey}
+            />
 
-          {/* Global Action Feedback Toast */}
-          {toastMessage ? (
-            <View style={styles.toastBanner}>
-              <View style={styles.toastDot} />
-              <Text style={styles.toastText}>{toastMessage}</Text>
-            </View>
-          ) : null}
+            {/* Global Action Feedback Toast */}
+            {toastMessage ? (
+              <View style={styles.toastBanner}>
+                <View style={styles.toastDot} />
+                <Text style={styles.toastText}>{toastMessage}</Text>
+              </View>
+            ) : null}
 
-          {/* Dynamic Screen View */}
-          <View style={styles.screenContainer}>{renderScreen()}</View>
+            {/* Dynamic Screen View */}
+            <View style={styles.screenContainer}>{renderScreen()}</View>
+          </View>
         </View>
-      </View>
-    </PosProvider>
+      </PosProvider>
     </OfflineSyncProvider>
   );
 }
