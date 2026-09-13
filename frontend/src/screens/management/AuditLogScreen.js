@@ -245,6 +245,7 @@ export default function AuditLogScreen({ onShowToast, onNavigate }) {
             value={String(totalCount)}
             subtext="Click to view all events"
             variant="teal"
+            style={{ width: '100%', minWidth: '100%', maxWidth: '100%' }}
             onPress={() => setActiveKpiFilter('ALL')}
           />
         </View>
@@ -261,6 +262,7 @@ export default function AuditLogScreen({ onShowToast, onNavigate }) {
             value={String(criticalCount)}
             subtext="Discounts, price & bill edits"
             variant="orange"
+            style={{ width: '100%', minWidth: '100%', maxWidth: '100%' }}
             onPress={() => setActiveKpiFilter('CRITICAL')}
           />
         </View>
@@ -277,6 +279,7 @@ export default function AuditLogScreen({ onShowToast, onNavigate }) {
             value={String(stockCount)}
             subtext="Adjustments & store transfers"
             variant="blue"
+            style={{ width: '100%', minWidth: '100%', maxWidth: '100%' }}
             onPress={() => setActiveKpiFilter('STOCK')}
           />
         </View>
@@ -293,6 +296,7 @@ export default function AuditLogScreen({ onShowToast, onNavigate }) {
             value={String(rxCount)}
             subtext="Schedule H prescription signs"
             variant="green"
+            style={{ width: '100%', minWidth: '100%', maxWidth: '100%' }}
             onPress={() => setActiveKpiFilter('RX')}
           />
         </View>
@@ -300,7 +304,7 @@ export default function AuditLogScreen({ onShowToast, onNavigate }) {
         <View
           style={[
             styles.kpiCardWrapper,
-            isMobile && styles.kpiCardWrapperMobile,
+            isMobile ? styles.kpiCardWrapperMobileFull : styles.kpiCardWrapperMobile,
             activeKpiFilter === 'SECURITY' && styles.kpiCardActiveRing,
           ]}
         >
@@ -309,6 +313,7 @@ export default function AuditLogScreen({ onShowToast, onNavigate }) {
             value={String(securityCount)}
             subtext="Permissions & staff updates"
             variant="amber"
+            style={{ width: '100%', minWidth: '100%', maxWidth: '100%' }}
             onPress={() => setActiveKpiFilter('SECURITY')}
           />
         </View>
@@ -906,6 +911,8 @@ const styles = StyleSheet.create({
   },
   kpiRowCompact: {
     flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 10,
   },
   kpiCardWrapper: {
     flex: 1,
@@ -913,8 +920,18 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   kpiCardWrapperMobile: {
-    minWidth: '47%',
+    width: '48.5%',
+    minWidth: '48.5%',
     maxWidth: '48.5%',
+    flexGrow: 0,
+    flexShrink: 0,
+  },
+  kpiCardWrapperMobileFull: {
+    width: '100%',
+    minWidth: '100%',
+    maxWidth: '100%',
+    flexGrow: 0,
+    flexShrink: 0,
   },
   kpiCardActiveRing: {
     borderWidth: 2,

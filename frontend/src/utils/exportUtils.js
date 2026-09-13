@@ -1155,22 +1155,33 @@ export function exportAuditLogReport(logs = [], format = 'pdf', filterLabel = 'A
       <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
       <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        * {
+          box-sizing: border-box;
+        }
+        html, body {
+          margin: 0;
+          padding: 0;
+          width: 100%;
+          max-width: 100vw;
+          overflow-x: hidden;
+          background-color: #f8fafc;
+        }
         body {
           font-family: 'Inter', sans-serif;
           color: #0f172a;
-          margin: 0;
-          padding: 20px;
-          background-color: #ffffff;
+          padding: 16px;
         }
         .toolbar {
           display: flex;
           justify-content: flex-end;
-          gap: 12px;
-          margin-bottom: 20px;
-          background: #f8fafc;
+          gap: 10px;
+          margin-bottom: 16px;
+          background: #ffffff;
           padding: 10px 14px;
           border-radius: 8px;
           border: 1px solid #e2e8f0;
+          max-width: 980px;
+          margin: 0 auto 16px auto;
         }
         .btn {
           padding: 8px 14px;
@@ -1188,6 +1199,9 @@ export function exportAuditLogReport(logs = [], format = 'pdf', filterLabel = 'A
           padding: 24px;
           max-width: 980px;
           margin: 0 auto;
+          background-color: #ffffff;
+          box-sizing: border-box;
+          width: 100%;
         }
         .header {
           display: flex;
@@ -1195,9 +1209,11 @@ export function exportAuditLogReport(logs = [], format = 'pdf', filterLabel = 'A
           border-bottom: 2px solid #0f766e;
           padding-bottom: 16px;
           margin-bottom: 16px;
+          flex-wrap: wrap;
+          gap: 12px;
         }
         .company-name { font-size: 20px; font-weight: 800; color: #0f766e; }
-        .company-sub { font-size: 11px; color: #64748b; margin-top: 4px; }
+        .company-sub { font-size: 11px; color: #64748b; margin-top: 4px; line-height: 1.4; }
         .compliance-badge {
           display: inline-block;
           background: #f0fdfa;
@@ -1232,11 +1248,20 @@ export function exportAuditLogReport(logs = [], format = 'pdf', filterLabel = 'A
           font-size: 11.5px;
           color: #166534;
           margin-bottom: 16px;
+          line-height: 1.4;
+        }
+        .table-responsive {
+          width: 100%;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+          margin-top: 8px;
+          border: 1px solid #e2e8f0;
+          border-radius: 6px;
         }
         table {
           width: 100%;
+          min-width: 680px;
           border-collapse: collapse;
-          margin-top: 8px;
           font-size: 11.5px;
         }
         th {
@@ -1244,15 +1269,18 @@ export function exportAuditLogReport(logs = [], format = 'pdf', filterLabel = 'A
           color: #334155;
           font-weight: 700;
           padding: 8px 6px;
-          border: 1px solid #cbd5e1;
+          border-bottom: 2px solid #cbd5e1;
+          border-right: 1px solid #e2e8f0;
           text-align: left;
           text-transform: uppercase;
           font-size: 10px;
         }
         td {
-          padding: 7px 6px;
-          border: 1px solid #e2e8f0;
+          padding: 8px 6px;
+          border-bottom: 1px solid #e2e8f0;
+          border-right: 1px solid #e2e8f0;
           vertical-align: top;
+          word-break: break-word;
         }
         .sev-critical { color: #dc2626; font-weight: 800; }
         .sev-warning { color: #d97706; font-weight: 700; }
@@ -1273,18 +1301,34 @@ export function exportAuditLogReport(logs = [], format = 'pdf', filterLabel = 'A
           justify-content: space-between;
           font-size: 11px;
           color: #64748b;
+          flex-wrap: wrap;
+          gap: 12px;
         }
         @media screen and (max-width: 768px) {
           body { padding: 8px; }
-          .report-card { padding: 12px; }
-          .header { flex-direction: column; gap: 8px; }
-          .kpi-row { grid-template-columns: repeat(2, 1fr); }
-          table { display: block; overflow-x: auto; width: 100%; }
+          .toolbar {
+            position: sticky;
+            top: 0;
+            z-index: 999;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding: 8px;
+          }
+          .toolbar .btn { flex: 1; text-align: center; }
+          .report-card { padding: 12px; border-radius: 6px; }
+          .header { flex-direction: column; gap: 8px; align-items: flex-start; }
+          .header > div { width: 100%; text-align: left !important; }
+          .company-name { font-size: 18px; }
+          .kpi-row { grid-template-columns: repeat(2, 1fr); gap: 6px; }
+          .kpi-card:last-child:nth-child(odd) { grid-column: span 2; }
+          .footer-box { flex-direction: column; gap: 14px; align-items: flex-start; }
         }
         @media print {
           .toolbar { display: none; }
-          body { padding: 0; }
-          .report-card { border: none; padding: 0; }
+          body { padding: 0; background: none; }
+          .report-card { border: none; padding: 0; max-width: 100%; }
+          .table-responsive { overflow: visible; border: none; }
+          table { min-width: 100%; font-size: 10px; }
         }
       </style>
     </head>
@@ -1338,55 +1382,57 @@ export function exportAuditLogReport(logs = [], format = 'pdf', filterLabel = 'A
           </div>
         </div>
 
-        <table>
-          <thead>
-            <tr>
-              <th style="width: 110px;">Timestamp & ID</th>
-              <th style="width: 120px;">Actor / User</th>
-              <th style="width: 125px;">Action</th>
-              <th style="width: 130px;">Target Entity</th>
-              <th style="width: 80px;">Branch</th>
-              <th style="width: 70px;">Severity</th>
-              <th>Justification & Details</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${logs.map((l) => {
-              const sevClass = l.severity === 'Critical' ? 'sev-critical' : l.severity === 'Warning' ? 'sev-warning' : l.severity === 'Success' ? 'sev-success' : 'sev-normal';
-              return `
-                <tr>
-                  <td>
-                    <strong>${l.id}</strong><br/>
-                    <span style="color: #64748b; font-size: 10px;">${l.timestamp}</span>
-                  </td>
-                  <td>
-                    <strong>${l.actor?.name || 'System'}</strong><br/>
-                    <span style="color: #64748b; font-size: 10px;">${l.actor?.role || 'Staff'}</span>
-                  </td>
-                  <td>
-                    <span class="badge" style="background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe;">${l.actionType}</span><br/>
-                    <span style="font-size: 10px; color: #64748b;">${l.actionLabel || ''}</span>
-                  </td>
-                  <td>
-                    <strong>${l.entityRef}</strong><br/>
-                    <span style="font-size: 10px; color: #64748b;">[${l.module}]</span>
-                  </td>
-                  <td>${l.branch || 'Main'}</td>
-                  <td><span class="${sevClass}">● ${l.severity || 'Normal'}</span></td>
-                  <td>
-                    <div>${l.reason || 'Standard transaction execution.'}</div>
-                    ${l.diff?.before ? `
-                      <div style="font-size: 10px; color: #64748b; margin-top: 2px;">
-                        <span style="color: #dc2626;">Before:</span> ${JSON.stringify(l.diff.before)} ➔ 
-                        <span style="color: #16a34a;">After:</span> ${JSON.stringify(l.diff.after)}
-                      </div>
-                    ` : ''}
-                  </td>
-                </tr>
-              `;
-            }).join('')}
-          </tbody>
-        </table>
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 110px;">Timestamp & ID</th>
+                <th style="width: 120px;">Actor / User</th>
+                <th style="width: 125px;">Action</th>
+                <th style="width: 130px;">Target Entity</th>
+                <th style="width: 80px;">Branch</th>
+                <th style="width: 70px;">Severity</th>
+                <th>Justification & Details</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${logs.map((l) => {
+                const sevClass = l.severity === 'Critical' ? 'sev-critical' : l.severity === 'Warning' ? 'sev-warning' : l.severity === 'Success' ? 'sev-success' : 'sev-normal';
+                return `
+                  <tr>
+                    <td>
+                      <strong>${l.id}</strong><br/>
+                      <span style="color: #64748b; font-size: 10px;">${l.timestamp}</span>
+                    </td>
+                    <td>
+                      <strong>${l.actor?.name || 'System'}</strong><br/>
+                      <span style="color: #64748b; font-size: 10px;">${l.actor?.role || 'Staff'}</span>
+                    </td>
+                    <td>
+                      <span class="badge" style="background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe;">${l.actionType}</span><br/>
+                      <span style="font-size: 10px; color: #64748b;">${l.actionLabel || ''}</span>
+                    </td>
+                    <td>
+                      <strong>${l.entityRef}</strong><br/>
+                      <span style="font-size: 10px; color: #64748b;">[${l.module}]</span>
+                    </td>
+                    <td>${l.branch || 'Main'}</td>
+                    <td><span class="${sevClass}">● ${l.severity || 'Normal'}</span></td>
+                    <td>
+                      <div>${l.reason || 'Standard transaction execution.'}</div>
+                      ${l.diff?.before ? `
+                        <div style="font-size: 10px; color: #64748b; margin-top: 2px;">
+                          <span style="color: #dc2626;">Before:</span> ${JSON.stringify(l.diff.before)} ➔ 
+                          <span style="color: #16a34a;">After:</span> ${JSON.stringify(l.diff.after)}
+                        </div>
+                      ` : ''}
+                    </td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
 
         <div class="footer-box">
           <div>
