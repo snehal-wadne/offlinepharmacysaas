@@ -57,6 +57,7 @@ async function runE2E() {
   const syncAuthHeaders = {
     Authorization: "Bearer pf_platform_default_dev",
     "x-organisation-id": orgId,
+    "x-branch-id": activeBranchId,
   };
 
   // 1. Core Health
@@ -168,12 +169,14 @@ async function runE2E() {
     await testEndpoint(
       "GET /api/cashier/register/current",
       `${BASE_URL}/api/cashier/register/current`,
+      { headers: syncAuthHeaders },
     ),
   );
   count(
     await testEndpoint(
       "GET /api/cashier/register/history",
       `${BASE_URL}/api/cashier/register/history`,
+      { headers: syncAuthHeaders },
     ),
   );
   count(
@@ -182,7 +185,7 @@ async function runE2E() {
       `${BASE_URL}/api/cashier/register/movement`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...syncAuthHeaders },
         body: JSON.stringify({
           type: "IN",
           amount: 500,
@@ -196,6 +199,7 @@ async function runE2E() {
     await testEndpoint(
       "GET /api/cashier/register/movements",
       `${BASE_URL}/api/cashier/register/movements`,
+      { headers: syncAuthHeaders },
     ),
   );
 

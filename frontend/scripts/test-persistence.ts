@@ -67,7 +67,7 @@ async function runAllTests() {
     await testDb.open();
     assert(testDb.isOpen(), 'Database opened successfully');
     assert(testDb.name === testDbName, 'Database has expected name');
-    assert(testDb.verno === 1, 'Database version is 1');
+    assert(testDb.verno >= 1, `Database version is valid (current: ${testDb.verno})`);
 
     // -------------------------------------------------------------
     // Test 2: All 6 stores created with keys and indexes

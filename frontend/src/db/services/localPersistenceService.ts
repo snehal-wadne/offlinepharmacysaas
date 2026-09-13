@@ -13,6 +13,10 @@ import {
   TransactionRecord,
   SyncOutboxRecord,
   SaleCommitResult,
+  CashRegisterRecord,
+  RegisterSessionRecord,
+  CashMovementRecord,
+  CashDenominationRecord,
 } from '../types';
 import { SyncMetadataRepository } from '../repositories/syncMetadataRepository';
 import { ProductRepository } from '../repositories/productRepository';
@@ -1510,6 +1514,566 @@ export class LocalPersistenceService {
     await this.db.sync_outbox.add(outboxRecord as SyncOutboxRecord);
 
     return { movementId, mutationId };
+  }
+
+  // ==========================================
+  // PHASE 5: CASH REGISTER & MOVEMENTS
+  // ==========================================
+
+  /**
+   * Retrieve all cash registers configured for this branch.
+   */
+  async getLocalRegisters(
+    organisationId = this.defaultOrgId || DEFAULT_ORG_ID,
+    branchId = this.defaultBranchId || DEFAULT_BRANCH_ID
+  ): Promise<CashRegisterRecord[]> {
+    return this.db.cash_registers
+      .where('[organisationId+branchId]')
+      .equals([organisationId, branchId])
+      .toArray();
+  }
+
+  /**
+   * Retrieve the active OPEN or CLOSE_PENDING register session for this branch.
+   */
+  async getLocalOpenRegisterSession(
+    organisationId = this.defaultOrgId || DEFAULT_ORG_ID,
+    branchId = this.defaultBranchId || DEFAULT_BRANCH_ID
+  ): Promise<RegisterSessionRecord | null> {
+    const sessions = await this.db.register_sessions
+      .where('[organisationId+branchId]')
+      .equals([organisationId, branchId])
+      .filter((s) => s.status === 'OPEN' || s.status === 'CLOSE_PENDING')
+      .reverse()
+      .sortBy('openedAt');
+
+    return sessions.length > 0 ? sessions[0] : null;
+  }
+
+  /**
+   * Atomically open a new register session locally in Dexie:
+   * 1. Validates no other session is currently OPEN for the register/branch.
+   * 2. Persists session record into `db.register_sessions` (status: 'OPEN').
+   * 3. If opening balance > 0, creates initial float movement in `db.cash_movements`.
+   * 4. Persists append-only business transaction in `db.transactions`.
+   * 5. Enqueues durable `OPEN_REGISTER_SESSION` mutation in `db.sync_outbox`.
+   */
+  async openLocalRegisterSession(
+    sessionData: {
+      sessionId?: string;
+      cashRegisterId?: string;
+      openingBalance?: number;
+      shiftName?: string;
+      notes?: string;
+    },
+    context: {
+      organisationId?: string;
+      branchId?: string;
+      userId?: string;
+      deviceId?: string;
+    } = {}
+  ): Promise<{ session: RegisterSessionRecord; mutationId: string }> {
+    const organisationId = context.organisationId || this.defaultOrgId || DEFAULT_ORG_ID;
+    const branchId = context.branchId || this.defaultBranchId || DEFAULT_BRANCH_ID;
+    const userId = context.userId || this.defaultUserId || DEFAULT_USER_ID;
+    const deviceId = context.deviceId || (await this.syncMetaRepo.getDeviceId());
+
+    const sessionId = sessionData.sessionId || generateUUID();
+    const mutationId = generateUUID();
+    const occurredAt = new Date().toISOString();
+    const openingBalance = Math.max(0, Number(sessionData.openingBalance || 0));
+    const sessionNumber = `REG-${Date.now().toString().slice(-6)}`;
+    const shiftName = sessionData.shiftName || 'Day Shift';
+
+    return this.db.transaction(
+      'rw',
+      [
+        this.db.register_sessions,
+        this.db.cash_registers,
+        this.db.cash_movements,
+        this.db.transactions,
+        this.db.sync_outbox,
+      ],
+      async () => {
+        // 1. Resolve or create cash register
+        let cashRegisterId = sessionData.cashRegisterId;
+        if (!cashRegisterId) {
+          const existingRegs = await this.db.cash_registers
+            .where('[organisationId+branchId]')
+            .equals([organisationId, branchId])
+            .toArray();
+
+          if (existingRegs.length > 0) {
+            cashRegisterId = existingRegs[0].id;
+          } else {
+            cashRegisterId = generateUUID();
+            await this.db.cash_registers.put({
+              id: cashRegisterId,
+              organisationId,
+              branchId,
+              name: 'Main Counter',
+              identifier: 'POS-01',
+              isActive: true,
+              createdAt: occurredAt,
+              updatedAt: occurredAt,
+            });
+          }
+        }
+
+        // 2. Enforce only one OPEN session per register
+        const activeSessions = await this.db.register_sessions
+          .where('cashRegisterId')
+          .equals(cashRegisterId)
+          .filter((s) => s.status === 'OPEN')
+          .toArray();
+
+        if (activeSessions.length > 0) {
+          throw new Error('A session is already open for this cash register.');
+        }
+
+        // 3. Persist local session
+        const sessionRecord: RegisterSessionRecord = {
+          id: sessionId,
+          organisationId,
+          branchId,
+          cashRegisterId,
+          cashierId: userId,
+          sessionNumber,
+          shiftName,
+          openingBalance,
+          status: 'OPEN',
+          openingNotes: sessionData.notes || undefined,
+          openedAt: occurredAt,
+          syncStatus: 'PENDING',
+          updatedAt: occurredAt,
+        };
+        await this.db.register_sessions.put(sessionRecord);
+
+        // 4. Record opening float in movements if > 0
+        let openingFloatMovementId: string | undefined = undefined;
+        if (openingBalance > 0) {
+          openingFloatMovementId = generateUUID();
+          await this.db.cash_movements.put({
+            id: openingFloatMovementId,
+            organisationId,
+            branchId,
+            cashRegisterSessionId: sessionId,
+            cashierId: userId,
+            movementNumber: `PC-${Date.now().toString().slice(-6)}`,
+            movementType: 'IN',
+            amount: openingBalance,
+            reason: 'Opening float balance',
+            occurredAt,
+            syncStatus: 'PENDING',
+            updatedAt: occurredAt,
+          });
+        }
+
+        // 5. Append-only transaction audit log
+        const transactionRecord: TransactionRecord = {
+          transactionId: generateUUID(),
+          mutationId,
+          type: 'REGISTER_OPEN',
+          organisationId,
+          branchId,
+          userId,
+          deviceId,
+          payload: {
+            sessionId,
+            cashRegisterId,
+            sessionNumber,
+            openingBalance,
+            shiftName,
+            notes: sessionData.notes,
+            openingFloatMovementId,
+          },
+          occurredAt,
+          status: 'LOCAL_COMMITTED',
+          syncStatus: 'PENDING',
+          createdAt: occurredAt,
+          updatedAt: occurredAt,
+        };
+        await this.db.transactions.put(transactionRecord);
+
+        // 6. Enqueue OPEN_REGISTER_SESSION in sync_outbox
+        const outboxRecord: Omit<SyncOutboxRecord, 'sequence'> = {
+          mutationId,
+          mutationType: 'OPEN_REGISTER_SESSION',
+          organisationId,
+          branchId,
+          deviceId,
+          userId,
+          payload: {
+            sessionId,
+            cashRegisterId,
+            sessionNumber,
+            openingBalance,
+            shiftName,
+            notes: sessionData.notes,
+            openingFloatMovementId,
+          },
+          status: 'PENDING',
+          attemptCount: 0,
+          createdAt: occurredAt,
+          updatedAt: occurredAt,
+        };
+        await this.db.sync_outbox.add(outboxRecord as SyncOutboxRecord);
+
+        return { session: sessionRecord, mutationId };
+      }
+    );
+  }
+
+  /**
+   * Atomically record a petty cash movement (IN or OUT) in Dexie:
+   * 1. Validates active session exists and is OPEN.
+   * 2. Persists movement into `db.cash_movements`.
+   * 3. Persists transaction log into `db.transactions`.
+   * 4. Enqueues durable `RECORD_CASH_MOVEMENT` mutation in `db.sync_outbox`.
+   */
+  async recordLocalCashMovement(
+    movementData: {
+      movementId?: string;
+      cashRegisterSessionId?: string;
+      movementType: 'IN' | 'OUT';
+      amount: number;
+      reason: string;
+      movementNumber?: string;
+    },
+    context: {
+      organisationId?: string;
+      branchId?: string;
+      userId?: string;
+      deviceId?: string;
+    } = {}
+  ): Promise<{ movement: CashMovementRecord; mutationId: string }> {
+    const organisationId = context.organisationId || this.defaultOrgId || DEFAULT_ORG_ID;
+    const branchId = context.branchId || this.defaultBranchId || DEFAULT_BRANCH_ID;
+    const userId = context.userId || this.defaultUserId || DEFAULT_USER_ID;
+    const deviceId = context.deviceId || (await this.syncMetaRepo.getDeviceId());
+
+    const amount = Number(movementData.amount);
+    if (isNaN(amount) || amount <= 0) {
+      throw new Error('Movement amount must be greater than 0.');
+    }
+
+    const type = movementData.movementType.toUpperCase() === 'IN' ? 'IN' : 'OUT';
+    const movementId = movementData.movementId || generateUUID();
+    const mutationId = generateUUID();
+    const occurredAt = new Date().toISOString();
+    const movementNumber =
+      movementData.movementNumber || `PC-${Date.now().toString().slice(-6)}`;
+
+    return this.db.transaction(
+      'rw',
+      [
+        this.db.register_sessions,
+        this.db.cash_movements,
+        this.db.transactions,
+        this.db.sync_outbox,
+      ],
+      async () => {
+        // 1. Resolve session
+        let sessionId = movementData.cashRegisterSessionId;
+        if (!sessionId) {
+          const activeSession = await this.db.register_sessions
+            .where('[organisationId+branchId]')
+            .equals([organisationId, branchId])
+            .filter((s) => s.status === 'OPEN')
+            .first();
+
+          if (!activeSession) {
+            throw new Error('Cannot record cash movement without an active open register session.');
+          }
+          sessionId = activeSession.id;
+        } else {
+          const sess = await this.db.register_sessions.get(sessionId);
+          if (!sess) {
+            throw new Error(`Register session ${sessionId} not found.`);
+          }
+          if (sess.status === 'CLOSED' || sess.status === 'CLOSE_PENDING') {
+            throw new Error(`Register session ${sessionId} is ${sess.status.toLowerCase()}. Movements cannot be added.`);
+          }
+        }
+
+        // 2. Persist movement record
+        const movementRecord: CashMovementRecord = {
+          id: movementId,
+          organisationId,
+          branchId,
+          cashRegisterSessionId: sessionId,
+          cashierId: userId,
+          movementNumber,
+          movementType: type,
+          amount,
+          reason: movementData.reason || (type === 'IN' ? 'Cash float addition' : 'General payout'),
+          occurredAt,
+          syncStatus: 'PENDING',
+          updatedAt: occurredAt,
+        };
+        await this.db.cash_movements.put(movementRecord);
+
+        // 3. Audit transaction log
+        const transactionRecord: TransactionRecord = {
+          transactionId: generateUUID(),
+          mutationId,
+          type: 'CASH_MOVEMENT',
+          organisationId,
+          branchId,
+          userId,
+          deviceId,
+          payload: {
+            movementId,
+            cashRegisterSessionId: sessionId,
+            movementNumber,
+            movementType: type,
+            amount,
+            reason: movementRecord.reason,
+          },
+          occurredAt,
+          status: 'LOCAL_COMMITTED',
+          syncStatus: 'PENDING',
+          createdAt: occurredAt,
+          updatedAt: occurredAt,
+        };
+        await this.db.transactions.put(transactionRecord);
+
+        // 4. Enqueue RECORD_CASH_MOVEMENT in outbox
+        const outboxRecord: Omit<SyncOutboxRecord, 'sequence'> = {
+          mutationId,
+          mutationType: 'RECORD_CASH_MOVEMENT',
+          organisationId,
+          branchId,
+          deviceId,
+          userId,
+          payload: {
+            movementId,
+            cashRegisterSessionId: sessionId,
+            movementNumber,
+            movementType: type,
+            amount,
+            reason: movementRecord.reason,
+          },
+          status: 'PENDING',
+          attemptCount: 0,
+          createdAt: occurredAt,
+          updatedAt: occurredAt,
+        };
+        await this.db.sync_outbox.add(outboxRecord as SyncOutboxRecord);
+
+        return { movement: movementRecord, mutationId };
+      }
+    );
+  }
+
+  /**
+   * Retrieve all cash movements for a given session.
+   */
+  async getLocalCashMovements(
+    sessionId: string,
+    organisationId = this.defaultOrgId || DEFAULT_ORG_ID,
+    branchId = this.defaultBranchId || DEFAULT_BRANCH_ID
+  ): Promise<CashMovementRecord[]> {
+    return this.db.cash_movements
+      .where('cashRegisterSessionId')
+      .equals(sessionId)
+      .toArray();
+  }
+
+  /**
+   * Save denomination counts entered during register reconciliation.
+   */
+  async saveLocalDenominations(
+    sessionId: string,
+    denominations: Record<string | number, number>,
+    context: { organisationId?: string } = {}
+  ): Promise<void> {
+    const organisationId = context.organisationId || this.defaultOrgId || DEFAULT_ORG_ID;
+    const now = new Date().toISOString();
+
+    for (const [val, count] of Object.entries(denominations)) {
+      const denomVal = Number(val);
+      const denomCount = Number(count);
+      if (denomVal > 0 && denomCount >= 0) {
+        await this.db.cash_denominations.put({
+          id: `${sessionId}_${denomVal}`,
+          organisationId,
+          cashRegisterSessionId: sessionId,
+          denominationValue: denomVal,
+          denominationCount: denomCount,
+          updatedAt: now,
+        });
+      }
+    }
+  }
+
+  /**
+   * Prepare local register close & reconciliation:
+   * 1. Marks session as CLOSE_PENDING locally (does NOT mark CLOSED offline!).
+   * 2. Computes expected cash, counted cash, and variance.
+   * 3. Stores closing denominations in Dexie.
+   * 4. Enqueues durable `CLOSE_REGISTER_SESSION` mutation to push to authoritative server.
+   */
+  async prepareLocalDayClose(
+    closeData: {
+      sessionId?: string;
+      countedCash: number;
+      notes?: string;
+      denominations?: Record<string | number, number>;
+    },
+    context: {
+      organisationId?: string;
+      branchId?: string;
+      userId?: string;
+      deviceId?: string;
+    } = {}
+  ): Promise<{ session: RegisterSessionRecord; mutationId: string }> {
+    const organisationId = context.organisationId || this.defaultOrgId || DEFAULT_ORG_ID;
+    const branchId = context.branchId || this.defaultBranchId || DEFAULT_BRANCH_ID;
+    const userId = context.userId || this.defaultUserId || DEFAULT_USER_ID;
+    const deviceId = context.deviceId || (await this.syncMetaRepo.getDeviceId());
+
+    const mutationId = generateUUID();
+    const occurredAt = new Date().toISOString();
+    const countedCash = Number(Number(closeData.countedCash || 0).toFixed(2));
+
+    return this.db.transaction(
+      'rw',
+      [
+        this.db.register_sessions,
+        this.db.cash_movements,
+        this.db.cash_denominations,
+        this.db.transactions,
+        this.db.sync_outbox,
+      ],
+      async () => {
+        let sessionId = closeData.sessionId;
+        if (!sessionId) {
+          const activeSession = await this.db.register_sessions
+            .where('[organisationId+branchId]')
+            .equals([organisationId, branchId])
+            .filter((s) => s.status === 'OPEN' || s.status === 'CLOSE_PENDING')
+            .first();
+
+          if (!activeSession) {
+            throw new Error('No open cash register session found to close.');
+          }
+          sessionId = activeSession.id;
+        }
+
+        const session = await this.db.register_sessions.get(sessionId);
+        if (!session) {
+          throw new Error(`Register session ${sessionId} not found.`);
+        }
+        if (session.status === 'CLOSED') {
+          throw new Error(`Register session ${sessionId} is already closed.`);
+        }
+
+        // Calculate expected cash from local movements & opening float
+        const movements = await this.db.cash_movements
+          .where('cashRegisterSessionId')
+          .equals(sessionId)
+          .toArray();
+
+        const cashIn = movements
+          .filter((m) => m.movementType === 'IN' && m.reason !== 'Opening float balance')
+          .reduce((sum, m) => sum + Number(m.amount), 0);
+
+        const cashOut = movements
+          .filter((m) => m.movementType === 'OUT')
+          .reduce((sum, m) => sum + Number(m.amount), 0);
+
+        // Authoritative formula: openingBalance + cashIn - cashOut (+ cashSales will be reconciled on server)
+        const expectedCash = Number((session.openingBalance + cashIn - cashOut).toFixed(2));
+        const variance = Number((countedCash - expectedCash).toFixed(2));
+        const varianceStatus: 'BALANCED' | 'SHORTAGE' | 'OVERAGE' =
+          variance === 0 ? 'BALANCED' : variance > 0 ? 'OVERAGE' : 'SHORTAGE';
+
+        // Update local session to CLOSE_PENDING (server push is authoritative for CLOSED)
+        const updatedSession: RegisterSessionRecord = {
+          ...session,
+          status: 'CLOSE_PENDING',
+          countedCash,
+          expectedCash,
+          variance,
+          varianceStatus,
+          closingNotes: closeData.notes || undefined,
+          syncStatus: 'PENDING',
+          updatedAt: occurredAt,
+        };
+        await this.db.register_sessions.put(updatedSession);
+
+        // Save denominations if provided
+        if (closeData.denominations && typeof closeData.denominations === 'object') {
+          for (const [val, count] of Object.entries(closeData.denominations)) {
+            const denomVal = Number(val);
+            const denomCount = Number(count);
+            if (denomVal > 0 && denomCount >= 0) {
+              await this.db.cash_denominations.put({
+                id: `${sessionId}_${denomVal}`,
+                organisationId,
+                cashRegisterSessionId: sessionId,
+                denominationValue: denomVal,
+                denominationCount: denomCount,
+                updatedAt: occurredAt,
+              });
+            }
+          }
+        }
+
+        // Transaction record
+        const transactionRecord: TransactionRecord = {
+          transactionId: generateUUID(),
+          mutationId,
+          type: 'REGISTER_CLOSE',
+          organisationId,
+          branchId,
+          userId,
+          deviceId,
+          payload: {
+            sessionId,
+            countedCash,
+            expectedCash,
+            variance,
+            varianceStatus,
+            notes: closeData.notes,
+            denominations: closeData.denominations,
+          },
+          occurredAt,
+          status: 'LOCAL_COMMITTED',
+          syncStatus: 'PENDING',
+          createdAt: occurredAt,
+          updatedAt: occurredAt,
+        };
+        await this.db.transactions.put(transactionRecord);
+
+        // Enqueue CLOSE_REGISTER_SESSION in sync_outbox
+        const outboxRecord: Omit<SyncOutboxRecord, 'sequence'> = {
+          mutationId,
+          mutationType: 'CLOSE_REGISTER_SESSION',
+          organisationId,
+          branchId,
+          deviceId,
+          userId,
+          payload: {
+            sessionId,
+            countedCash,
+            expectedCash,
+            variance,
+            varianceStatus,
+            notes: closeData.notes,
+            denominations: closeData.denominations,
+          },
+          status: 'PENDING',
+          attemptCount: 0,
+          createdAt: occurredAt,
+          updatedAt: occurredAt,
+        };
+        await this.db.sync_outbox.add(outboxRecord as SyncOutboxRecord);
+
+        return { session: updatedSession, mutationId };
+      }
+    );
   }
 }
 

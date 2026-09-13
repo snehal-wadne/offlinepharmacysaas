@@ -14,6 +14,7 @@ const {
 } = require("../db/connection");
 const cashierService = require("./cashier.service");
 const customerService = require("./customer.service");
+const { getNextBusinessNumber } = require("../repositories/number-sequence.repository");
 
 /**
  * Deterministic JSON payload fingerprint for idempotency verification
@@ -2780,8 +2781,728 @@ class SyncService {
       };
     } catch (err) {
       await client.query("ROLLBACK");
+      console.error(`[SyncService] Error processing TRANSFER_STOCK ${mutationId}:`, err);
+      return {
+        status: "RETRYABLE_ERROR",
+        errorCode: "DATABASE_ERROR",
+        errorMessage: err.message,
+      };
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Process OPEN_REGISTER_SESSION sync mutation
+   */
+  async processOpenRegisterSession({
+    mutationId,
+    organisationId,
+    branchId,
+    effectiveUserId,
+    payload = {},
+    occurredAt,
+    deviceId,
+  }) {
+    const isUuid = (str) =>
+      typeof str === "string" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        str,
+      );
+
+    const sessionId = payload.sessionId || payload.id;
+    if (!sessionId || !isUuid(sessionId)) {
+      return {
+        status: "FAILED",
+        errorCode: "VALIDATION_ERROR",
+        errorMessage: "Open register session mutation must specify a valid UUID sessionId.",
+      };
+    }
+
+    const { resolvedOrgId, resolvedBranchId } = await this.resolveTenantContext(
+      organisationId,
+      branchId,
+    );
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      // 1. Check if this exact session record already exists in cash_register_sessions (idempotency)
+      const existingSession = await client.query(
+        `SELECT id, session_number, status, opening_balance, opened_at, cash_register_id
+         FROM cash_register_sessions
+         WHERE id = $1 AND organisation_id = $2`,
+        [sessionId, resolvedOrgId],
+      );
+
+      if (existingSession.rows.length > 0) {
+        const row = existingSession.rows[0];
+        await client.query("COMMIT");
+        return {
+          status: "SUCCESS",
+          result: {
+            sessionId: row.id,
+            sessionNumber: row.session_number,
+            status: row.status,
+            openingBalance: Number(row.opening_balance),
+            openedAt: row.opened_at,
+          },
+          idempotentReplay: true,
+        };
+      }
+
+      // 2. Resolve or create cash register for this branch
+      let registerId = payload.cashRegisterId;
+      if (registerId && isUuid(registerId)) {
+        const regCheck = await client.query(
+          `SELECT id FROM cash_registers WHERE id = $1 AND organisation_id = $2 AND branch_id = $3 FOR UPDATE`,
+          [registerId, resolvedOrgId, resolvedBranchId],
+        );
+        if (regCheck.rows.length === 0) {
+          const identifier = payload.registerIdentifier || payload.identifier || ('POS-' + registerId.slice(0, 8));
+          const newReg = await client.query(
+            `INSERT INTO cash_registers (id, organisation_id, branch_id, name, identifier, is_active)
+             VALUES ($1, $2, $3, 'Counter 1', $4, true)
+             ON CONFLICT (id) DO UPDATE SET is_active = true
+             RETURNING id`,
+            [registerId, resolvedOrgId, resolvedBranchId, identifier],
+          );
+          registerId = newReg.rows[0]?.id || registerId;
+        }
+      }
+
+      if (!registerId) {
+        const regRes = await client.query(
+          `SELECT id FROM cash_registers WHERE branch_id = $1 AND organisation_id = $2 LIMIT 1 FOR UPDATE`,
+          [resolvedBranchId, resolvedOrgId],
+        );
+        if (regRes.rows.length > 0) {
+          registerId = regRes.rows[0].id;
+        } else {
+          const newReg = await client.query(
+            `INSERT INTO cash_registers (organisation_id, branch_id, name, identifier, is_active)
+             VALUES ($1, $2, 'Counter 1', 'POS-01', true) RETURNING id`,
+            [resolvedOrgId, resolvedBranchId],
+          );
+          registerId = newReg.rows[0].id;
+        }
+      }
+
+      // 3. Enforce single open session constraint per register
+      const openConflictRes = await client.query(
+        `SELECT id, session_number FROM cash_register_sessions
+         WHERE cash_register_id = $1 AND status = 'OPEN' FOR UPDATE`,
+        [registerId],
+      );
+
+      if (openConflictRes.rows.length > 0) {
+        const openRow = openConflictRes.rows[0];
+        if (openRow.id !== sessionId) {
+          await client.query("ROLLBACK");
+          return {
+            status: "CONFLICT",
+            errorCode: "OPEN_SESSION_ALREADY_EXISTS",
+            errorMessage: `A session (${openRow.session_number}) is already open for this cash register.`,
+            conflictDetails: {
+              activeSessionId: openRow.id,
+              activeSessionNumber: openRow.session_number,
+            },
+          };
+        }
+      }
+
+      // 4. Resolve cashier
+      let cashierId = effectiveUserId || payload.cashierId;
+      if (!cashierId || !isUuid(cashierId)) {
+        const uRes = await client.query(
+          `SELECT id FROM users WHERE status = 'ACTIVE' ORDER BY created_at ASC LIMIT 1`,
+        );
+        cashierId = uRes.rows[0]?.id;
+      }
+
+      const openingBalance = Math.max(0, Number(payload.openingBalance || 0));
+      const shiftName = payload.shiftName || "Day Shift";
+      const sessionNumber =
+        payload.sessionNumber ||
+        (await getNextBusinessNumber({
+          organisationId: resolvedOrgId,
+          branchId: resolvedBranchId,
+          sequenceType: "REGISTER_SESSION",
+          client,
+        }));
+
+      // 5. Insert cash_register_sessions
+      const sessionInsertRes = await client.query(
+        `INSERT INTO cash_register_sessions (
+           id, organisation_id, branch_id, cash_register_id, cashier_id,
+           session_number, shift_name, opened_at, opening_balance, status, opening_notes
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'OPEN', $10)
+         RETURNING *`,
+        [
+          sessionId,
+          resolvedOrgId,
+          resolvedBranchId,
+          registerId,
+          cashierId,
+          sessionNumber,
+          shiftName,
+          occurredAt || new Date().toISOString(),
+          openingBalance,
+          payload.notes || payload.openingNotes || null,
+        ],
+      );
+
+      const createdSession = sessionInsertRes.rows[0];
+
+      // 6. Record opening float cash movement if openingBalance > 0
+      let floatMovementId = null;
+      if (openingBalance > 0) {
+        floatMovementId = isUuid(payload.openingFloatMovementId)
+          ? payload.openingFloatMovementId
+          : undefined;
+        const movementNumber = await getNextBusinessNumber({
+          organisationId: resolvedOrgId,
+          branchId: resolvedBranchId,
+          sequenceType: "CASH_MOVEMENT",
+          client,
+        });
+
+        const movRes = await client.query(
+          `INSERT INTO cash_movements (
+             id, organisation_id, branch_id, cash_register_session_id, cashier_id,
+             movement_number, movement_type, amount, reason, created_at
+           ) VALUES (COALESCE($1, gen_random_uuid()), $2, $3, $4, $5, $6, 'IN', $7, 'Opening float balance', NOW())
+           RETURNING id`,
+          [
+            floatMovementId || null,
+            resolvedOrgId,
+            resolvedBranchId,
+            sessionId,
+            cashierId,
+            movementNumber,
+            openingBalance,
+          ],
+        );
+        floatMovementId = movRes.rows[0].id;
+      }
+
+      const resultData = {
+        sessionId: createdSession.id,
+        sessionNumber: createdSession.session_number,
+        cashRegisterId: createdSession.cash_register_id,
+        openingBalance,
+        status: "OPEN",
+        openedAt: createdSession.opened_at,
+        floatMovementId,
+        organisationId: resolvedOrgId,
+        branchId: resolvedBranchId,
+      };
+
+      // 7. Record Idempotency in sync_mutations
+      await client.query(
+        `INSERT INTO sync_mutations (
+           mutation_id, organisation_id, branch_id, user_id, device_id, mutation_type,
+           occurred_at, status, payload, result, processed_at
+         ) VALUES ($1, $2, $3, $4, $5, 'OPEN_REGISTER_SESSION', $6, 'PROCESSED', $7, $8, NOW())
+         ON CONFLICT (organisation_id, mutation_id) DO UPDATE
+         SET status = 'PROCESSED', result = EXCLUDED.result, processed_at = NOW()`,
+        [
+          mutationId,
+          resolvedOrgId,
+          resolvedBranchId,
+          effectiveUserId || null,
+          deviceId,
+          occurredAt || new Date().toISOString(),
+          JSON.stringify(payload),
+          JSON.stringify(resultData),
+        ],
+      );
+
+      // 8. Record sync_changes event atomically
+      await client.query(
+        `INSERT INTO sync_changes (
+           organisation_id, branch_id, entity_type, entity_id, operation, changed_at, payload
+         ) VALUES ($1, $2, 'REGISTER_SESSION', $3, 'INSERT', NOW(), $4)`,
+        [
+          resolvedOrgId,
+          resolvedBranchId,
+          sessionId,
+          JSON.stringify(resultData),
+        ],
+      );
+
+      await client.query("COMMIT");
+
+      return {
+        status: "SUCCESS",
+        result: resultData,
+      };
+    } catch (err) {
+      await client.query("ROLLBACK");
       console.error(
-        `[SyncService] Error processing TRANSFER_STOCK ${mutationId}:`,
+        `[SyncService] Error processing OPEN_REGISTER_SESSION ${mutationId}:`,
+        err,
+      );
+      return {
+        status: "RETRYABLE_ERROR",
+        errorCode: "DATABASE_ERROR",
+        errorMessage: err.message,
+      };
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Process RECORD_CASH_MOVEMENT sync mutation
+   */
+  async processRecordCashMovement({
+    mutationId,
+    organisationId,
+    branchId,
+    effectiveUserId,
+    payload = {},
+    occurredAt,
+    deviceId,
+  }) {
+    const isUuid = (str) =>
+      typeof str === "string" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        str,
+      );
+
+    const movementId = payload.movementId || payload.id;
+    if (!movementId || !isUuid(movementId)) {
+      return {
+        status: "FAILED",
+        errorCode: "VALIDATION_ERROR",
+        errorMessage: "Cash movement mutation must specify a valid UUID movementId.",
+      };
+    }
+
+    const amount = Number(payload.amount);
+    if (isNaN(amount) || amount <= 0) {
+      return {
+        status: "FAILED",
+        errorCode: "VALIDATION_ERROR",
+        errorMessage: "Movement amount must be greater than 0.",
+      };
+    }
+
+    const rawType = String(payload.movementType || payload.type || "").toUpperCase();
+    const movementType = rawType === "IN" ? "IN" : "OUT";
+
+    const { resolvedOrgId, resolvedBranchId } = await this.resolveTenantContext(
+      organisationId,
+      branchId,
+    );
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      // 1. Idempotency check on cash_movements
+      const existingMov = await client.query(
+        "SELECT id, movement_number, amount, movement_type, cash_register_session_id FROM cash_movements WHERE id = $1 AND organisation_id = $2",
+        [movementId, resolvedOrgId],
+      );
+
+      if (existingMov.rows.length > 0) {
+        const row = existingMov.rows[0];
+        await client.query("COMMIT");
+        return {
+          status: "SUCCESS",
+          result: {
+            movementId: row.id,
+            movementNumber: row.movement_number,
+            movementType: row.movement_type,
+            amount: Number(row.amount),
+            cashRegisterSessionId: row.cash_register_session_id,
+          },
+          idempotentReplay: true,
+        };
+      }
+
+      // 2. Resolve target session with FOR UPDATE
+      let sessionId = payload.cashRegisterSessionId || payload.sessionId;
+      let sessionRow = null;
+
+      if (sessionId && isUuid(sessionId)) {
+        const sRes = await client.query(
+          "SELECT id, status, branch_id FROM cash_register_sessions WHERE id = $1 AND organisation_id = $2 FOR UPDATE",
+          [sessionId, resolvedOrgId],
+        );
+        if (sRes.rows.length > 0) {
+          sessionRow = sRes.rows[0];
+        }
+      }
+
+      if (!sessionRow) {
+        const openSessRes = await client.query(
+          `SELECT id, status, branch_id FROM cash_register_sessions
+           WHERE branch_id = $1 AND organisation_id = $2 AND status = 'OPEN'
+           ORDER BY opened_at DESC LIMIT 1 FOR UPDATE`,
+          [resolvedBranchId, resolvedOrgId],
+        );
+        if (openSessRes.rows.length > 0) {
+          sessionRow = openSessRes.rows[0];
+          sessionId = sessionRow.id;
+        }
+      }
+
+      if (!sessionRow) {
+        await client.query("ROLLBACK");
+        return {
+          status: "CONFLICT",
+          errorCode: "NO_ACTIVE_SESSION",
+          errorMessage: "Cannot record cash movement without an active open register session.",
+        };
+      }
+
+      if (sessionRow.status === "CLOSED") {
+        await client.query("ROLLBACK");
+        return {
+          status: "CONFLICT",
+          errorCode: "SESSION_ALREADY_CLOSED",
+          errorMessage: `Cash register session ${sessionRow.id} is already CLOSED. Movements cannot be posted to closed sessions.`,
+        };
+      }
+
+      // 3. Resolve cashier user
+      let cashierId = effectiveUserId || payload.cashierId;
+      if (!cashierId || !isUuid(cashierId)) {
+        const uRes = await client.query(
+          "SELECT id FROM users WHERE status = 'ACTIVE' ORDER BY created_at ASC LIMIT 1",
+        );
+        cashierId = uRes.rows[0]?.id;
+      }
+
+      const movementNumber =
+        payload.movementNumber ||
+        (await getNextBusinessNumber({
+          organisationId: resolvedOrgId,
+          branchId: resolvedBranchId,
+          sequenceType: "CASH_MOVEMENT",
+          client,
+        }));
+
+      const reason =
+        payload.reason ||
+        (movementType === "IN" ? "Cash float addition" : "General expense payout");
+
+      // 4. Insert into cash_movements
+      await client.query(
+        `INSERT INTO cash_movements (
+           id, organisation_id, branch_id, cash_register_session_id, cashier_id,
+           movement_number, movement_type, amount, reason, created_at
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        [
+          movementId,
+          resolvedOrgId,
+          resolvedBranchId,
+          sessionId,
+          cashierId,
+          movementNumber,
+          movementType,
+          amount,
+          reason,
+          occurredAt || new Date().toISOString(),
+        ],
+      );
+
+      const resultData = {
+        movementId,
+        movementNumber,
+        movementType,
+        amount,
+        reason,
+        cashRegisterSessionId: sessionId,
+        organisationId: resolvedOrgId,
+        branchId: resolvedBranchId,
+        status: "SUCCESS",
+      };
+
+      // 5. Record Idempotency in sync_mutations
+      await client.query(
+        `INSERT INTO sync_mutations (
+           mutation_id, organisation_id, branch_id, user_id, device_id, mutation_type,
+           occurred_at, status, payload, result, processed_at
+         ) VALUES ($1, $2, $3, $4, $5, 'RECORD_CASH_MOVEMENT', $6, 'PROCESSED', $7, $8, NOW())
+         ON CONFLICT (organisation_id, mutation_id) DO UPDATE
+         SET status = 'PROCESSED', result = EXCLUDED.result, processed_at = NOW()`,
+        [
+          mutationId,
+          resolvedOrgId,
+          resolvedBranchId,
+          effectiveUserId || null,
+          deviceId,
+          occurredAt || new Date().toISOString(),
+          JSON.stringify(payload),
+          JSON.stringify(resultData),
+        ],
+      );
+
+      // 6. Record sync_changes event
+      await client.query(
+        `INSERT INTO sync_changes (
+           organisation_id, branch_id, entity_type, entity_id, operation, changed_at, payload
+         ) VALUES ($1, $2, 'CASH_MOVEMENT', $3, 'INSERT', NOW(), $4)`,
+        [
+          resolvedOrgId,
+          resolvedBranchId,
+          movementId,
+          JSON.stringify(resultData),
+        ],
+      );
+
+      await client.query("COMMIT");
+
+      return {
+        status: "SUCCESS",
+        result: resultData,
+      };
+    } catch (err) {
+      await client.query("ROLLBACK");
+      console.error(
+        `[SyncService] Error processing RECORD_CASH_MOVEMENT ${mutationId}:`,
+        err,
+      );
+      return {
+        status: "RETRYABLE_ERROR",
+        errorCode: "DATABASE_ERROR",
+        errorMessage: err.message,
+      };
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Process CLOSE_REGISTER_SESSION sync mutation
+   */
+  async processCloseRegisterSession({
+    mutationId,
+    organisationId,
+    branchId,
+    effectiveUserId,
+    payload = {},
+    occurredAt,
+    deviceId,
+  }) {
+    const isUuid = (str) =>
+      typeof str === "string" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        str,
+      );
+
+    const sessionId = payload.sessionId || payload.id;
+    if (!sessionId || !isUuid(sessionId)) {
+      return {
+        status: "FAILED",
+        errorCode: "VALIDATION_ERROR",
+        errorMessage: "Close register session mutation must specify a valid UUID sessionId.",
+      };
+    }
+
+    const { resolvedOrgId, resolvedBranchId } = await this.resolveTenantContext(
+      organisationId,
+      branchId,
+    );
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      // 1. Lock and inspect session
+      const sessRes = await client.query(
+        `SELECT id, branch_id, cash_register_id, session_number, opening_balance,
+                counted_cash, expected_cash, variance, variance_status, status, closed_at
+         FROM cash_register_sessions
+         WHERE id = $1 AND organisation_id = $2 FOR UPDATE`,
+        [sessionId, resolvedOrgId],
+      );
+
+      if (sessRes.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return {
+          status: "FAILED",
+          errorCode: "SESSION_NOT_FOUND",
+          errorMessage: `Cash register session ${sessionId} not found.`,
+        };
+      }
+
+      const session = sessRes.rows[0];
+
+      // If already CLOSED:
+      if (session.status === "CLOSED") {
+        await client.query("COMMIT");
+        return {
+          status: "SUCCESS",
+          result: {
+            sessionId: session.id,
+            sessionNumber: session.session_number,
+            status: "CLOSED",
+            expectedCash: Number(session.expected_cash || 0),
+            countedCash: Number(session.counted_cash || 0),
+            variance: Number(session.variance || 0),
+            varianceStatus: session.variance_status,
+            closedAt: session.closed_at,
+          },
+          idempotentReplay: true,
+        };
+      }
+
+      // 2. Authoritatively derive expected_cash
+      const openingBalance = Number(session.opening_balance) || 0;
+
+      // Cash sales
+      const salesRes = await client.query(
+        `SELECT COALESCE(SUM(pt.amount), 0.00) AS cash_sales
+         FROM payments p
+         INNER JOIN payment_transactions pt ON pt.payment_id = p.id
+         WHERE p.cash_register_session_id = $1
+           AND p.status = 'COMPLETED'
+           AND UPPER(pt.payment_method) = 'CASH'`,
+        [session.id],
+      );
+      const cashSales = Number(salesRes.rows[0].cash_sales) || 0;
+
+      // Cash refunds
+      const returnsRes = await client.query(
+        `SELECT COALESCE(SUM(r.refund_amount), 0.00) AS cash_refunds
+         FROM returns r
+         WHERE r.cash_register_session_id = $1
+           AND r.status = 'PROCESSED'
+           AND UPPER(r.refund_method) = 'CASH'`,
+        [session.id],
+      );
+      const cashRefunds = Number(returnsRes.rows[0].cash_refunds) || 0;
+
+      // Cash movements
+      const movRes = await client.query(
+        `SELECT
+           COALESCE(SUM(CASE WHEN movement_type = 'IN' THEN amount ELSE 0 END), 0.00) AS cash_in,
+           COALESCE(SUM(CASE WHEN movement_type = 'OUT' THEN amount ELSE 0 END), 0.00) AS cash_out
+         FROM cash_movements
+         WHERE cash_register_session_id = $1`,
+        [session.id],
+      );
+      const cashIn = Number(movRes.rows[0].cash_in) || 0;
+      const cashOut = Number(movRes.rows[0].cash_out) || 0;
+
+      const derivedExpectedCash = Number(
+        (openingBalance + cashSales - cashRefunds + cashIn - cashOut).toFixed(2),
+      );
+      const countedCash = Number(Number(payload.countedCash || 0).toFixed(2));
+      const variance = Number((countedCash - derivedExpectedCash).toFixed(2));
+      const varianceStatus =
+        variance === 0 ? "BALANCED" : variance > 0 ? "OVERAGE" : "SHORTAGE";
+
+      // 3. Update session to CLOSED
+      const closeRes = await client.query(
+        `UPDATE cash_register_sessions
+         SET status = 'CLOSED',
+             closed_at = CURRENT_TIMESTAMP,
+             counted_cash = $1,
+             expected_cash = $2,
+             variance = $3,
+             variance_status = $4,
+             closing_notes = COALESCE($5, closing_notes),
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $6
+         RETURNING *`,
+        [
+          countedCash,
+          derivedExpectedCash,
+          variance,
+          varianceStatus,
+          payload.notes || payload.closingNotes || null,
+          session.id,
+        ],
+      );
+
+      const closedRow = closeRes.rows[0];
+
+      // 4. Save denominations if provided
+      if (payload.denominations && typeof payload.denominations === "object") {
+        for (const [denomVal, denomCount] of Object.entries(payload.denominations)) {
+          const valNum = parseFloat(denomVal) || 0;
+          const countNum = parseInt(denomCount, 10) || 0;
+          if (valNum > 0 && countNum >= 0) {
+            await client.query(
+              `INSERT INTO cash_denominations (
+                 organisation_id, cash_register_session_id, denomination_value, denomination_count
+               ) VALUES ($1, $2, $3, $4)
+               ON CONFLICT (cash_register_session_id, denomination_value)
+               DO UPDATE SET denomination_count = EXCLUDED.denomination_count`,
+              [resolvedOrgId, session.id, valNum, countNum],
+            );
+          }
+        }
+      }
+
+      const resultData = {
+        sessionId: closedRow.id,
+        sessionNumber: closedRow.session_number,
+        status: "CLOSED",
+        openingBalance,
+        cashSales,
+        cashRefunds,
+        cashIn,
+        cashOut,
+        expectedCash: derivedExpectedCash,
+        countedCash,
+        variance,
+        varianceStatus,
+        closedAt: closedRow.closed_at,
+        organisationId: resolvedOrgId,
+        branchId: resolvedBranchId,
+      };
+
+      // 5. Record in sync_mutations
+      await client.query(
+        `INSERT INTO sync_mutations (
+           mutation_id, organisation_id, branch_id, user_id, device_id, mutation_type,
+           occurred_at, status, payload, result, processed_at
+         ) VALUES ($1, $2, $3, $4, $5, 'CLOSE_REGISTER_SESSION', $6, 'PROCESSED', $7, $8, NOW())
+         ON CONFLICT (organisation_id, mutation_id) DO UPDATE
+         SET status = 'PROCESSED', result = EXCLUDED.result, processed_at = NOW()`,
+        [
+          mutationId,
+          resolvedOrgId,
+          resolvedBranchId,
+          effectiveUserId || null,
+          deviceId,
+          occurredAt || new Date().toISOString(),
+          JSON.stringify(payload),
+          JSON.stringify(resultData),
+        ],
+      );
+
+      // 6. Record in sync_changes
+      await client.query(
+        `INSERT INTO sync_changes (
+           organisation_id, branch_id, entity_type, entity_id, operation, changed_at, payload
+         ) VALUES ($1, $2, 'REGISTER_SESSION', $3, 'UPDATE', NOW(), $4)`,
+        [
+          resolvedOrgId,
+          resolvedBranchId,
+          session.id,
+          JSON.stringify(resultData),
+        ],
+      );
+
+      await client.query("COMMIT");
+
+      return {
+        status: "SUCCESS",
+        result: resultData,
+      };
+    } catch (err) {
+      await client.query("ROLLBACK");
+      console.error(
+        `[SyncService] Error processing CLOSE_REGISTER_SESSION ${mutationId}:`,
         err,
       );
       return {
@@ -3031,15 +3752,39 @@ class SyncService {
               deviceId,
             });
             break;
+          case "OPEN_REGISTER_SESSION":
+          case "REGISTER_OPEN":
           case "OPEN_SESSION":
+            outcome = await this.processOpenRegisterSession({
+              ...mutation,
+              organisationId: targetOrgId,
+              branchId: targetBranchId,
+              effectiveUserId,
+              userContext,
+              deviceId,
+            });
+            break;
+          case "RECORD_CASH_MOVEMENT":
+            outcome = await this.processRecordCashMovement({
+              ...mutation,
+              organisationId: targetOrgId,
+              branchId: targetBranchId,
+              effectiveUserId,
+              userContext,
+              deviceId,
+            });
+            break;
+          case "CLOSE_REGISTER_SESSION":
+          case "REGISTER_CLOSE":
           case "CLOSE_SESSION":
-            outcome = {
-              status: "SUCCESS",
-              result: {
-                mutationType: mutation.mutationType,
-                acknowledged: true,
-              },
-            };
+            outcome = await this.processCloseRegisterSession({
+              ...mutation,
+              organisationId: targetOrgId,
+              branchId: targetBranchId,
+              effectiveUserId,
+              userContext,
+              deviceId,
+            });
             break;
 
           default:
@@ -3418,6 +4163,25 @@ class SyncService {
     );
     const serverCursor = cursorRes.rows[0]?.server_cursor || "0";
 
+    // 7. Fetch active registers for branch
+    const registersRes = await pool.query(
+      `SELECT id, organisation_id, branch_id, name, identifier, is_active
+       FROM cash_registers
+       WHERE organisation_id = $1 AND branch_id = $2
+       ORDER BY created_at ASC`,
+      [organisationId, branchId],
+    );
+
+    // 8. Fetch active open session for branch (if any)
+    const openSessionRes = await pool.query(
+      `SELECT crs.*, u.name AS cashier_name
+       FROM cash_register_sessions crs
+       LEFT JOIN users u ON u.id = crs.cashier_id
+       WHERE crs.organisation_id = $1 AND crs.branch_id = $2 AND crs.status = 'OPEN'
+       ORDER BY crs.opened_at DESC LIMIT 1`,
+      [organisationId, branchId],
+    );
+
     return {
       success: true,
       organisationId,
@@ -3443,6 +4207,8 @@ class SyncService {
       products,
       inventory,
       customers,
+      registers: registersRes.rows,
+      openSession: openSessionRes.rows[0] || null,
     };
   }
 }

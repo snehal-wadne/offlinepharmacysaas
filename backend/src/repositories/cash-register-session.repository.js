@@ -150,8 +150,10 @@ const openSession = async ({
           WHERE id = $3 AND organisation_id = $2 AND branch_id = $1
         ) AS register_exists,
         EXISTS (
-          SELECT 1 FROM organisation_memberships
-          WHERE user_id = $4 AND organisation_id = $2 AND status = 'ACTIVE'
+          SELECT 1 FROM users u
+          LEFT JOIN organisation_memberships om ON om.user_id = u.id AND om.organisation_id = $2
+          LEFT JOIN organisations o ON o.id = $2 AND o.owner_id = u.id
+          WHERE u.id = $4 AND (om.status = 'ACTIVE' OR u.is_platform_superadmin = TRUE OR o.id IS NOT NULL)
         ) AS cashier_exists;
     `;
 

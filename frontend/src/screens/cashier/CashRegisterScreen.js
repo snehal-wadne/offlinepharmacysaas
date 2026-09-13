@@ -22,6 +22,8 @@ import {
   recordCashMovement,
   fetchCashMovements,
 } from '../../api/cashierApi';
+import { localPersistenceService } from '../../db';
+import { syncEngine } from '../../sync';
 
 export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBranch = true }) {
   const { width } = useWindowDimensions();
@@ -76,11 +78,54 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
     },
   ]);
 
-  // Load live register session and history from backend PostgreSQL
+  // Load live register session and history from local Dexie & backend PostgreSQL
   useEffect(() => {
     let isMounted = true;
     async function loadRegisterData() {
       try {
+        // 1. Check offline Dexie stores first
+        let localOpenSession = null;
+        let localMovements = [];
+        if (typeof localPersistenceService?.getLocalOpenRegisterSession === 'function') {
+          try {
+            localOpenSession = await localPersistenceService.getLocalOpenRegisterSession();
+            if (localOpenSession) {
+              localMovements = await localPersistenceService.getLocalCashMovements(localOpenSession.id);
+            }
+          } catch (e) {
+            console.warn('[CashRegister] Error reading local Dexie session:', e);
+          }
+        }
+
+        if (localOpenSession && isMounted) {
+          const isOpen = localOpenSession.status === 'OPEN' || localOpenSession.status === 'CLOSE_PENDING';
+          const openBal = parseFloat(localOpenSession.openingBalance || 2000.0);
+          const expCash = parseFloat(localOpenSession.expectedCash || openBal);
+          setSession((prev) => ({
+            ...prev,
+            id: localOpenSession.id,
+            sessionId: localOpenSession.sessionNumber || localOpenSession.id || prev.sessionId,
+            isOpen,
+            isPendingClose: localOpenSession.status === 'CLOSE_PENDING',
+            openingBalance: openBal,
+            expectedCash: expCash > 0 ? expCash : openBal,
+            openedBy: localOpenSession.cashierId || prev.openedBy,
+            notes: localOpenSession.openingNotes || prev.notes,
+          }));
+
+          if (localMovements && localMovements.length > 0) {
+            setPettyCashMovements(localMovements.map((m) => ({
+              id: m.movementNumber || m.id,
+              type: m.movementType,
+              amount: parseFloat(m.amount),
+              reason: m.reason,
+              time: m.occurredAt ? new Date(m.occurredAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Now',
+              cashier: m.cashierId || 'Cashier 01',
+            })));
+          }
+        }
+
+        // 2. Fetch live data from backend (with existing mock fallbacks)
         const [currentSession, historyData, movementsData] = await Promise.all([
           fetchCurrentRegisterSession(),
           fetchRegisterHistory(),
@@ -88,7 +133,7 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
         ]);
 
         if (isMounted) {
-          if (currentSession && (currentSession.id || currentSession.status === 'OPEN')) {
+          if (!localOpenSession && currentSession && (currentSession.id || currentSession.status === 'OPEN')) {
             const isOpen = currentSession.status === 'OPEN';
             const openBal = parseFloat(currentSession.openingBalance || 2000.0);
             const expCash = parseFloat(currentSession.expectedCash || currentSession.openingBalance || 2000.0);
@@ -125,7 +170,7 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
             })));
           }
 
-          if (movementsData && Array.isArray(movementsData) && movementsData.length > 0) {
+          if (!localMovements?.length && movementsData && Array.isArray(movementsData) && movementsData.length > 0) {
             setPettyCashMovements(movementsData);
           }
         }
@@ -134,7 +179,24 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
       }
     }
     loadRegisterData();
-    return () => { isMounted = false; };
+
+    const subscribeFn =
+      typeof syncEngine?.onStateChange === 'function'
+        ? syncEngine.onStateChange.bind(syncEngine)
+        : typeof syncEngine?.subscribe === 'function'
+          ? syncEngine.subscribe.bind(syncEngine)
+          : null;
+
+    const unsubscribe = subscribeFn
+      ? subscribeFn(() => {
+          if (isMounted) loadRegisterData();
+        })
+      : () => {};
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, []);
 
   // Calculate totals
@@ -163,6 +225,23 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
     const dateStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
     const initialExpected = balanceNum + 8750.0 - 350.0 + totalPettyCashIn - totalPettyCashOut;
 
+    // 1. Offline Dexie persistence & outbox queue
+    let localResult = null;
+    if (typeof localPersistenceService?.openLocalRegisterSession === 'function') {
+      try {
+        localResult = await localPersistenceService.openLocalRegisterSession({
+          openingBalance: balanceNum,
+          notes: openingNote || 'Opening shift float recorded.',
+        });
+        if (typeof syncEngine?.sync === 'function') {
+          syncEngine.sync().catch(() => {});
+        }
+      } catch (e) {
+        console.warn('[CashRegister] local open error (fallback):', e.message);
+      }
+    }
+
+    // 2. Also try backend API
     try {
       const res = await openRegisterShift({
         openingBalance: balanceNum,
@@ -172,7 +251,8 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
       setSession((prev) => ({
         ...prev,
         isOpen: true,
-        sessionId: res?.sessionCode || res?.sessionNumber || prev.sessionId,
+        id: localResult?.session?.id || prev.id,
+        sessionId: res?.sessionCode || res?.sessionNumber || localResult?.session?.sessionNumber || prev.sessionId,
         openingBalance: balanceNum,
         cashSales: 8750.0,
         upiSales: 4250.0,
@@ -189,6 +269,8 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
       setSession((prev) => ({
         ...prev,
         isOpen: true,
+        id: localResult?.session?.id || prev.id,
+        sessionId: localResult?.session?.sessionNumber || prev.sessionId,
         openingBalance: balanceNum,
         expectedCash: initialExpected,
         openedAt: `${dateStr}, ${nowStr}`,
@@ -210,6 +292,22 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
     let varStatus = 'Balanced';
     if (varVal < -1) varStatus = 'Shortage';
     else if (varVal > 1) varStatus = 'Overage';
+
+    // 1. Offline Dexie persistence & outbox queue (marks CLOSE_PENDING locally)
+    if (typeof localPersistenceService?.prepareLocalDayClose === 'function') {
+      try {
+        await localPersistenceService.prepareLocalDayClose({
+          sessionId: session.id,
+          countedCash: countedVal,
+          notes: closingNotes || 'Shift closed and drawer reconciled.',
+        });
+        if (typeof syncEngine?.sync === 'function') {
+          syncEngine.sync().catch(() => {});
+        }
+      } catch (e) {
+        console.warn('[CashRegister] local close error (fallback):', e.message);
+      }
+    }
 
     try {
       await closeRegisterShift({
@@ -271,6 +369,26 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
     const nowDateStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
     let newId = `PC-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    // 1. Offline Dexie persistence & outbox queue
+    if (typeof localPersistenceService?.recordLocalCashMovement === 'function') {
+      try {
+        const localRes = await localPersistenceService.recordLocalCashMovement({
+          sessionId: session.id,
+          movementType,
+          amount: amt,
+          reason: finalReason,
+        });
+        if (localRes?.movement?.movementNumber) {
+          newId = localRes.movement.movementNumber;
+        }
+        if (typeof syncEngine?.sync === 'function') {
+          syncEngine.sync().catch(() => {});
+        }
+      } catch (e) {
+        console.warn('[CashRegister] local movement error (fallback):', e.message);
+      }
+    }
 
     try {
       const res = await recordCashMovement({

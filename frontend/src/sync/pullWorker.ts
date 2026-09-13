@@ -102,7 +102,16 @@ export class PullWorker {
   async applyChangesLocally(changes: ServerChangeItem[]): Promise<void> {
     await this.db.transaction(
       'rw',
-      [this.db.products, this.db.inventory, this.db.customers, this.db.transactions, this.db.sync_metadata],
+      [
+        this.db.products,
+        this.db.inventory,
+        this.db.customers,
+        this.db.transactions,
+        this.db.sync_metadata,
+        this.db.cash_registers,
+        this.db.register_sessions,
+        this.db.cash_movements,
+      ],
       async () => {
         for (const change of changes) {
           if (!change) continue;
@@ -420,6 +429,94 @@ export class PullWorker {
                     }
                   }
                 }
+              }
+              break;
+
+            case 'REGISTER':
+            case 'CASH_REGISTER':
+              if (itemData) {
+                const regId = itemData.id || change.entityId;
+                await this.db.cash_registers.put({
+                  id: regId,
+                  organisationId: itemData.organisationId || itemData.organisation_id || change.organisationId,
+                  branchId: itemData.branchId || itemData.branch_id || change.branchId,
+                  name: itemData.name || 'Main Register',
+                  identifier: itemData.identifier || itemData.registerNumber || itemData.register_number || 'POS-01',
+                  isActive:
+                    itemData.isActive !== undefined
+                      ? itemData.isActive
+                      : itemData.is_active !== undefined
+                      ? itemData.is_active
+                      : true,
+                  createdAt: itemData.createdAt || itemData.created_at || new Date().toISOString(),
+                  updatedAt: itemData.updatedAt || itemData.updated_at || new Date().toISOString(),
+                });
+              }
+              break;
+
+            case 'REGISTER_SESSION':
+              if (itemData) {
+                const sessionId = itemData.id || itemData.sessionId || change.entityId;
+                const existing = await this.db.register_sessions.get(sessionId);
+                const incomingStatus = itemData.status || (change.operation === 'DELETE' ? 'CLOSED' : 'OPEN');
+                // If local session is PENDING close or open, only overwrite if incoming is authoritative CLOSED or matches
+                if (existing && existing.syncStatus === 'PENDING' && incomingStatus !== 'CLOSED') {
+                  break;
+                }
+                await this.db.register_sessions.put({
+                  id: sessionId,
+                  organisationId: itemData.organisationId || itemData.organisation_id || change.organisationId,
+                  branchId: itemData.branchId || itemData.branch_id || change.branchId,
+                  cashRegisterId: itemData.cashRegisterId || itemData.cash_register_id || itemData.registerId || 'REG-1',
+                  cashierId: itemData.cashierId || itemData.cashier_id || itemData.openedByUserId || '',
+                  sessionNumber: itemData.sessionNumber || itemData.session_number || `REG-${sessionId.slice(0, 6)}`,
+                  shiftName: itemData.shiftName || itemData.shift_name || 'Day Shift',
+                  openingBalance: Number(itemData.openingBalance ?? itemData.opening_balance ?? itemData.openingCashBalance ?? 0),
+                  expectedCash:
+                    itemData.expectedCash !== undefined || itemData.expected_cash !== undefined
+                      ? Number(itemData.expectedCash ?? itemData.expected_cash)
+                      : undefined,
+                  countedCash:
+                    itemData.countedCash !== undefined || itemData.counted_cash !== undefined
+                      ? Number(itemData.countedCash ?? itemData.counted_cash)
+                      : undefined,
+                  variance:
+                    itemData.variance !== undefined
+                      ? Number(itemData.variance)
+                      : undefined,
+                  status: incomingStatus as any,
+                  varianceStatus: itemData.varianceStatus || itemData.variance_status || undefined,
+                  openingNotes: itemData.openingNotes || itemData.opening_notes || itemData.notes || undefined,
+                  closingNotes: itemData.closingNotes || itemData.closing_notes || undefined,
+                  openedAt: itemData.openedAt || itemData.opened_at || new Date().toISOString(),
+                  closedAt: itemData.closedAt || itemData.closed_at || undefined,
+                  syncStatus: 'SYNCED',
+                  updatedAt: itemData.updatedAt || itemData.updated_at || new Date().toISOString(),
+                });
+              }
+              break;
+
+            case 'CASH_MOVEMENT':
+              if (itemData) {
+                const movementId = itemData.id || itemData.movementId || change.entityId;
+                const existingMov = await this.db.cash_movements.get(movementId);
+                if (existingMov && existingMov.syncStatus === 'PENDING') {
+                  break;
+                }
+                await this.db.cash_movements.put({
+                  id: movementId,
+                  organisationId: itemData.organisationId || itemData.organisation_id || change.organisationId,
+                  branchId: itemData.branchId || itemData.branch_id || change.branchId,
+                  cashRegisterSessionId: itemData.cashRegisterSessionId || itemData.cash_register_session_id || itemData.sessionId || '',
+                  cashierId: itemData.cashierId || itemData.cashier_id || itemData.performedByUserId || '',
+                  movementNumber: itemData.movementNumber || itemData.movement_number || `PC-${movementId.slice(0, 6)}`,
+                  movementType: (itemData.movementType || itemData.movement_type || 'IN').toUpperCase() as any,
+                  amount: Number(itemData.amount || 0),
+                  reason: itemData.reason || '',
+                  occurredAt: itemData.occurredAt || itemData.occurred_at || itemData.createdAt || itemData.created_at || new Date().toISOString(),
+                  syncStatus: 'SYNCED',
+                  updatedAt: itemData.updatedAt || itemData.updated_at || new Date().toISOString(),
+                });
               }
               break;
 

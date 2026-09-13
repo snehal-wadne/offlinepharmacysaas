@@ -13,6 +13,7 @@
     "test:payments": "ts-node scripts/test-phase2-payments.ts",
     "test:receiving": "ts-node scripts/test-phase3-receiving.ts",
     "test:phase4": "ts-node scripts/test-phase4-inventory.ts",
+    "test:phase5": "ts-node scripts/test-phase5-cash-register.ts",
     "test:integration": "ts-node scripts/test-canonical-integration.ts",
     "test:shared": "ts-node scripts/test-shared-architecture.ts"
   },

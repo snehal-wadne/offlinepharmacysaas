@@ -13,14 +13,18 @@
 const express = require('express');
 const router = express.Router();
 const cashierController = require('../controllers/cashier.controller');
+const { requireSyncAuth } = require('../middleware/sync-auth.middleware');
 
-// --- Register Sessions ---
-router.get('/register/current', cashierController.getCurrentSession);
-router.post('/register/open', cashierController.openSession);
-router.post('/register/close', cashierController.closeSession);
-router.get('/register/history', cashierController.getSessionHistory);
-router.post('/register/movement', cashierController.recordCashMovement);
-router.get('/register/movements', cashierController.getCashMovements);
+// --- Register Management & Sessions (Strict Multi-Tenant Auth) ---
+router.get('/registers', requireSyncAuth, cashierController.getBranchRegisters);
+router.get('/register/registers', requireSyncAuth, cashierController.getBranchRegisters);
+router.get('/register/current', requireSyncAuth, cashierController.getCurrentSession);
+router.post('/register/open', requireSyncAuth, cashierController.openSession);
+router.post('/register/close', requireSyncAuth, cashierController.closeSession);
+router.get('/register/history', requireSyncAuth, cashierController.getSessionHistory);
+router.post('/register/movement', requireSyncAuth, cashierController.recordCashMovement);
+router.get('/register/movements', requireSyncAuth, cashierController.getCashMovements);
+router.get('/register/summary', requireSyncAuth, cashierController.getSessionSummary);
 
 // --- Products & Barcode Search ---
 router.get('/products', cashierController.searchProducts);
