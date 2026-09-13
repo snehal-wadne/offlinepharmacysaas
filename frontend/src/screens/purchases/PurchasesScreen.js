@@ -35,7 +35,7 @@ const PO_STATUS_BADGES = {
   Cancelled: { bg: '#FEE2E2', text: '#B91C1C' },
 };
 
-export default function PurchasesScreen({ onShowToast, onNavigate }) {
+export default function PurchasesScreen({ onShowToast, onNavigate, selectedBranch = 'All Branches' }) {
   const offlineSync = useOfflineSync();
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
@@ -63,12 +63,13 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
 
   useEffect(() => {
     loadPurchasesData();
-  }, []);
+  }, [selectedBranch]);
 
   const loadPurchasesData = async () => {
     try {
       setLoading(true);
-      const res = await fetchPurchases();
+      const branchParam = selectedBranch && selectedBranch !== 'All Branches' ? selectedBranch : undefined;
+      const res = await fetchPurchases({ branchId: branchParam });
       if (res && res.data && Array.isArray(res.data) && res.data.length > 0) {
         setOrders(res.data);
       } else {
@@ -191,7 +192,16 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
 
     const matchesTogglePending = !togglePendingOnly || po.status === 'Pending' || po.status === 'PENDING';
 
-    return matchesSearch && matchesStatus && matchesTogglePending;
+    // Branch Scoping Filter
+    let matchesBranch = true;
+    if (selectedBranch && selectedBranch !== 'All Branches') {
+      matchesBranch =
+        (po.branch && (po.branch === selectedBranch || po.branchName === selectedBranch)) ||
+        (po.branchName && po.branchName === selectedBranch) ||
+        (po.branch_id && (po.branch_id === selectedBranch || String(po.branch_id) === String(selectedBranch)));
+    }
+
+    return matchesSearch && matchesStatus && matchesTogglePending && matchesBranch;
   });
 
   const handleOpenModal = () => {

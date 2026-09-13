@@ -36,6 +36,7 @@ import { syncEngine } from "../../sync";
 export default function StockAdjustmentsScreen({
   onShowToast,
   isMultiBranch = true,
+  selectedBranch = "All Branches",
 }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
@@ -69,7 +70,7 @@ export default function StockAdjustmentsScreen({
       isMounted = false;
       if (unsubscribe) unsubscribe();
     };
-  }, []);
+  }, [selectedBranch]);
 
   const loadInventoryData = async () => {
     try {

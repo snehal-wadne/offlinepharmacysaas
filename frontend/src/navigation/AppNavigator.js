@@ -14,6 +14,7 @@ import LoginScreen from "../screens/auth/LoginScreen";
 import { PosProvider } from "../context/PosContext";
 import { OfflineSyncProvider } from "../offline/OfflineSyncContext";
 import { setAuthSession, clearAuthSession } from "../api/apiClient";
+import { syncEngine } from "../sync";
 
 // 0. Sales & Cashier Screens (Sales / POS Billing, Cash Register)
 import SalesScreen from "../screens/sales/SalesScreen";
@@ -125,6 +126,7 @@ export default function AppNavigator() {
             onNavigate={handleNavigate}
             onShowToast={showToast}
             isMultiBranch={isMultiBranch}
+            selectedBranch={selectedBranch}
           />
         );
       case "sales":
@@ -135,6 +137,7 @@ export default function AppNavigator() {
             onNavigate={handleNavigate}
             onShowToast={showToast}
             isMultiBranch={isMultiBranch}
+            selectedBranch={selectedBranch}
           />
         );
       case "cash-register":
@@ -144,6 +147,7 @@ export default function AppNavigator() {
             onNavigate={handleNavigate}
             onShowToast={showToast}
             isMultiBranch={isMultiBranch}
+            selectedBranch={selectedBranch}
           />
         );
       case "held-bills":
@@ -152,6 +156,7 @@ export default function AppNavigator() {
             onNavigate={handleNavigate}
             onShowToast={showToast}
             isMultiBranch={isMultiBranch}
+            selectedBranch={selectedBranch}
           />
         );
       case "sales-returns":
@@ -161,6 +166,7 @@ export default function AppNavigator() {
             onNavigate={handleNavigate}
             onShowToast={showToast}
             isMultiBranch={isMultiBranch}
+            selectedBranch={selectedBranch}
           />
         );
       case "stock-adjustments":
@@ -169,6 +175,7 @@ export default function AppNavigator() {
             onNavigate={handleNavigate}
             onShowToast={showToast}
             isMultiBranch={isMultiBranch}
+            selectedBranch={selectedBranch}
           />
         );
       case "stock-transfer":
@@ -176,17 +183,20 @@ export default function AppNavigator() {
           <StockTransferScreen
             onNavigate={handleNavigate}
             onShowToast={showToast}
+            selectedBranch={selectedBranch}
           />
         );
       case "inventory":
       case "stock-status":
       case "low-stock-expiry":
+      case "current-stock":
         return (
           <StockStatusScreen
             initialSearchQuery={selectedCustomerId}
             onNavigate={handleNavigate}
             onShowToast={showToast}
             isMultiBranch={isMultiBranch}
+            selectedBranch={selectedBranch}
           />
         );
       case "purchases":
@@ -195,6 +205,7 @@ export default function AppNavigator() {
             onNavigate={handleNavigate}
             onShowToast={showToast}
             isMultiBranch={isMultiBranch}
+            selectedBranch={selectedBranch}
           />
         );
       case "goods-receiving":
@@ -203,6 +214,7 @@ export default function AppNavigator() {
             onNavigate={handleNavigate}
             onShowToast={showToast}
             isMultiBranch={isMultiBranch}
+            selectedBranch={selectedBranch}
           />
         );
       case "suppliers":
@@ -211,6 +223,7 @@ export default function AppNavigator() {
             onNavigate={handleNavigate}
             onShowToast={showToast}
             isMultiBranch={isMultiBranch}
+            selectedBranch={selectedBranch}
           />
         );
       case "customers-patients":
@@ -221,6 +234,7 @@ export default function AppNavigator() {
             onNavigate={handleNavigate}
             onShowToast={showToast}
             isMultiBranch={isMultiBranch}
+            selectedBranch={selectedBranch}
           />
         );
       case "customer-details":
@@ -230,6 +244,7 @@ export default function AppNavigator() {
             onNavigate={handleNavigate}
             onShowToast={showToast}
             isMultiBranch={isMultiBranch}
+            selectedBranch={selectedBranch}
           />
         );
       case "customer-ledger":
@@ -238,6 +253,7 @@ export default function AppNavigator() {
             onNavigate={handleNavigate}
             onShowToast={showToast}
             isMultiBranch={isMultiBranch}
+            selectedBranch={selectedBranch}
           />
         );
       case "customer-payments":
@@ -246,6 +262,7 @@ export default function AppNavigator() {
             onNavigate={handleNavigate}
             onShowToast={showToast}
             isMultiBranch={isMultiBranch}
+            selectedBranch={selectedBranch}
           />
         );
       case "branches":
@@ -263,6 +280,7 @@ export default function AppNavigator() {
             onNavigate={handleNavigate}
             onShowToast={showToast}
             isMultiBranch={isMultiBranch}
+            selectedBranch={selectedBranch}
           />
         );
       case "roles":
@@ -288,6 +306,7 @@ export default function AppNavigator() {
             onNavigate={handleNavigate}
             onShowToast={showToast}
             isMultiBranch={isMultiBranch}
+            selectedBranch={selectedBranch}
           />
         );
       case "inventory-reports":
@@ -296,6 +315,7 @@ export default function AppNavigator() {
             onNavigate={handleNavigate}
             onShowToast={showToast}
             isMultiBranch={isMultiBranch}
+            selectedBranch={selectedBranch}
           />
         );
       case "purchase-reports":
@@ -304,6 +324,7 @@ export default function AppNavigator() {
             onNavigate={handleNavigate}
             onShowToast={showToast}
             isMultiBranch={isMultiBranch}
+            selectedBranch={selectedBranch}
           />
         );
       case "expiry-reports":
@@ -312,6 +333,7 @@ export default function AppNavigator() {
             onNavigate={handleNavigate}
             onShowToast={showToast}
             isMultiBranch={isMultiBranch}
+            selectedBranch={selectedBranch}
           />
         );
       case "tax-settings":
@@ -337,6 +359,7 @@ export default function AppNavigator() {
             onNavigate={handleNavigate}
             onShowToast={showToast}
             isMultiBranch={isMultiBranch}
+            selectedBranch={selectedBranch}
           />
         );
     }
@@ -362,7 +385,7 @@ export default function AppNavigator() {
 
   return (
     <OfflineSyncProvider>
-      <PosProvider currentUser={currentUser}>
+      <PosProvider currentUser={currentUser} selectedBranch={selectedBranch}>
         <View style={styles.appContainer}>
           {/* 1. Fixed Left Sidebar for Desktop */}
           {!isMobile && (
@@ -426,6 +449,9 @@ export default function AppNavigator() {
               currentBranch={selectedBranch}
               onBranchChange={(b) => {
                 setSelectedBranch(b);
+                if (typeof syncEngine?.setActiveBranch === "function") {
+                  syncEngine.setActiveBranch(b);
+                }
                 showToast(`Switched active branch to ${b}`);
               }}
               isMultiBranch={isMultiBranch}

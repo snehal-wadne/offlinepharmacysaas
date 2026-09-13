@@ -18,7 +18,7 @@ import { SkeletonTableRow } from '../../components/common/SkeletonLoader';
 import PaginationControls from '../../components/common/PaginationControls';
 import { exportAuditLogReport, exportSingleAuditLogPDF } from '../../utils/exportUtils';
 
-export default function AuditLogScreen({ onShowToast, onNavigate }) {
+export default function AuditLogScreen({ onShowToast, onNavigate, selectedBranch = 'All Branches' }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
   const isMobile = width < 768;
@@ -37,23 +37,34 @@ export default function AuditLogScreen({ onShowToast, onNavigate }) {
   const [selectedLog, setSelectedLog] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
 
+  // Branch-scoped base logs
+  const isBranchFiltered = selectedBranch && selectedBranch !== 'All Branches';
+  const scopedLogs = isBranchFiltered
+    ? logs.filter((l) => {
+        if (!l.branch) return true;
+        const b = l.branch.toLowerCase();
+        const s = selectedBranch.toLowerCase();
+        return b.includes(s) || s.includes(b);
+      })
+    : logs;
+
   // Dynamic KPI Counts
-  const totalCount = logs.length;
-  const criticalCount = logs.filter(
+  const totalCount = scopedLogs.length;
+  const criticalCount = scopedLogs.filter(
     (l) => l.severity === 'Critical' || l.actionType === 'PRICE_OVERRIDE' || l.actionType === 'BILL_CANCELLED'
   ).length;
-  const stockCount = logs.filter(
+  const stockCount = scopedLogs.filter(
     (l) => l.actionType === 'STOCK_ADJUSTMENT' || l.actionType === 'STOCK_TRANSFER'
   ).length;
-  const rxCount = logs.filter(
+  const rxCount = scopedLogs.filter(
     (l) => l.actionType === 'RX_APPROVED' || l.severity === 'Success'
   ).length;
-  const securityCount = logs.filter(
+  const securityCount = scopedLogs.filter(
     (l) => l.actionType === 'ROLE_MODIFIED' || l.actionType === 'USER_CREATED'
   ).length;
 
   // Filtered Logs based on Search and Selected Interactive KPI Card
-  const filteredLogs = logs.filter((log) => {
+  const filteredLogs = scopedLogs.filter((log) => {
     const q = searchQuery.toLowerCase().trim();
     const matchesSearch =
       !q ||

@@ -12,6 +12,7 @@ import { apiGet, apiPost, apiPut, apiDelete } from './apiClient';
 export async function fetchInventory(params = {}) {
   const query = new URLSearchParams();
   if (params.search) query.append('search', params.search);
+  if (params.branchId && params.branchId !== 'All Branches') query.append('branchId', params.branchId);
 
   const queryString = query.toString() ? `?${query.toString()}` : '';
   return apiGet(`/inventory${queryString}`);
@@ -20,8 +21,11 @@ export async function fetchInventory(params = {}) {
 /**
  * GET /api/inventory/summary
  */
-export async function fetchInventorySummary() {
-  return apiGet('/inventory/summary');
+export async function fetchInventorySummary(params = {}) {
+  const query = new URLSearchParams();
+  if (params?.branchId && params.branchId !== 'All Branches') query.append('branchId', params.branchId);
+  const queryString = query.toString() ? `?${query.toString()}` : '';
+  return apiGet(`/inventory/summary${queryString}`);
 }
 
 /**
@@ -30,6 +34,7 @@ export async function fetchInventorySummary() {
 export async function fetchStockMovements(params = {}) {
   const query = new URLSearchParams();
   if (params.limit) query.append('limit', params.limit);
+  if (params.branchId && params.branchId !== 'All Branches') query.append('branchId', params.branchId);
   const queryString = query.toString() ? `?${query.toString()}` : '';
   return apiGet(`/inventory/movements${queryString}`);
 }

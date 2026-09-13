@@ -9,10 +9,31 @@ const { pool } = require("../db/connection");
 const getInventory = async ({
   organisationId,
   search,
+  branchId,
   limit = 100,
   offset = 0,
 }) => {
   try {
+    const isAllBranches = !branchId || branchId === 'all' || branchId === 'All Branches';
+    let branchClause = '';
+    const values = [organisationId];
+
+    if (!isAllBranches) {
+      values.push(branchId);
+      branchClause = `AND (ib.branch_id::text = $${values.length} OR b.name ILIKE $${values.length})`;
+    }
+
+    let searchClause = '';
+    if (search) {
+      values.push(`%${search}%`);
+      searchClause = `AND (p.medicine_name ILIKE $${values.length} OR p.brand_name ILIKE $${values.length} OR p.sku ILIKE $${values.length} OR ib.batch_number ILIKE $${values.length} OR s.name ILIKE $${values.length})`;
+    }
+
+    values.push(limit);
+    const limitIdx = values.length;
+    values.push(offset);
+    const offsetIdx = values.length;
+
     const query = `
       SELECT
         ib.id,
@@ -39,14 +60,11 @@ const getInventory = async ({
       INNER JOIN suppliers s ON s.id = ib.supplier_id
       LEFT JOIN users u ON u.id = ib.updated_by
       WHERE p.organisation_id = $1
-        ${search ? `AND (p.medicine_name ILIKE $4 OR p.brand_name ILIKE $4 OR p.sku ILIKE $4 OR ib.batch_number ILIKE $4 OR s.name ILIKE $4)` : ""}
+        ${branchClause}
+        ${searchClause}
       ORDER BY ib.updated_at DESC, ib.created_at DESC
-      LIMIT $2 OFFSET $3;
+      LIMIT $${limitIdx} OFFSET $${offsetIdx};
     `;
-
-    const values = search
-      ? [organisationId, limit, offset, `%${search}%`]
-      : [organisationId, limit, offset];
 
     const result = await pool.query(query, values);
     return result.rows.map((row) => ({
@@ -127,18 +145,28 @@ const saveOrUpdateInventory = async (organisationId, itemData) => {
 
   // 2. Resolve Branch
   let bId;
+  const targetBranchName = branchId || "Main Branch";
   const bRes = await pool.query(
-    `SELECT id FROM branches WHERE organisation_id = $1 LIMIT 1;`,
-    [organisationId],
+    `SELECT id FROM branches WHERE organisation_id = $1 AND (id::text = $2 OR name ILIKE $2) LIMIT 1;`,
+    [organisationId, targetBranchName],
   );
   if (bRes.rows.length > 0) {
     bId = bRes.rows[0].id;
   } else {
-    const newB = await pool.query(
-      `INSERT INTO branches (organisation_id, name) VALUES ($1, $2) RETURNING id;`,
-      [organisationId, branchId || "Main Branch"],
+    // Fallback: check if any branch exists
+    const anyB = await pool.query(
+      `SELECT id FROM branches WHERE organisation_id = $1 LIMIT 1;`,
+      [organisationId]
     );
-    bId = newB.rows[0].id;
+    if (anyB.rows.length > 0) {
+      bId = anyB.rows[0].id;
+    } else {
+      const newB = await pool.query(
+        `INSERT INTO branches (organisation_id, name) VALUES ($1, $2) RETURNING id;`,
+        [organisationId, targetBranchName],
+      );
+      bId = newB.rows[0].id;
+    }
   }
 
   // 3. Resolve or Update Product
@@ -287,9 +315,20 @@ const deleteInventoryEntry = async (organisationId, batchId) => {
   return res.rowCount > 0;
 };
 
-const getInventorySummary = async (organisationId) => {
+const getInventorySummary = async (organisationId, branchId = null) => {
   if (!organisationId) {
     throw new Error("organisationId is required");
+  }
+
+  const isAllBranches = !branchId || branchId === 'all' || branchId === 'All Branches';
+  let branchJoin = '';
+  let branchClause = '';
+  const params = [organisationId];
+
+  if (!isAllBranches) {
+    params.push(branchId);
+    branchJoin = 'INNER JOIN branches b ON b.id = ib.branch_id';
+    branchClause = `AND (ib.branch_id::text = $2 OR b.name ILIKE $2)`;
   }
 
   const kpiQuery = `
@@ -302,10 +341,12 @@ const getInventorySummary = async (organisationId) => {
       COUNT(CASE WHEN ib.expiry_date < CURRENT_DATE THEN 1 END) AS "expiredCount"
     FROM inventory_batches ib
     INNER JOIN products p ON p.id = ib.product_id
-    WHERE p.organisation_id = $1;
+    ${branchJoin}
+    WHERE p.organisation_id = $1
+      ${branchClause};
   `;
 
-  const kpiRes = await pool.query(kpiQuery, [organisationId]);
+  const kpiRes = await pool.query(kpiQuery, params);
   const row = kpiRes.rows[0] || {};
 
   return {
@@ -348,10 +389,11 @@ const recordStockMovement = async (
   }
 };
 
-const getStockMovements = async (organisationId, limit = 10) => {
+const getStockMovements = async (organisationId, limit = 10, branchId = null) => {
   try {
-    const res = await pool.query(
-      `SELECT
+    const isAllBranches = !branchId || branchId === 'all' || branchId === 'All Branches';
+    let query = `
+      SELECT
          id,
          branch_name AS "branchName",
          movement_type AS "type",
@@ -361,10 +403,16 @@ const getStockMovements = async (organisationId, limit = 10) => {
          status,
          created_at
        FROM stock_movements
-       ORDER BY created_at DESC
-       LIMIT $1;`,
-      [limit],
-    );
+    `;
+    const params = [];
+    if (!isAllBranches) {
+      params.push(branchId);
+      query += ` WHERE (branch_name ILIKE $1) `;
+    }
+    params.push(limit);
+    query += ` ORDER BY created_at DESC LIMIT $${params.length};`;
+
+    const res = await pool.query(query, params);
 
     if (res.rows.length > 0) {
       return res.rows.map((r) => {

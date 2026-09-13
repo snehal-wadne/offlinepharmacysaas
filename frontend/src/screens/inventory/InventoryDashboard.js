@@ -21,25 +21,32 @@ import {
 import { fetchPurchases } from '../../api/purchaseApi';
 import { fetchInventory, fetchInventorySummary, fetchStockMovements } from '../../api/inventoryApi';
 
-export default function InventoryDashboard({ onNavigate, onShowToast }) {
+export default function InventoryDashboard({ onNavigate, onShowToast, selectedBranch = 'All Branches' }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
 
-  const [pendingOrders, setPendingOrders] = useState(MOCK_PURCHASE_ORDERS || []);
+  const [pendingOrders, setPendingOrders] = useState([]);
   const [inventoryItems, setInventoryItems] = useState([]);
   const [summaryData, setSummaryData] = useState(null);
-  const [recentMovements, setRecentMovements] = useState(MOCK_RECENT_MOVEMENTS || []);
+  const [recentMovements, setRecentMovements] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
+    const isFiltered = selectedBranch && selectedBranch !== 'All Branches';
+    const branchParam = isFiltered ? selectedBranch : undefined;
 
     async function loadDashboardData() {
+      setLoading(true);
       try {
         // Load Pending Purchase Orders
-        const poRes = await fetchPurchases({ status: 'PENDING' });
+        const poRes = await fetchPurchases({ status: 'PENDING', branchId: branchParam });
         if (isMounted && poRes && Array.isArray(poRes.data) && poRes.data.length > 0) {
-          const formatted = poRes.data.map((po) => ({
+          let list = poRes.data;
+          if (isFiltered) {
+            list = list.filter((po) => !po.branch || po.branch === selectedBranch || po.branchName === selectedBranch);
+          }
+          const formatted = list.map((po) => ({
             id: po.purchase_number || po.purchaseNumber || po.id,
             rawId: po.id,
             supplierName: po.supplier_name || po.supplierName || po.supplier || 'Supplier',
@@ -53,14 +60,25 @@ export default function InventoryDashboard({ onNavigate, onShowToast }) {
               : po.orderDate || 'Today',
           }));
           setPendingOrders(formatted);
+        } else if (isMounted) {
+          let fallbackPOs = MOCK_PURCHASE_ORDERS || [];
+          if (isFiltered) {
+            fallbackPOs = fallbackPOs.filter((po) => !po.branch || po.branch === selectedBranch || po.branchName === selectedBranch);
+          }
+          setPendingOrders(fallbackPOs);
         }
       } catch (err) {
         console.log('[InventoryDashboard] Backend pending POs fetch fallback');
+        let fallbackPOs = MOCK_PURCHASE_ORDERS || [];
+        if (isFiltered) {
+          fallbackPOs = fallbackPOs.filter((po) => !po.branch || po.branch === selectedBranch || po.branchName === selectedBranch);
+        }
+        if (isMounted) setPendingOrders(fallbackPOs);
       }
 
       try {
         // Load Summary KPI statistics
-        const summaryRes = await fetchInventorySummary();
+        const summaryRes = await fetchInventorySummary({ branchId: branchParam });
         if (isMounted && summaryRes && summaryRes.data) {
           setSummaryData(summaryRes.data);
         }
@@ -70,19 +88,38 @@ export default function InventoryDashboard({ onNavigate, onShowToast }) {
 
       try {
         // Load Recent Stock Movements from backend
-        const movementsRes = await fetchStockMovements();
+        const movementsRes = await fetchStockMovements({ branchId: branchParam });
         if (isMounted && movementsRes && Array.isArray(movementsRes.data) && movementsRes.data.length > 0) {
-          setRecentMovements(movementsRes.data);
+          let movs = movementsRes.data;
+          if (isFiltered) {
+            movs = movs.filter((m) => !m.branchName || m.branchName === selectedBranch);
+          }
+          setRecentMovements(movs);
+        } else if (isMounted) {
+          let fallbackMovs = MOCK_RECENT_MOVEMENTS || [];
+          if (isFiltered) {
+            fallbackMovs = fallbackMovs.filter((m) => !m.branch || m.branch === selectedBranch || m.branchName === selectedBranch);
+          }
+          setRecentMovements(fallbackMovs);
         }
       } catch (err) {
         console.log('[InventoryDashboard] Stock movements API fallback');
+        let fallbackMovs = MOCK_RECENT_MOVEMENTS || [];
+        if (isFiltered) {
+          fallbackMovs = fallbackMovs.filter((m) => !m.branch || m.branch === selectedBranch || m.branchName === selectedBranch);
+        }
+        if (isMounted) setRecentMovements(fallbackMovs);
       }
 
       try {
         // Load Inventory Batches for dynamic calculation
-        const invRes = await fetchInventory();
+        const invRes = await fetchInventory({ branchId: branchParam });
         if (isMounted && invRes && Array.isArray(invRes.data)) {
-          setInventoryItems(invRes.data);
+          let items = invRes.data;
+          if (isFiltered) {
+            items = items.filter((item) => !item.branchName || item.branchName === selectedBranch || item.branchId === selectedBranch);
+          }
+          setInventoryItems(items);
         }
       } catch (err) {
         console.log('[InventoryDashboard] Inventory API fallback');
@@ -95,7 +132,7 @@ export default function InventoryDashboard({ onNavigate, onShowToast }) {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [selectedBranch]);
 
   const handleQuickAction = (id, label) => {
     if (id === 'view-stock') {

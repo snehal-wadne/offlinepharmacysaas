@@ -22,11 +22,13 @@ const getInventory = async (req, res) => {
     if (!organisationId) {
       return res.status(400).json({ error: 'Organisation ID is required' });
     }
-    const { search, limit, offset } = req.query;
+    const { search, limit, offset, branchId: queryBranchId } = req.query;
+    const branchId = queryBranchId || req.headers['x-branch-id'] || req.tenant?.branchId || null;
 
     const inventory = await inventoryService.getInventory({
       organisationId,
       search,
+      branchId,
       limit: Number(limit) || 100,
       offset: Number(offset) || 0,
     });
@@ -123,7 +125,8 @@ const getInventorySummary = async (req, res) => {
     if (!organisationId) {
       return res.status(400).json({ error: 'Organisation ID is required' });
     }
-    const summary = await inventoryService.getInventorySummary(organisationId);
+    const branchId = req.query.branchId || req.headers['x-branch-id'] || req.tenant?.branchId || null;
+    const summary = await inventoryService.getInventorySummary(organisationId, branchId);
 
     res.status(200).json({
       success: true,
@@ -145,7 +148,8 @@ const getRecentStockMovements = async (req, res) => {
       return res.status(400).json({ error: 'Organisation ID is required' });
     }
     const limit = Number(req.query.limit) || 10;
-    const movements = await inventoryService.getStockMovements(organisationId, limit);
+    const branchId = req.query.branchId || req.headers['x-branch-id'] || req.tenant?.branchId || null;
+    const movements = await inventoryService.getStockMovements(organisationId, limit, branchId);
 
     res.status(200).json({
       success: true,

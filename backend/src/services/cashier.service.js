@@ -580,8 +580,19 @@ class CashierService {
   // 2. PRODUCTS & BARCODE LOOKUP
   // ==========================================
 
-  async searchProducts({ search = "", barcode = "" }) {
+  async searchProducts({ search = "", barcode = "", branchId = null }) {
     const term = (barcode || search || "").trim();
+    const isAllBranches = !branchId || branchId === 'all' || branchId === 'All Branches';
+
+    let branchJoin = '';
+    let branchCondition = '';
+    const values = [];
+
+    if (!isAllBranches) {
+      values.push(branchId);
+      branchJoin = 'INNER JOIN branches b ON b.id = ib.branch_id';
+      branchCondition = `AND (ib.branch_id::text = $${values.length} OR b.name ILIKE $${values.length})`;
+    }
 
     let query = `
       SELECT 
@@ -602,18 +613,18 @@ class CashierService {
         COALESCE(ib.mrp, 0.00) AS mrp,
         ROUND((COALESCE(ib.mrp, 0.00) * 0.9)::numeric, 2) AS "sellingPrice"
       FROM products p
-      LEFT JOIN inventory_batches ib ON ib.product_id = p.id AND ib.quantity > 0
+      LEFT JOIN inventory_batches ib ON ib.product_id = p.id AND ib.quantity > 0 ${branchCondition}
+      ${branchJoin}
     `;
 
-    const values = [];
     if (term) {
-      query += `
-        WHERE (p.sku ILIKE $1 
-           OR p.medicine_name ILIKE $1 
-           OR p.brand_name ILIKE $1 
-           OR ib.batch_number ILIKE $1)
-      `;
       values.push(`%${term}%`);
+      query += `
+        WHERE (p.sku ILIKE $${values.length} 
+           OR p.medicine_name ILIKE $${values.length} 
+           OR p.brand_name ILIKE $${values.length} 
+           OR ib.batch_number ILIKE $${values.length})
+      `;
     }
 
     query += ` ORDER BY p.medicine_name ASC, ib.expiry_date ASC LIMIT 50;`;

@@ -103,10 +103,13 @@ export async function fetchCashMovements(sessionId) {
 // 2. PRODUCTS & BARCODE LOOKUP
 // ==========================================
 
-export async function fetchCashierProducts(search = "", barcode = "") {
+export async function fetchCashierProducts(search = "", barcode = "", branchId = "") {
   const query = new URLSearchParams();
   if (search) query.append("search", search);
   if (barcode) query.append("barcode", barcode);
+  if (branchId && branchId !== "All Branches" && branchId !== "all") {
+    query.append("branchId", branchId);
+  }
   const queryString = query.toString() ? `?${query.toString()}` : "";
 
   const res = await apiGet(`/cashier/products${queryString}`);
@@ -122,6 +125,11 @@ export async function fetchCashierProducts(search = "", barcode = "") {
             p.generic.toLowerCase().includes(q) ||
             p.sku.toLowerCase().includes(q) ||
             p.batch.toLowerCase().includes(q),
+        );
+      }
+      if (branchId && branchId !== "All Branches") {
+        list = list.filter(
+          (p) => !p.branchId || p.branchId === branchId || p.branch === branchId
         );
       }
       return list;

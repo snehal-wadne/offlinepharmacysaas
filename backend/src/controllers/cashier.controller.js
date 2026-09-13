@@ -340,8 +340,9 @@ const getSessionSummary = async (req, res) => {
 // --- Products & Barcode Search ---
 const searchProducts = async (req, res) => {
   try {
-    const { search, barcode } = req.query;
-    const result = await cashierService.searchProducts({ search, barcode });
+    const { search, barcode, branchId: queryBranchId } = req.query;
+    const branchId = queryBranchId || req.headers['x-branch-id'] || req.tenant?.branchId || null;
+    const result = await cashierService.searchProducts({ search, barcode, branchId });
     res.status(200).json(result);
   } catch (error) {
     console.error('Error searching products:', error);

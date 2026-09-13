@@ -41,6 +41,7 @@ export default function StockStatusScreen({
   onShowToast,
   isMultiBranch = true,
   initialSearchQuery = "",
+  selectedBranch = "All Branches",
 }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
@@ -53,7 +54,7 @@ export default function StockStatusScreen({
 
   useEffect(() => {
     loadInventoryData();
-  }, []);
+  }, [selectedBranch]);
 
   useEffect(() => {
     setSearchQuery(initialSearchQuery || "");
@@ -62,7 +63,8 @@ export default function StockStatusScreen({
   const loadInventoryData = async () => {
     try {
       setLoading(true);
-      const res = await fetchInventory();
+      const branchParam = selectedBranch && selectedBranch !== "All Branches" ? selectedBranch : undefined;
+      const res = await fetchInventory({ branchId: branchParam });
       if (res && res.data && Array.isArray(res.data)) {
         setRawInventory(res.data);
       }
@@ -109,8 +111,11 @@ export default function StockStatusScreen({
       };
     });
 
-  const lowStockItemsList =
+  const baseLowStockList =
     rawInventory.length > 0 ? dbLowStockItems : MOCK_LOW_STOCK_ITEMS;
+  const lowStockItemsList = selectedBranch && selectedBranch !== "All Branches"
+    ? baseLowStockList.filter((i) => !i.branch || i.branch === selectedBranch || i.branchId === selectedBranch)
+    : baseLowStockList;
 
   // Live DB Batch Expiry Timeline Mapping
   const dbExpiryItems = rawInventory.map((item) => {
@@ -140,8 +145,11 @@ export default function StockStatusScreen({
     };
   });
 
-  const expiryItemsList =
+  const baseExpiryList =
     rawInventory.length > 0 ? dbExpiryItems : MOCK_EXPIRY_BATCHES;
+  const expiryItemsList = selectedBranch && selectedBranch !== "All Branches"
+    ? baseExpiryList.filter((i) => !i.branch || i.branch === selectedBranch || i.branchId === selectedBranch)
+    : baseExpiryList;
 
   // Dynamic 4 KPI Stat Cards Calculations
   const lowStockAlertsCount = lowStockItemsList.length;

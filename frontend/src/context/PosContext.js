@@ -16,7 +16,7 @@ import { syncEngine, bootstrapService } from "../sync";
 
 const PosContext = createContext(null);
 
-export function PosProvider({ children, currentUser }) {
+export function PosProvider({ children, currentUser, selectedBranch = "All Branches" }) {
   const effectiveOrgId = currentUser?.organisationId || null;
   const effectiveBranchId = currentUser?.branchId || null;
   const effectiveUserId = currentUser?.id || null;
@@ -25,7 +25,9 @@ export function PosProvider({ children, currentUser }) {
   const [products, setProducts] = useState(MOCK_POS_PRODUCTS);
   const [customers, setCustomers] = useState([]);
   const [isOfflineReady, setIsOfflineReady] = useState(false);
-  const [activeBranch, setActiveBranch] = useState(null);
+  const [activeBranch, setActiveBranch] = useState(
+    selectedBranch && selectedBranch !== "All Branches" ? selectedBranch : null
+  );
   const [taxConfig, setTaxConfig] = useState(null);
   const [heldBills, setHeldBills] = useState(MOCK_HELD_BILLS);
   const [activeResumedDraft, setActiveResumedDraft] = useState(null);
@@ -37,13 +39,23 @@ export function PosProvider({ children, currentUser }) {
       : { status: "IDLE", isOnline: true },
   );
 
+  // Sync activeBranch with selectedBranch from navigation
+  useEffect(() => {
+    if (selectedBranch && selectedBranch !== "All Branches") {
+      setActiveBranch(selectedBranch);
+    } else {
+      setActiveBranch(null);
+    }
+  }, [selectedBranch]);
+
   // Hydrate live products, held bills, and recent invoices from PostgreSQL backend
   useEffect(() => {
     let isMounted = true;
     async function hydratePosData() {
       try {
+        const branchParam = selectedBranch && selectedBranch !== "All Branches" ? selectedBranch : "";
         const [liveProds, liveHeld, liveInvs, liveReturns] = await Promise.all([
-          fetchCashierProducts(),
+          fetchCashierProducts("", "", branchParam),
           fetchHeldBills(),
           fetchRecentInvoices(),
           fetchReturnHistory ? fetchReturnHistory() : Promise.resolve([]),
@@ -113,7 +125,7 @@ export function PosProvider({ children, currentUser }) {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [selectedBranch]);
 
   // Initialize local persistence layer and restore recent invoices
   useEffect(() => {
