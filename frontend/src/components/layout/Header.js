@@ -442,7 +442,7 @@ export default function Header({
         {/* Sync Status Badge (Desktop & Mobile) */}
         <Pressable
           onPress={() => {
-            if (pendingCount > 0 && !isSyncing && syncNow) {
+            if (!isSyncing && syncNow) {
               syncNow();
             }
           }}
@@ -451,9 +451,11 @@ export default function Header({
             isMobile && styles.syncBadgeMobile,
             isSyncing
               ? styles.syncBadgeSyncing
-              : !isOnline || pendingCount > 0
-                ? styles.syncBadgePending
-                : styles.syncBadge,
+              : !isOnline
+                ? styles.syncBadgeOffline
+                : pendingCount > 0
+                  ? styles.syncBadgePending
+                  : styles.syncBadge,
           ]}
           accessibilityRole="button"
           accessibilityLabel="Sync status and trigger"
@@ -463,9 +465,11 @@ export default function Header({
               styles.syncDot,
               isSyncing
                 ? styles.syncDotSyncing
-                : !isOnline || pendingCount > 0
-                  ? styles.syncDotPending
-                  : styles.syncDot,
+                : !isOnline
+                  ? styles.syncDotOffline
+                  : pendingCount > 0
+                    ? styles.syncDotPending
+                    : styles.syncDot,
             ]}
           />
           <Text
@@ -474,26 +478,34 @@ export default function Header({
               isMobile && styles.syncTextMobile,
               isSyncing
                 ? styles.syncTextSyncing
-                : !isOnline || pendingCount > 0
-                  ? styles.syncTextPending
-                  : styles.syncText,
+                : !isOnline
+                  ? styles.syncTextOffline
+                  : pendingCount > 0
+                    ? styles.syncTextPending
+                    : styles.syncText,
             ]}
             numberOfLines={1}
           >
             {isSyncing
               ? isMobile
-                ? `Syncing...`
-                : `Syncing (${pendingCount})...`
+                ? "Syncing..."
+                : pendingCount > 0
+                  ? `Syncing (${pendingCount})...`
+                  : "Syncing..."
               : !isOnline
                 ? isMobile
-                  ? `Offline (${pendingCount})`
-                  : `Offline (${pendingCount})`
+                  ? pendingCount > 0
+                    ? `Offline (${pendingCount})`
+                    : "Offline"
+                  : pendingCount > 0
+                    ? `Offline (${pendingCount})`
+                    : "Offline"
                 : pendingCount > 0
                   ? isMobile
                     ? `⚡ ${pendingCount} Sync`
-                    : `Pending (${pendingCount}) • Sync Now`
+                    : `Online (${pendingCount}) • Sync Now`
                   : isMobile
-                    ? "Synced"
+                    ? "Online"
                     : "Online • Synced"}
           </Text>
         </Pressable>

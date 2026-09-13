@@ -84,6 +84,13 @@ export function OfflineSyncProvider({ children }) {
     }
   }, [isSyncing]);
 
+  // Immediately sync all data to the cloud when online and pending records exist
+  useEffect(() => {
+    if (isOnline && pendingCount > 0 && !isSyncing) {
+      triggerSync(true);
+    }
+  }, [isOnline, pendingCount, isSyncing, triggerSync]);
+
   // ============================================================
   // OFFLINE MUTATION ACTIONS
   // ============================================================

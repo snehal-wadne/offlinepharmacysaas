@@ -1113,9 +1113,19 @@ export default function StockTransferScreen({ onShowToast }) {
               ) : null}
 
               {/* Branch Selection Section */}
-              <View style={styles.branchSelectionGrid}>
+              <View
+                style={[
+                  styles.branchSelectionGrid,
+                  isMobile && styles.branchSelectionGridMobile,
+                ]}
+              >
                 {/* Source Branch (From) */}
-                <View style={styles.branchCol}>
+                <View
+                  style={[
+                    styles.branchCol,
+                    isMobile && styles.branchColMobile,
+                  ]}
+                >
                   <Text style={styles.fieldLabelModal}>
                     From Branch (Source) <Text style={styles.reqStar}>*</Text>
                   </Text>
@@ -1145,25 +1155,28 @@ export default function StockTransferScreen({ onShowToast }) {
                               isSelected && styles.branchOptionItemFromActive,
                             ]}
                           >
-                            <View
-                              style={[
-                                styles.branchDot,
-                                isSelected && styles.branchDotFromActive,
-                              ]}
-                            />
-                            <View style={{ flex: 1 }}>
-                              <Text
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
+                              <View
                                 style={[
-                                  styles.branchOptionName,
-                                  isSelected &&
-                                    styles.branchOptionNameFromActive,
+                                  styles.branchDot,
+                                  isSelected && styles.branchDotFromActive,
                                 ]}
-                              >
-                                {bName}
-                              </Text>
-                              <Text style={styles.branchOptionCity}>
-                                {b.city || "Pune"}
-                              </Text>
+                              />
+                              <View style={styles.branchOptionTextCol}>
+                                <Text
+                                  style={[
+                                    styles.branchOptionName,
+                                    isSelected &&
+                                      styles.branchOptionNameFromActive,
+                                  ]}
+                                  numberOfLines={1}
+                                >
+                                  {bName}
+                                </Text>
+                                <Text style={styles.branchOptionCity}>
+                                  {b.city || "Pune"}
+                                </Text>
+                              </View>
                             </View>
                             {isSelected && (
                               <Text
@@ -1184,14 +1197,26 @@ export default function StockTransferScreen({ onShowToast }) {
                 </View>
 
                 {/* Direction Indicator */}
-                <View style={styles.transferDirectionCol}>
+                <View
+                  style={[
+                    styles.transferDirectionCol,
+                    isMobile && styles.transferDirectionColMobile,
+                  ]}
+                >
                   <View style={styles.transferDirectionCircle}>
-                    <Text style={styles.transferDirectionArrow}>➔</Text>
+                    <Text style={styles.transferDirectionArrow}>
+                      {isMobile ? "⬇" : "➔"}
+                    </Text>
                   </View>
                 </View>
 
                 {/* Destination Branch (To) */}
-                <View style={styles.branchCol}>
+                <View
+                  style={[
+                    styles.branchCol,
+                    isMobile && styles.branchColMobile,
+                  ]}
+                >
                   <Text style={styles.fieldLabelModal}>
                     To Branch (Destination){" "}
                     <Text style={styles.reqStar}>*</Text>
@@ -1216,26 +1241,29 @@ export default function StockTransferScreen({ onShowToast }) {
                               isDisabled && styles.branchOptionDisabled,
                             ]}
                           >
-                            <View
-                              style={[
-                                styles.branchDot,
-                                isSelected && styles.branchDotToActive,
-                              ]}
-                            />
-                            <View style={{ flex: 1 }}>
-                              <Text
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
+                              <View
                                 style={[
-                                  styles.branchOptionName,
-                                  isSelected &&
-                                    styles.branchOptionNameToActive,
-                                  isDisabled && styles.branchOptionNameDisabled,
+                                  styles.branchDot,
+                                  isSelected && styles.branchDotToActive,
                                 ]}
-                              >
-                                {bName} {isDisabled ? "(Current Source)" : ""}
-                              </Text>
-                              <Text style={styles.branchOptionCity}>
-                                {b.city || "Pune"}
-                              </Text>
+                              />
+                              <View style={styles.branchOptionTextCol}>
+                                <Text
+                                  style={[
+                                    styles.branchOptionName,
+                                    isSelected &&
+                                      styles.branchOptionNameToActive,
+                                    isDisabled && styles.branchOptionNameDisabled,
+                                  ]}
+                                  numberOfLines={1}
+                                >
+                                  {bName} {isDisabled ? "(Current Source)" : ""}
+                                </Text>
+                                <Text style={styles.branchOptionCity}>
+                                  {b.city || "Pune"}
+                                </Text>
+                              </View>
                             </View>
                             {isSelected && (
                               <Text
@@ -2512,8 +2540,19 @@ const styles = StyleSheet.create({
     alignItems: "stretch",
     gap: 10,
   },
+  branchSelectionGridMobile: {
+    flexDirection: "column",
+    gap: 12,
+  },
   branchCol: {
     flex: 1,
+  },
+  branchColMobile: {
+    width: "100%",
+  },
+  branchOptionTextCol: {
+    flex: 1,
+    minWidth: 0,
   },
   branchPickerBox: {
     borderWidth: 1,
@@ -2584,6 +2623,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     width: 28,
     paddingTop: 18,
+  },
+  transferDirectionColMobile: {
+    width: "100%",
+    paddingTop: 0,
+    marginVertical: 4,
   },
   transferDirectionCircle: {
     width: 28,
