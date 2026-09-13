@@ -18,6 +18,8 @@ import {
   BRANCH_FILTER_OPTIONS,
   MOCK_ROLES_LIST,
 } from '../../data/managementMockData';
+import { SkeletonTableRow } from '../../components/common/SkeletonLoader';
+import PaginationControls from '../../components/common/PaginationControls';
 
 export default function UsersScreen({ onShowToast, onNavigate }) {
   const { width } = useWindowDimensions();
@@ -32,6 +34,9 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
 
   // Users State
   const [users, setUsers] = useState(MOCK_USERS_LIST);
+  const [loading, setLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   // Add / Invite / Edit Modal State
   const [modalVisible, setModalVisible] = useState(false);
@@ -114,6 +119,12 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
     setSelectedBranch('All Branches');
     setSelectedStatus('All');
   };
+
+  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
+  const paginatedUsers = filteredUsers.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
   // Open Modal for Add / Invite
   const handleOpenAddModal = () => {
@@ -582,7 +593,13 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
           </Text>
         </View>
 
-        {filteredUsers.length === 0 ? (
+        {loading ? (
+          <View style={{ padding: 20 }}>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <SkeletonTableRow key={i} />
+            ))}
+          </View>
+        ) : filteredUsers.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyIcon}>👥</Text>
             <Text style={styles.emptyTitle}>No Staff Members Found</Text>
@@ -607,7 +624,7 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
           </View>
         ) : isMobile ? (
           <View style={styles.mobileStaffList}>
-            {filteredUsers.map((user) => {
+            {paginatedUsers.map((user) => {
               const isActive = user.status === 'Active';
               const roleBadge = getRoleBadgeStyle(user.role);
 
@@ -737,7 +754,7 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
               </View>
 
               {/* Table Body */}
-              {filteredUsers.map((user, index) => {
+              {paginatedUsers.map((user, index) => {
                 const isActive = user.status === 'Active';
                 const isEven = index % 2 === 0;
                 const roleBadge = getRoleBadgeStyle(user.role);
@@ -905,9 +922,17 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
             </View>
           </ScrollView>
         )}
+        {!loading && filteredUsers.length > 0 && (
+          <PaginationControls
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            totalItems={filteredUsers.length}
+          />
+        )}
       </View>
 
-      {/* 5. ADD / INVITE / EDIT USER MODAL */}
+      {/* 5. Add / Invite User Modal */}
       <Modal
         visible={modalVisible}
         transparent

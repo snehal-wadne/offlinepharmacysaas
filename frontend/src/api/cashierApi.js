@@ -15,126 +15,88 @@ import {
   MOCK_RECENT_INVOICES,
 } from "../data/cashierMockData";
 
-const API_BASE_URL =
-  Platform.OS === "android"
-    ? "http://10.0.2.2:5000/api"
-    : "http://localhost:5000/api";
-
-async function apiRequest(endpoint, options = {}) {
-  const url = `${API_BASE_URL}${endpoint}`;
-  const config = {
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-    ...options,
-  };
-
-  try {
-    const response = await fetch(url, config);
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || `HTTP error ${response.status}`);
-    }
-    return data;
-  } catch (error) {
-    console.warn(
-      `[Cashier API] Network request failed for ${url}:`,
-      error.message,
-    );
-    throw error;
-  }
-}
+import { apiGet, apiPost, apiDelete } from './apiClient';
 
 // ==========================================
 // 1. REGISTER SESSIONS
 // ==========================================
 
 export async function fetchCurrentRegisterSession() {
-  try {
-    const res = await apiRequest("/cashier/register/current", {
-      method: "GET",
-    });
-    return res.data;
-  } catch {
-    return DEFAULT_REGISTER_SESSION;
+  const res = await apiGet("/cashier/register/current");
+  if (!res.success) {
+    if (res.isOffline) return DEFAULT_REGISTER_SESSION;
+    throw new Error(res.error);
   }
+  return res.data.data || res.data;
 }
 
 export async function openRegisterShift(data) {
-  try {
-    const res = await apiRequest("/cashier/register/open", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-    return res.data;
-  } catch {
-    return {
-      ...DEFAULT_REGISTER_SESSION,
-      isOpen: true,
-      openedBy: data.openedBy || "Cashier 01",
-      openingBalance: data.openingBalance || 2000.0,
-      expectedCash: data.openingBalance || 2000.0,
-    };
+  const res = await apiPost("/cashier/register/open", data);
+  if (!res.success) {
+    if (res.isOffline) {
+      return {
+        ...DEFAULT_REGISTER_SESSION,
+        isOpen: true,
+        openedBy: data.openedBy || "Cashier 01",
+        openingBalance: data.openingBalance || 2000.0,
+        expectedCash: data.openingBalance || 2000.0,
+      };
+    }
+    throw new Error(res.error);
   }
+  return res.data.data || res.data;
 }
 
 export async function closeRegisterShift(data) {
-  try {
-    const res = await apiRequest("/cashier/register/close", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-    return res.data;
-  } catch {
-    return {
-      id: "REG-2026-0829-01",
-      status: "Balanced",
-      variance: 0,
-      countedCash: data.countedCash || 0,
-    };
+  const res = await apiPost("/cashier/register/close", data);
+  if (!res.success) {
+    if (res.isOffline) {
+      return {
+        id: "REG-2026-0829-01",
+        status: "Balanced",
+        variance: 0,
+        countedCash: data.countedCash || 0,
+      };
+    }
+    throw new Error(res.error);
   }
+  return res.data.data || res.data;
 }
 
 export async function fetchRegisterHistory() {
-  try {
-    const res = await apiRequest("/cashier/register/history", {
-      method: "GET",
-    });
-    return res.data || [];
-  } catch {
-    return MOCK_REGISTER_HISTORY;
+  const res = await apiGet("/cashier/register/history");
+  if (!res.success) {
+    if (res.isOffline) return MOCK_REGISTER_HISTORY;
+    throw new Error(res.error);
   }
+  return res.data.data || res.data || [];
 }
 
 export async function recordCashMovement(data) {
-  try {
-    const res = await apiRequest('/cashier/register/movement', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-    return res.data;
-  } catch (err) {
-    console.warn('[Cashier API] recordCashMovement fallback:', err.message);
-    return {
-      id: `PC-${Date.now().toString().slice(-4)}`,
-      type: data.movementType || 'OUT',
-      amount: data.amount || 0,
-      reason: data.reason || 'Petty cash',
-      time: new Date().toLocaleString(),
-    };
+  const res = await apiPost('/cashier/register/movement', data);
+  if (!res.success) {
+    if (res.isOffline) {
+      return {
+        id: `PC-${Date.now().toString().slice(-4)}`,
+        type: data.movementType || 'OUT',
+        amount: data.amount || 0,
+        reason: data.reason || 'Petty cash',
+        time: new Date().toLocaleString(),
+      };
+    }
+    throw new Error(res.error);
   }
+  return res.data.data || res.data;
 }
 
 export async function fetchCashMovements(sessionId) {
-  try {
-    const queryString = sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : '';
-    const res = await apiRequest(`/cashier/register/movements${queryString}`, { method: 'GET' });
-    return res.data || [];
-  } catch {
-    return [];
+  const queryString = sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : '';
+  const res = await apiGet(`/cashier/register/movements${queryString}`);
+  if (!res.success) {
+    if (res.isOffline) return [];
+    throw new Error(res.error);
   }
+  return res.data.data || res.data || [];
 }
 
 // ==========================================
@@ -142,31 +104,31 @@ export async function fetchCashMovements(sessionId) {
 // ==========================================
 
 export async function fetchCashierProducts(search = "", barcode = "") {
-  try {
-    const query = new URLSearchParams();
-    if (search) query.append("search", search);
-    if (barcode) query.append("barcode", barcode);
-    const queryString = query.toString() ? `?${query.toString()}` : "";
+  const query = new URLSearchParams();
+  if (search) query.append("search", search);
+  if (barcode) query.append("barcode", barcode);
+  const queryString = query.toString() ? `?${query.toString()}` : "";
 
-    const res = await apiRequest(`/cashier/products${queryString}`, {
-      method: "GET",
-    });
-    return res.data || [];
-  } catch {
-    let list = MOCK_POS_PRODUCTS;
-    if (barcode) list = list.filter((p) => p.barcode === barcode);
-    if (search) {
-      const q = search.toLowerCase();
-      list = list.filter(
-        (p) =>
-          p.name.toLowerCase().includes(q) ||
-          p.generic.toLowerCase().includes(q) ||
-          p.sku.toLowerCase().includes(q) ||
-          p.batch.toLowerCase().includes(q),
-      );
+  const res = await apiGet(`/cashier/products${queryString}`);
+  if (!res.success) {
+    if (res.isOffline) {
+      let list = MOCK_POS_PRODUCTS;
+      if (barcode) list = list.filter((p) => p.barcode === barcode);
+      if (search) {
+        const q = search.toLowerCase();
+        list = list.filter(
+          (p) =>
+            p.name.toLowerCase().includes(q) ||
+            p.generic.toLowerCase().includes(q) ||
+            p.sku.toLowerCase().includes(q) ||
+            p.batch.toLowerCase().includes(q),
+        );
+      }
+      return list;
     }
-    return list;
+    throw new Error(res.error);
   }
+  return res.data.data || res.data || [];
 }
 
 // ==========================================
@@ -179,32 +141,28 @@ export async function fetchCashierProducts(search = "", barcode = "") {
  * Direct POST to `/cashier/sales` must not be invoked during POS checkout to eliminate duplicate-sale risk.
  */
 export async function createPosSale(saleData) {
-  try {
-    const res = await apiRequest("/cashier/sales", {
-      method: "POST",
-      body: JSON.stringify(saleData),
-    });
-    return res.data;
-  } catch {
-    // Offline simulated response
-    return {
-      invoiceNo: `INV-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
-      date: new Date().toLocaleString(),
-      ...saleData,
-      offlineCreated: true,
-    };
+  const res = await apiPost("/cashier/sales", saleData);
+  if (!res.success) {
+    if (res.isOffline) {
+      return {
+        invoiceNo: `INV-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
+        date: new Date().toLocaleString(),
+        ...saleData,
+        offlineCreated: true,
+      };
+    }
+    throw new Error(res.error);
   }
+  return res.data.data || res.data;
 }
 
 export async function fetchRecentInvoices(limit = 20) {
-  try {
-    const res = await apiRequest(`/cashier/sales/recent?limit=${limit}`, {
-      method: "GET",
-    });
-    return res.data || [];
-  } catch {
-    return MOCK_RECENT_INVOICES;
+  const res = await apiGet(`/cashier/sales/recent?limit=${limit}`);
+  if (!res.success) {
+    if (res.isOffline) return MOCK_RECENT_INVOICES;
+    throw new Error(res.error);
   }
+  return res.data.data || res.data || [];
 }
 
 // ==========================================
@@ -212,39 +170,36 @@ export async function fetchRecentInvoices(limit = 20) {
 // ==========================================
 
 export async function fetchHeldBills() {
-  try {
-    const res = await apiRequest("/cashier/held-bills", { method: "GET" });
-    return res.data || [];
-  } catch {
-    return MOCK_HELD_BILLS;
+  const res = await apiGet("/cashier/held-bills");
+  if (!res.success) {
+    if (res.isOffline) return MOCK_HELD_BILLS;
+    throw new Error(res.error);
   }
+  return res.data.data || res.data || [];
 }
 
 export async function holdCurrentBill(billData) {
-  try {
-    const res = await apiRequest("/cashier/held-bills", {
-      method: "POST",
-      body: JSON.stringify(billData),
-    });
-    return res.data;
-  } catch {
-    return {
-      holdId: `HOLD-${Date.now().toString().slice(-4)}`,
-      token: `T-${Math.floor(100 + Math.random() * 900)}`,
-      ...billData,
-    };
+  const res = await apiPost("/cashier/held-bills", billData);
+  if (!res.success) {
+    if (res.isOffline) {
+      return {
+        holdId: `HOLD-${Date.now().toString().slice(-4)}`,
+        token: `T-${Math.floor(100 + Math.random() * 900)}`,
+        ...billData,
+      };
+    }
+    throw new Error(res.error);
   }
+  return res.data.data || res.data;
 }
 
 export async function resumeHeldBill(holdId) {
-  try {
-    const res = await apiRequest(`/cashier/held-bills/${holdId}`, {
-      method: "DELETE",
-    });
-    return res.data;
-  } catch {
-    return null;
+  const res = await apiDelete(`/cashier/held-bills/${holdId}`);
+  if (!res.success) {
+    if (res.isOffline) return null;
+    throw new Error(res.error);
   }
+  return res.data.data || res.data;
 }
 
 // ==========================================
@@ -252,35 +207,29 @@ export async function resumeHeldBill(holdId) {
 // ==========================================
 
 export async function searchReturnInvoice(invoiceNo) {
-  try {
-    const res = await apiRequest(
-      `/cashier/returns/search?invoiceNo=${encodeURIComponent(invoiceNo)}`,
-      {
-        method: "GET",
-      },
-    );
-    return res.data;
-  } catch {
-    return (
-      MOCK_RECENT_INVOICES.find((inv) => inv.invoiceNo === invoiceNo) || null
-    );
+  const res = await apiGet(`/cashier/returns/search?invoiceNo=${encodeURIComponent(invoiceNo)}`);
+  if (!res.success) {
+    if (res.isOffline) {
+      return MOCK_RECENT_INVOICES.find((inv) => inv.invoiceNo === invoiceNo) || null;
+    }
+    throw new Error(res.error);
   }
+  return res.data.data || res.data;
 }
 
 export async function processSaleReturn(returnData) {
-  try {
-    const res = await apiRequest("/cashier/returns", {
-      method: "POST",
-      body: JSON.stringify(returnData),
-    });
-    return res.data;
-  } catch {
-    return {
-      returnNo: `RET-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`,
-      date: new Date().toLocaleString(),
-      ...returnData,
-    };
+  const res = await apiPost("/cashier/returns", returnData);
+  if (!res.success) {
+    if (res.isOffline) {
+      return {
+        returnNo: `RET-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`,
+        date: new Date().toLocaleString(),
+        ...returnData,
+      };
+    }
+    throw new Error(res.error);
   }
+  return res.data.data || res.data;
 }
 
 // ==========================================
@@ -288,14 +237,17 @@ export async function processSaleReturn(returnData) {
 // ==========================================
 
 export async function fetchSyncStatus() {
-  try {
-    return await apiRequest("/sync/status", { method: "GET" });
-  } catch {
-    return {
-      online: false,
-      mode: "offline_local",
-      pendingSyncCount: 0,
-      message: "Running fully offline without network errors.",
-    };
+  const res = await apiGet("/sync/status");
+  if (!res.success) {
+    if (res.isOffline) {
+      return {
+        online: false,
+        mode: "offline_local",
+        pendingSyncCount: 0,
+        message: "Running fully offline without network errors.",
+      };
+    }
+    throw new Error(res.error);
   }
+  return res.data;
 }

@@ -10,6 +10,7 @@ import {
   Platform,
   Modal,
 } from 'react-native';
+import { SkeletonItemCard } from '../../components/common/SkeletonLoader';
 
 const INDIAN_STATES = [
   { code: '27', name: 'Maharashtra (Home State)', isIntraState: true },
@@ -82,6 +83,7 @@ export default function SubscriptionPlansScreen({ onNavigate, onShowToast, isMul
 
   // Billing Cycle: 'monthly' or 'annual'
   const [billingCycle, setBillingCycle] = useState('monthly');
+  const [loading, setLoading] = useState(false);
 
   // Currently active subscription (Mock state)
   const [activePlan, setActivePlan] = useState('plan-growth');
@@ -254,8 +256,13 @@ export default function SubscriptionPlansScreen({ onNavigate, onShowToast, isMul
 
       {/* 3 Subscription Plan Cards Grid */}
       <View style={styles.planCardsGrid}>
-        {SUBSCRIPTION_PLANS.map((plan) => {
-          const price = billingCycle === 'annual' ? plan.annualPrice : plan.monthlyPrice;
+        {loading ? (
+          Array.from({ length: 3 }).map((_, i) => (
+            <SkeletonItemCard key={i} />
+          ))
+        ) : (
+          SUBSCRIPTION_PLANS.map((plan) => {
+            const price = billingCycle === 'annual' ? plan.annualPrice : plan.monthlyPrice;
           const isCurrentActive = activePlan === plan.id;
           const planGst = (price * 0.18).toFixed(2);
           const planTotalWithGst = (price * 1.18).toFixed(2);
@@ -331,11 +338,11 @@ export default function SubscriptionPlansScreen({ onNavigate, onShowToast, isMul
                 </Text>
               </Pressable>
             </View>
-          );
-        })}
+            );
+          }))}
       </View>
 
-      {/* Tax Information Banner */}
+      {/* Subscription Features Breakdown */}
       <View style={styles.taxNoticeCard}>
         <View style={styles.taxNoticeHeader}>
           <Text style={styles.taxNoticeIcon}>ℹ️</Text>

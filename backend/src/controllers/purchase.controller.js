@@ -9,12 +9,12 @@ const purchaseService = require('../services/purchase.service');
 const { pool } = require('../db/connection');
 
 const getOrgId = async (req) => {
+  if (req.user && req.user.organisationId) return req.user.organisationId;
   if (req.headers['x-organisation-id']) return req.headers['x-organisation-id'];
   if (req.query && req.query.organisationId) return req.query.organisationId;
   if (req.body && req.body.organisationId) return req.body.organisationId;
 
-  const orgRes = await pool.query('SELECT id FROM organisations LIMIT 1;');
-  return orgRes.rows[0]?.id;
+  return null;
 };
 
 /**
@@ -24,6 +24,9 @@ const getOrgId = async (req) => {
 const getPurchases = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
+    if (!organisationId) {
+      return res.status(400).json({ error: 'Organisation ID is required' });
+    }
     const { status, search, branchId, supplierId, limit, offset } = req.query;
 
     const purchases = await purchaseService.getPurchases({
@@ -56,6 +59,9 @@ const getPurchases = async (req, res) => {
 const getPurchaseById = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
+    if (!organisationId) {
+      return res.status(400).json({ error: 'Organisation ID is required' });
+    }
     const { id } = req.params;
 
     const purchase = await purchaseService.getPurchaseById(organisationId, id);
@@ -85,6 +91,9 @@ const getPurchaseById = async (req, res) => {
 const createPurchase = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
+    if (!organisationId) {
+      return res.status(400).json({ error: 'Organisation ID is required' });
+    }
     const purchaseData = {
       ...req.body,
       organisationId,
@@ -113,6 +122,9 @@ const createPurchase = async (req, res) => {
 const updatePurchaseStatus = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
+    if (!organisationId) {
+      return res.status(400).json({ error: 'Organisation ID is required' });
+    }
     const { id } = req.params;
     const { status } = req.body;
 
@@ -146,6 +158,9 @@ const updatePurchaseStatus = async (req, res) => {
 const receivePurchase = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
+    if (!organisationId) {
+      return res.status(400).json({ error: 'Organisation ID is required' });
+    }
     const { id } = req.params;
     const receiveData = req.body || {};
 
@@ -168,6 +183,9 @@ const receivePurchase = async (req, res) => {
 const getPurchaseSummary = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
+    if (!organisationId) {
+      return res.status(400).json({ error: 'Organisation ID is required' });
+    }
     const summary = await purchaseService.getPurchaseSummary(organisationId);
     res.status(200).json({
       success: true,

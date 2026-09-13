@@ -14,6 +14,8 @@ import InventoryStatCard from '../../components/inventory/InventoryStatCard';
 import {
   MOCK_AUDIT_LOGS,
 } from '../../data/managementMockData';
+import { SkeletonTableRow } from '../../components/common/SkeletonLoader';
+import PaginationControls from '../../components/common/PaginationControls';
 
 export default function AuditLogScreen({ onShowToast, onNavigate }) {
   const { width } = useWindowDimensions();
@@ -26,6 +28,9 @@ export default function AuditLogScreen({ onShowToast, onNavigate }) {
 
   // Audit Logs State
   const [logs, setLogs] = useState(MOCK_AUDIT_LOGS);
+  const [loading, setLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   // View Details Modal State
   const [selectedLog, setSelectedLog] = useState(null);
@@ -72,6 +77,12 @@ export default function AuditLogScreen({ onShowToast, onNavigate }) {
 
     return matchesSearch && matchesKpi;
   });
+
+  const totalPages = Math.ceil(filteredLogs.length / itemsPerPage);
+  const paginatedLogs = filteredLogs.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
   const handleOpenDetails = (log) => {
     setSelectedLog(log);
@@ -288,7 +299,13 @@ export default function AuditLogScreen({ onShowToast, onNavigate }) {
           </Text>
         </View>
 
-        {filteredLogs.length === 0 ? (
+        {loading ? (
+          <View style={{ padding: 20 }}>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <SkeletonTableRow key={i} />
+            ))}
+          </View>
+        ) : filteredLogs.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyIcon}>📋</Text>
             <Text style={styles.emptyTitle}>No Audit Records Found</Text>
@@ -307,7 +324,7 @@ export default function AuditLogScreen({ onShowToast, onNavigate }) {
           </View>
         ) : isMobile ? (
           <View style={styles.mobileAuditList}>
-            {filteredLogs.map((log) => {
+            {paginatedLogs.map((log) => {
               const actionBadge = getActionBadgeStyle(log.actionType);
               const sevStyle = getSeverityStyle(log.severity);
 
@@ -385,7 +402,7 @@ export default function AuditLogScreen({ onShowToast, onNavigate }) {
               </View>
 
               {/* Body */}
-              {filteredLogs.map((log, index) => {
+              {paginatedLogs.map((log, index) => {
                 const isEven = index % 2 === 0;
                 const actionBadge = getActionBadgeStyle(log.actionType);
                 const sevStyle = getSeverityStyle(log.severity);
@@ -504,6 +521,14 @@ export default function AuditLogScreen({ onShowToast, onNavigate }) {
               })}
             </View>
           </ScrollView>
+        )}
+        {!loading && filteredLogs.length > 0 && (
+          <PaginationControls
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            totalItems={filteredLogs.length}
+          />
         )}
       </View>
 

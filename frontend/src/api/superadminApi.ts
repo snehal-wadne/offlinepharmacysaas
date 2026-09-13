@@ -34,7 +34,14 @@ async function apiRequest<T = any>(endpoint: string, options: RequestInit = {}):
 
   try {
     const response = await fetch(url, config);
-    const data = await response.json().catch(() => ({}));
+    let data;
+    const text = await response.text();
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { error: text };
+    }
+    
     if (!response.ok) {
       throw new Error(data.error || `HTTP error! status: ${response.status}`);
     }

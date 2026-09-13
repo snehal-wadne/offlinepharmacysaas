@@ -119,8 +119,17 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
   });
 
   const loadBranchesData = async () => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
     try {
-      const res = await fetch(`${API_URL}/branches`);
+      const token = typeof localStorage !== 'undefined' ? localStorage.getItem('token') || '' : '';
+      const res = await fetch(`${API_URL}/branches`, {
+        headers: {
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        },
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
       if (res.ok) {
         const json = await res.json();
         if (json.success && Array.isArray(json.data) && json.data.length > 0) {
@@ -306,14 +315,19 @@ export default function StockAdjustmentsScreen({ onShowToast, isMultiBranch = tr
 
     try {
       await updateInventoryEntry(selectedItemForAction.id, updatedPayload);
-      recordStockMovementApi({
-        branchName: selectedItemForAction.branchId || 'Main Branch',
-        type: 'Adjustment',
-        item: selectedItemForAction.brandName || selectedItemForAction.medicineName || 'Medicine Item',
-        quantity: deltaNum > 0 ? `+${deltaNum}` : `${deltaNum}`,
-        reference: selectedItemForAction.batchNo || 'ADJ-1001',
-        status: 'Completed',
-      }).catch(() => {});
+      try {
+        await recordStockMovementApi({
+          branchName: selectedItemForAction.branchId || 'Main Branch',
+          type: 'Adjustment',
+          item: selectedItemForAction.brandName || selectedItemForAction.medicineName || 'Medicine Item',
+          quantity: deltaNum > 0 ? `+${deltaNum}` : `${deltaNum}`,
+          reference: selectedItemForAction.batchNo || 'ADJ-1001',
+          status: 'Completed',
+        });
+      } catch (err) {
+        console.warn('Failed to record stock movement:', err.message);
+        if (onShowToast) onShowToast('⚠️ Adjustment saved, but failed to log movement history');
+      }
 
       setStockItems((prev) =>
         prev.map((i) => {

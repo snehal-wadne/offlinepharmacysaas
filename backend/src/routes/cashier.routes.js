@@ -13,6 +13,9 @@
 const express = require('express');
 const router = express.Router();
 const cashierController = require('../controllers/cashier.controller');
+const { authenticate } = require('../middlewares/auth.middleware');
+
+router.use(authenticate);
 
 // --- Register Sessions ---
 router.get('/register/current', cashierController.getCurrentSession);

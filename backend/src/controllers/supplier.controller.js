@@ -8,17 +8,20 @@ const supplierService = require('../services/supplier.service');
 const { pool } = require('../db/connection');
 
 const getOrgId = async (req) => {
+  if (req.user && req.user.organisationId) return req.user.organisationId;
   if (req.headers['x-organisation-id']) return req.headers['x-organisation-id'];
   if (req.query && req.query.organisationId) return req.query.organisationId;
   if (req.body && req.body.organisationId) return req.body.organisationId;
 
-  const orgRes = await pool.query('SELECT id FROM organisations LIMIT 1;');
-  return orgRes.rows[0]?.id;
+  return null;
 };
 
 const getSuppliers = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
+    if (!organisationId) {
+      return res.status(400).json({ error: 'Organisation ID is required' });
+    }
     const { search, limit, offset } = req.query;
 
     const suppliers = await supplierService.getSuppliers({
@@ -45,6 +48,9 @@ const getSuppliers = async (req, res) => {
 const getSupplierById = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
+    if (!organisationId) {
+      return res.status(400).json({ error: 'Organisation ID is required' });
+    }
     const { id } = req.params;
 
     const supplier = await supplierService.getSupplierById(organisationId, id);
@@ -71,6 +77,9 @@ const getSupplierById = async (req, res) => {
 const createSupplier = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
+    if (!organisationId) {
+      return res.status(400).json({ error: 'Organisation ID is required' });
+    }
     const supplierData = {
       ...req.body,
       organisationId,
@@ -95,6 +104,9 @@ const createSupplier = async (req, res) => {
 const updateSupplierStatus = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
+    if (!organisationId) {
+      return res.status(400).json({ error: 'Organisation ID is required' });
+    }
     const { id } = req.params;
     const { status } = req.body;
 
@@ -128,6 +140,9 @@ const updateSupplierStatus = async (req, res) => {
 const updateSupplier = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
+    if (!organisationId) {
+      return res.status(400).json({ error: 'Organisation ID is required' });
+    }
     const { id } = req.params;
 
     const updatedSupplier = await supplierService.updateSupplier(organisationId, id, req.body);
@@ -149,6 +164,9 @@ const updateSupplier = async (req, res) => {
 const deleteSupplier = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
+    if (!organisationId) {
+      return res.status(400).json({ error: 'Organisation ID is required' });
+    }
     const { id } = req.params;
 
     const deleted = await supplierService.deleteSupplier(organisationId, id);

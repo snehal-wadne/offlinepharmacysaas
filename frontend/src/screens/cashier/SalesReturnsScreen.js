@@ -12,6 +12,9 @@ import {
 } from "react-native";
 import { usePos } from "../../context/PosContext";
 import BarcodeScannerModal from "../../components/common/BarcodeScannerModal";
+import { SkeletonTableRow } from "../../components/common/SkeletonLoader";
+import PaginationControls from "../../components/common/PaginationControls";
+import { useEffect } from "react";
 
 export default function SalesReturnsScreen({
   onNavigate,
@@ -21,6 +24,15 @@ export default function SalesReturnsScreen({
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const isCompact = width < 1100;
+
+  const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 500);
+    return () => clearTimeout(timer);
+  }, []);
 
   const { invoices, returnHistory, processReturnRefund } = usePos();
 
@@ -103,7 +115,7 @@ export default function SalesReturnsScreen({
       !q ||
       inv.invoiceNo.toLowerCase().includes(q) ||
       inv.customer.toLowerCase().includes(q) ||
-      (inv.phone && inv.phone.includes(q));
+      (inv.phone && String(inv.phone).includes(q));
 
     let matchDate = true;
     if (selectedDateFilter === "Today (29 Aug 2026)") {
@@ -139,7 +151,7 @@ export default function SalesReturnsScreen({
   const calculateRefundTotal = () => {
     if (!selectedInvoice || !selectedInvoice.items) return 0;
     let total = 0;
-    selectedInvoice.items.forEach((it, idx) => {
+    (selectedInvoice.items || []).forEach((it, idx) => {
       const q = returnQtys[idx] || 0;
       const unitPrice = it.price || it.sellingPrice || 0;
       total += unitPrice * q;
@@ -265,6 +277,18 @@ export default function SalesReturnsScreen({
       onShowToast(`⚠️ No invoice found matching code "${scannedCode}".`);
     }
   };
+
+  const paginatedData = filteredInvoices.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, padding: 24, gap: 16 }}>
+        <SkeletonTableRow />
+        <SkeletonTableRow />
+        <SkeletonTableRow />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.screenContainer}>
@@ -606,7 +630,7 @@ export default function SalesReturnsScreen({
                         </Text>
                       </View>
                     ) : (
-                      filteredInvoices.map((inv) => {
+                      paginatedData.map((inv) => {
                         const isSelected =
                           selectedInvoice?.invoiceNo === inv.invoiceNo;
                         return (
@@ -718,11 +742,14 @@ export default function SalesReturnsScreen({
                       })
                     )}
 
-                    <View style={styles.tableFooterRow}>
-                      <Text style={styles.showingCountText}>
-                        Showing {filteredInvoices.length} of {invoices.length}{" "}
-                        Invoices
-                      </Text>
+                    <View style={{ padding: 16 }}>
+                      <PaginationControls
+                        currentPage={currentPage}
+                        totalItems={filteredInvoices.length}
+                        itemsPerPage={itemsPerPage}
+                        onPageChange={setCurrentPage}
+                        onItemsPerPageChange={(n) => { setItemsPerPage(n); setCurrentPage(1); }}
+                      />
                     </View>
                   </View>
                 ) : (
@@ -759,7 +786,7 @@ export default function SalesReturnsScreen({
                           </Text>
                         </View>
                       ) : (
-                        filteredInvoices.map((inv) => {
+                        paginatedData.map((inv) => {
                           const isSelected =
                             selectedInvoice?.invoiceNo === inv.invoiceNo;
                           return (
@@ -818,11 +845,14 @@ export default function SalesReturnsScreen({
                       )}
                     </ScrollView>
 
-                    <View style={styles.tableFooterRow}>
-                      <Text style={styles.showingCountText}>
-                        Showing {filteredInvoices.length} of {invoices.length}{" "}
-                        Invoices
-                      </Text>
+                    <View style={{ padding: 16 }}>
+                      <PaginationControls
+                        currentPage={currentPage}
+                        totalItems={filteredInvoices.length}
+                        itemsPerPage={itemsPerPage}
+                        onPageChange={setCurrentPage}
+                        onItemsPerPageChange={(n) => { setItemsPerPage(n); setCurrentPage(1); }}
+                      />
                     </View>
                   </View>
                 )}

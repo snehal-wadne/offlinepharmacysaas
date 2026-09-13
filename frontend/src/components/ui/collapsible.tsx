@@ -16,7 +16,10 @@ export function Collapsible({ children, title }: PropsWithChildren & { title: st
     <ThemedView>
       <Pressable
         style={({ pressed }) => [styles.heading, pressed && styles.pressedHeading]}
-        onPress={() => setIsOpen((value) => !value)}>
+        onPress={() => setIsOpen((value) => !value)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: isOpen }}
+      >
         <ThemedView type="backgroundElement" style={styles.button}>
           <SymbolView
             name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}

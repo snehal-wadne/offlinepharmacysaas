@@ -4,33 +4,7 @@
  * Communicates with backend REST API for inventory management and stock adjustments.
  */
 
-import { Platform } from 'react-native';
-
-const API_BASE_URL = Platform.OS === 'android' ? 'http://10.0.2.2:5000/api' : 'http://localhost:5000/api';
-
-async function apiRequest(endpoint, options = {}) {
-  const url = `${API_BASE_URL}${endpoint}`;
-  const config = {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-    ...options,
-  };
-
-  try {
-    const response = await fetch(url, config);
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || `HTTP error ${response.status}`);
-    }
-    return data;
-  } catch (error) {
-    console.warn(`[Inventory API] Request failed for ${url}:`, error.message);
-    throw error;
-  }
-}
+import { apiGet, apiPost, apiPut, apiDelete } from './apiClient';
 
 /**
  * GET /api/inventory
@@ -40,14 +14,14 @@ export async function fetchInventory(params = {}) {
   if (params.search) query.append('search', params.search);
 
   const queryString = query.toString() ? `?${query.toString()}` : '';
-  return apiRequest(`/inventory${queryString}`, { method: 'GET' });
+  return apiGet(`/inventory${queryString}`);
 }
 
 /**
  * GET /api/inventory/summary
  */
 export async function fetchInventorySummary() {
-  return apiRequest('/inventory/summary', { method: 'GET' });
+  return apiGet('/inventory/summary');
 }
 
 /**
@@ -57,46 +31,35 @@ export async function fetchStockMovements(params = {}) {
   const query = new URLSearchParams();
   if (params.limit) query.append('limit', params.limit);
   const queryString = query.toString() ? `?${query.toString()}` : '';
-  return apiRequest(`/inventory/movements${queryString}`, { method: 'GET' });
+  return apiGet(`/inventory/movements${queryString}`);
 }
 
 /**
  * POST /api/inventory/movements
  */
 export async function recordStockMovementApi(movementData) {
-  return apiRequest('/inventory/movements', {
-    method: 'POST',
-    body: JSON.stringify(movementData),
-  });
+  return apiPost('/inventory/movements', movementData);
 }
 
 /**
  * POST /api/inventory
  */
 export async function saveInventoryEntry(itemData) {
-  return apiRequest('/inventory', {
-    method: 'POST',
-    body: JSON.stringify(itemData),
-  });
+  return apiPost('/inventory', itemData);
 }
 
 /**
  * PUT /api/inventory/:id
  */
 export async function updateInventoryEntry(id, itemData) {
-  return apiRequest(`/inventory/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(itemData),
-  });
+  return apiPut(`/inventory/${id}`, itemData);
 }
 
 /**
  * DELETE /api/inventory/:id
  */
 export async function deleteInventoryEntry(id) {
-  return apiRequest(`/inventory/${id}`, {
-    method: 'DELETE',
-  });
+  return apiDelete(`/inventory/${id}`);
 }
 
 /**
@@ -104,8 +67,6 @@ export async function deleteInventoryEntry(id) {
  * Generates barcode data, SVG representation, and printable thermal HTML
  */
 export async function fetchItemBarcode(id) {
-  return apiRequest(`/inventory/${id}/barcode`, {
-    method: 'GET',
-  });
+  return apiGet(`/inventory/${id}/barcode`);
 }
 

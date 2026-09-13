@@ -51,7 +51,8 @@ export default function StockTransferScreen({ onShowToast }) {
     toBranch: 'Downtown Branch',
     product: 'Paracetamol 500mg',
     batch: 'B-1001',
-    availableQuantity: 500,
+    // TODO: Should come from inventory lookup
+    availableQuantity: typeof item !== 'undefined' ? item?.stock || 0 : 0,
     transferQuantity: '',
     notes: '',
   });
@@ -206,7 +207,7 @@ export default function StockTransferScreen({ onShowToast }) {
     }
 
     const newTransfer = {
-      id: `TR-0${transfers.length + 1}`,
+      id: 'TR-' + Date.now().toString(36).toUpperCase(),
       fromBranch: formData.fromBranch,
       toBranch: formData.toBranch,
       transferDate: '29 Aug 2026',

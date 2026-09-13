@@ -8,17 +8,20 @@ const customerService = require('../services/customer.service');
 const { pool } = require('../db/connection');
 
 const getOrgId = async (req) => {
+  if (req.user && req.user.organisationId) return req.user.organisationId;
   if (req.headers['x-organisation-id']) return req.headers['x-organisation-id'];
   if (req.query && req.query.organisationId) return req.query.organisationId;
   if (req.body && req.body.organisationId) return req.body.organisationId;
 
-  const orgRes = await pool.query('SELECT id FROM organisations LIMIT 1;');
-  return orgRes.rows[0]?.id || 'c206390c-2dae-41e5-a698-bf8259a73912';
+  return null;
 };
 
 const getCustomers = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
+    if (!organisationId) {
+      return res.status(400).json({ error: 'Organisation ID is required' });
+    }
     const { search, category, limit, offset } = req.query;
 
     const customers = await customerService.getCustomers({
@@ -46,6 +49,9 @@ const getCustomers = async (req, res) => {
 const getCustomersSummary = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
+    if (!organisationId) {
+      return res.status(400).json({ error: 'Organisation ID is required' });
+    }
     const summary = await customerService.getCustomersSummary(organisationId);
 
     res.status(200).json({
@@ -64,6 +70,9 @@ const getCustomersSummary = async (req, res) => {
 const createCustomer = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
+    if (!organisationId) {
+      return res.status(400).json({ error: 'Organisation ID is required' });
+    }
     const customerData = {
       ...req.body,
       organisationId,
@@ -88,6 +97,9 @@ const createCustomer = async (req, res) => {
 const updateCustomer = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
+    if (!organisationId) {
+      return res.status(400).json({ error: 'Organisation ID is required' });
+    }
     const { id } = req.params;
 
     const updatedCustomer = await customerService.updateCustomer(organisationId, id, req.body);
@@ -109,6 +121,9 @@ const updateCustomer = async (req, res) => {
 const deleteCustomer = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
+    if (!organisationId) {
+      return res.status(400).json({ error: 'Organisation ID is required' });
+    }
     const { id } = req.params;
 
     const deleted = await customerService.deleteCustomer(organisationId, id);

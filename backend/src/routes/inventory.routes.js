@@ -7,6 +7,9 @@
 const express = require('express');
 const router = express.Router();
 const inventoryController = require('../controllers/inventory.controller');
+const { authenticate } = require('../middlewares/auth.middleware');
+
+router.use(authenticate);
 
 // GET /api/inventory - List inventory
 router.get('/', inventoryController.getInventory);

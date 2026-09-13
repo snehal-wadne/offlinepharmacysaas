@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, SafeAreaView } from 'react-native';
+import { SkeletonTableRow, SkeletonItemCard, SkeletonKpiCard } from '../../components/common/SkeletonLoader';
+import PaginationControls from '../../components/common/PaginationControls';
 
 const COLORS = {
   primary: '#0F766E',
@@ -52,6 +54,10 @@ export default function InventoryReportsScreen({ navigation, route }) {
   const [quickRange, setQuickRange] = useState('this_month');
   const [searchQuery, setSearchQuery] = useState('');
 
+  const [loading, setLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
   const [showBranchDropdown, setShowBranchDropdown] = useState(false);
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
 
@@ -60,6 +66,12 @@ export default function InventoryReportsScreen({ navigation, route }) {
   };
 
   const currentReport = getSelectedReportData();
+
+  const filteredData = STOCK_VALUATION_DATA.filter(item => {
+    const matchesSearch = !searchQuery || item.product.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCategory = selectedCategory === 'All Categories' || item.category === selectedCategory;
+    return matchesSearch && matchesCategory;
+  });
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -229,18 +241,33 @@ export default function InventoryReportsScreen({ navigation, route }) {
                     <Text style={[styles.tableCellHeader, styles.cellAmount]}>Selling Value</Text>
                     <Text style={[styles.tableCellHeader, styles.cellAmount]}>MRP Value</Text>
                   </View>
-                  {STOCK_VALUATION_DATA.map((row, index) => (
-                    <View key={index} style={[styles.tableRow, index % 2 !== 0 && styles.tableRowAlt]}>
-                      <Text style={[styles.tableCell, styles.cellProduct, styles.textBold]}>{row.product}</Text>
-                      <Text style={[styles.tableCell, styles.cellCategory]}>{row.category}</Text>
-                      <Text style={[styles.tableCell, styles.cellQty]}>{row.qty}</Text>
-                      <Text style={[styles.tableCell, styles.cellAmount]}>{row.purchaseValue}</Text>
-                      <Text style={[styles.tableCell, styles.cellAmount]}>{row.sellingValue}</Text>
-                      <Text style={[styles.tableCell, styles.cellAmount]}>{row.mrpValue}</Text>
-                    </View>
-                  ))}
+                  {loading ? (
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <SkeletonTableRow key={i} columns={6} />
+                    ))
+                  ) : (
+                    filteredData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((row, index) => (
+                      <View key={index} style={[styles.tableRow, index % 2 !== 0 && styles.tableRowAlt]}>
+                        <Text style={[styles.tableCell, styles.cellProduct, styles.textBold]}>{row.product}</Text>
+                        <Text style={[styles.tableCell, styles.cellCategory]}>{row.category}</Text>
+                        <Text style={[styles.tableCell, styles.cellQty]}>{row.qty}</Text>
+                        <Text style={[styles.tableCell, styles.cellAmount]}>{row.purchaseValue}</Text>
+                        <Text style={[styles.tableCell, styles.cellAmount]}>{row.sellingValue}</Text>
+                        <Text style={[styles.tableCell, styles.cellAmount]}>{row.mrpValue}</Text>
+                      </View>
+                    ))
+                  )}
                 </View>
               </ScrollView>
+              
+              <PaginationControls 
+                currentPage={currentPage}
+                totalPages={Math.ceil(filteredData.length / itemsPerPage)}
+                onPageChange={setCurrentPage}
+                itemsPerPage={itemsPerPage}
+                onItemsPerPageChange={setItemsPerPage}
+              />
+              
               <Text style={styles.footerNote}>This is a preview. Use Export to download the complete report.</Text>
             </View>
           ) : (

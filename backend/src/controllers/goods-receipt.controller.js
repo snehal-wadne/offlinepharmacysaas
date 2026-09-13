@@ -9,17 +9,20 @@ const goodsReceiptService = require('../services/goods-receipt.service');
 const { pool } = require('../db/connection');
 
 const getOrgId = async (req) => {
+  if (req.user && req.user.organisationId) return req.user.organisationId;
   if (req.headers['x-organisation-id']) return req.headers['x-organisation-id'];
   if (req.query && req.query.organisationId) return req.query.organisationId;
   if (req.body && req.body.organisationId) return req.body.organisationId;
 
-  const orgRes = await pool.query('SELECT id FROM organisations LIMIT 1;');
-  return orgRes.rows[0]?.id;
+  return null;
 };
 
 const getGoodsReceipts = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
+    if (!organisationId) {
+      return res.status(400).json({ error: 'Organisation ID is required' });
+    }
     const { purchaseId, limit, offset } = req.query;
 
     const receipts = await goodsReceiptService.getGoodsReceipts({
@@ -46,6 +49,9 @@ const getGoodsReceipts = async (req, res) => {
 const getGoodsReceiptById = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
+    if (!organisationId) {
+      return res.status(400).json({ error: 'Organisation ID is required' });
+    }
     const { id } = req.params;
 
     const receipt = await goodsReceiptService.getGoodsReceiptById(organisationId, id);
@@ -72,6 +78,9 @@ const getGoodsReceiptById = async (req, res) => {
 const createGoodsReceipt = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
+    if (!organisationId) {
+      return res.status(400).json({ error: 'Organisation ID is required' });
+    }
     const receiptData = {
       ...req.body,
       organisationId,
@@ -96,6 +105,9 @@ const createGoodsReceipt = async (req, res) => {
 const updateGoodsReceiptStatus = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
+    if (!organisationId) {
+      return res.status(400).json({ error: 'Organisation ID is required' });
+    }
     const { id } = req.params;
     const { status } = req.body;
 

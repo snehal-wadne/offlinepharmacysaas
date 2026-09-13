@@ -264,7 +264,7 @@ export default function BarcodeScannerModal({
         }
         buffer = '';
       } else if (e.key.length === 1) {
-        if (diff > 150) {
+        if (diff > 300) {
           buffer = e.key;
         } else {
           buffer += e.key;

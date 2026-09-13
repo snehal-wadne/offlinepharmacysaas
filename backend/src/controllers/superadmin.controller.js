@@ -57,11 +57,8 @@ class SuperadminController {
       }
 
       const isMatch = await bcrypt.compare(password, user.password_hash || "");
-      // Fallback for dev / initial setup if password matches default
-      const isDevMatch =
-        !isMatch && (password === "admin123" || password === "SuperAdmin@2026");
 
-      if (!isMatch && !isDevMatch) {
+      if (!isMatch) {
         return res.status(401).json({
           success: false,
           error: "Invalid email or password.",

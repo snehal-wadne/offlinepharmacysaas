@@ -14,6 +14,7 @@ import {
   MOCK_CUSTOMERS_LIST,
   MOCK_CUSTOMER_DETAILS_DATA,
 } from '../../data/customersMockData';
+import { SkeletonTableRow, SkeletonItemCard } from '../../components/common/SkeletonLoader';
 
 export default function CustomerDetailsScreen({
   customerId = 'CUST-1040',
@@ -27,6 +28,7 @@ export default function CustomerDetailsScreen({
 
   // Active Customer state
   const [selectedCustomerId, setSelectedCustomerId] = useState(customerId);
+  const [loading, setLoading] = useState(false);
 
   // Active Tab: 'purchases' | 'returns' | 'ledger' | 'info'
   const [activeTab, setActiveTab] = useState('purchases');
@@ -305,64 +307,72 @@ export default function CustomerDetailsScreen({
               {/* Table Data / Mobile KPI Cards */}
               {isMobile ? (
                 <View style={styles.mobileCardsContainer}>
-                  {paginatedInvoices.length === 0 ? (
-                    <View style={styles.emptyTableBox}>
-                      <Text style={styles.emptyTableText}>No invoices found matching your search.</Text>
-                    </View>
-                  ) : (
-                    paginatedInvoices.map((inv) => (
-                      <View key={inv.invoiceNo} style={styles.mobileCustomerCard}>
-                        <View style={styles.mobileCardHeader}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Text style={styles.invNoText}>{inv.invoiceNo}</Text>
-                            <View style={styles.statusCompletedPill}>
-                              <Text style={styles.statusCompletedText}>{inv.status}</Text>
-                            </View>
-                          </View>
-                          <Pressable
-                            onPress={() => handleViewInvoice(inv)}
-                            style={styles.viewActionBtn}
-                            accessibilityRole="button"
-                            accessibilityLabel={`View invoice ${inv.invoiceNo}`}
-                          >
-                            <Text style={styles.viewActionBtnText}>View</Text>
-                          </Pressable>
-                        </View>
-
-                        <Text style={styles.mobileCardDate}>{inv.dateTime}</Text>
-
-                        <View style={styles.mobileCardFooter}>
-                          <View>
-                            <Text style={styles.mobileCardSub}>{inv.items} items</Text>
-                            <Text style={styles.mobileCardMethod}>Paid via {inv.paymentMethod}</Text>
-                          </View>
-                          <Text style={styles.mobileCardAmount}>{inv.amount}</Text>
-                        </View>
-                      </View>
-                    ))
-                  )}
-                </View>
-              ) : (
-                <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-                  <View style={styles.tableWrapper}>
-                    {/* Table Header */}
-                    <View style={styles.tableHeader}>
-                      <Text style={[styles.thCell, { width: 120 }]}>INVOICE NO.</Text>
-                      <Text style={[styles.thCell, { width: 170 }]}>DATE & TIME</Text>
-                      <Text style={[styles.thCell, { width: 80, textAlign: 'center' }]}>ITEMS</Text>
-                      <Text style={[styles.thCell, { width: 110, textAlign: 'right' }]}>AMOUNT (₹)</Text>
-                      <Text style={[styles.thCell, { width: 120, textAlign: 'center' }]}>PAYMENT METHOD</Text>
-                      <Text style={[styles.thCell, { width: 110, textAlign: 'center' }]}>STATUS</Text>
-                      <Text style={[styles.thCell, { width: 90, textAlign: 'center' }]}>ACTION</Text>
-                    </View>
-
-                    {/* Table Rows */}
-                    {paginatedInvoices.length === 0 ? (
+                    {loading ? (
+                      Array.from({ length: 3 }).map((_, i) => (
+                        <SkeletonItemCard key={i} />
+                      ))
+                    ) : paginatedInvoices.length === 0 ? (
                       <View style={styles.emptyTableBox}>
                         <Text style={styles.emptyTableText}>No invoices found matching your search.</Text>
                       </View>
                     ) : (
-                      paginatedInvoices.map((inv, idx) => (
+                      paginatedInvoices.map((inv) => (
+                        <View key={inv.invoiceNo} style={styles.mobileCustomerCard}>
+                          <View style={styles.mobileCardHeader}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              <Text style={styles.invNoText}>{inv.invoiceNo}</Text>
+                              <View style={styles.statusCompletedPill}>
+                                <Text style={styles.statusCompletedText}>{inv.status}</Text>
+                              </View>
+                            </View>
+                            <Pressable
+                              onPress={() => handleViewInvoice(inv)}
+                              style={styles.viewActionBtn}
+                              accessibilityRole="button"
+                              accessibilityLabel={`View invoice ${inv.invoiceNo}`}
+                            >
+                              <Text style={styles.viewActionBtnText}>View</Text>
+                            </Pressable>
+                          </View>
+  
+                          <Text style={styles.mobileCardDate}>{inv.dateTime}</Text>
+  
+                          <View style={styles.mobileCardFooter}>
+                            <View>
+                              <Text style={styles.mobileCardSub}>{inv.items} items</Text>
+                              <Text style={styles.mobileCardMethod}>Paid via {inv.paymentMethod}</Text>
+                            </View>
+                            <Text style={styles.mobileCardAmount}>{inv.amount}</Text>
+                          </View>
+                        </View>
+                      ))
+                    )}
+                  </View>
+                ) : (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+                    <View style={styles.tableWrapper}>
+                      {/* Table Header */}
+                      <View style={styles.tableHeader}>
+                        <Text style={[styles.thCell, { width: 120 }]}>INVOICE NO.</Text>
+                        <Text style={[styles.thCell, { width: 170 }]}>DATE & TIME</Text>
+                        <Text style={[styles.thCell, { width: 80, textAlign: 'center' }]}>ITEMS</Text>
+                        <Text style={[styles.thCell, { width: 110, textAlign: 'right' }]}>AMOUNT (₹)</Text>
+                        <Text style={[styles.thCell, { width: 120, textAlign: 'center' }]}>PAYMENT METHOD</Text>
+                        <Text style={[styles.thCell, { width: 110, textAlign: 'center' }]}>STATUS</Text>
+                        <Text style={[styles.thCell, { width: 90, textAlign: 'center' }]}>ACTION</Text>
+                      </View>
+  
+                      {/* Table Rows */}
+                      {loading ? (
+                        Array.from({ length: 5 }).map((_, i) => (
+                          <SkeletonTableRow key={i} columns={7} />
+                        ))
+                      ) : paginatedInvoices.length === 0 ? (
+                        <View style={styles.emptyTableBox}>
+                          <Text style={styles.emptyTableText}>No invoices found matching your search.</Text>
+                        </View>
+                      ) : (
+                        paginatedInvoices.map((inv, idx) => (
                         <View
                           key={inv.invoiceNo}
                           style={[

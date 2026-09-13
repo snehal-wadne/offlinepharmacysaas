@@ -8,6 +8,9 @@
 const express = require('express');
 const router = express.Router();
 const branchController = require('../controllers/branch.controller');
+const { authenticate } = require('../middlewares/auth.middleware');
+
+router.use(authenticate);
 
 router.get('/', branchController.getBranches);
 router.get('/:id', branchController.getBranchById);

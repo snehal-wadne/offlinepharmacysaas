@@ -18,8 +18,8 @@ export default function LoginScreen({ onLoginSuccess }) {
   const [authMode, setAuthMode] = useState("signin");
 
   // Sign In States
-  const [signInEmail, setSignInEmail] = useState("root@falah.com");
-  const [signInPassword, setSignInPassword] = useState("more#78548");
+  const [signInEmail, setSignInEmail] = useState("");
+  const [signInPassword, setSignInPassword] = useState("");
   const [showSignInPassword, setShowSignInPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
@@ -35,7 +35,6 @@ export default function LoginScreen({ onLoginSuccess }) {
   // Google OAuth Modal & Custom Account States
   const [googleModalVisible, setGoogleModalVisible] = useState(false);
   const [customGoogleEmail, setCustomGoogleEmail] = useState("");
-  const [customGoogleAsOwner, setCustomGoogleAsOwner] = useState(true);
 
   // UI Feedback States
   const [isLoading, setIsLoading] = useState(false);
@@ -117,44 +116,25 @@ export default function LoginScreen({ onLoginSuccess }) {
           password: signInPassword,
         }),
         signal: controller.signal,
-      }).catch(() => null);
+      });
 
       clearTimeout(timeoutId);
+      setIsLoading(false);
 
-      if (response && response.ok) {
+      if (response.ok) {
         const data = await response.json();
-        setIsLoading(false);
         if (onLoginSuccess) {
-          onLoginSuccess(data.user);
+          onLoginSuccess(data.user, data.token);
         }
         return;
       }
+
+      const errorData = await response.json().catch(() => ({}));
+      setErrorMessage(errorData.error || "Invalid email/phone or password.");
     } catch (err) {
-      // Backend request failed
-    }
-
-    // 2. Validate against authorized demo / local Google users
-    const validDemoCredentials =
-      (email === "root@falah.com" && signInPassword === "more#78548") ||
-      (email === "admin@flora.edu.in" && signInPassword === "admin123") ||
-      (email.endsWith("@gmail.com") && signInPassword.length >= 6);
-
-    setIsLoading(false);
-
-    if (validDemoCredentials) {
-      if (onLoginSuccess) {
-        onLoginSuccess({
-          id: `USR-${Date.now().toString().slice(-4)}`,
-          display_name: email.split("@")[0].replace(".", " ").toUpperCase(),
-          name: email.split("@")[0].replace(".", " ").toUpperCase(),
-          email: email,
-          role: "Administrator",
-          accessLevel: "Admin",
-          branch: "FIT Main Campus Hospital Pharmacy",
-        });
-      }
-    } else {
-      setErrorMessage("Invalid credentials. Please verify your Gmail ID and password or use Demo Credentials.");
+      console.error('Auth request failed:', err);
+      setIsLoading(false);
+      setErrorMessage("Unable to reach the server. Please check your connection and try again.");
     }
   };
 
@@ -231,14 +211,11 @@ export default function LoginScreen({ onLoginSuccess }) {
     setIsLoading(true);
     setErrorMessage("");
 
-    const isOwner =
-      googleUser.isOwner ||
-      (googleUser.role && googleUser.role.toUpperCase() === "OWNER") ||
-      googleUser.email === "surajmore303@gmail.com" ||
-      googleUser.email === "owner@falah.com";
-
-    const targetRole = isOwner ? "OWNER" : (googleUser.role || "STAFF");
-
+    // Owner/role is decided entirely server-side (server-side email allowlist or
+    // existing organisation ownership) - the client only ever supplies the email.
+    // Never fabricate a signed-in session locally if the backend is unreachable;
+    // that would let anyone claim any identity (including Owner) with zero
+    // verification whenever the network happens to be down.
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 4000);
@@ -249,49 +226,29 @@ export default function LoginScreen({ onLoginSuccess }) {
         body: JSON.stringify({
           email: googleUser.email,
           name: googleUser.name,
-          role: targetRole,
           googleSub: googleUser.googleSub || `google_${googleUser.email.replace(/[^a-zA-Z0-9]/g, '_')}`,
         }),
         signal: controller.signal,
-      }).catch(() => null);
+      });
 
       clearTimeout(timeoutId);
+      setIsLoading(false);
 
-      if (response && response.ok) {
-        const data = await response.json();
-        setIsLoading(false);
-        if (onLoginSuccess && data.user) {
-          onLoginSuccess(data.user);
-          return;
+      const data = await response.json().catch(() => ({}));
+
+      if (response.ok && data.user) {
+        if (onLoginSuccess) {
+          onLoginSuccess(data.user, data.token);
         }
+        return;
       }
+
+      setErrorMessage(data.error || "Google sign-in failed. Please try again.");
     } catch (e) {
-      console.warn("Backend Google login request failed, using local session:", e.message);
+      console.error("Google login request failed:", e.message);
+      setIsLoading(false);
+      setErrorMessage("Unable to reach the server for Google sign-in. Please check your connection and try again.");
     }
-
-    // Local / Offline fallback with complete verified owner session
-    setIsLoading(false);
-    if (onLoginSuccess) {
-      onLoginSuccess({
-        id: `GOOGLE-${Date.now().toString().slice(-4)}`,
-        display_name: googleUser.name,
-        name: googleUser.name,
-        email: googleUser.email,
-        role: isOwner ? "OWNER" : (googleUser.role || "Administrator"),
-        roleName: isOwner ? "Pharmacy Owner" : (googleUser.roleName || "Administrator"),
-        accessLevel: isOwner ? "Owner" : (targetRole === "ADMIN" ? "Admin" : "Staff"),
-        isOwner: Boolean(isOwner),
-        branch: "FIT Main Campus Hospital Pharmacy",
-        isGoogleAuth: true,
-      });
-    }
-  };
-
-  const loadDemoCredentials = () => {
-    setSignInEmail("root@falah.com");
-    setSignInPassword("more#78548");
-    setErrorMessage("");
-    setSuccessMessage("Demo credentials loaded! Click Sign In.");
   };
 
   return (
@@ -478,7 +435,7 @@ export default function LoginScreen({ onLoginSuccess }) {
                       <Text style={styles.inputPrefixIcon}>📧</Text>
                       <TextInput
                         style={styles.input}
-                        placeholder="e.g. root@falah.com or you@gmail.com"
+                        placeholder="e.g. you@gmail.com"
                         placeholderTextColor="#94a3b8"
                         value={signInEmail}
                         onChangeText={(text) => {
@@ -541,10 +498,6 @@ export default function LoginScreen({ onLoginSuccess }) {
                         {rememberMe && <Text style={styles.checkMark}>✓</Text>}
                       </View>
                       <Text style={styles.rememberText}>Remember me</Text>
-                    </Pressable>
-
-                    <Pressable onPress={loadDemoCredentials} disabled={isLoading}>
-                      <Text style={styles.forgotText}>Use Demo Login</Text>
                     </Pressable>
                   </View>
 
@@ -798,13 +751,6 @@ export default function LoginScreen({ onLoginSuccess }) {
                   </Pressable>
                 </View>
               )}
-
-              {/* DEMO NOTICE BADGE */}
-              <View style={styles.demoNotice}>
-                <Text style={styles.demoNoticeText}>
-                  💡 <Text style={{ fontWeight: "700" }}>Admin Account:</Text> root@falah.com / more#78548
-                </Text>
-              </View>
             </View>
           </ScrollView>
         </View>
@@ -933,17 +879,9 @@ export default function LoginScreen({ onLoginSuccess }) {
                   keyboardType="email-address"
                 />
               </View>
-              <Pressable
-                style={styles.ownerCheckboxRow}
-                onPress={() => setCustomGoogleAsOwner(!customGoogleAsOwner)}
-              >
-                <View style={[styles.checkbox, customGoogleAsOwner && styles.checkboxSelected]}>
-                  {customGoogleAsOwner && <Text style={styles.checkMark}>✓</Text>}
-                </View>
-                <Text style={styles.ownerCheckboxText}>
-                  Sign in as <Text style={{ fontWeight: "700", color: "#0F766E" }}>Pharmacy Owner (👑 Full Access)</Text>
-                </Text>
-              </Pressable>
+              <Text style={styles.ownerCheckboxText}>
+                Your access level (Owner, Admin, or Staff) is assigned by the pharmacy's account records, not chosen here.
+              </Text>
               <Pressable
                 style={[
                   styles.customGoogleSubmitBtn,
@@ -956,14 +894,11 @@ export default function LoginScreen({ onLoginSuccess }) {
                   handleGoogleSignInSelect({
                     name: em.split("@")[0].replace(".", " ").toUpperCase(),
                     email: em,
-                    role: customGoogleAsOwner ? "OWNER" : "STAFF",
-                    roleName: customGoogleAsOwner ? "Pharmacy Owner" : "Staff",
-                    isOwner: customGoogleAsOwner,
                   });
                 }}
               >
                 <Text style={styles.customGoogleSubmitText}>
-                  Continue with Google as {customGoogleAsOwner ? "👑 Pharmacy Owner" : "Staff"} →
+                  Continue with Google →
                 </Text>
               </Pressable>
             </View>

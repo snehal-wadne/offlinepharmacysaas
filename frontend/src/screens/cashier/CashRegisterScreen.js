@@ -22,6 +22,8 @@ import {
   recordCashMovement,
   fetchCashMovements,
 } from '../../api/cashierApi';
+import { SkeletonKpiCard, SkeletonTableRow } from '../../components/common/SkeletonLoader';
+import PaginationControls from '../../components/common/PaginationControls';
 
 export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBranch = true }) {
   const { width } = useWindowDimensions();
@@ -75,6 +77,10 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
       cashier: 'Cashier 01',
     },
   ]);
+
+  const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
 
   // Load live register session and history from backend PostgreSQL
   useEffect(() => {
@@ -131,6 +137,8 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
         }
       } catch (err) {
         console.warn('Failed to load register session from API:', err.message);
+      } finally {
+        if (isMounted) setLoading(false);
       }
     }
     loadRegisterData();
@@ -153,7 +161,11 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
 
   // Handler: Open Register (Image 1 -> Image 3)
   const handleOpenRegister = async () => {
-    const balanceNum = parseFloat(openingBalanceInput) || 0;
+    const balanceNum = parseFloat(openingBalanceInput);
+    if (isNaN(balanceNum)) {
+      if (onShowToast) onShowToast('⚠️ Please enter a valid number for opening balance.');
+      return;
+    }
     if (balanceNum < 0) {
       if (onShowToast) onShowToast('⚠️ Opening balance cannot be negative.');
       return;
@@ -283,6 +295,12 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
       }
     } catch (e) {
       console.warn('Error saving cash movement to backend:', e.message);
+      try {
+        const { enqueueMutation } = require('../../offline/syncQueue');
+        enqueueMutation('RECORD_CASH_MOVEMENT', { movementType, amount: amt, reason: finalReason });
+      } catch (err) {
+        console.warn('Could not queue offline movement', err);
+      }
     }
 
     const newMovement = {
@@ -337,6 +355,22 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
       onShowToast(`✓ Removed petty cash movement ${item.id}`);
     }
   };
+
+  const paginatedData = historyList.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, padding: 24, gap: 16 }}>
+        <View style={{ flexDirection: 'row', gap: 16 }}>
+          <SkeletonKpiCard />
+          <SkeletonKpiCard />
+        </View>
+        <SkeletonTableRow />
+        <SkeletonTableRow />
+        <SkeletonTableRow />
+      </View>
+    );
+  }
 
   return (
     <ScrollView
@@ -1042,7 +1076,7 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
             <ScrollView style={{ maxHeight: 450 }}>
               {isMobile ? (
                 <View style={styles.mobileHistoryList}>
-                  {historyList.map((item) => (
+                  {paginatedData.map((item) => (
                     <View key={item.id} style={styles.mobileHistoryCard}>
                       <View style={styles.mobileHistoryHeader}>
                         <View>
@@ -1122,7 +1156,7 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
                     <Text style={[styles.historyTh, { flex: 1, textAlign: 'center' }]}>Variance</Text>
                   </View>
 
-                  {historyList.map((item) => (
+                  {paginatedData.map((item) => (
                     <View key={item.id}>
                       <View style={styles.historyTableRow}>
                         <View style={{ flex: 1.2 }}>
@@ -1178,6 +1212,16 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
                 </View>
               )}
             </ScrollView>
+
+            <View style={{ padding: 16 }}>
+              <PaginationControls
+                currentPage={currentPage}
+                totalItems={historyList.length}
+                itemsPerPage={itemsPerPage}
+                onPageChange={setCurrentPage}
+                onItemsPerPageChange={(n) => { setItemsPerPage(n); setCurrentPage(1); }}
+              />
+            </View>
 
             <View style={styles.historyModalFooter}>
               <Pressable

@@ -24,7 +24,23 @@ const PORT = Number(process.env.PORT || 5000);
 /**
  * Middleware
  */
-app.use(cors());
+// CORS_ORIGINS is a comma-separated allow-list (e.g. "https://app.example.com,https://admin.example.com").
+// Left unset by default so local/dev/mobile clients keep working out of the box - set it in
+// production to stop arbitrary web pages from being able to call this API from a browser.
+const corsOrigins = (process.env.CORS_ORIGINS || "")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+app.use(
+  cors(
+    corsOrigins.length > 0
+      ? {
+          origin: corsOrigins,
+        }
+      : {}
+  )
+);
 app.use(
   express.json({
     limit: "10mb",

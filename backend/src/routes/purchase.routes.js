@@ -7,6 +7,9 @@
 const express = require('express');
 const router = express.Router();
 const purchaseController = require('../controllers/purchase.controller');
+const { authenticate } = require('../middlewares/auth.middleware');
+
+router.use(authenticate);
 
 // GET /api/purchases - List purchase orders (supports status, search, limit, offset filters)
 router.get('/', purchaseController.getPurchases);

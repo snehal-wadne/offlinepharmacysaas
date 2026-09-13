@@ -10,6 +10,8 @@ import {
   Platform,
 } from 'react-native';
 import InventoryStatCard from '../../components/inventory/InventoryStatCard';
+import { SkeletonTableRow } from '../../components/common/SkeletonLoader';
+import PaginationControls from '../../components/common/PaginationControls';
 import {
   MOCK_STOCK_ITEMS,
 } from '../../data/currentStockMockData';
@@ -85,11 +87,11 @@ export default function CurrentStockScreen({ onShowToast }) {
       sku: formData.sku,
       batchNo: formData.batchNo,
       quantity: Number(formData.quantity),
-      amount: '₹120.00',
+      amount: formData.amount || '₹0.00',
       branchId: formData.branchId || 'BR-01',
-      shelfLocation: formData.shelfLocation || 'A1-S1',
-      supplierName: 'PharmaCo',
-      updatedBy: 'Manager',
+      shelfLocation: formData.shelfLocation || '',
+      supplierName: formData.supplierName || '',
+      updatedBy: formData.updatedBy || 'System',
       lastUpdated: new Date().toISOString().split('T')[0],
       status: 'In Stock',
     };
@@ -182,6 +184,21 @@ export default function CurrentStockScreen({ onShowToast }) {
     }
   };
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
+
+  const paginatedData = stockItems.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, padding: 24, gap: 16 }}>
+        <SkeletonTableRow />
+        <SkeletonTableRow />
+        <SkeletonTableRow />
+      </View>
+    );
+  }
+
   return (
     <ScrollView
       style={styles.container}
@@ -211,7 +228,7 @@ export default function CurrentStockScreen({ onShowToast }) {
         {isMobile ? (
           /* Mobile Card View */
           <View style={styles.mobileCardList}>
-            {stockItems.map((item) => (
+            {paginatedData.map((item) => (
               <View key={item.id} style={styles.mobileStockCard}>
                 <View style={styles.mobileStockHeader}>
                   <View style={{ flex: 1 }}>
@@ -285,7 +302,7 @@ export default function CurrentStockScreen({ onShowToast }) {
               </View>
 
               {/* Table Rows */}
-              {stockItems.map((item, index) => (
+              {paginatedData.map((item, index) => (
                 <View
                   key={item.id}
                   style={[
@@ -330,6 +347,15 @@ export default function CurrentStockScreen({ onShowToast }) {
             </View>
           </ScrollView>
         )}
+        <View style={{ padding: 16 }}>
+          <PaginationControls
+            currentPage={currentPage}
+            totalItems={stockItems.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+            onItemsPerPageChange={(n) => { setItemsPerPage(n); setCurrentPage(1); }}
+          />
+        </View>
       </View>
 
       {/* Add Medicine Entry Form Card */}

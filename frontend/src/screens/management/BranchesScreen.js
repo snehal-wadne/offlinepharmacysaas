@@ -17,6 +17,8 @@ import {
   BRANCH_TYPES,
 } from '../../data/managementMockData';
 import { API_URL } from '../../config';
+import { SkeletonItemCard } from '../../components/common/SkeletonLoader';
+import PaginationControls from '../../components/common/PaginationControls';
 
 export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpdated }) {
   const { width } = useWindowDimensions();
@@ -30,6 +32,9 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
 
   // Branches State
   const [branches, setBranches] = useState(MOCK_BRANCHES_LIST);
+  const [loading, setLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   // Load branches from database
   useEffect(() => {
@@ -128,6 +133,12 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
     return matchesSearch && matchesType && matchesStatus;
   });
 
+  const totalPages = Math.ceil(filteredBranches.length / itemsPerPage);
+  const paginatedBranches = filteredBranches.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
   const handleOpenAddModal = () => {
     setIsEditing(false);
     setActiveBranchId(null);
@@ -205,7 +216,7 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
         );
 
         if (String(activeBranchId).includes('-')) {
-          await fetch(`${API_URL}/branches/${activeBranchId}`, {
+          const response = await fetch(`${API_URL}/branches/${activeBranchId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -217,7 +228,8 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
               phone: formData.phone,
               status: formData.status === 'Active' ? 'ACTIVE' : 'INACTIVE',
             }),
-          }).catch(() => {});
+          });
+          if (!response.ok) throw new Error('Failed to update branch');
         }
 
         if (onShowToast) {
@@ -266,6 +278,7 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
       }
     } catch (err) {
       console.warn('Error saving branch to database:', err.message);
+      if (onShowToast) onShowToast(`⚠️ Error saving branch: ${err.message}`);
     }
 
     setModalVisible(false);
@@ -286,13 +299,15 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
     }
 
     try {
-      await fetch(`${API_URL}/branches/${branch.id}`, {
+      const response = await fetch(`${API_URL}/branches/${branch.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: dbStatus }),
       });
+      if (!response.ok) throw new Error('Status toggle failed');
     } catch (err) {
       console.warn('Error updating branch status in database:', err.message);
+      if (onShowToast) onShowToast(`⚠️ Failed to toggle branch status`);
     }
 
     if (onBranchesUpdated) {
@@ -445,7 +460,13 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
           </Text>
         </View>
 
-        {filteredBranches.length === 0 ? (
+        {loading ? (
+          <View style={{ padding: 20 }}>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <SkeletonItemCard key={i} />
+            ))}
+          </View>
+        ) : filteredBranches.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyIcon}>🏢</Text>
             <Text style={styles.emptyTitle}>No Branches Found</Text>
@@ -461,7 +482,7 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
           </View>
         ) : isMobile ? (
           <View style={styles.mobileBranchList}>
-            {filteredBranches.map((branch) => {
+            {paginatedBranches.map((branch) => {
               const isActive = branch.status === 'Active';
 
               return (
@@ -578,7 +599,7 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
               </View>
 
               {/* Table Body */}
-              {filteredBranches.map((branch, index) => {
+              {paginatedBranches.map((branch, index) => {
                 const isActive = branch.status === 'Active';
                 const isEven = index % 2 === 0;
 
@@ -704,6 +725,14 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
               })}
             </View>
           </ScrollView>
+        )}
+        {!loading && filteredBranches.length > 0 && (
+          <PaginationControls
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            totalItems={filteredBranches.length}
+          />
         )}
       </View>
 

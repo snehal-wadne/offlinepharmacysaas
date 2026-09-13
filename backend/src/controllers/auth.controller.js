@@ -2,13 +2,17 @@
  * Auth Controller
  */
 
-const authService = require('../services/auth.service');
+const authService = require("../services/auth.service");
 
 const login = async (req, res) => {
   try {
     const { emailOrPhone, password, email } = req.body;
     const identifier = emailOrPhone || email;
-    const result = await authService.login({ emailOrPhone: identifier, password, branchId: req.body.branchId });
+    const result = await authService.login({
+      emailOrPhone: identifier,
+      password,
+      branchId: req.body.branchId,
+    });
     res.status(200).json(result);
   } catch (error) {
     res.status(401).json({ success: false, error: error.message });
@@ -36,12 +40,11 @@ const register = async (req, res) => {
 
 const googleLogin = async (req, res) => {
   try {
-    const { email, name, googleSub, role, branchId } = req.body;
+    const { email, name, googleSub, branchId } = req.body;
     const result = await authService.googleLogin({
       email,
       name,
       googleSub,
-      role,
       branchId,
     });
     res.status(200).json(result);
@@ -56,4 +59,3 @@ module.exports = {
   register,
   googleLogin,
 };
-

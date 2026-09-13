@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, SafeAreaView } from 'react-native';
+import { SkeletonTableRow, SkeletonItemCard, SkeletonKpiCard } from '../../components/common/SkeletonLoader';
+import PaginationControls from '../../components/common/PaginationControls';
 
 const COLORS = {
   primary: '#0F766E',
@@ -56,6 +58,17 @@ export default function PurchaseReportsScreen({ navigation, route }) {
   });
   
   const [openDropdown, setOpenDropdown] = useState(null);
+  
+  const filteredData = MOCK_PO_DATA.filter(item => {
+    const matchesBranch = filters.branch === 'All Branches' || item.branch === filters.branch;
+    const matchesSupplier = filters.supplier === 'All Suppliers' || item.supplier === filters.supplier;
+    const matchesStatus = filters.status === 'All Status' || item.status === filters.status;
+    return matchesBranch && matchesSupplier && matchesStatus;
+  });
+
+  const [loading, setLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   const BRANCH_OPTIONS = ['All Branches', 'Main Branch', 'BR-02', 'BR-03', 'BR-04', 'BR-05'];
   const SUPPLIER_OPTIONS = ['All Suppliers', 'PharmaCo', 'NutriLife', 'CareSupply', 'GenSupply', 'MedLife'];
@@ -268,27 +281,42 @@ export default function PurchaseReportsScreen({ navigation, route }) {
                       <Text style={[styles.tableHeaderText, { width: 130 }]}>Branch</Text>
                     </View>
                     
-                    {MOCK_PO_DATA.map((row, index) => {
-                      const statusStyle = getStatusStyle(row.status);
-                      return (
-                        <View key={row.id} style={[styles.tableRow, index % 2 === 1 && styles.tableRowAlt]}>
-                          <Text style={[styles.tableCell, styles.poIdCell, { width: 110 }]}>{row.id}</Text>
-                          <Text style={[styles.tableCell, { width: 110 }]}>{row.date}</Text>
-                          <Text style={[styles.tableCell, { width: 130 }]} numberOfLines={1}>{row.supplier}</Text>
-                          <Text style={[styles.tableCell, { width: 70 }]}>{row.items}</Text>
-                          <Text style={[styles.tableCell, { width: 110 }]}>{row.amount}</Text>
-                          <View style={[styles.tableCell, { width: 140 }]}>
-                            <View style={[styles.badge, { backgroundColor: statusStyle.bg }]}>
-                              <Text style={[styles.badgeText, { color: statusStyle.text }]}>{row.status}</Text>
+                    {loading ? (
+                      Array.from({ length: 5 }).map((_, i) => (
+                        <SkeletonTableRow key={i} columns={7} />
+                      ))
+                    ) : (
+                      filteredData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((row, index) => {
+                        const statusStyle = getStatusStyle(row.status);
+                        return (
+                          <View key={row.id} style={[styles.tableRow, index % 2 === 1 && styles.tableRowAlt]}>
+                            <Text style={[styles.tableCell, styles.poIdCell, { width: 110 }]}>{row.id}</Text>
+                            <Text style={[styles.tableCell, { width: 110 }]}>{row.date}</Text>
+                            <Text style={[styles.tableCell, { width: 130 }]} numberOfLines={1}>{row.supplier}</Text>
+                            <Text style={[styles.tableCell, { width: 70 }]}>{row.items}</Text>
+                            <Text style={[styles.tableCell, { width: 110 }]}>{row.amount}</Text>
+                            <View style={[styles.tableCell, { width: 140 }]}>
+                              <View style={[styles.badge, { backgroundColor: statusStyle.bg }]}>
+                                <Text style={[styles.badgeText, { color: statusStyle.text }]}>{row.status}</Text>
+                              </View>
                             </View>
+                            <Text style={[styles.tableCell, { width: 130 }]} numberOfLines={1}>{row.branch}</Text>
                           </View>
-                          <Text style={[styles.tableCell, { width: 130 }]} numberOfLines={1}>{row.branch}</Text>
-                        </View>
-                      );
-                    })}
+                        );
+                      })
+                    )}
                   </View>
                 </ScrollView>
               </View>
+              
+              <PaginationControls 
+                currentPage={currentPage}
+                totalPages={Math.ceil(filteredData.length / itemsPerPage)}
+                onPageChange={setCurrentPage}
+                itemsPerPage={itemsPerPage}
+                onItemsPerPageChange={setItemsPerPage}
+              />
+              
               <Text style={styles.footerNote}>This is a preview. Use Export to download the complete report.</Text>
             </View>
           ) : (

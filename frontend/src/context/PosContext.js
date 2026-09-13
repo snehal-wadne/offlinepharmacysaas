@@ -8,6 +8,7 @@ import {
   fetchCashierProducts,
   fetchHeldBills,
   fetchRecentInvoices,
+  fetchReturnHistory,
   createPosSale,
 } from "../api/cashierApi";
 import { localPersistenceService } from "../db";
@@ -20,6 +21,7 @@ export function PosProvider({ children }) {
   const [heldBills, setHeldBills] = useState(MOCK_HELD_BILLS);
   const [activeResumedDraft, setActiveResumedDraft] = useState(null);
   const [invoices, setInvoices] = useState(MOCK_RECENT_INVOICES);
+  const [returnHistory, setReturnHistory] = useState([]);
   const [syncState, setSyncState] = useState(
     typeof syncEngine?.getState === "function"
       ? syncEngine.getState()
@@ -31,10 +33,11 @@ export function PosProvider({ children }) {
     let isMounted = true;
     async function hydratePosData() {
       try {
-        const [liveProds, liveHeld, liveInvs] = await Promise.all([
+        const [liveProds, liveHeld, liveInvs, liveReturns] = await Promise.all([
           fetchCashierProducts(),
           fetchHeldBills(),
           fetchRecentInvoices(),
+          fetchReturnHistory ? fetchReturnHistory() : Promise.resolve([]),
         ]);
         if (isMounted) {
           if (liveProds && Array.isArray(liveProds) && liveProds.length > 0) {
@@ -46,6 +49,9 @@ export function PosProvider({ children }) {
           if (liveInvs && Array.isArray(liveInvs) && liveInvs.length > 0) {
             setInvoices(liveInvs);
           }
+          if (liveReturns && Array.isArray(liveReturns) && liveReturns.length > 0) {
+            setReturnHistory(liveReturns);
+          }
         }
       } catch (err) {
         console.warn("POS live hydration fallback to offline cache:", err.message);
@@ -54,20 +60,6 @@ export function PosProvider({ children }) {
     hydratePosData();
     return () => { isMounted = false; };
   }, []);
-  const [returnHistory, setReturnHistory] = useState([
-    {
-      returnNo: "RET-2026-104",
-      originalInvoice: "INV-1020",
-      date: "27 Aug 2026, 04:30 PM",
-      customer: "Suresh Patil",
-      amount: 158.0,
-      refundMode: "Cash",
-      reason: "Doctor altered prescription",
-      stockDisposition: "Sellable",
-      itemsCount: 1,
-      items: [{ name: "Pan 40 Tablets", qty: 1, refundPrice: 158.0 }],
-    },
-  ]);
 
   // Initialize local persistence layer and restore recent invoices
   useEffect(() => {
@@ -325,7 +317,7 @@ export function PosProvider({ children }) {
     });
 
     // Opportunistically push to server if online (non-blocking)
-    syncEngine?.sync?.().catch(() => {});
+    syncEngine?.sync?.().catch((err) => { console.error('Sync failed:', err); });
 
     // 3. Update React UI state (stock, drafts, invoices) ONLY after local DB succeeds
     setProducts((prev) => {
@@ -423,7 +415,7 @@ export function PosProvider({ children }) {
     });
 
     // Opportunistically push to server if online (non-blocking)
-    syncEngine?.sync?.().catch(() => {});
+    syncEngine?.sync?.().catch((err) => { console.error('Sync failed:', err); });
 
     // 2. Update React UI state (stock, return history) ONLY after local DB succeeds
     if (returnData.stockDisposition === "Sellable") {

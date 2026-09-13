@@ -23,6 +23,8 @@ import {
   updateSupplierStatus,
   deleteSupplier,
 } from '../../api/purchaseApi';
+import { SkeletonTableRow, SkeletonItemCard } from '../../components/common/SkeletonLoader';
+import PaginationControls from '../../components/common/PaginationControls';
 
 const SUPPLIER_CATEGORIES = [
   'Medicines & Injections',
@@ -51,6 +53,8 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
   // Suppliers List State
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // Add / Edit Supplier Modal State
   const [modalVisible, setModalVisible] = useState(false);
@@ -479,13 +483,15 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
         {isMobile ? (
           /* Mobile Supplier Cards */
           <View style={styles.mobileCardList}>
-            {filteredSuppliers.length === 0 ? (
+            {loading ? (
+              Array.from({ length: 3 }).map((_, i) => <SkeletonItemCard key={i} />)
+            ) : filteredSuppliers.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyTitle}>No suppliers found</Text>
                 <Text style={styles.emptySubtitle}>Try changing your search terms.</Text>
               </View>
             ) : (
-              filteredSuppliers.map((sup, index) => (
+              filteredSuppliers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((sup, index) => (
                 <View key={sup.id} style={styles.mobileSupplierCard}>
                   <View style={styles.mobileSupHeader}>
                     <View style={{ flex: 1 }}>
@@ -571,13 +577,17 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
               </View>
 
               {/* Rows */}
-              {filteredSuppliers.length === 0 ? (
+              {loading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <SkeletonTableRow key={i} columns={10} />
+                ))
+              ) : filteredSuppliers.length === 0 ? (
                 <View style={styles.emptyState}>
                   <Text style={styles.emptyTitle}>No suppliers found</Text>
                   <Text style={styles.emptySubtitle}>Try changing your search terms.</Text>
                 </View>
               ) : (
-                filteredSuppliers.map((sup, index) => (
+                filteredSuppliers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((sup, index) => (
                   <View
                     key={sup.id}
                     style={[
@@ -650,6 +660,14 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
             </View>
           </ScrollView>
         )}
+        
+        <PaginationControls 
+          currentPage={currentPage}
+          totalPages={Math.ceil(filteredSuppliers.length / itemsPerPage)}
+          onPageChange={setCurrentPage}
+          itemsPerPage={itemsPerPage}
+          onItemsPerPageChange={setItemsPerPage}
+        />
       </View>
 
       {/* Add / Edit Supplier Modal */}

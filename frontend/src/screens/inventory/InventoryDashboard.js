@@ -11,6 +11,7 @@ import StockSummary from '../../components/inventory/StockSummary';
 import PendingPurchaseOrders from '../../components/inventory/PendingPurchaseOrders';
 import RecentStockMovements from '../../components/inventory/RecentStockMovements';
 import QuickActions from '../../components/inventory/QuickActions';
+import { SkeletonKpiCard } from '../../components/common/SkeletonLoader';
 import {
   MOCK_KPI_DATA,
   MOCK_STOCK_SUMMARY,
@@ -255,6 +256,17 @@ export default function InventoryDashboard({ onNavigate, onShowToast }) {
 
     return Object.values(categoryMap).filter((c) => c.totalItems > 0);
   }, [inventoryItems]);
+
+  if (loading) {
+    return (
+      <View style={[styles.scrollContent, { flexDirection: 'row', gap: 16, flexWrap: 'wrap' }]}>
+        <SkeletonKpiCard />
+        <SkeletonKpiCard />
+        <SkeletonKpiCard />
+        <SkeletonKpiCard />
+      </View>
+    );
+  }
 
   return (
     <ScrollView

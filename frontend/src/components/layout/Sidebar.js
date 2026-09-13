@@ -83,7 +83,9 @@ export default function Sidebar({
     if (posCtx && posCtx.heldBills) {
       heldCount = posCtx.heldBills.length;
     }
-  } catch (e) {}
+  } catch (e) {
+    console.error('Context extraction error:', e);
+  }
 
   // Inventory subitems (Stock Adjustments, Stock Transfer, Stock Status)
   const inventorySubItems = ALL_INVENTORY_SUBITEMS;

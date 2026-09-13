@@ -1,20 +1,22 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
+  TextInput,
   Pressable,
   Modal,
   StyleSheet,
   Platform,
+  ActivityIndicator,
 } from "react-native";
-import { API_URL } from "../../config";
 import { MOCK_BRANCHES_LIST } from "../../data/managementMockData";
 import { useOfflineSync } from "../../offline/OfflineSyncContext";
+import { apiGet } from "../../api/apiClient";
 
 const DEFAULT_BRANCH_OPTIONS = [
   "All Branches",
   ...MOCK_BRANCHES_LIST.filter(
-    (b) => b.status === "Active" || b.status === "ACTIVE"
+    (b) => b.status === "Active" || b.status === "ACTIVE",
   ).map((b) => b.name),
 ];
 
@@ -43,15 +45,18 @@ export default function Header({
 
   const fetchBranchesFromDb = async () => {
     try {
-      const response = await fetch(`${API_URL}/branches`);
-      if (response.ok) {
-        const json = await response.json();
+      const result = await apiGet("/api/branches");
+      if (result.success) {
+        const json = result.data;
         if (json.success && Array.isArray(json.data) && json.data.length > 0) {
           const activeBranches = json.data.filter(
-            (b) => b.status === "ACTIVE" || b.status === "Active" || !b.status
+            (b) => b.status === "ACTIVE" || b.status === "Active" || !b.status,
           );
           const dbNames = activeBranches.map((b) => b.name);
-          const combined = ["All Branches", ...dbNames.filter((n) => n !== "All Branches")];
+          const combined = [
+            "All Branches",
+            ...dbNames.filter((n) => n !== "All Branches"),
+          ];
           setBranchOptions(combined);
           return;
         }
@@ -62,41 +67,89 @@ export default function Header({
 
     // Fallback: filter MOCK_BRANCHES_LIST for active branches
     const activeMock = MOCK_BRANCHES_LIST.filter(
-      (b) => b.status === "Active" || b.status === "ACTIVE"
+      (b) => b.status === "Active" || b.status === "ACTIVE",
     ).map((b) => b.name);
     setBranchOptions(["All Branches", ...activeMock]);
   };
 
-  // Dynamic connection monitoring and branch fetching from backend
+  // --- Global Search (products & customers) ---
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState({
+    products: [],
+    customers: [],
+  });
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchDebounceRef = useRef(null);
+
+  const runSearch = async (query) => {
+    setIsSearching(true);
+    try {
+      const [productsRes, customersRes] = await Promise.all([
+        apiGet(`/api/cashier/products?search=${encodeURIComponent(query)}`),
+        apiGet(`/api/customers?search=${encodeURIComponent(query)}`),
+      ]);
+
+      const products =
+        productsRes.success && Array.isArray(productsRes.data?.data)
+          ? productsRes.data.data.slice(0, 5)
+          : [];
+      const customers =
+        customersRes.success && Array.isArray(customersRes.data?.data)
+          ? customersRes.data.data.slice(0, 5)
+          : [];
+
+      setSearchResults({ products, customers });
+    } catch (err) {
+      console.warn("Global search failed:", err.message);
+      setSearchResults({ products: [], customers: [] });
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleSearchChange = (text) => {
+    setSearchQuery(text);
+    setSearchOpen(true);
+
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+    }
+
+    const trimmed = text.trim();
+    if (trimmed.length < 2) {
+      setSearchResults({ products: [], customers: [] });
+      setIsSearching(false);
+      return;
+    }
+
+    searchDebounceRef.current = setTimeout(() => runSearch(trimmed), 350);
+  };
+
+  const closeSearch = () => {
+    setSearchOpen(false);
+  };
+
+  const handleSelectProduct = (product) => {
+    closeSearch();
+    setSearchQuery("");
+    setSearchResults({ products: [], customers: [] });
+    if (onNavigate) onNavigate("stock-status", product.name);
+  };
+
+  const handleSelectCustomer = (customer) => {
+    closeSearch();
+    setSearchQuery("");
+    setSearchResults({ products: [], customers: [] });
+    if (onNavigate) onNavigate("customer-details", customer.id);
+  };
+
+  const hasSearchResults =
+    searchResults.products.length > 0 || searchResults.customers.length > 0;
+
+  // Branch fetching from backend (online status is tracked by OfflineSyncContext)
   useEffect(() => {
-    let active = true;
-
-    const checkConnection = async () => {
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3000);
-        const response = await fetch(`${API_URL}/health`, {
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
-        if (response.ok && active) {
-          setIsOnline(true);
-        } else if (active) {
-          setIsOnline(false);
-        }
-      } catch (err) {
-        if (active) setIsOnline(false);
-      }
-    };
-
-    checkConnection();
     fetchBranchesFromDb();
-    const interval = setInterval(checkConnection, 10000);
-
-    return () => {
-      active = false;
-      clearInterval(interval);
-    };
   }, [branchRefreshKey]);
 
   const displayName = currentUser?.display_name || "User";
@@ -133,127 +186,238 @@ export default function Header({
 
         {/* Active Branch Switcher Dropdown */}
         <View style={styles.branchSelectorRow}>
-            {!isMobile && <Text style={styles.branchLabel}>Store / Branch</Text>}
-            <View style={styles.branchAnchorContainer}>
-              <Pressable
-                onPress={() => {
-                  if (!dropdownOpen) fetchBranchesFromDb();
-                  setDropdownOpen(!dropdownOpen);
-                }}
-                style={styles.branchButton}
-                accessibilityRole="button"
-                accessibilityLabel="Select Branch"
-              >
-                <Text style={styles.branchStoreIcon}>📍</Text>
-                <Text style={styles.branchButtonText} numberOfLines={1}>
-                  {currentBranch}
-                </Text>
-                <Text style={styles.chevron}>▾</Text>
-              </Pressable>
+          {!isMobile && <Text style={styles.branchLabel}>Store / Branch</Text>}
+          <View style={styles.branchAnchorContainer}>
+            <Pressable
+              onPress={() => {
+                if (!dropdownOpen) fetchBranchesFromDb();
+                setDropdownOpen(!dropdownOpen);
+              }}
+              style={styles.branchButton}
+              accessibilityRole="button"
+              accessibilityLabel="Select Branch"
+            >
+              <Text style={styles.branchStoreIcon}>📍</Text>
+              <Text style={styles.branchButtonText} numberOfLines={1}>
+                {currentBranch}
+              </Text>
+              <Text style={styles.chevron}>▾</Text>
+            </Pressable>
 
-              {/* Anchored Dropdown Menu */}
-              {dropdownOpen && (
-                <>
-                  <Pressable
-                    style={styles.floatingBackdrop}
-                    onPress={() => setDropdownOpen(false)}
-                  />
-                  <View style={styles.dropdownCardAnchored}>
-                    <Text style={styles.dropdownTitle}>
-                      Select Active Store Branch
-                    </Text>
-                    {branchOptions.map((branch) => {
-                      const isSelected = branch === currentBranch;
-                      return (
-                        <Pressable
-                          key={branch}
-                          onPress={() => handleSelectBranch(branch)}
+            {/* Anchored Dropdown Menu */}
+            {dropdownOpen && (
+              <>
+                <Pressable
+                  style={styles.floatingBackdrop}
+                  onPress={() => setDropdownOpen(false)}
+                />
+                <View style={styles.dropdownCardAnchored}>
+                  <Text style={styles.dropdownTitle}>
+                    Select Active Store Branch
+                  </Text>
+                  {branchOptions.map((branch) => {
+                    const isSelected = branch === currentBranch;
+                    return (
+                      <Pressable
+                        key={branch}
+                        onPress={() => handleSelectBranch(branch)}
+                        style={[
+                          styles.dropdownItem,
+                          isSelected && styles.dropdownItemSelected,
+                        ]}
+                      >
+                        <Text
                           style={[
-                            styles.dropdownItem,
-                            isSelected && styles.dropdownItemSelected,
+                            styles.dropdownItemText,
+                            isSelected && styles.dropdownItemTextSelected,
                           ]}
                         >
-                          <Text
-                            style={[
-                              styles.dropdownItemText,
-                              isSelected && styles.dropdownItemTextSelected,
-                            ]}
-                          >
-                            📍 {branch}
-                          </Text>
-                          {isSelected && (
-                            <Text style={styles.checkmark}>✓</Text>
-                          )}
-                        </Pressable>
-                      );
-                    })}
+                          📍 {branch}
+                        </Text>
+                        {isSelected && <Text style={styles.checkmark}>✓</Text>}
+                      </Pressable>
+                    );
+                  })}
 
-                    {/* Single vs Multi Pharmacy Mode Switcher */}
-                    <View style={styles.dropdownDivider} />
-                    <View style={styles.dropdownModeSection}>
-                      <Text style={styles.dropdownModeSectionTitle}>PHARMACY OPERATION MODE</Text>
-                      <Pressable
-                        onPress={() => {
-                          if (onSetPharmacyMode) onSetPharmacyMode(false);
-                          setDropdownOpen(false);
-                        }}
-                        style={[styles.dropdownModeBtn, !isMultiBranch && styles.dropdownModeBtnActive]}
+                  {/* Single vs Multi Pharmacy Mode Switcher */}
+                  <View style={styles.dropdownDivider} />
+                  <View style={styles.dropdownModeSection}>
+                    <Text style={styles.dropdownModeSectionTitle}>
+                      PHARMACY OPERATION MODE
+                    </Text>
+                    <Pressable
+                      onPress={() => {
+                        if (onSetPharmacyMode) onSetPharmacyMode(false);
+                        setDropdownOpen(false);
+                      }}
+                      style={[
+                        styles.dropdownModeBtn,
+                        !isMultiBranch && styles.dropdownModeBtnActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.dropdownModeBtnText,
+                          !isMultiBranch && styles.dropdownModeBtnTextActive,
+                        ]}
                       >
-                        <Text style={[styles.dropdownModeBtnText, !isMultiBranch && styles.dropdownModeBtnTextActive]}>
-                          🏪 Single Store Mode
-                        </Text>
-                        {!isMultiBranch && <Text style={styles.checkmark}>✓</Text>}
-                      </Pressable>
-                      <Pressable
-                        onPress={() => {
-                          if (onSetPharmacyMode) onSetPharmacyMode(true);
-                          setDropdownOpen(false);
-                        }}
-                        style={[styles.dropdownModeBtn, isMultiBranch && styles.dropdownModeBtnActive]}
+                        🏪 Single Store Mode
+                      </Text>
+                      {!isMultiBranch && (
+                        <Text style={styles.checkmark}>✓</Text>
+                      )}
+                    </Pressable>
+                    <Pressable
+                      onPress={() => {
+                        if (onSetPharmacyMode) onSetPharmacyMode(true);
+                        setDropdownOpen(false);
+                      }}
+                      style={[
+                        styles.dropdownModeBtn,
+                        isMultiBranch && styles.dropdownModeBtnActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.dropdownModeBtnText,
+                          isMultiBranch && styles.dropdownModeBtnTextActive,
+                        ]}
                       >
-                        <Text style={[styles.dropdownModeBtnText, isMultiBranch && styles.dropdownModeBtnTextActive]}>
-                          🏢 Multi-Branch Network
-                        </Text>
-                        {isMultiBranch && <Text style={styles.checkmark}>✓</Text>}
-                      </Pressable>
-                    </View>
+                        🏢 Multi-Branch Network
+                      </Text>
+                      {isMultiBranch && <Text style={styles.checkmark}>✓</Text>}
+                    </Pressable>
                   </View>
-                </>
-              )}
-            </View>
-
-            {/* Quick Mode Toggle Pill in Header Bar */}
-            {onTogglePharmacyMode && (
-              <Pressable
-                onPress={onTogglePharmacyMode}
-                style={[
-                  styles.modeTogglePill,
-                  isMultiBranch ? styles.modeTogglePillMulti : styles.modeTogglePillSingle,
-                ]}
-                accessibilityRole="button"
-                accessibilityLabel="Toggle Pharmacy Mode"
-              >
-                <Text style={styles.modeToggleIcon}>{isMultiBranch ? '🏢' : '🏪'}</Text>
-                {!isMobile && (
-                  <Text
-                    style={[
-                      styles.modeToggleText,
-                      isMultiBranch ? styles.modeToggleTextMulti : styles.modeToggleTextSingle,
-                    ]}
-                  >
-                    {isMultiBranch ? 'Multi-Branch' : 'Single Shop'}
-                  </Text>
-                )}
-              </Pressable>
+                </View>
+              </>
             )}
           </View>
+
+          {/* Quick Mode Toggle Pill in Header Bar */}
+          {onTogglePharmacyMode && (
+            <Pressable
+              onPress={onTogglePharmacyMode}
+              style={[
+                styles.modeTogglePill,
+                isMultiBranch
+                  ? styles.modeTogglePillMulti
+                  : styles.modeTogglePillSingle,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Toggle Pharmacy Mode"
+            >
+              <Text style={styles.modeToggleIcon}>
+                {isMultiBranch ? "🏢" : "🏪"}
+              </Text>
+              {!isMobile && (
+                <Text
+                  style={[
+                    styles.modeToggleText,
+                    isMultiBranch
+                      ? styles.modeToggleTextMulti
+                      : styles.modeToggleTextSingle,
+                  ]}
+                >
+                  {isMultiBranch ? "Multi-Branch" : "Single Shop"}
+                </Text>
+              )}
+            </Pressable>
+          )}
+        </View>
       </View>
 
       {/* Middle: Global Search Input */}
       {!isMobile && (
-        <View style={styles.headerSearchWrapper}>
-          <Text style={styles.headerSearchIcon}>🔍</Text>
-          <Text style={styles.headerSearchPlaceholder}>Search (Ctrl+K)</Text>
+        <View style={styles.headerSearchAnchor}>
+          <View style={styles.headerSearchWrapper}>
+            <Text style={styles.headerSearchIcon}>🔍</Text>
+            <TextInput
+              style={styles.headerSearchInput}
+              placeholder="Search products, customers..."
+              placeholderTextColor="#94A3B8"
+              value={searchQuery}
+              onChangeText={handleSearchChange}
+              onFocus={() => setSearchOpen(true)}
+              accessibilityLabel="Global search"
+            />
+            {isSearching && <ActivityIndicator size="small" color="#0F766E" />}
+          </View>
+
+          {searchOpen && searchQuery.trim().length >= 2 && (
+            <>
+              <Pressable
+                style={styles.floatingBackdrop}
+                onPress={closeSearch}
+              />
+              <View style={styles.searchResultsDropdown}>
+                {!isSearching && !hasSearchResults && (
+                  <Text style={styles.searchNoResults}>
+                    No matches for "{searchQuery.trim()}"
+                  </Text>
+                )}
+
+                {searchResults.customers.length > 0 && (
+                  <>
+                    <Text style={styles.searchSectionTitle}>Customers</Text>
+                    {searchResults.customers.map((customer) => (
+                      <Pressable
+                        key={`customer-${customer.id}`}
+                        style={styles.searchResultItem}
+                        onPress={() => handleSelectCustomer(customer)}
+                      >
+                        <Text style={styles.searchResultIcon}>🧑</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={styles.searchResultTitle}
+                            numberOfLines={1}
+                          >
+                            {customer.fullName ||
+                              customer.full_name ||
+                              customer.name}
+                          </Text>
+                          <Text
+                            style={styles.searchResultSubtitle}
+                            numberOfLines={1}
+                          >
+                            {customer.phone || customer.email || ""}
+                          </Text>
+                        </View>
+                      </Pressable>
+                    ))}
+                  </>
+                )}
+
+                {searchResults.products.length > 0 && (
+                  <>
+                    <Text style={styles.searchSectionTitle}>Products</Text>
+                    {searchResults.products.map((product) => (
+                      <Pressable
+                        key={`product-${product.id}`}
+                        style={styles.searchResultItem}
+                        onPress={() => handleSelectProduct(product)}
+                      >
+                        <Text style={styles.searchResultIcon}>💊</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={styles.searchResultTitle}
+                            numberOfLines={1}
+                          >
+                            {product.name}
+                          </Text>
+                          <Text
+                            style={styles.searchResultSubtitle}
+                            numberOfLines={1}
+                          >
+                            Stock: {product.stock} • MRP ₹{product.mrp}
+                          </Text>
+                        </View>
+                      </Pressable>
+                    ))}
+                  </>
+                )}
+              </View>
+            </>
+          )}
         </View>
       )}
 
@@ -262,7 +426,7 @@ export default function Header({
         {/* Subscription Plan Quick Badge */}
         {!isMobile && (
           <Pressable
-            onPress={() => onNavigate && onNavigate('subscription-plans')}
+            onPress={() => onNavigate && onNavigate("subscription-plans")}
             style={styles.headerPlanBadge}
             accessibilityRole="button"
             accessibilityLabel="View SaaS Subscription"
@@ -286,9 +450,9 @@ export default function Header({
             styles.syncBadge,
             isSyncing
               ? styles.syncBadgeSyncing
-              : (!isOnline || pendingCount > 0)
-              ? styles.syncBadgePending
-              : styles.syncBadge,
+              : !isOnline || pendingCount > 0
+                ? styles.syncBadgePending
+                : styles.syncBadge,
           ]}
           accessibilityRole="button"
           accessibilityLabel="Sync status and trigger"
@@ -298,9 +462,9 @@ export default function Header({
               styles.syncDot,
               isSyncing
                 ? styles.syncDotSyncing
-                : (!isOnline || pendingCount > 0)
-                ? styles.syncDotPending
-                : styles.syncDot,
+                : !isOnline || pendingCount > 0
+                  ? styles.syncDotPending
+                  : styles.syncDot,
             ]}
           />
           <Text
@@ -308,24 +472,24 @@ export default function Header({
               styles.syncText,
               isSyncing
                 ? styles.syncTextSyncing
-                : (!isOnline || pendingCount > 0)
-                ? styles.syncTextPending
-                : styles.syncText,
+                : !isOnline || pendingCount > 0
+                  ? styles.syncTextPending
+                  : styles.syncText,
             ]}
           >
             {isSyncing
               ? `Syncing (${pendingCount})...`
               : !isOnline
-              ? `Offline (${pendingCount})`
-              : pendingCount > 0
-              ? `Pending (${pendingCount}) • Sync Now`
-              : 'Online • Synced'}
+                ? `Offline (${pendingCount})`
+                : pendingCount > 0
+                  ? `Pending (${pendingCount}) • Sync Now`
+                  : "Online • Synced"}
           </Text>
         </Pressable>
 
         {/* Quick Settings Icon */}
         <Pressable
-          onPress={() => onNavigate && onNavigate('tax-settings')}
+          onPress={() => onNavigate && onNavigate("tax-settings")}
           style={styles.quickSettingsButton}
           accessibilityRole="button"
           accessibilityLabel="Settings"
@@ -338,34 +502,38 @@ export default function Header({
           <View
             style={[
               styles.avatar,
-              (currentUser?.isOwner || (currentUser?.role || '').toUpperCase() === 'OWNER') && {
-                backgroundColor: '#0D9488',
+              (currentUser?.isOwner ||
+                (currentUser?.role || "").toUpperCase() === "OWNER") && {
+                backgroundColor: "#0D9488",
               },
             ]}
           >
             <Text style={styles.avatarText}>
-              {(currentUser?.isOwner || (currentUser?.role || '').toUpperCase() === 'OWNER')
-                ? '👑'
-                : initials || 'C'}
+              {currentUser?.isOwner ||
+              (currentUser?.role || "").toUpperCase() === "OWNER"
+                ? "👑"
+                : initials || "C"}
             </Text>
           </View>
           {!isMobile && (
             <View style={styles.userInfoColumn}>
               <Text style={styles.userNameText}>
-                {displayName || 'Admin Owner'}
+                {displayName || "Admin Owner"}
               </Text>
               <Text
                 style={[
                   styles.userRoleText,
-                  (currentUser?.isOwner || (currentUser?.role || '').toUpperCase() === 'OWNER') && {
-                    color: '#0F766E',
-                    fontWeight: '800',
+                  (currentUser?.isOwner ||
+                    (currentUser?.role || "").toUpperCase() === "OWNER") && {
+                    color: "#0F766E",
+                    fontWeight: "800",
                   },
                 ]}
               >
-                {(currentUser?.isOwner || (currentUser?.role || '').toUpperCase() === 'OWNER')
-                  ? '👑 Pharmacy Owner'
-                  : currentUser?.roleName || currentUser?.role || 'Admin'}
+                {currentUser?.isOwner ||
+                (currentUser?.role || "").toUpperCase() === "OWNER"
+                  ? "👑 Pharmacy Owner"
+                  : currentUser?.roleName || currentUser?.role || "Admin"}
               </Text>
             </View>
           )}
@@ -507,6 +675,10 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#0F172A",
   },
+  headerSearchAnchor: {
+    position: "relative",
+    zIndex: 9999,
+  },
   headerSearchWrapper: {
     flexDirection: "row",
     alignItems: "center",
@@ -516,16 +688,79 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 7,
-    width: 240,
+    width: 280,
     gap: 8,
   },
   headerSearchIcon: {
     fontSize: 12,
     color: "#94A3B8",
   },
-  headerSearchPlaceholder: {
+  headerSearchInput: {
+    flex: 1,
     fontSize: 12.5,
+    color: "#0F172A",
+    padding: 0,
+    ...Platform.select({
+      web: { outlineStyle: "none" },
+    }),
+  },
+  searchResultsDropdown: {
+    position: "absolute",
+    top: 40,
+    left: 0,
+    right: 0,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    paddingVertical: 6,
+    maxHeight: 360,
+    overflow: "hidden",
+    zIndex: 9999,
+    ...Platform.select({
+      web: {
+        boxShadow:
+          "0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
+      },
+    }),
+  },
+  searchSectionTitle: {
+    fontSize: 10.5,
+    fontWeight: "700",
     color: "#94A3B8",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    paddingHorizontal: 14,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  searchResultItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    cursor: "pointer",
+  },
+  searchResultIcon: {
+    fontSize: 15,
+  },
+  searchResultTitle: {
+    fontSize: 12.5,
+    fontWeight: "600",
+    color: "#0F172A",
+  },
+  searchResultSubtitle: {
+    fontSize: 11,
+    color: "#64748B",
+    marginTop: 1,
+  },
+  searchNoResults: {
+    fontSize: 12,
+    color: "#94A3B8",
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    textAlign: "center",
   },
   userInfoColumn: {
     flexDirection: "column",
@@ -672,68 +907,68 @@ const styles = StyleSheet.create({
     color: "#64748B",
   },
   headerPlanBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
-    backgroundColor: '#F5F3FF',
+    backgroundColor: "#F5F3FF",
     borderWidth: 1,
-    borderColor: '#DDD6FE',
+    borderColor: "#DDD6FE",
     paddingVertical: 5,
     paddingHorizontal: 10,
     borderRadius: 8,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   headerPlanIcon: {
     fontSize: 14,
   },
   headerPlanTitle: {
     fontSize: 11.5,
-    fontWeight: '700',
-    color: '#6D28D9',
+    fontWeight: "700",
+    color: "#6D28D9",
     lineHeight: 14,
   },
   headerPlanSubtitle: {
     fontSize: 9.5,
-    color: '#8B5CF6',
-    fontWeight: '600',
+    color: "#8B5CF6",
+    fontWeight: "600",
   },
   branchStoreIcon: {
     fontSize: 13,
   },
   modeTogglePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 5,
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 8,
-    cursor: 'pointer',
+    cursor: "pointer",
     borderWidth: 1,
   },
   modeTogglePillMulti: {
-    backgroundColor: '#F0FDFA',
-    borderColor: '#99F6E4',
+    backgroundColor: "#F0FDFA",
+    borderColor: "#99F6E4",
   },
   modeTogglePillSingle: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#BFDBFE',
+    backgroundColor: "#EFF6FF",
+    borderColor: "#BFDBFE",
   },
   modeToggleIcon: {
     fontSize: 12,
   },
   modeToggleText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   modeToggleTextMulti: {
-    color: '#0F766E',
+    color: "#0F766E",
   },
   modeToggleTextSingle: {
-    color: '#1D4ED8',
+    color: "#1D4ED8",
   },
   dropdownDivider: {
     height: 1,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: "#F1F5F9",
     marginVertical: 6,
   },
   dropdownModeSection: {
@@ -742,42 +977,42 @@ const styles = StyleSheet.create({
   },
   dropdownModeSectionTitle: {
     fontSize: 10,
-    fontWeight: '800',
-    color: '#94A3B8',
+    fontWeight: "800",
+    color: "#94A3B8",
     letterSpacing: 0.5,
     marginBottom: 4,
     paddingHorizontal: 6,
   },
   dropdownModeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingVertical: 8,
     paddingHorizontal: 8,
     borderRadius: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   dropdownModeBtnActive: {
-    backgroundColor: '#F0FDFA',
+    backgroundColor: "#F0FDFA",
   },
   dropdownModeBtnText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#334155',
+    fontWeight: "600",
+    color: "#334155",
   },
   dropdownModeBtnTextActive: {
-    color: '#0F766E',
-    fontWeight: '750',
+    color: "#0F766E",
+    fontWeight: "750",
   },
   quickSettingsButton: {
     padding: 7,
     borderRadius: 8,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    cursor: 'pointer',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: "#E2E8F0",
+    cursor: "pointer",
+    alignItems: "center",
+    justifyContent: "center",
   },
   quickSettingsIcon: {
     fontSize: 15,

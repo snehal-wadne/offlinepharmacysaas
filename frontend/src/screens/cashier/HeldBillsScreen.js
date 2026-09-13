@@ -73,7 +73,7 @@ export default function HeldBillsScreen({ onNavigate, onShowToast, isMultiBranch
       (b.billNo && b.billNo.toLowerCase().includes(q)) ||
       (b.token && b.token.toLowerCase().includes(q)) ||
       (b.customerName && b.customerName.toLowerCase().includes(q)) ||
-      (b.customerPhone && b.customerPhone.includes(q)) ||
+      (b.customerPhone && String(b.customerPhone).includes(q)) ||
       (b.itemsSummary && b.itemsSummary.toLowerCase().includes(q));
 
     let matchStatus = true;

@@ -7,6 +7,9 @@
 const express = require('express');
 const router = express.Router();
 const goodsReceiptController = require('../controllers/goods-receipt.controller');
+const { authenticate } = require('../middlewares/auth.middleware');
+
+router.use(authenticate);
 
 // GET /api/goods-receipts - List goods receipts
 router.get('/', goodsReceiptController.getGoodsReceipts);

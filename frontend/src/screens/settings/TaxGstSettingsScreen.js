@@ -10,6 +10,7 @@ import {
   Platform,
   Modal,
 } from 'react-native';
+import { SkeletonTableRow } from '../../components/common/SkeletonLoader';
 import {
   fetchTaxes,
   createTax,
@@ -261,7 +262,7 @@ export default function TaxGstSettingsScreen({
       });
       notify('✓ Tax and GST settings saved successfully to database!');
     } catch (err) {
-      notify('✓ Tax and GST settings saved locally.');
+      notify('⚠ Failed to save tax settings. Please try again.', 'error');
     }
   };
 
@@ -273,9 +274,9 @@ export default function TaxGstSettingsScreen({
   const roleName = (currentUser?.role || '').toLowerCase();
   const accessLevel = (currentUser?.accessLevel || '').toLowerCase();
   const isAdmin =
-    !currentUser || // Fallback in dev/preview
-    roleName.includes('admin') ||
-    accessLevel.includes('admin');
+    currentUser &&
+    (roleName.includes('admin') ||
+    accessLevel.includes('admin'));
 
   if (!isAdmin) {
     return (
@@ -566,58 +567,64 @@ export default function TaxGstSettingsScreen({
 
             {/* Taxes List */}
             <View style={styles.taxesList}>
-              {taxesList.map((tax) => (
-                <View key={tax.id} style={[styles.taxItemCard, tax.isApplied && styles.taxItemCardApplied]}>
-                  {/* Left: Info */}
-                  <View style={styles.taxItemInfo}>
-                    <View style={styles.taxItemTitleRow}>
-                      <Text style={styles.taxItemName}>{tax.name}</Text>
-                      <View
-                        style={[
-                          styles.taxTypeBadge,
-                          tax.type === 'VAT Tax'
-                            ? styles.taxTypeVat
-                            : tax.type === 'State Tax'
-                            ? styles.taxTypeState
-                            : styles.taxTypeCentral,
-                        ]}
-                      >
-                        <Text style={styles.taxTypeBadgeText}>{tax.type}</Text>
+              {loading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <SkeletonTableRow key={i} />
+                ))
+              ) : (
+                taxesList.map((tax) => (
+                  <View key={tax.id} style={[styles.taxItemCard, tax.isApplied && styles.taxItemCardApplied]}>
+                    {/* Left: Info */}
+                    <View style={styles.taxItemInfo}>
+                      <View style={styles.taxItemTitleRow}>
+                        <Text style={styles.taxItemName}>{tax.name}</Text>
+                        <View
+                          style={[
+                            styles.taxTypeBadge,
+                            tax.type === 'VAT Tax'
+                              ? styles.taxTypeVat
+                              : tax.type === 'State Tax'
+                              ? styles.taxTypeState
+                              : styles.taxTypeCentral,
+                          ]}
+                        >
+                          <Text style={styles.taxTypeBadgeText}>{tax.type}</Text>
+                        </View>
+                        <View style={styles.rateBadge}>
+                          <Text style={styles.rateBadgeText}>{tax.rate}%</Text>
+                        </View>
                       </View>
-                      <View style={styles.rateBadge}>
-                        <Text style={styles.rateBadgeText}>{tax.rate}%</Text>
-                      </View>
-                    </View>
-                    <Text style={styles.taxItemDesc}>{tax.description}</Text>
-                  </View>
-
-                  {/* Right: Toggle & Delete */}
-                  <View style={styles.taxItemActions}>
-                    <View style={styles.toggleWithLabel}>
-                      <Text style={styles.applyLabel}>
-                        {tax.isApplied ? 'Applied to Bill' : 'Not Applied'}
-                      </Text>
-                      <Pressable
-                        onPress={() => handleToggleApplyTax(tax.id)}
-                        style={[styles.toggleSwitch, tax.isApplied ? styles.toggleOn : styles.toggleOff]}
-                      >
-                        <View style={[styles.toggleKnob, tax.isApplied ? styles.toggleKnobOn : styles.toggleKnobOff]} />
-                      </Pressable>
+                      <Text style={styles.taxItemDesc}>{tax.description}</Text>
                     </View>
 
-                    {!tax.isDefault ? (
-                      <Pressable
-                        onPress={() => handleDeleteTax(tax.id, tax.name)}
-                        style={styles.deleteBtn}
-                        accessibilityRole="button"
-                        accessibilityLabel="Delete Tax"
-                      >
-                        <Text style={styles.deleteBtnText}>🗑️ Delete</Text>
-                      </Pressable>
-                    ) : null}
+                    {/* Right: Toggle & Delete */}
+                    <View style={styles.taxItemActions}>
+                      <View style={styles.toggleWithLabel}>
+                        <Text style={styles.applyLabel}>
+                          {tax.isApplied ? 'Applied to Bill' : 'Not Applied'}
+                        </Text>
+                        <Pressable
+                          onPress={() => handleToggleApplyTax(tax.id)}
+                          style={[styles.toggleSwitch, tax.isApplied ? styles.toggleOn : styles.toggleOff]}
+                        >
+                          <View style={[styles.toggleKnob, tax.isApplied ? styles.toggleKnobOn : styles.toggleKnobOff]} />
+                        </Pressable>
+                      </View>
+
+                      {!tax.isDefault ? (
+                        <Pressable
+                          onPress={() => handleDeleteTax(tax.id, tax.name)}
+                          style={styles.deleteBtn}
+                          accessibilityRole="button"
+                          accessibilityLabel="Delete Tax"
+                        >
+                          <Text style={styles.deleteBtnText}>🗑️ Delete</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
                   </View>
-                </View>
-              ))}
+                ))
+              )}
             </View>
           </View>
         </View>

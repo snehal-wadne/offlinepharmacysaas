@@ -6,6 +6,7 @@
  */
 
 const { pool } = require('../db/connection');
+const { verifyToken } = require('../utils/token.util');
 
 const authenticate = async (req, res, next) => {
   try {
@@ -15,17 +16,17 @@ const authenticate = async (req, res, next) => {
 
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.split(' ')[1];
-      // Format: jwt_pg_<userId>_<timestamp> or raw UUID
-      if (token.startsWith('jwt_pg_') || token.startsWith('pin_token_')) {
-        const parts = token.split('_');
-        userId = parts[2]; // UUID segment
-      } else if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(token)) {
-        userId = token;
+      const decoded = verifyToken(token);
+      if (decoded && decoded.userId) {
+        userId = decoded.userId;
       }
     }
 
-    // Development / test fallback ONLY when NO Authorization header is passed at all
-    if (!hasAuthHeader && (process.env.NODE_ENV !== 'production' || req.headers['x-dev-user'] === 'true')) {
+    // Development-only fallback: must be explicitly opted into via ALLOW_DEV_AUTH=true.
+    // Previously this activated by default whenever NODE_ENV wasn't 'production',
+    // which meant any request with no Authorization header silently authenticated
+    // as the first active user (effectively an unauthenticated admin session).
+    if (!hasAuthHeader && process.env.ALLOW_DEV_AUTH === 'true') {
       const fallbackUserRes = await pool.query(`
         SELECT 
           u.id, u.name, u.email, u.phone, u.staff_id AS "staffId",

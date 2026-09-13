@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, SafeAreaView, useWindowDimensions } from 'react-native';
+import { SkeletonTableRow, SkeletonItemCard, SkeletonKpiCard } from '../../components/common/SkeletonLoader';
+import PaginationControls from '../../components/common/PaginationControls';
 
 const COLORS = {
   primary: '#0F766E',
@@ -54,6 +56,10 @@ export default function StockMovementHistoryScreen({ navigation, route }) {
   const [userFilter, setUserFilter] = useState('All');
 
   const [activeDropdown, setActiveDropdown] = useState(null); // 'type', 'branch', 'user'
+
+  const [loading, setLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   const typeOptions = ['All', 'Purchase', 'Sale', 'Transfer', 'Adjustment', 'Return', 'Stocktake'];
   const branchOptions = ['All', 'Main Branch', 'BR-02', 'BR-03', 'BR-04', 'BR-05'];
@@ -256,12 +262,16 @@ export default function StockMovementHistoryScreen({ navigation, route }) {
         {/* Data Table / Mobile Movement Cards */}
         {isMobile ? (
           <View style={styles.mobileCardList}>
-            {filteredData.length === 0 ? (
+            {loading ? (
+              Array.from({ length: 3 }).map((_, i) => (
+                <SkeletonItemCard key={i} />
+              ))
+            ) : filteredData.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyStateText}>No movements found matching filters.</Text>
               </View>
             ) : (
-              filteredData.map((item) => (
+              filteredData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((item) => (
                 <View key={item.id} style={styles.mobileMovementCard}>
                   <View style={styles.mobileCardHeader}>
                     <View style={{ flex: 1 }}>
@@ -317,37 +327,45 @@ export default function StockMovementHistoryScreen({ navigation, route }) {
                 </View>
 
                 {/* Table Body */}
-                {filteredData.map((item, index) => (
-                  <View key={item.id} style={[styles.tableRow, index % 2 === 1 && styles.tableRowAlt]}>
-                    <Text style={[styles.cellText, { width: 110 }]}>{item.date}</Text>
-                    <View style={[styles.cellContent, { width: 120 }]}>
-                      {renderBadge(item.type)}
-                    </View>
-                    <Text style={[styles.cellText, { width: 180, fontWeight: '500' }]}>{item.product}</Text>
-                    <Text style={[styles.cellText, { width: 100 }]}>{item.batch}</Text>
-                    <Text style={[styles.cellText, { width: 90, color: item.quantity > 0 ? COLORS.success : item.quantity < 0 ? COLORS.danger : COLORS.textSecondary, fontWeight: '600' }]}>
-                      {item.quantity > 0 ? `+${item.quantity}` : item.quantity}
-                    </Text>
-                    <Text style={[styles.cellText, styles.referenceLink, { width: 110 }]}>{item.reference}</Text>
-                    <Text style={[styles.cellText, { width: 120 }]}>{item.branch}</Text>
-                    <Text style={[styles.cellText, { width: 90 }]}>{item.user}</Text>
-                    <Text style={[styles.cellText, { width: 200 }]} numberOfLines={1}>{item.reason}</Text>
-                  </View>
-                ))}
-                
-                {filteredData.length === 0 && (
+                {loading ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <SkeletonTableRow key={i} columns={9} />
+                  ))
+                ) : filteredData.length === 0 ? (
                   <View style={styles.emptyState}>
                     <Text style={styles.emptyStateText}>No movements found matching filters.</Text>
                   </View>
+                ) : (
+                  filteredData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((item, index) => (
+                    <View key={item.id} style={[styles.tableRow, index % 2 === 1 && styles.tableRowAlt]}>
+                      <Text style={[styles.cellText, { width: 110 }]}>{item.date}</Text>
+                      <View style={[styles.cellContent, { width: 120 }]}>
+                        {renderBadge(item.type)}
+                      </View>
+                      <Text style={[styles.cellText, { width: 180, fontWeight: '500' }]}>{item.product}</Text>
+                      <Text style={[styles.cellText, { width: 100 }]}>{item.batch}</Text>
+                      <Text style={[styles.cellText, { width: 90, color: item.quantity > 0 ? COLORS.success : item.quantity < 0 ? COLORS.danger : COLORS.textSecondary, fontWeight: '600' }]}>
+                        {item.quantity > 0 ? `+${item.quantity}` : item.quantity}
+                      </Text>
+                      <Text style={[styles.cellText, styles.referenceLink, { width: 110 }]}>{item.reference}</Text>
+                      <Text style={[styles.cellText, { width: 120 }]}>{item.branch}</Text>
+                      <Text style={[styles.cellText, { width: 90 }]}>{item.user}</Text>
+                      <Text style={[styles.cellText, { width: 200 }]} numberOfLines={1}>{item.reason}</Text>
+                    </View>
+                  ))
                 )}
               </View>
             </ScrollView>
           </View>
         )}
         
-        <View style={styles.pagination}>
-          <Text style={styles.paginationText}>Showing {Math.min(1, filteredData.length)}–{Math.min(20, filteredData.length)} of 1,842 movements</Text>
-        </View>
+        <PaginationControls 
+          currentPage={currentPage}
+          totalPages={Math.ceil(filteredData.length / itemsPerPage)}
+          onPageChange={setCurrentPage}
+          itemsPerPage={itemsPerPage}
+          onItemsPerPageChange={setItemsPerPage}
+        />
 
       </ScrollView>
     </SafeAreaView>

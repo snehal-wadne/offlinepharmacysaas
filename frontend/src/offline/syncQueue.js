@@ -5,6 +5,8 @@
  * survive browser reloads, page navigation, or system restarts.
  */
 
+import { generateUUID } from '../db/utils/uuid';
+
 const SYNC_QUEUE_KEY = 'pharma_offline_sync_queue_v1';
 
 const getStoredQueue = () => {
@@ -31,7 +33,7 @@ const saveStoredQueue = (queue) => {
 export const enqueueMutation = (type, data) => {
   const queue = getStoredQueue();
   const mutation = {
-    id: `mut_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+    id: `mut_${Date.now()}_${generateUUID()}`,
     type,
     data,
     createdAt: new Date().toISOString(),

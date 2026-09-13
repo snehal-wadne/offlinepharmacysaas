@@ -9,10 +9,13 @@ import {
   StyleSheet,
   useWindowDimensions,
   Platform,
+  Image,
 } from 'react-native';
 import { MOCK_POS_PRODUCTS } from '../../data/cashierMockData';
 import { MOCK_CUSTOMERS_LIST } from '../../data/customersMockData';
 import { useOfflineSync } from '../../offline/OfflineSyncContext';
+import { SkeletonItemCard } from '../../components/common/SkeletonLoader';
+import PaginationControls from '../../components/common/PaginationControls';
 
 export default function PosBillingScreen({ onNavigate, onShowToast, isMultiBranch = true }) {
   const offlineSync = useOfflineSync();
@@ -22,6 +25,16 @@ export default function PosBillingScreen({ onNavigate, onShowToast, isMultiBranc
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const isCompact = width < 1100;
+  
+  const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
+
+  useEffect(() => {
+    // Simulate loading since data is mostly synchronous here
+    const timer = setTimeout(() => setLoading(false), 500);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Active Tab on Mobile: 'catalog' | 'cart'
   const [mobileTab, setMobileTab] = useState('catalog');
@@ -77,6 +90,9 @@ export default function PosBillingScreen({ onNavigate, onShowToast, isMultiBranc
   const [paymentMode, setPaymentMode] = useState('Cash'); // 'Cash' | 'UPI' | 'Card' | 'Credit' | 'Split'
   const [cashTendered, setCashTendered] = useState('');
   const [upiTendered, setUpiTendered] = useState('');
+  const [storeUpiId, setStoreUpiId] = useState('pharmaflow@okhdfcbank');
+  const [upiRefNumber, setUpiRefNumber] = useState('');
+  const [isEditingUpiId, setIsEditingUpiId] = useState(false);
 
   // Receipt Modal State (BIL-10, BIL-19)
   const [receiptModalVisible, setReceiptModalVisible] = useState(false);
@@ -89,7 +105,7 @@ export default function PosBillingScreen({ onNavigate, onShowToast, isMultiBranc
     const matchSearch =
       prod.name.toLowerCase().includes(q) ||
       prod.generic.toLowerCase().includes(q) ||
-      prod.barcode.includes(q) ||
+      (prod.barcode && String(prod.barcode).includes(q)) ||
       prod.sku.toLowerCase().includes(q);
     const matchCat = selectedCategory === 'All' || prod.category === selectedCategory;
     return matchSearch && matchCat;
@@ -237,6 +253,18 @@ export default function PosBillingScreen({ onNavigate, onShowToast, isMultiBranc
     }
   };
 
+  const paginatedData = filteredProducts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, padding: 24, gap: 16 }}>
+        <SkeletonItemCard />
+        <SkeletonItemCard />
+        <SkeletonItemCard />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       {/* Top Banner / Breadcrumb */}
@@ -338,7 +366,7 @@ export default function PosBillingScreen({ onNavigate, onShowToast, isMultiBranc
           {/* Catalog Grid */}
           <ScrollView style={styles.catalogScroll} showsVerticalScrollIndicator={true}>
             <View style={styles.catalogGrid}>
-              {filteredProducts.map((prod) => (
+              {paginatedData.map((prod) => (
                 <Pressable
                   key={prod.id}
                   onPress={() => handleAddToCart(prod)}
@@ -373,6 +401,15 @@ export default function PosBillingScreen({ onNavigate, onShowToast, isMultiBranc
               ))}
             </View>
           </ScrollView>
+          <View style={{ padding: 16 }}>
+            <PaginationControls
+              currentPage={currentPage}
+              totalItems={filteredProducts.length}
+              itemsPerPage={itemsPerPage}
+              onPageChange={setCurrentPage}
+              onItemsPerPageChange={(n) => { setItemsPerPage(n); setCurrentPage(1); }}
+            />
+          </View>
         </View>
         )}
 
@@ -581,9 +618,68 @@ export default function PosBillingScreen({ onNavigate, onShowToast, isMultiBranc
 
             {paymentMode === 'UPI' && (
               <View style={styles.qrSectionBox}>
-                <Text style={styles.qrIcon}>📷</Text>
-                <Text style={styles.qrText}>Show Store Dynamic UPI QR to Customer</Text>
-                <Text style={styles.qrSubText}>Amount: ₹{totals.grandTotal.toFixed(2)}</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F766E' }}>Customer UPI Scanner</Text>
+                  <Text style={{ fontSize: 18, fontWeight: '900', color: '#0F766E' }}>₹{totals.grandTotal.toFixed(2)}</Text>
+                </View>
+
+                <View style={{ alignSelf: 'center', backgroundColor: '#FFFFFF', padding: 8, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 8 }}>
+                  <Image
+                    source={{
+                      uri: `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
+                        `upi://pay?pa=${encodeURIComponent(
+                          storeUpiId.trim() || 'pharmaflow@okhdfcbank'
+                        )}&pn=PharmaFlow%20Pharmacy&am=${totals.grandTotal.toFixed(
+                          2
+                        )}&cu=INR&tn=${encodeURIComponent(
+                          `POS-${Date.now().toString().slice(-6)}`
+                        )}`
+                      )}`,
+                    }}
+                    style={{ width: 160, height: 160 }}
+                    resizeMode="contain"
+                  />
+                  <Text style={{ textAlign: 'center', fontSize: 11, fontWeight: '700', color: '#059669', marginTop: 4 }}>
+                    ⚡ Scan to Pay ₹{totals.grandTotal.toFixed(2)}
+                  </Text>
+                </View>
+
+                {/* VPA and supported apps */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFFFFF', padding: 6, borderRadius: 6, marginBottom: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                  <Text style={{ fontSize: 11, color: '#64748B' }}>UPI VPA: <Text style={{ fontWeight: '700', color: '#0F172A' }}>{storeUpiId}</Text></Text>
+                  <Pressable onPress={() => setIsEditingUpiId(!isEditingUpiId)}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#0D9488' }}>{isEditingUpiId ? 'Done' : 'Edit'}</Text>
+                  </Pressable>
+                </View>
+
+                {isEditingUpiId && (
+                  <TextInput
+                    style={{ borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 6, padding: 6, fontSize: 12, backgroundColor: '#FFFFFF', marginBottom: 8 }}
+                    value={storeUpiId}
+                    onChangeText={setStoreUpiId}
+                    placeholder="Enter UPI ID"
+                    autoCapitalize="none"
+                  />
+                )}
+
+                <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6, marginBottom: 8 }}>
+                  {['GPay', 'PhonePe', 'Paytm', 'BHIM', 'Any App'].map((app) => (
+                    <Text key={app} style={{ fontSize: 10, fontWeight: '700', color: '#475569', backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>{app}</Text>
+                  ))}
+                </View>
+
+                <TextInput
+                  style={{ borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 6, paddingHorizontal: 10, height: 36, fontSize: 12, backgroundColor: '#FFFFFF', marginBottom: 6 }}
+                  placeholder="Customer UTR / Ref No. (Optional)"
+                  placeholderTextColor="#94A3B8"
+                  value={upiRefNumber}
+                  onChangeText={setUpiRefNumber}
+                  keyboardType="numeric"
+                />
+
+                <Text style={{ fontSize: 11, color: '#92400E', backgroundColor: '#FEF3C7', padding: 6, borderRadius: 6 }}>
+                  💡 Customer scans QR code above. Once payment is received, click &apos;Complete Sale &amp; Print&apos;.
+                </Text>
               </View>
             )}
 
@@ -749,7 +845,7 @@ export default function PosBillingScreen({ onNavigate, onShowToast, isMultiBranc
               {MOCK_CUSTOMERS_LIST.filter(
                 (c) =>
                   c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
-                  c.phone.includes(customerSearch)
+                  (c.phone && String(c.phone).includes(customerSearch))
               ).map((c) => (
                 <Pressable
                   key={c.id}

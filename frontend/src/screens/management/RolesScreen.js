@@ -16,6 +16,8 @@ import {
   MOCK_ROLES_LIST,
   MOCK_USERS_LIST,
 } from '../../data/managementMockData';
+import { SkeletonItemCard } from '../../components/common/SkeletonLoader';
+import PaginationControls from '../../components/common/PaginationControls';
 
 export default function RolesScreen({ onShowToast, onNavigate }) {
   const { width } = useWindowDimensions();
@@ -28,6 +30,9 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
 
   // Roles State
   const [roles, setRoles] = useState(MOCK_ROLES_LIST);
+  const [loading, setLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   // Add / Edit Role Modal State
   const [modalVisible, setModalVisible] = useState(false);
@@ -65,6 +70,12 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
 
     return matchesSearch && matchesType;
   });
+
+  const totalPages = Math.ceil(filteredRoles.length / itemsPerPage);
+  const paginatedRoles = filteredRoles.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
   const handleOpenAddModal = () => {
     setIsEditing(false);
@@ -274,7 +285,11 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
 
       {/* 4. Roles Grid Cards */}
       <View style={styles.rolesGrid}>
-        {filteredRoles.length === 0 ? (
+        {loading ? (
+          Array.from({ length: 5 }).map((_, i) => (
+            <SkeletonItemCard key={i} />
+          ))
+        ) : filteredRoles.length === 0 ? (
           <View style={styles.emptyStateContainer}>
             <Text style={styles.emptyIcon}>🛡️</Text>
             <Text style={styles.emptyTitle}>No roles match your search</Text>
@@ -283,7 +298,7 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
             </Text>
           </View>
         ) : (
-          filteredRoles.map((role) => {
+          paginatedRoles.map((role) => {
             const assignedCount = role.userCount || 0;
             return (
               <View key={role.id} style={styles.roleCard}>
@@ -380,6 +395,14 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
           })
         )}
       </View>
+      {!loading && filteredRoles.length > 0 && (
+        <PaginationControls
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+          totalItems={filteredRoles.length}
+        />
+      )}
 
       {/* 5. Add / Edit Role Modal */}
       <Modal

@@ -14,11 +14,23 @@ import {
   MOCK_VENDOR_SPEND_ANALYSIS,
 } from '../../data/reportsMockData';
 import { exportToCSV, exportToPDF } from '../../utils/exportUtils';
+import { SkeletonTableRow } from '../../components/common/SkeletonLoader';
+import PaginationControls from '../../components/common/PaginationControls';
 
 export default function PurchaseReportsScreen({ onShowToast, onNavigate }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
   const isMobile = width < 768;
+
+  const [loading, setLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  const totalPages = Math.ceil(MOCK_VENDOR_SPEND_ANALYSIS.length / itemsPerPage);
+  const paginatedVendors = MOCK_VENDOR_SPEND_ANALYSIS.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
   const handleExport = (type) => {
     const headers = [
@@ -120,7 +132,14 @@ export default function PurchaseReportsScreen({ onShowToast, onNavigate }) {
         {isMobile ? (
           /* Mobile Vendor Spend Cards */
           <View style={styles.mobileCardList}>
-            {MOCK_VENDOR_SPEND_ANALYSIS.map((v) => (
+            {loading ? (
+              <View style={{ padding: 20 }}>
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <SkeletonTableRow key={i} />
+                ))}
+              </View>
+            ) : (
+              paginatedVendors.map((v) => (
               <View key={v.supplier} style={styles.mobileVendorCard}>
                 <View style={styles.mobileCardHeader}>
                   <View style={{ flex: 1 }}>
@@ -151,7 +170,7 @@ export default function PurchaseReportsScreen({ onShowToast, onNavigate }) {
                   </View>
                 </View>
               </View>
-            ))}
+            )))}
           </View>
         ) : (
           /* Desktop Table */
@@ -167,7 +186,14 @@ export default function PurchaseReportsScreen({ onShowToast, onNavigate }) {
                 <Text style={[styles.thCell, { width: 180 }]}>PRIMARY CATEGORY</Text>
               </View>
 
-              {MOCK_VENDOR_SPEND_ANALYSIS.map((v, index) => (
+              {loading ? (
+                <View style={{ padding: 20 }}>
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <SkeletonTableRow key={i} />
+                  ))}
+                </View>
+              ) : (
+                paginatedVendors.map((v, index) => (
                 <View
                   key={v.supplier}
                   style={[
@@ -206,9 +232,17 @@ export default function PurchaseReportsScreen({ onShowToast, onNavigate }) {
                     {v.primaryCategory}
                   </Text>
                 </View>
-              ))}
+              )))}
             </View>
           </ScrollView>
+        )}
+        {!loading && MOCK_VENDOR_SPEND_ANALYSIS.length > 0 && (
+          <PaginationControls
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            totalItems={MOCK_VENDOR_SPEND_ANALYSIS.length}
+          />
         )}
       </View>
     </ScrollView>

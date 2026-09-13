@@ -61,6 +61,16 @@ export function classifySyncError(error: any, httpStatus?: number): ClassifiedEr
       };
     }
 
+    if (httpStatus === 404) {
+      return {
+        category: 'FATAL',
+        isRetryable: false,
+        message: 'Resource not found on server.',
+        code: 'NOT_FOUND',
+        suggestedDelayMs: 0,
+      };
+    }
+
     if (httpStatus === 403) {
       return {
         category: 'AUTHORIZATION',

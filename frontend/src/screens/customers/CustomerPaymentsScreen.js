@@ -16,6 +16,8 @@ import {
   PAYMENT_MODE_FILTER,
   MOCK_CUSTOMER_PAYMENTS_LIST,
 } from '../../data/customersMockData';
+import { SkeletonTableRow, SkeletonItemCard } from '../../components/common/SkeletonLoader';
+import PaginationControls from '../../components/common/PaginationControls';
 
 const PAYMENT_MODE_BADGES = {
   'UPI / QR': { bg: '#DBEAFE', text: '#1D4ED8' },
@@ -38,6 +40,10 @@ export default function CustomerPaymentsScreen({ onShowToast, onNavigate }) {
 
   // Payments List State
   const [payments, setPayments] = useState(MOCK_CUSTOMER_PAYMENTS_LIST);
+
+  const [loading, setLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // Modal 1: Record Payment Modal
   const [recordModalVisible, setRecordModalVisible] = useState(false);
@@ -248,13 +254,15 @@ export default function CustomerPaymentsScreen({ onShowToast, onNavigate }) {
         {isMobile ? (
           /* Mobile Payment Receipt Cards */
           <View style={styles.mobileCardList}>
-            {filteredPayments.length === 0 ? (
+            {loading ? (
+              Array.from({ length: 3 }).map((_, i) => <SkeletonItemCard key={i} />)
+            ) : filteredPayments.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyTitle}>No payment receipts found</Text>
                 <Text style={styles.emptySubtitle}>Try changing your search terms or payment mode selection.</Text>
               </View>
             ) : (
-              filteredPayments.map((rcpt) => {
+              filteredPayments.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((rcpt) => {
                 const modeStyle = MODE_BADGES[rcpt.paymentMode] || MODE_BADGES.Cash;
                 const displayAmount = rcpt.amount || rcpt.amountPaid || '₹0.00';
                 const displayDate = rcpt.date || rcpt.paymentDate || '';
@@ -343,13 +351,17 @@ export default function CustomerPaymentsScreen({ onShowToast, onNavigate }) {
                 <Text style={[styles.thCell, { width: 130, textAlign: 'center' }]}>ACTIONS</Text>
               </View>
 
-              {filteredPayments.length === 0 ? (
+              {loading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <SkeletonTableRow key={i} columns={10} />
+                ))
+              ) : filteredPayments.length === 0 ? (
                 <View style={styles.emptyState}>
                   <Text style={styles.emptyTitle}>No payment receipts found</Text>
                   <Text style={styles.emptySubtitle}>Try changing your search terms or payment mode selection.</Text>
                 </View>
               ) : (
-                filteredPayments.map((rcpt, index) => {
+                filteredPayments.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((rcpt, index) => {
                   const modeStyle = MODE_BADGES[rcpt.paymentMode] || MODE_BADGES.Cash;
                   const displayAmount = rcpt.amount || rcpt.amountPaid || '₹0.00';
                   const displayDate = rcpt.date || rcpt.paymentDate || '';
@@ -429,6 +441,14 @@ export default function CustomerPaymentsScreen({ onShowToast, onNavigate }) {
             </View>
           </ScrollView>
         )}
+        
+        <PaginationControls 
+          currentPage={currentPage}
+          totalPages={Math.ceil(filteredPayments.length / itemsPerPage)}
+          onPageChange={setCurrentPage}
+          itemsPerPage={itemsPerPage}
+          onItemsPerPageChange={setItemsPerPage}
+        />
       </View>
 
       {/* Modal 1: Record Customer Payment Modal */}

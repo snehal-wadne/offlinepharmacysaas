@@ -1,5 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Modal, FlatList, StyleSheet, SafeAreaView, useWindowDimensions } from 'react-native';
+import { SkeletonTableRow, SkeletonItemCard, SkeletonKpiCard } from '../../components/common/SkeletonLoader';
+import PaginationControls from '../../components/common/PaginationControls';
 
 const COLORS = {
   primary: '#0F766E',
@@ -61,6 +63,10 @@ export default function StocktakeScreen({ navigation, route }) {
   const [showBranchDropdown, setShowBranchDropdown] = useState(false);
   const [modalNotes, setModalNotes] = useState('');
   const [modalCountType, setModalCountType] = useState('full');
+
+  const [loading, setLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   const branches = ['Main Branch', 'BR-02', 'BR-03', 'BR-04', 'BR-05'];
 
@@ -213,54 +219,58 @@ export default function StocktakeScreen({ navigation, route }) {
         {/* Main Table / Mobile Cards */}
         {isMobile ? (
           <View style={styles.mobileCardList}>
-            {getFilteredData().map((item) => {
-              const statusStyle = getStatusStyle(item.status);
-              return (
-                <View key={item.id} style={styles.mobileCard}>
-                  <View style={styles.mobileCardHeader}>
-                    <View>
-                      <Text style={styles.mobileCardId}>{item.id}</Text>
-                      <Text style={styles.mobileCardBranch}>{item.branch}</Text>
+            {loading ? (
+              Array.from({ length: 3 }).map((_, i) => <SkeletonItemCard key={i} />)
+            ) : (
+              getFilteredData().slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((item) => {
+                const statusStyle = getStatusStyle(item.status);
+                return (
+                  <View key={item.id} style={styles.mobileCard}>
+                    <View style={styles.mobileCardHeader}>
+                      <View>
+                        <Text style={styles.mobileCardId}>{item.id}</Text>
+                        <Text style={styles.mobileCardBranch}>{item.branch}</Text>
+                      </View>
+                      <View style={[styles.badge, { backgroundColor: statusStyle.bg }]}>
+                        <Text style={[styles.badgeText, { color: statusStyle.text }]}>{item.status}</Text>
+                      </View>
                     </View>
-                    <View style={[styles.badge, { backgroundColor: statusStyle.bg }]}>
-                      <Text style={[styles.badgeText, { color: statusStyle.text }]}>{item.status}</Text>
-                    </View>
-                  </View>
 
-                  <View style={styles.mobileGrid}>
-                    <View style={styles.mobileGridCol}>
-                      <Text style={styles.mobileLabel}>Date</Text>
-                      <Text style={styles.mobileVal}>{item.date}</Text>
+                    <View style={styles.mobileGrid}>
+                      <View style={styles.mobileGridCol}>
+                        <Text style={styles.mobileLabel}>Date</Text>
+                        <Text style={styles.mobileVal}>{item.date}</Text>
+                      </View>
+                      <View style={styles.mobileGridCol}>
+                        <Text style={styles.mobileLabel}>Count Progress</Text>
+                        <Text style={styles.mobileValBold}>{item.itemsCounted} / {item.totalItems}</Text>
+                      </View>
+                      <View style={styles.mobileGridCol}>
+                        <Text style={styles.mobileLabel}>Discrepancies</Text>
+                        <Text style={[styles.mobileValBold, { color: item.discrepancies > 0 ? COLORS.danger : COLORS.success }]}>
+                          {item.discrepancies} items
+                        </Text>
+                      </View>
+                      <View style={styles.mobileGridCol}>
+                        <Text style={styles.mobileLabel}>Created By</Text>
+                        <Text style={styles.mobileVal}>{item.createdBy}</Text>
+                      </View>
                     </View>
-                    <View style={styles.mobileGridCol}>
-                      <Text style={styles.mobileLabel}>Count Progress</Text>
-                      <Text style={styles.mobileValBold}>{item.itemsCounted} / {item.totalItems}</Text>
-                    </View>
-                    <View style={styles.mobileGridCol}>
-                      <Text style={styles.mobileLabel}>Discrepancies</Text>
-                      <Text style={[styles.mobileValBold, { color: item.discrepancies > 0 ? COLORS.danger : COLORS.success }]}>
-                        {item.discrepancies} items
-                      </Text>
-                    </View>
-                    <View style={styles.mobileGridCol}>
-                      <Text style={styles.mobileLabel}>Created By</Text>
-                      <Text style={styles.mobileVal}>{item.createdBy}</Text>
-                    </View>
-                  </View>
 
-                  <View style={styles.mobileCardFooter}>
-                    <TouchableOpacity
-                      style={[styles.mobileActionBtn, item.status === 'In Progress' ? styles.actionPrimary : styles.actionSecondary]}
-                      onPress={() => setSelectedStocktake(item)}
-                    >
-                      <Text style={[styles.actionButtonText, item.status === 'In Progress' ? styles.actionTextPrimary : styles.actionTextSecondary]}>
-                        {item.status === 'In Progress' ? 'Resume Stocktake →' : 'View Audit Details'}
-                      </Text>
-                    </TouchableOpacity>
+                    <View style={styles.mobileCardFooter}>
+                      <TouchableOpacity
+                        style={[styles.mobileActionBtn, item.status === 'In Progress' ? styles.actionPrimary : styles.actionSecondary]}
+                        onPress={() => setSelectedStocktake(item)}
+                      >
+                        <Text style={[styles.actionButtonText, item.status === 'In Progress' ? styles.actionTextPrimary : styles.actionTextSecondary]}>
+                          {item.status === 'In Progress' ? 'Resume Stocktake →' : 'View Audit Details'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                </View>
-              );
-            })}
+                );
+              })
+            )}
           </View>
         ) : (
           <View style={styles.card}>
@@ -276,16 +286,30 @@ export default function StocktakeScreen({ navigation, route }) {
                   <Text style={[styles.columnHeader, { width: 120 }]}>Created By</Text>
                   <Text style={[styles.columnHeader, { width: 120 }]}>Actions</Text>
                 </View>
-                <FlatList
-                  data={getFilteredData()}
-                  keyExtractor={(item) => item.id}
-                  renderItem={renderStocktakeItem}
-                  scrollEnabled={false}
-                />
+                {loading ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <SkeletonTableRow key={i} columns={8} />
+                  ))
+                ) : (
+                  <FlatList
+                    data={getFilteredData().slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)}
+                    keyExtractor={(item) => item.id}
+                    renderItem={renderStocktakeItem}
+                    scrollEnabled={false}
+                  />
+                )}
               </View>
             </ScrollView>
           </View>
         )}
+        
+        <PaginationControls 
+          currentPage={currentPage}
+          totalPages={Math.ceil(getFilteredData().length / itemsPerPage)}
+          onPageChange={setCurrentPage}
+          itemsPerPage={itemsPerPage}
+          onItemsPerPageChange={setItemsPerPage}
+        />
 
         {/* Detail Panel */}
         {selectedStocktake && (
@@ -299,7 +323,7 @@ export default function StocktakeScreen({ navigation, route }) {
 
             {isMobile ? (
               <View style={styles.mobileCardList}>
-                {MOCK_DETAIL.map((item, index) => {
+                {(selectedStocktake.items || MOCK_DETAIL).map((item, index) => {
                   const statusStyle = getStatusStyle(item.status);
                   return (
                     <View key={`${item.product}-${index}`} style={styles.mobileCard}>
@@ -346,7 +370,7 @@ export default function StocktakeScreen({ navigation, route }) {
                     <Text style={[styles.columnHeader, { width: 120 }]}>Actions</Text>
                   </View>
                   <FlatList
-                    data={MOCK_DETAIL}
+                    data={selectedStocktake.items || MOCK_DETAIL}
                     keyExtractor={(item, index) => `${item.product}-${index}`}
                     renderItem={renderDetailItem}
                     scrollEnabled={false}

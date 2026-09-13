@@ -341,6 +341,9 @@ export class LocalPersistenceService {
                   updatedAt: occurredAt,
                 });
               }
+              if (remainingToDeduct > 0) {
+                throw new Error('Insufficient stock: ' + remainingToDeduct + ' units short');
+              }
             }
           }
         }

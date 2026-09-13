@@ -20,6 +20,8 @@ import {
   createGoodsReceipt,
   updateGoodsReceiptStatus,
 } from '../../api/purchaseApi';
+import { SkeletonTableRow, SkeletonItemCard } from '../../components/common/SkeletonLoader';
+import PaginationControls from '../../components/common/PaginationControls';
 
 const GRN_STATUS_BADGES = {
   Verified: { bg: '#DCFCE7', text: '#15803D', dot: '#16A34A' },
@@ -37,9 +39,14 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
   const [grnList, setGrnList] = useState(MOCK_GRN_LIST);
   const [activeMenuId, setActiveMenuId] = useState(null);
 
+  const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
   useEffect(() => {
     let isMounted = true;
     async function loadGRNs() {
+      setLoading(true);
       try {
         const response = await fetchGoodsReceipts();
         if (isMounted && response && response.data && response.data.length > 0) {
@@ -65,6 +72,8 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
         }
       } catch (err) {
         console.log('[GoodsReceivingScreen] Backend offline or using default list');
+      } finally {
+        if (isMounted) setLoading(false);
       }
     }
     loadGRNs();
@@ -323,13 +332,15 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
         {/* GRN Content (Mobile Cards vs Desktop Table) */}
         {isMobile ? (
           <View style={styles.mobileCardsList}>
-            {filteredGRNs.length === 0 ? (
+            {loading ? (
+              Array.from({ length: 3 }).map((_, i) => <SkeletonItemCard key={i} />)
+            ) : filteredGRNs.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyTitle}>No goods received records found</Text>
                 <Text style={styles.emptySubtitle}>Try changing your search or status filter.</Text>
               </View>
             ) : (
-              filteredGRNs.map((grn) => {
+              filteredGRNs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((grn) => {
                 const badge =
                   GRN_STATUS_BADGES[grn.status] || GRN_STATUS_BADGES.Verified;
                 const isMenuOpen = activeMenuId === grn.id;
@@ -485,13 +496,17 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
               </View>
 
               {/* Table Rows */}
-              {filteredGRNs.length === 0 ? (
+              {loading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <SkeletonTableRow key={i} columns={10} />
+                ))
+              ) : filteredGRNs.length === 0 ? (
                 <View style={styles.emptyState}>
                   <Text style={styles.emptyTitle}>No goods received records found</Text>
                   <Text style={styles.emptySubtitle}>Try changing your search or status filter.</Text>
                 </View>
               ) : (
-                filteredGRNs.map((grn, index) => {
+                filteredGRNs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((grn, index) => {
                   const badge =
                     GRN_STATUS_BADGES[grn.status] || GRN_STATUS_BADGES.Verified;
                   const isMenuOpen = activeMenuId === grn.id;
@@ -634,6 +649,14 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
             </View>
           </ScrollView>
         )}
+        
+        <PaginationControls 
+          currentPage={currentPage}
+          totalPages={Math.ceil(filteredGRNs.length / itemsPerPage)}
+          onPageChange={setCurrentPage}
+          itemsPerPage={itemsPerPage}
+          onItemsPerPageChange={setItemsPerPage}
+        />
       </View>
 
       {/* Receive Shipment Modal */}

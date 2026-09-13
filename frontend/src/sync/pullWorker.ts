@@ -48,50 +48,60 @@ export class PullWorker {
     branchId = 'BRANCH-MAIN',
     stream = 'main'
   ): Promise<{ changesApplied: number; cursor: string }> {
-    const currentCursor = (await this.syncMetaRepo.getLastPullCursor(stream)) || '0';
+    let currentCursor = (await this.syncMetaRepo.getLastPullCursor(stream)) || '0';
+    let totalChangesApplied = 0;
+    let iteration = 0;
+    let hasMore = false;
 
     logSyncEvent('pull_started', { stream, cursor: currentCursor });
 
-    const url = `${this.baseUrl}/api/sync/pull?cursor=${encodeURIComponent(
-      currentCursor
-    )}&organisationId=${encodeURIComponent(organisationId)}&branchId=${encodeURIComponent(
-      branchId
-    )}&limit=50`;
+    do {
+      iteration++;
+      const url = `${this.baseUrl}/api/sync/pull?cursor=${encodeURIComponent(
+        currentCursor
+      )}&organisationId=${encodeURIComponent(organisationId)}&branchId=${encodeURIComponent(
+        branchId
+      )}&limit=50`;
 
-    const headers: Record<string, string> = {
-      'x-organisation-id': organisationId,
-      'x-branch-id': branchId,
-    };
-    if (this.authToken) {
-      headers['Authorization'] = `Bearer ${this.authToken}`;
-    }
+      const headers: Record<string, string> = {
+        'x-organisation-id': organisationId,
+        'x-branch-id': branchId,
+      };
+      if (this.authToken) {
+        headers['Authorization'] = `Bearer ${this.authToken}`;
+      }
 
-    const response = await fetch(url, { method: 'GET', headers });
-    if (!response.ok) {
-      throw new Error(`Pull request failed with status HTTP ${response.status}`);
-    }
+      const response = await fetch(url, { method: 'GET', headers });
+      if (!response.ok) {
+        throw new Error(`Pull request failed with status HTTP ${response.status}`);
+      }
 
-    const data: PullChangesResponse = await response.json();
-    const changes = data.changes || [];
+      const data: PullChangesResponse = await response.json();
+      const changes = data.changes || [];
 
-    if (changes.length > 0) {
-      // Apply changes atomically inside IndexedDB
-      await this.applyChangesLocally(changes);
-    }
+      if (changes.length > 0) {
+        // Apply changes atomically inside IndexedDB
+        await this.applyChangesLocally(changes);
+        totalChangesApplied += changes.length;
+      }
 
-    // ONLY AFTER successful local commit (or 0 changes applied), advance cursor
-    const nextCursor = data.nextCursor !== undefined ? data.nextCursor : currentCursor;
-    await this.syncMetaRepo.setLastPullCursor(nextCursor, stream);
+      // ONLY AFTER successful local commit (or 0 changes applied), advance cursor
+      currentCursor = data.nextCursor !== undefined ? data.nextCursor : currentCursor;
+      await this.syncMetaRepo.setLastPullCursor(currentCursor, stream);
+      
+      hasMore = Boolean(data.hasMore);
+
+    } while (hasMore && iteration < 10);
 
     logSyncEvent('pull_completed', {
       stream,
-      changesApplied: changes.length,
-      nextCursor,
+      changesApplied: totalChangesApplied,
+      nextCursor: currentCursor,
     });
 
     return {
-      changesApplied: changes.length,
-      cursor: data.nextCursor || currentCursor,
+      changesApplied: totalChangesApplied,
+      cursor: currentCursor,
     };
   }
 

@@ -29,6 +29,7 @@ import { logSyncEvent } from './syncLogger';
 import { ConnectivityService, connectivityService as defaultConnService } from './connectivityService';
 import { PullWorker, pullWorker as defaultPullWorker } from './pullWorker';
 
+const syncLogger = console;
 const DEFAULT_BATCH_SIZE = 25;
 
 export class SyncEngine {
@@ -83,7 +84,7 @@ export class SyncEngine {
 
       // If transitioning from offline to online, trigger automatic sync
       if (!prevOnline && isOnline && this.started) {
-        this.sync().catch(() => {});
+        this.sync().catch(err => syncLogger.warn('Operation failed:', err));
       }
     });
   }
@@ -102,7 +103,7 @@ export class SyncEngine {
   setTenantContext(organisationId: string | null, branchId: string | null = null): void {
     this.activeOrganisationId = organisationId;
     this.activeBranchId = branchId;
-    this.refreshCounts().catch(() => {});
+    this.refreshCounts().catch(err => syncLogger.warn('Operation failed:', err));
   }
 
   /**
@@ -180,17 +181,17 @@ export class SyncEngine {
     this.isSyncing = true;
     this.updateState({ isSyncing: true, status: 'SYNCING' });
 
-    this.activeSyncPromise = this.runSyncLoop()
-      .finally(() => {
-        this.isSyncing = false;
-        this.activeSyncPromise = null;
-        this.updateState({
-          isSyncing: false,
-          status: this.connService.getIsOnline() ? 'ONLINE' : 'OFFLINE',
-        });
+    try {
+      this.activeSyncPromise = this.runSyncLoop();
+      await this.activeSyncPromise;
+    } finally {
+      this.isSyncing = false;
+      this.activeSyncPromise = null;
+      this.updateState({
+        isSyncing: false,
+        status: this.connService.getIsOnline() ? 'ONLINE' : 'OFFLINE',
       });
-
-    return this.activeSyncPromise;
+    }
   }
 
   /**
@@ -234,7 +235,7 @@ export class SyncEngine {
         }
         const txId = item.payload?.clientTransactionId || item.payload?.transactionId;
         if (txId) {
-          await this.txRepo.updateTransactionSyncStatus(txId, 'SYNCING').catch(() => {});
+          await this.txRepo.updateTransactionSyncStatus(txId, 'SYNCING').catch(err => syncLogger.warn('Operation failed:', err));
         }
       }
 
@@ -271,21 +272,28 @@ export class SyncEngine {
           headers['x-branch-id'] = this.activeBranchId;
         }
 
-        const res = await fetch(`${this.baseUrl}/api/sync/push`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify(pushPayload),
-        });
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        try {
+          const res = await fetch(`${this.baseUrl}/api/sync/push`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(pushPayload),
+            signal: controller.signal
+          });
 
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw {
-            status: res.status,
-            message: errData.error || `HTTP ${res.status} error`,
-          };
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw {
+              status: res.status,
+              message: errData.error || `HTTP ${res.status} error`,
+            };
+          }
+
+          response = await res.json();
+        } finally {
+          clearTimeout(timeoutId);
         }
-
-        response = await res.json();
       } catch (err: any) {
         transportError = err;
       }
@@ -314,7 +322,7 @@ export class SyncEngine {
           }
           const txId = item.payload?.clientTransactionId || item.payload?.transactionId;
           if (txId) {
-            await this.txRepo.updateTransactionSyncStatus(txId, 'PENDING', classified.message).catch(() => {});
+            await this.txRepo.updateTransactionSyncStatus(txId, 'PENDING', classified.message).catch(err => syncLogger.warn('Operation failed:', err));
           }
         }
 
@@ -345,7 +353,7 @@ export class SyncEngine {
             );
           }
           if (txId) {
-            await this.txRepo.updateTransactionSyncStatus(txId, 'PENDING').catch(() => {});
+            await this.txRepo.updateTransactionSyncStatus(txId, 'PENDING').catch(err => syncLogger.warn('Operation failed:', err));
           }
           continue;
         }

@@ -22,6 +22,8 @@ import {
   updatePurchaseStatus,
 } from '../../api/purchaseApi';
 import { useOfflineSync } from '../../offline/OfflineSyncContext';
+import { SkeletonTableRow, SkeletonItemCard } from '../../components/common/SkeletonLoader';
+import PaginationControls from '../../components/common/PaginationControls';
 
 const PO_STATUS_BADGES = {
   Draft: { bg: '#F1F5F9', text: '#475569' },
@@ -55,6 +57,8 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
   // Purchase Orders List
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   useEffect(() => {
     loadPurchasesData();
@@ -608,13 +612,15 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
         {isMobile ? (
           /* Mobile Purchase Order Cards (No horizontal scroll) */
           <View style={styles.mobileCardList}>
-            {filteredOrders.length === 0 ? (
+            {loading ? (
+              Array.from({ length: 3 }).map((_, i) => <SkeletonItemCard key={i} />)
+            ) : filteredOrders.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyTitle}>No purchase orders found</Text>
                 <Text style={styles.emptySubtitle}>Try changing your search keywords or filter tab.</Text>
               </View>
             ) : (
-              filteredOrders.map((po) => {
+              filteredOrders.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((po) => {
                 const badge = PO_STATUS_BADGES[po.status] || PO_STATUS_BADGES.Pending;
                 return (
                   <View key={po.id} style={styles.mobilePOCard}>
@@ -705,13 +711,17 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
               </View>
 
               {/* Rows */}
-              {filteredOrders.length === 0 ? (
+              {loading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <SkeletonTableRow key={i} columns={10} />
+                ))
+              ) : filteredOrders.length === 0 ? (
                 <View style={styles.emptyState}>
                   <Text style={styles.emptyTitle}>No purchase orders found</Text>
                   <Text style={styles.emptySubtitle}>Try changing your search keywords or active tab.</Text>
                 </View>
               ) : (
-                filteredOrders.map((po, index) => {
+                filteredOrders.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((po, index) => {
                   const badge = PO_STATUS_BADGES[po.status] || PO_STATUS_BADGES.Pending;
                   return (
                     <View
@@ -783,6 +793,14 @@ export default function PurchasesScreen({ onShowToast, onNavigate }) {
             </View>
           </ScrollView>
         )}
+        
+        <PaginationControls 
+          currentPage={currentPage}
+          totalPages={Math.ceil(filteredOrders.length / itemsPerPage)}
+          onPageChange={setCurrentPage}
+          itemsPerPage={itemsPerPage}
+          onItemsPerPageChange={setItemsPerPage}
+        />
       </View>
 
       {/* New Purchase Order Modal */}

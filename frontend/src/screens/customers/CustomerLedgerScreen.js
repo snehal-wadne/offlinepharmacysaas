@@ -17,6 +17,8 @@ import {
   MOCK_CUSTOMER_LEDGER_LIST,
   MOCK_PATIENT_STATEMENTS,
 } from '../../data/customersMockData';
+import { SkeletonTableRow, SkeletonItemCard } from '../../components/common/SkeletonLoader';
+import PaginationControls from '../../components/common/PaginationControls';
 
 export default function CustomerLedgerScreen({ onShowToast, onNavigate }) {
   const { width } = useWindowDimensions();
@@ -29,6 +31,10 @@ export default function CustomerLedgerScreen({ onShowToast, onNavigate }) {
 
   // Ledger Accounts State
   const [ledgerAccounts, setLedgerAccounts] = useState(MOCK_CUSTOMER_LEDGER_LIST);
+
+  const [loading, setLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // Modal 1: Statement Modal (RX-06, RX-07)
   const [statementModalVisible, setStatementModalVisible] = useState(false);
@@ -213,13 +219,15 @@ export default function CustomerLedgerScreen({ onShowToast, onNavigate }) {
         {isMobile ? (
           /* Mobile Credit Account Cards */
           <View style={styles.mobileCardList}>
-            {filteredLedgers.length === 0 ? (
+            {loading ? (
+              Array.from({ length: 3 }).map((_, i) => <SkeletonItemCard key={i} />)
+            ) : filteredLedgers.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyTitle}>No credit accounts found</Text>
                 <Text style={styles.emptySubtitle}>Try changing your search keywords or aging filter selection.</Text>
               </View>
             ) : (
-              filteredLedgers.map((acc) => {
+              filteredLedgers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((acc) => {
                 const isOverdue = acc.agingBucket.includes('30+ Days');
                 const isExceeded = acc.creditStatus === 'Limit Exceeded';
                 return (
@@ -304,13 +312,17 @@ export default function CustomerLedgerScreen({ onShowToast, onNavigate }) {
                 <Text style={[styles.thCell, { width: 160, textAlign: 'center' }]}>ACTIONS</Text>
               </View>
 
-              {filteredLedgers.length === 0 ? (
+              {loading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <SkeletonTableRow key={i} columns={11} />
+                ))
+              ) : filteredLedgers.length === 0 ? (
                 <View style={styles.emptyState}>
                   <Text style={styles.emptyTitle}>No credit accounts found</Text>
                   <Text style={styles.emptySubtitle}>Try changing your search keywords or aging filter selection.</Text>
                 </View>
               ) : (
-                filteredLedgers.map((acc, index) => {
+                filteredLedgers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((acc, index) => {
                   const isOverdue = acc.agingBucket.includes('30+ Days');
                   const isExceeded = acc.creditStatus === 'Limit Exceeded';
                   return (
@@ -444,6 +456,14 @@ export default function CustomerLedgerScreen({ onShowToast, onNavigate }) {
             </View>
           </ScrollView>
         )}
+        
+        <PaginationControls 
+          currentPage={currentPage}
+          totalPages={Math.ceil(filteredLedgers.length / itemsPerPage)}
+          onPageChange={setCurrentPage}
+          itemsPerPage={itemsPerPage}
+          onItemsPerPageChange={setItemsPerPage}
+        />
       </View>
 
       {/* Modal 1: Statement Modal */}

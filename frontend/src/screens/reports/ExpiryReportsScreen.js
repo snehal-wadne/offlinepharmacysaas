@@ -15,6 +15,8 @@ import {
   MOCK_EXPIRY_RISK_ITEMS,
 } from '../../data/reportsMockData';
 import { exportToCSV, exportToPDF } from '../../utils/exportUtils';
+import { SkeletonTableRow } from '../../components/common/SkeletonLoader';
+import PaginationControls from '../../components/common/PaginationControls';
 
 const RISK_BADGES = {
   Critical: { bg: '#FEE2E2', text: '#B91C1C' },
@@ -30,6 +32,9 @@ export default function ExpiryReportsScreen({ onShowToast, onNavigate }) {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [riskItems, setRiskItems] = useState(MOCK_EXPIRY_RISK_ITEMS);
+  const [loading, setLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   const filteredItems = riskItems.filter((item) => {
     const q = searchQuery.toLowerCase();
@@ -40,6 +45,12 @@ export default function ExpiryReportsScreen({ onShowToast, onNavigate }) {
       item.riskLevel.toLowerCase().includes(q)
     );
   });
+
+  const totalPages = Math.ceil(filteredItems.length / itemsPerPage);
+  const paginatedItems = filteredItems.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
   const handleExport = (type) => {
     const headers = [
@@ -168,13 +179,19 @@ export default function ExpiryReportsScreen({ onShowToast, onNavigate }) {
 
         {isMobile ? (
           <View style={styles.mobileCardsList}>
-            {filteredItems.length === 0 ? (
+            {loading ? (
+              <View style={{ padding: 20 }}>
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <SkeletonTableRow key={i} />
+                ))}
+              </View>
+            ) : filteredItems.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyTitle}>No expiring batches found</Text>
                 <Text style={styles.emptySubtitle}>Try changing your search terms.</Text>
               </View>
             ) : (
-              filteredItems.map((item) => {
+              paginatedItems.map((item) => {
                 const badge = RISK_BADGES[item.riskLevel] || RISK_BADGES.Critical;
                 const isCriticalOrExpired = item.riskLevel === 'Critical' || item.riskLevel === 'Expired';
 
@@ -243,13 +260,19 @@ export default function ExpiryReportsScreen({ onShowToast, onNavigate }) {
                 <Text style={[styles.thCell, { width: 200 }]}>RECOMMENDED ACTION</Text>
               </View>
 
-              {filteredItems.length === 0 ? (
+              {loading ? (
+                <View style={{ padding: 20 }}>
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <SkeletonTableRow key={i} />
+                  ))}
+                </View>
+              ) : filteredItems.length === 0 ? (
                 <View style={styles.emptyState}>
                   <Text style={styles.emptyTitle}>No expiring batches found</Text>
                   <Text style={styles.emptySubtitle}>Try changing your search terms.</Text>
                 </View>
               ) : (
-                filteredItems.map((item, index) => {
+                paginatedItems.map((item, index) => {
                   const badge = RISK_BADGES[item.riskLevel] || RISK_BADGES.Critical;
                   return (
                     <View
@@ -312,6 +335,14 @@ export default function ExpiryReportsScreen({ onShowToast, onNavigate }) {
               )}
             </View>
           </ScrollView>
+        )}
+        {!loading && filteredItems.length > 0 && (
+          <PaginationControls
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            totalItems={filteredItems.length}
+          />
         )}
       </View>
     </ScrollView>

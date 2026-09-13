@@ -8,17 +8,20 @@ const inventoryService = require('../services/inventory.service');
 const { pool } = require('../db/connection');
 
 const getOrgId = async (req) => {
+  if (req.user && req.user.organisationId) return req.user.organisationId;
   if (req.headers['x-organisation-id']) return req.headers['x-organisation-id'];
   if (req.query && req.query.organisationId) return req.query.organisationId;
   if (req.body && req.body.organisationId) return req.body.organisationId;
 
-  const orgRes = await pool.query('SELECT id FROM organisations LIMIT 1;');
-  return orgRes.rows[0]?.id;
+  return null;
 };
 
 const getInventory = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
+    if (!organisationId) {
+      return res.status(400).json({ error: 'Organisation ID is required' });
+    }
     const { search, limit, offset } = req.query;
 
     const inventory = await inventoryService.getInventory({
@@ -45,6 +48,9 @@ const getInventory = async (req, res) => {
 const saveInventory = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
+    if (!organisationId) {
+      return res.status(400).json({ error: 'Organisation ID is required' });
+    }
     const itemData = req.body;
 
     const saved = await inventoryService.saveOrUpdateInventory(organisationId, itemData);
@@ -66,6 +72,9 @@ const saveInventory = async (req, res) => {
 const updateInventory = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
+    if (!organisationId) {
+      return res.status(400).json({ error: 'Organisation ID is required' });
+    }
     const { id } = req.params;
     const itemData = { ...req.body, id };
 
@@ -88,6 +97,9 @@ const updateInventory = async (req, res) => {
 const deleteInventory = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
+    if (!organisationId) {
+      return res.status(400).json({ error: 'Organisation ID is required' });
+    }
     const { id } = req.params;
 
     const deleted = await inventoryService.deleteInventoryEntry(organisationId, id);
@@ -108,6 +120,9 @@ const deleteInventory = async (req, res) => {
 const getInventorySummary = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
+    if (!organisationId) {
+      return res.status(400).json({ error: 'Organisation ID is required' });
+    }
     const summary = await inventoryService.getInventorySummary(organisationId);
 
     res.status(200).json({
@@ -126,6 +141,9 @@ const getInventorySummary = async (req, res) => {
 const getRecentStockMovements = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
+    if (!organisationId) {
+      return res.status(400).json({ error: 'Organisation ID is required' });
+    }
     const limit = Number(req.query.limit) || 10;
     const movements = await inventoryService.getStockMovements(organisationId, limit);
 
@@ -145,6 +163,9 @@ const getRecentStockMovements = async (req, res) => {
 const recordMovement = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
+    if (!organisationId) {
+      return res.status(400).json({ error: 'Organisation ID is required' });
+    }
     const { branchName, type, item, quantity, reference, status } = req.body;
 
     await inventoryService.recordStockMovement(organisationId, {
@@ -172,6 +193,9 @@ const recordMovement = async (req, res) => {
 const getItemBarcode = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
+    if (!organisationId) {
+      return res.status(400).json({ error: 'Organisation ID is required' });
+    }
     const { id } = req.params;
 
     const barcodeData = await inventoryService.getItemBarcodeData(organisationId, id);

@@ -20,8 +20,8 @@ export function exportToCSV(headers, rows, filename) {
     row.map(val => {
       let stringVal = val === null || val === undefined ? '' : String(val);
       // Excel cleanup: strip Rupee symbols and trim spaces
-      if (stringVal.startsWith('₹')) {
-        stringVal = stringVal.replace('₹', '').trim();
+      if (stringVal.includes('₹')) {
+        stringVal = stringVal.replace(/₹/g, '').trim();
       }
       return `"${stringVal.replace(/"/g, '""')}"`;
     }).join(',')

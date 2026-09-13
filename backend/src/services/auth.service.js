@@ -9,6 +9,7 @@
 
 const bcrypt = require('bcrypt');
 const { pool } = require('../db/connection');
+const { signToken } = require('../utils/token.util');
 
 class AuthService {
   /**
@@ -47,35 +48,19 @@ class AuthService {
     `;
 
     const res = await pool.query(query, [cleanIdentifier]);
-    let user = res.rows[0];
+    const user = res.rows[0];
 
-    // If no user found by exact email/phone, check if there's any active user or create dev user
     if (!user) {
-      const anyUserRes = await pool.query(`
-        SELECT 
-          u.id, u.name, u.email, u.phone, u.staff_id AS "staffId", u.status, u.password_hash,
-          om.organisation_id, ba.branch_id, r.name AS role_name, r.role_identifier, o.name AS organisation_name
-        FROM users u
-        LEFT JOIN organisation_memberships om ON om.user_id = u.id
-        LEFT JOIN organisations o ON o.id = om.organisation_id
-        LEFT JOIN branch_assignments ba ON ba.membership_id = om.id
-        LEFT JOIN roles r ON r.id = ba.role_id
-        WHERE u.status = 'ACTIVE'
-        LIMIT 1;
-      `);
-      if (anyUserRes.rows.length > 0 && (cleanIdentifier.includes('admin') || password === 'admin123' || password === 'admin')) {
-        user = anyUserRes.rows[0];
-      } else {
-        throw new Error('Invalid email, phone number, or password.');
-      }
+      throw new Error('Invalid email, phone number, or password.');
     }
 
-    // Verify password if hash exists and not demo bypass
-    if (user.password_hash && password !== 'admin123' && password !== 'password123') {
-      const match = await bcrypt.compare(password, user.password_hash).catch(() => false);
-      if (!match && user.password_hash !== password) {
-        throw new Error('Invalid credentials.');
-      }
+    if (!user.password_hash) {
+      throw new Error('This account has no password configured. Use Google Sign-In or contact your administrator.');
+    }
+
+    const match = await bcrypt.compare(password, user.password_hash).catch(() => false);
+    if (!match) {
+      throw new Error('Invalid credentials.');
     }
 
     // Resolve organisation if not set on user
@@ -117,7 +102,7 @@ class AuthService {
       branch = defaultBranchRes.rows[0] || { id: null, name: 'Main Branch' };
     }
 
-    const token = `jwt_pg_${user.id}_${Date.now()}`;
+    const token = signToken({ userId: user.id, email: user.email });
 
     return {
       success: true,
@@ -148,54 +133,12 @@ class AuthService {
       throw new Error('PIN is required.');
     }
 
-    const userRes = await pool.query(`
-      SELECT 
-        u.id, u.name, u.email, u.phone, u.staff_id AS "staffId",
-        om.organisation_id, ba.branch_id, r.name AS role_name, r.role_identifier
-      FROM users u
-      LEFT JOIN organisation_memberships om ON om.user_id = u.id
-      LEFT JOIN branch_assignments ba ON ba.membership_id = om.id
-      LEFT JOIN roles r ON r.id = ba.role_id
-      WHERE u.status = 'ACTIVE'
-      ORDER BY u.created_at ASC
-      LIMIT 1;
-    `);
-
-    if (userRes.rows.length === 0) {
-      throw new Error('No active user accounts found.');
-    }
-
-    const user = userRes.rows[0];
-    if (!user.organisation_id) {
-      const orgRes = await pool.query(`
-        SELECT id, name FROM organisations 
-        WHERE owner_id = $1 OR id = (SELECT organisation_id FROM branches LIMIT 1)
-        LIMIT 1;
-      `, [user.id]);
-      if (orgRes.rows.length > 0) {
-        user.organisation_id = orgRes.rows[0].id;
-      }
-    }
-    const defaultBranchRes = await pool.query(
-      'SELECT id, name, branch_code AS "branchCode" FROM branches WHERE status = \'ACTIVE\' LIMIT 1;'
-    );
-    const branch = defaultBranchRes.rows[0] || { id: null, name: 'Main Branch' };
-
-    return {
-      success: true,
-      token: `pin_token_${user.id}_${Date.now()}`,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role_identifier || 'CASHIER',
-        roleName: user.role_name || 'Cashier',
-        organisationId: user.organisation_id,
-        branchId: branch.id,
-        branch: branch.name,
-        isOffline: false,
-      },
-    };
+    // There is currently no per-user PIN column in the schema (users table has no
+    // pin_hash / cashier_pin field). This previously authenticated as whichever
+    // active user was created first regardless of the PIN entered - i.e. any
+    // 4-digit guess logged a stranger in as that account. Failing closed here
+    // until a real per-user PIN hash is added to the schema and checked here.
+    throw new Error('Quick PIN login is not yet configured for this account. Please sign in with email/phone and password.');
   }
 
   /**
@@ -258,11 +201,17 @@ class AuthService {
 
     const cleanEmail = email.trim().toLowerCase();
     const effectiveSub = googleSub || `google_${cleanEmail}_${Date.now()}`;
-    const isOwnerRequested =
-      (role && role.toUpperCase() === 'OWNER') ||
-      cleanEmail === 'surajmore303@gmail.com' ||
-      cleanEmail.includes('owner') ||
-      cleanEmail === 'root@falah.com';
+
+    // Owner elevation must never be decided by client-supplied input (the caller
+    // could simply POST role: "OWNER" for any email). It is decided solely by:
+    // 1. A fixed server-side allowlist of bootstrap owner emails, or
+    // 2. Already being recorded as the organisation's owner_id in the database
+    //    (checked further below via `defaultOrg.owner_id === user.id`).
+    const OWNER_EMAIL_ALLOWLIST = (process.env.OWNER_EMAILS || 'surajmore303@gmail.com,root@falah.com')
+      .split(',')
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean);
+    const isOwnerRequested = OWNER_EMAIL_ALLOWLIST.includes(cleanEmail);
 
     // 1. Check if user already exists
     const userQuery = `
@@ -352,7 +301,7 @@ class AuthService {
       branch = defaultBranchRes.rows[0] || { id: null, name: 'Main Branch' };
     }
 
-    const token = `jwt_google_${user.id}_${Date.now()}`;
+    const token = signToken({ userId: user.id, email: user.email });
     const displayName = name || user.name || cleanEmail.split('@')[0].toUpperCase();
 
     return {

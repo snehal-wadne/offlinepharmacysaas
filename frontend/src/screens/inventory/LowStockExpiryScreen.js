@@ -9,6 +9,8 @@ import {
   useWindowDimensions,
   Platform,
 } from 'react-native';
+import { SkeletonItemCard } from '../../components/common/SkeletonLoader';
+import PaginationControls from '../../components/common/PaginationControls';
 import {
   MOCK_LOW_STOCK_ITEMS,
   MOCK_EXPIRY_ITEMS,
@@ -36,6 +38,14 @@ export default function LowStockExpiryScreen({ onShowToast }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [rawInventory, setRawInventory] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
+
+  // Reset page when tab changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab]);
 
   useEffect(() => {
     loadInventoryData();
@@ -89,7 +99,7 @@ export default function LowStockExpiryScreen({ onShowToast }) {
       id: item.id,
       medicine: `${item.brandName || item.medicineName} (${item.medicineName || item.genericName})`,
       batchNo: item.batchNo || 'B-1001',
-      expiryDate: item.lastUpdated ? `${new Date(item.lastUpdated).getFullYear() + 2}-12-31` : '2028-12-31',
+      expiryDate: item.expiryDate || null,
       quantity: qty,
       supplier: item.supplierName || item.manufacturer || 'Pharma Distributor',
       status: status,
@@ -129,6 +139,19 @@ export default function LowStockExpiryScreen({ onShowToast }) {
   const criticalCount = lowStockItemsList.filter((i) => i.currentStock < 15 || i.status === 'Critical').length;
   const expiringCount = expiryItemsList.filter((i) => i.status === 'Expiring Soon').length;
   const expiredCount = expiryItemsList.filter((i) => i.status === 'Expired' || i.quantity === 0).length;
+
+  const paginatedLowStock = filteredLowStock.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const paginatedExpiry = filteredExpiry.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, padding: 24, gap: 16 }}>
+        <SkeletonItemCard />
+        <SkeletonItemCard />
+        <SkeletonItemCard />
+      </View>
+    );
+  }
 
   return (
     <ScrollView
@@ -245,7 +268,7 @@ export default function LowStockExpiryScreen({ onShowToast }) {
                 <Text style={[styles.thCell, { width: 100, textAlign: 'center' }]}>ACTION</Text>
               </View>
 
-              {filteredLowStock.map((item, index) => {
+              {paginatedLowStock.map((item, index) => {
                 const badge = LOW_STOCK_BADGES[item.status] || LOW_STOCK_BADGES['Low Stock'];
                 const isCritical = item.status === 'Critical' || item.status === 'Out of Stock';
 
@@ -324,7 +347,7 @@ export default function LowStockExpiryScreen({ onShowToast }) {
                 <Text style={[styles.thCell, { width: 110, textAlign: 'center' }]}>ACTION</Text>
               </View>
 
-              {filteredExpiry.map((item, index) => {
+              {paginatedExpiry.map((item, index) => {
                 const badge = EXPIRY_BADGES[item.status] || EXPIRY_BADGES.Safe;
                 const isExpired = item.status === 'Expired';
                 const isSoon = item.status === 'Expiring Soon';
@@ -347,7 +370,7 @@ export default function LowStockExpiryScreen({ onShowToast }) {
                         { width: 130 },
                       ]}
                     >
-                      {item.expiryDate}
+                      {item.expiryDate ? item.expiryDate : 'No expiry set'}
                     </Text>
                     <Text
                       style={[
@@ -394,6 +417,16 @@ export default function LowStockExpiryScreen({ onShowToast }) {
             </View>
           </ScrollView>
         )}
+        
+        <View style={{ padding: 16 }}>
+          <PaginationControls
+            currentPage={currentPage}
+            totalItems={activeTab === 'low-stock' ? filteredLowStock.length : filteredExpiry.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+            onItemsPerPageChange={(n) => { setItemsPerPage(n); setCurrentPage(1); }}
+          />
+        </View>
       </View>
     </ScrollView>
   );

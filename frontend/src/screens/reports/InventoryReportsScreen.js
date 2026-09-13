@@ -15,6 +15,8 @@ import {
   MOCK_FAST_MOVING_ITEMS,
 } from '../../data/reportsMockData';
 import { exportToCSV } from '../../utils/exportUtils';
+import { SkeletonTableRow } from '../../components/common/SkeletonLoader';
+import PaginationControls from '../../components/common/PaginationControls';
 
 const HEALTH_BADGES = {
   Optimal: { bg: '#DCFCE7', text: '#15803D' },
@@ -32,6 +34,16 @@ export default function InventoryReportsScreen({ onShowToast, onNavigate }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
   const isMobile = width < 768;
+
+  const [loading, setLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  const totalPages = Math.ceil(MOCK_INVENTORY_CATEGORY_VALUATION.length / itemsPerPage);
+  const paginatedCategories = MOCK_INVENTORY_CATEGORY_VALUATION.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
   const handleExport = (type) => {
     if (type === 'csv') {
@@ -53,6 +65,10 @@ export default function InventoryReportsScreen({ onShowToast, onNavigate }) {
       exportToCSV(headers, rows, 'inventory_valuation_and_forecast.csv');
     } else if (type === 'pdf') {
       // Custom double-table PDF export
+      if (Platform.OS !== 'web') {
+        alert('PDF export is available on web only');
+        return;
+      }
       if (typeof window === 'undefined') return;
       const printWindow = window.open('', '_blank');
       if (!printWindow) {
@@ -354,7 +370,14 @@ export default function InventoryReportsScreen({ onShowToast, onNavigate }) {
 
         {isMobile ? (
           <View style={styles.mobileCardsList}>
-            {MOCK_INVENTORY_CATEGORY_VALUATION.map((cat) => {
+            {loading ? (
+              <View style={{ padding: 20 }}>
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <SkeletonTableRow key={i} />
+                ))}
+              </View>
+            ) : (
+              paginatedCategories.map((cat) => {
               const badge = HEALTH_BADGES[cat.status] || HEALTH_BADGES.Optimal;
               return (
                 <View key={cat.category} style={styles.mobileReportCard}>
@@ -388,7 +411,7 @@ export default function InventoryReportsScreen({ onShowToast, onNavigate }) {
                   </View>
                 </View>
               );
-            })}
+            }))}
           </View>
         ) : (
           <ScrollView horizontal showsHorizontalScrollIndicator={true}>
@@ -402,7 +425,14 @@ export default function InventoryReportsScreen({ onShowToast, onNavigate }) {
                 <Text style={[styles.thCell, { width: 140, textAlign: 'center' }]}>STOCK HEALTH</Text>
               </View>
 
-              {MOCK_INVENTORY_CATEGORY_VALUATION.map((cat, index) => {
+              {loading ? (
+                <View style={{ padding: 20 }}>
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <SkeletonTableRow key={i} />
+                  ))}
+                </View>
+              ) : (
+                paginatedCategories.map((cat, index) => {
                 const badge = HEALTH_BADGES[cat.status] || HEALTH_BADGES.Optimal;
                 return (
                   <View
@@ -437,9 +467,17 @@ export default function InventoryReportsScreen({ onShowToast, onNavigate }) {
                     </View>
                   </View>
                 );
-              })}
+              }))}
             </View>
           </ScrollView>
+        )}
+        {!loading && MOCK_INVENTORY_CATEGORY_VALUATION.length > 0 && (
+          <PaginationControls
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            totalItems={MOCK_INVENTORY_CATEGORY_VALUATION.length}
+          />
         )}
       </View>
 

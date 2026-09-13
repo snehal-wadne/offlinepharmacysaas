@@ -15,6 +15,7 @@ import {
   PAGE_PERMISSION_MODULES,
   DEFAULT_ROLE_PAGE_PERMISSIONS,
 } from '../../data/managementMockData';
+import { SkeletonTableRow } from '../../components/common/SkeletonLoader';
 
 export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
   const { width } = useWindowDimensions();
@@ -26,6 +27,7 @@ export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
 
   // Search filter for pages/modules
   const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(false);
 
   // Collapsed Module Groups state
   const [collapsedModules, setCollapsedModules] = useState({});
@@ -87,6 +89,7 @@ export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
   const handleSaveChanges = () => {
     if (onShowToast) {
       onShowToast(`✓ Page permissions for role "${activeRole.name}" successfully saved and active!`);
+      // TODO: Persist to backend when API endpoint is available
     }
   };
 
@@ -196,7 +199,13 @@ export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
         </View>
 
         {/* Modules & Rows */}
-        {filteredModules.length === 0 ? (
+        {loading ? (
+          <View style={{ padding: 20 }}>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <SkeletonTableRow key={i} />
+            ))}
+          </View>
+        ) : filteredModules.length === 0 ? (
           <View style={styles.emptySearchContainer}>
             <Text style={styles.emptyIcon}>🔍</Text>
             <Text style={styles.emptyTitle}>No matching pages found</Text>

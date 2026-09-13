@@ -9,10 +9,13 @@ import {
   StyleSheet,
   useWindowDimensions,
   Platform,
+  Image,
 } from "react-native";
 import { usePos } from "../../context/PosContext";
 import { MOCK_CUSTOMERS_LIST } from "../../data/customersMockData";
 import BarcodeScannerModal from "../../components/common/BarcodeScannerModal";
+import { SkeletonItemCard } from "../../components/common/SkeletonLoader";
+import PaginationControls from "../../components/common/PaginationControls";
 
 export default function SalesScreen({
   onNavigate,
@@ -22,6 +25,15 @@ export default function SalesScreen({
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const isCompact = width < 1080;
+
+  const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 500);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Shared POS Context
   const {
@@ -69,6 +81,11 @@ export default function SalesScreen({
   const [paymentMode, setPaymentMode] = useState("Cash"); // 'Cash' | 'Card' | 'UPI' | 'Split'
   const [checkoutModalVisible, setCheckoutModalVisible] = useState(false);
   const [cashTendered, setCashTendered] = useState("");
+  const [storeUpiId, setStoreUpiId] = useState("falahpharmacy@okhdfcbank");
+  const [upiRefNumber, setUpiRefNumber] = useState("");
+  const [isEditingUpiId, setIsEditingUpiId] = useState(false);
+  const [fullScreenQrVisible, setFullScreenQrVisible] = useState(false);
+  const [scannerPurpose, setScannerPurpose] = useState("product"); // 'product' | 'utr'
 
   // Thermal Receipt State
   const [receiptModalVisible, setReceiptModalVisible] = useState(false);
@@ -326,8 +343,9 @@ export default function SalesScreen({
           selectedCustomer?.id !== "WALK-IN" &&
           selectedCustomer?.id !== "DRAFT-CUST"
             ? selectedCustomer?.id
-            : undefined,
+            : null,
         paymentMode,
+        upiRefNumber: paymentMode === "UPI" ? (upiRefNumber.trim() || `UPI-${Date.now().toString().slice(-6)}`) : null,
         items: [...cart],
         subtotal: totals.subtotal,
         discountPercent: appliedDiscount || 0,
@@ -345,6 +363,8 @@ export default function SalesScreen({
       setCompletedInvoice(newInvoice);
       setCheckoutModalVisible(false);
       setReceiptModalVisible(true);
+      setUpiRefNumber("");
+      setIsEditingUpiId(false);
 
       // Clear cart and draft indicators ONLY after local DB success
       setCart([]);
@@ -374,6 +394,17 @@ export default function SalesScreen({
 
   // Handle barcode scanned from camera or gun
   const handleBarcodeScanned = (scannedCode) => {
+    if (scannerPurpose === "utr") {
+      const cleanUtr = scannedCode.trim();
+      setUpiRefNumber(cleanUtr);
+      setScannerModalVisible(false);
+      setScannerPurpose("product");
+      if (onShowToast) {
+        onShowToast(`✓ Scanned UPI Ref / UTR: ${cleanUtr}`);
+      }
+      return;
+    }
+
     const code = scannedCode.trim().toLowerCase();
     const match = products.find(
       (p) =>
@@ -394,6 +425,18 @@ export default function SalesScreen({
       }
     }
   };
+
+  const paginatedData = filteredProducts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, padding: 24, gap: 16 }}>
+        <SkeletonItemCard />
+        <SkeletonItemCard />
+        <SkeletonItemCard />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.screenContainer}>
@@ -580,7 +623,7 @@ export default function SalesScreen({
               </View>
 
               <View style={styles.searchResultsList}>
-                {filteredProducts.map((prod) => {
+                {paginatedData.map((prod) => {
                   const isBatchDropdownOpen = openBatchDropdownId === prod.id;
                   const prodBatches =
                     prod.batches && prod.batches.length > 0
@@ -751,6 +794,15 @@ export default function SalesScreen({
                 })}
               </View>
             </ScrollView>
+            <View style={{ padding: 16 }}>
+              <PaginationControls
+                currentPage={currentPage}
+                totalItems={filteredProducts.length}
+                itemsPerPage={itemsPerPage}
+                onPageChange={setCurrentPage}
+                onItemsPerPageChange={(n) => { setItemsPerPage(n); setCurrentPage(1); }}
+              />
+            </View>
           </View>
         )}
 
@@ -1043,13 +1095,113 @@ export default function SalesScreen({
 
             {paymentMode === "UPI" && (
               <View style={styles.upiQrBox}>
-                <Text style={styles.upiQrIcon}>📱</Text>
-                <Text style={styles.upiQrText}>
-                  Customer scan store UPI QR code
-                </Text>
-                <Text style={styles.upiQrAmount}>
-                  ₹{totals.grandTotal.toFixed(2)}
-                </Text>
+                <View style={styles.upiQrTopHeader}>
+                  <Text style={styles.upiQrTitle}>Customer UPI Payment Scanner</Text>
+                  <Text style={styles.upiQrAmount}>
+                    ₹{totals.grandTotal.toFixed(2)}
+                  </Text>
+                </View>
+
+                {/* Dynamic QR Code Card */}
+                <View style={styles.upiQrImageCard}>
+                  <Image
+                    source={{
+                      uri: `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(
+                        `upi://pay?pa=${encodeURIComponent(
+                          storeUpiId.trim() || "falahpharmacy@okhdfcbank"
+                        )}&pn=Falah%20Pharmacy&am=${totals.grandTotal.toFixed(
+                          2
+                        )}&cu=INR&tn=${encodeURIComponent(
+                          `POS-${Date.now().toString().slice(-6)}`
+                        )}`
+                      )}`,
+                    }}
+                    style={styles.upiQrCodeImage}
+                    resizeMode="contain"
+                  />
+                  <View style={styles.scanTargetBadge}>
+                    <Text style={styles.scanTargetBadgeText}>⚡ Scan to Pay ₹{totals.grandTotal.toFixed(2)}</Text>
+                  </View>
+                </View>
+
+                {/* Quick actions: Fullscreen Standee & Camera Scanner */}
+                <View style={styles.upiActionRow}>
+                  <Pressable
+                    style={styles.upiMiniActionBtn}
+                    onPress={() => setFullScreenQrVisible(true)}
+                  >
+                    <Text style={styles.upiMiniActionText}>🔍 Fullscreen Standee</Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.upiMiniActionBtn}
+                    onPress={() => {
+                      setScannerPurpose("utr");
+                      setScannerModalVisible(true);
+                    }}
+                  >
+                    <Text style={styles.upiMiniActionText}>📷 Scan Customer Screen</Text>
+                  </Pressable>
+                </View>
+
+                {/* UPI VPA Row with inline edit */}
+                <View style={styles.upiVpaRow}>
+                  {isEditingUpiId ? (
+                    <View style={styles.upiEditRow}>
+                      <TextInput
+                        style={styles.upiEditInput}
+                        value={storeUpiId}
+                        onChangeText={setStoreUpiId}
+                        placeholder="e.g. store@okhdfcbank"
+                        placeholderTextColor="#94A3B8"
+                        autoCapitalize="none"
+                      />
+                      <Pressable
+                        style={styles.upiSaveBtn}
+                        onPress={() => setIsEditingUpiId(false)}
+                      >
+                        <Text style={styles.upiSaveBtnText}>Save</Text>
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <View style={styles.upiDisplayRow}>
+                      <Text style={styles.upiVpaLabel}>UPI VPA:</Text>
+                      <Text style={styles.upiVpaValue}>{storeUpiId}</Text>
+                      <Pressable onPress={() => setIsEditingUpiId(true)}>
+                        <Text style={styles.upiEditLink}>✏️ Edit</Text>
+                      </Pressable>
+                    </View>
+                  )}
+                </View>
+
+                {/* Supported UPI Apps Badges */}
+                <View style={styles.upiSupportedAppsRow}>
+                  <Text style={styles.upiAppsTag}>GPay</Text>
+                  <Text style={styles.upiAppsTag}>PhonePe</Text>
+                  <Text style={styles.upiAppsTag}>Paytm</Text>
+                  <Text style={styles.upiAppsTag}>BHIM</Text>
+                  <Text style={styles.upiAppsTag}>Any App</Text>
+                </View>
+
+                {/* Optional UTR Input */}
+                <View style={styles.utrInputSection}>
+                  <Text style={styles.utrLabel}>
+                    UTR / Transaction Ref (Optional)
+                  </Text>
+                  <TextInput
+                    style={styles.utrInput}
+                    placeholder="Enter 12-digit UTR from customer app"
+                    placeholderTextColor="#94A3B8"
+                    value={upiRefNumber}
+                    onChangeText={setUpiRefNumber}
+                    keyboardType="numeric"
+                  />
+                </View>
+
+                <View style={styles.upiHelpBanner}>
+                  <Text style={styles.upiHelpText}>
+                    💡 Customer scans QR code above. Verify payment on your phone/soundbox, then click &apos;Confirm Payment &amp; Print&apos;.
+                  </Text>
+                </View>
               </View>
             )}
 
@@ -1109,6 +1261,11 @@ export default function SalesScreen({
               <Text style={styles.receiptMetaText}>
                 Payment: {completedInvoice.paymentMode}
               </Text>
+              {completedInvoice.upiRefNumber ? (
+                <Text style={styles.receiptMetaText}>
+                  UPI Ref / UTR: {completedInvoice.upiRefNumber}
+                </Text>
+              ) : null}
 
               <Text style={styles.receiptDashedLine}>
                 --------------------------------------
@@ -1139,6 +1296,19 @@ export default function SalesScreen({
                 <Text style={styles.receiptTotalGreen}>
                   ₹{completedInvoice.total.toFixed(2)}
                 </Text>
+              </View>
+
+              <View style={styles.receiptQrBox}>
+                <Image
+                  source={{
+                    uri: `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(
+                      `INVOICE:${completedInvoice.invoiceNo}|TOTAL:₹${completedInvoice.total}|DATE:${completedInvoice.date}`
+                    )}`,
+                  }}
+                  style={styles.receiptQrImage}
+                  resizeMode="contain"
+                />
+                <Text style={styles.receiptQrSubtitle}>Digital E-Invoice Verification</Text>
               </View>
 
               <Text style={styles.receiptThanksText}>
@@ -1252,13 +1422,79 @@ export default function SalesScreen({
       </Modal>
 
       {/* ========================================================================= */}
+      {/* FULLSCREEN CUSTOMER UPI QR STANDEE MODAL                                  */}
+      {/* ========================================================================= */}
+      <Modal
+        visible={fullScreenQrVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setFullScreenQrVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.qrStandeeCard}>
+            <View style={styles.qrStandeeHeader}>
+              <Text style={styles.qrStandeeStoreName}>FALAH PHARMACY POS</Text>
+              <Text style={styles.qrStandeeSubtitle}>
+                Scan with any UPI App (GPay, PhonePe, Paytm, BHIM)
+              </Text>
+            </View>
+
+            <View style={styles.qrStandeeImageWrapper}>
+              <Image
+                source={{
+                  uri: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(
+                    `upi://pay?pa=${encodeURIComponent(
+                      storeUpiId.trim() || "falahpharmacy@okhdfcbank"
+                    )}&pn=Falah%20Pharmacy&am=${totals.grandTotal.toFixed(
+                      2
+                    )}&cu=INR&tn=${encodeURIComponent(
+                      `POS-${Date.now().toString().slice(-6)}`
+                    )}`
+                  )}`,
+                }}
+                style={styles.qrStandeeImage}
+                resizeMode="contain"
+              />
+            </View>
+
+            <Text style={styles.qrStandeeAmount}>
+              ₹{totals.grandTotal.toFixed(2)}
+            </Text>
+            <Text style={styles.qrStandeeVpa}>VPA: {storeUpiId}</Text>
+
+            <View style={styles.upiSupportedAppsRow}>
+              <Text style={styles.upiAppsTag}>GPay</Text>
+              <Text style={styles.upiAppsTag}>PhonePe</Text>
+              <Text style={styles.upiAppsTag}>Paytm</Text>
+              <Text style={styles.upiAppsTag}>BHIM</Text>
+              <Text style={styles.upiAppsTag}>Amazon Pay</Text>
+            </View>
+
+            <Pressable
+              style={styles.closeStandeeBtn}
+              onPress={() => setFullScreenQrVisible(false)}
+            >
+              <Text style={styles.closeStandeeBtnText}>✕ Close Standee</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ========================================================================= */}
       {/* INTERACTIVE QR / BARCODE SCANNER MODAL                                    */}
       {/* ========================================================================= */}
       <BarcodeScannerModal
         visible={scannerModalVisible}
-        onClose={() => setScannerModalVisible(false)}
+        onClose={() => {
+          setScannerModalVisible(false);
+          setScannerPurpose("product");
+        }}
         onScan={handleBarcodeScanned}
-        title="Scan Medicine Barcode"
+        title={
+          scannerPurpose === "utr"
+            ? "Scan Customer Payment UTR / Barcode"
+            : "Scan Medicine Barcode"
+        }
         mode="product"
       />
     </View>
@@ -2162,7 +2398,7 @@ const styles = StyleSheet.create({
   },
   checkoutModalCard: {
     width: "100%",
-    maxWidth: 440,
+    maxWidth: 480,
     backgroundColor: "#FFFFFF",
     borderRadius: 14,
     padding: 20,
@@ -2220,25 +2456,266 @@ const styles = StyleSheet.create({
     color: "#0F766E",
   },
   upiQrBox: {
-    alignItems: "center",
-    padding: 20,
     backgroundColor: "#F0FDFA",
-    borderRadius: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#CCFBF1",
+    padding: 14,
     marginBottom: 16,
   },
-  upiQrIcon: {
-    fontSize: 40,
-    marginBottom: 8,
+  upiQrTopHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
   },
-  upiQrText: {
+  upiQrTitle: {
     fontSize: 13,
-    fontWeight: "600",
+    fontWeight: "700",
     color: "#0F766E",
   },
   upiQrAmount: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: "900",
     color: "#0F766E",
+  },
+  upiQrImageCard: {
+    alignSelf: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    padding: 10,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 3,
+    marginBottom: 10,
+  },
+  upiQrCodeImage: {
+    width: 170,
+    height: 170,
+  },
+  scanTargetBadge: {
+    marginTop: 6,
+    backgroundColor: "#ECFDF5",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
+  },
+  scanTargetBadgeText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#047857",
+  },
+  upiActionRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 8,
+    marginBottom: 10,
+  },
+  upiMiniActionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: "#CCFBF1",
+    borderWidth: 1,
+    borderColor: "#99F6E4",
+  },
+  upiMiniActionText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#0F766E",
+  },
+  upiVpaRow: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginBottom: 8,
+  },
+  upiDisplayRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  upiVpaLabel: {
+    fontSize: 11,
+    color: "#64748B",
+    fontWeight: "600",
+  },
+  upiVpaValue: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#0F172A",
+    flex: 1,
+    marginLeft: 6,
+  },
+  upiEditLink: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#0D9488",
+  },
+  upiEditRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  upiEditInput: {
+    flex: 1,
+    fontSize: 12,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: 4,
+    color: "#0F172A",
+  },
+  upiSaveBtn: {
+    backgroundColor: "#0D9488",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  upiSaveBtnText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  upiSupportedAppsRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    flexWrap: "wrap",
+    gap: 6,
+    marginBottom: 8,
+  },
+  upiAppsTag: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#475569",
+    backgroundColor: "#F1F5F9",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+  },
+  utrInputSection: {
+    marginBottom: 8,
+  },
+  utrLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#475569",
+    marginBottom: 4,
+  },
+  utrInput: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    height: 36,
+    fontSize: 12,
+    color: "#0F172A",
+    ...Platform.select({ web: { outlineStyle: "none" } }),
+  },
+  upiHelpBanner: {
+    backgroundColor: "#FEF3C7",
+    borderRadius: 6,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+  },
+  upiHelpText: {
+    fontSize: 11,
+    color: "#92400E",
+    fontWeight: "600",
+    lineHeight: 15,
+  },
+  qrStandeeCard: {
+    width: "100%",
+    maxWidth: 380,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    padding: 24,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  qrStandeeHeader: {
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  qrStandeeStoreName: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: "#0F766E",
+    letterSpacing: 0.5,
+  },
+  qrStandeeSubtitle: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#64748B",
+    marginTop: 3,
+  },
+  qrStandeeImageWrapper: {
+    padding: 12,
+    backgroundColor: "#F8FAFC",
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: "#0D9488",
+    marginBottom: 14,
+  },
+  qrStandeeImage: {
+    width: 240,
+    height: 240,
+  },
+  qrStandeeAmount: {
+    fontSize: 28,
+    fontWeight: "900",
+    color: "#0F766E",
+    marginBottom: 4,
+  },
+  qrStandeeVpa: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#334155",
+    marginBottom: 12,
+  },
+  closeStandeeBtn: {
+    marginTop: 8,
+    backgroundColor: "#F1F5F9",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    width: "100%",
+    alignItems: "center",
+  },
+  closeStandeeBtnText: {
+    fontSize: 13,
+    fontWeight: "750",
+    color: "#475569",
+  },
+  receiptQrBox: {
+    alignItems: "center",
+    marginVertical: 10,
+    paddingVertical: 6,
+  },
+  receiptQrImage: {
+    width: 90,
+    height: 90,
+  },
+  receiptQrSubtitle: {
+    fontSize: 10,
+    color: "#64748B",
     marginTop: 4,
   },
   modalFooterRow: {
