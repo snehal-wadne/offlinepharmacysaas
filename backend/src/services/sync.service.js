@@ -14,7 +14,9 @@ const {
 } = require("../db/connection");
 const cashierService = require("./cashier.service");
 const customerService = require("./customer.service");
-const { getNextBusinessNumber } = require("../repositories/number-sequence.repository");
+const {
+  getNextBusinessNumber,
+} = require("../repositories/number-sequence.repository");
 
 /**
  * Deterministic JSON payload fingerprint for idempotency verification
@@ -66,11 +68,15 @@ class SyncService {
       success: true,
       online: isOnline,
       mode: isOnline ? "ONLINE_POSTGRESQL" : "OFFLINE_LOCAL",
-      database: isOnline ? (process.env.DB_DATABASE || "falah_pharmacy") : "offline",
+      database: isOnline
+        ? process.env.DB_DATABASE || "falah_pharmacy"
+        : "offline",
       processedMutationsCount: mutationCount,
       serverTime: new Date().toISOString(),
       timestamp: new Date().toISOString(),
-      message: isOnline ? "Database connected and ready for sync" : "Database offline",
+      message: isOnline
+        ? "Database connected and ready for sync"
+        : "Database offline",
     };
   }
 
@@ -94,39 +100,45 @@ class SyncService {
     const syncedIds = [];
     const errors = [];
 
-    console.log(`📥 Received offline sync batch: ${mutations.length} mutations (Batch: ${batchId || 'N/A'})`);
+    console.log(
+      `📥 Received offline sync batch: ${mutations.length} mutations (Batch: ${batchId || "N/A"})`,
+    );
 
     for (const item of mutations) {
       try {
         const { id, type, action, data } = item;
-        const opType = (type || action || '').toUpperCase();
+        const opType = (type || action || "").toUpperCase();
         const payload = data || {};
 
         switch (opType) {
-          case 'CREATE_INVOICE':
-          case 'SALE': {
+          case "CREATE_INVOICE":
+          case "SALE": {
             const saleData = payload.invoice
               ? {
                   ...payload.invoice,
-                  items: (payload.items && payload.items.length > 0)
-                    ? payload.items
-                    : (payload.invoice.items || []),
+                  items:
+                    payload.items && payload.items.length > 0
+                      ? payload.items
+                      : payload.invoice.items || [],
                   total: payload.invoice.grandTotal || payload.invoice.total,
                   subtotal: payload.invoice.subtotal,
                   tax: payload.invoice.tax,
-                  discount: payload.invoice.totalDiscounts || payload.invoice.discount,
-                  paymentMethod: payload.invoice.paymentMode || 'CASH',
+                  discount:
+                    payload.invoice.totalDiscounts || payload.invoice.discount,
+                  paymentMethod: payload.invoice.paymentMode || "CASH",
                 }
               : payload;
 
             const invNum = saleData.invoiceNo || saleData.invoiceNumber;
             if (invNum) {
               const existingInv = await pool.query(
-                'SELECT id FROM invoices WHERE invoice_number = $1 LIMIT 1;',
-                [invNum]
+                "SELECT id FROM invoices WHERE invoice_number = $1 LIMIT 1;",
+                [invNum],
               );
               if (existingInv.rows.length > 0) {
-                console.log(`ℹ️ Invoice ${invNum} already exists in PostgreSQL, marked synced.`);
+                console.log(
+                  `ℹ️ Invoice ${invNum} already exists in PostgreSQL, marked synced.`,
+                );
                 syncedIds.push(id);
                 continue;
               }
@@ -137,35 +149,43 @@ class SyncService {
             break;
           }
 
-          case 'HOLD_BILL':
-          case 'PARK_BILL': {
+          case "HOLD_BILL":
+          case "PARK_BILL": {
             await cashierService.saveHeldBill(payload);
             syncedIds.push(id);
-            console.log(`✓ Synced offline held bill: ${payload.billNo || payload.holdId || id}`);
+            console.log(
+              `✓ Synced offline held bill: ${payload.billNo || payload.holdId || id}`,
+            );
             break;
           }
 
-          case 'CREATE_RETURN':
-          case 'RETURN': {
+          case "CREATE_RETURN":
+          case "RETURN": {
             await cashierService.processReturn(payload);
             syncedIds.push(id);
-            console.log(`✓ Synced offline return: ${payload.invoiceNo || payload.returnNo || id}`);
+            console.log(
+              `✓ Synced offline return: ${payload.invoiceNo || payload.returnNo || id}`,
+            );
             break;
           }
 
-          case 'CREATE_CUSTOMER': {
+          case "CREATE_CUSTOMER": {
             let customerOrgId = payload.organisationId;
             if (!customerOrgId) {
-              const defaultOrg = await pool.query('SELECT id FROM organisations LIMIT 1;');
+              const defaultOrg = await pool.query(
+                "SELECT id FROM organisations LIMIT 1;",
+              );
               customerOrgId = defaultOrg.rows[0]?.id;
             }
             if (payload.phone) {
               const existingCust = await pool.query(
-                'SELECT id FROM customers WHERE organisation_id = $1 AND phone = $2 LIMIT 1;',
-                [customerOrgId, payload.phone.trim()]
+                "SELECT id FROM customers WHERE organisation_id = $1 AND phone = $2 LIMIT 1;",
+                [customerOrgId, payload.phone.trim()],
               );
               if (existingCust.rows.length > 0) {
-                console.log(`ℹ️ Customer with phone ${payload.phone} already exists in PostgreSQL, marked synced.`);
+                console.log(
+                  `ℹ️ Customer with phone ${payload.phone} already exists in PostgreSQL, marked synced.`,
+                );
                 syncedIds.push(id);
                 continue;
               }
@@ -175,10 +195,10 @@ class SyncService {
               name: payload.name || payload.fullName,
               phone: payload.phone,
               email: payload.email,
-              category: payload.category || 'Regular',
+              category: payload.category || "Regular",
               age: payload.age || 30,
-              gender: payload.gender || 'F',
-              city: payload.city || 'Mumbai',
+              gender: payload.gender || "F",
+              city: payload.city || "Mumbai",
               creditLimit: payload.creditLimit || 0,
             });
             syncedIds.push(id);
@@ -187,7 +207,9 @@ class SyncService {
           }
 
           default:
-            console.log(`✓ Processed general offline mutation: ${opType} (${id})`);
+            console.log(
+              `✓ Processed general offline mutation: ${opType} (${id})`,
+            );
             break;
         }
 
@@ -2781,7 +2803,10 @@ class SyncService {
       };
     } catch (err) {
       await client.query("ROLLBACK");
-      console.error(`[SyncService] Error processing TRANSFER_STOCK ${mutationId}:`, err);
+      console.error(
+        `[SyncService] Error processing TRANSFER_STOCK ${mutationId}:`,
+        err,
+      );
       return {
         status: "RETRYABLE_ERROR",
         errorCode: "DATABASE_ERROR",
@@ -2815,7 +2840,8 @@ class SyncService {
       return {
         status: "FAILED",
         errorCode: "VALIDATION_ERROR",
-        errorMessage: "Open register session mutation must specify a valid UUID sessionId.",
+        errorMessage:
+          "Open register session mutation must specify a valid UUID sessionId.",
       };
     }
 
@@ -2860,7 +2886,10 @@ class SyncService {
           [registerId, resolvedOrgId, resolvedBranchId],
         );
         if (regCheck.rows.length === 0) {
-          const identifier = payload.registerIdentifier || payload.identifier || ('POS-' + registerId.slice(0, 8));
+          const identifier =
+            payload.registerIdentifier ||
+            payload.identifier ||
+            "POS-" + registerId.slice(0, 8);
           const newReg = await client.query(
             `INSERT INTO cash_registers (id, organisation_id, branch_id, name, identifier, is_active)
              VALUES ($1, $2, $3, 'Counter 1', $4, true)
@@ -3077,7 +3106,8 @@ class SyncService {
       return {
         status: "FAILED",
         errorCode: "VALIDATION_ERROR",
-        errorMessage: "Cash movement mutation must specify a valid UUID movementId.",
+        errorMessage:
+          "Cash movement mutation must specify a valid UUID movementId.",
       };
     }
 
@@ -3090,7 +3120,9 @@ class SyncService {
       };
     }
 
-    const rawType = String(payload.movementType || payload.type || "").toUpperCase();
+    const rawType = String(
+      payload.movementType || payload.type || "",
+    ).toUpperCase();
     const movementType = rawType === "IN" ? "IN" : "OUT";
 
     const { resolvedOrgId, resolvedBranchId } = await this.resolveTenantContext(
@@ -3156,7 +3188,8 @@ class SyncService {
         return {
           status: "CONFLICT",
           errorCode: "NO_ACTIVE_SESSION",
-          errorMessage: "Cannot record cash movement without an active open register session.",
+          errorMessage:
+            "Cannot record cash movement without an active open register session.",
         };
       }
 
@@ -3189,7 +3222,9 @@ class SyncService {
 
       const reason =
         payload.reason ||
-        (movementType === "IN" ? "Cash float addition" : "General expense payout");
+        (movementType === "IN"
+          ? "Cash float addition"
+          : "General expense payout");
 
       // 4. Insert into cash_movements
       await client.query(
@@ -3301,7 +3336,8 @@ class SyncService {
       return {
         status: "FAILED",
         errorCode: "VALIDATION_ERROR",
-        errorMessage: "Close register session mutation must specify a valid UUID sessionId.",
+        errorMessage:
+          "Close register session mutation must specify a valid UUID sessionId.",
       };
     }
 
@@ -3392,7 +3428,9 @@ class SyncService {
       const cashOut = Number(movRes.rows[0].cash_out) || 0;
 
       const derivedExpectedCash = Number(
-        (openingBalance + cashSales - cashRefunds + cashIn - cashOut).toFixed(2),
+        (openingBalance + cashSales - cashRefunds + cashIn - cashOut).toFixed(
+          2,
+        ),
       );
       const countedCash = Number(Number(payload.countedCash || 0).toFixed(2));
       const variance = Number((countedCash - derivedExpectedCash).toFixed(2));
@@ -3426,7 +3464,9 @@ class SyncService {
 
       // 4. Save denominations if provided
       if (payload.denominations && typeof payload.denominations === "object") {
-        for (const [denomVal, denomCount] of Object.entries(payload.denominations)) {
+        for (const [denomVal, denomCount] of Object.entries(
+          payload.denominations,
+        )) {
           const valNum = parseFloat(denomVal) || 0;
           const countNum = parseInt(denomCount, 10) || 0;
           if (valNum > 0 && countNum >= 0) {
@@ -4214,5 +4254,3 @@ class SyncService {
 }
 
 module.exports = new SyncService();
-
-
