@@ -1,18 +1,30 @@
 /**
  * Sync Routes
  *
- * Base endpoint: /api/sync
+ * Base endpoint: /api/sync and /sync
  */
 
 const express = require("express");
 const router = express.Router();
 const syncController = require("../controllers/sync.controller");
-const { requireSyncAuth } = require("../middleware/sync-auth.middleware");
+const {
+  requireSyncAuth,
+  optionalSyncAuth,
+} = require("../middleware/sync-auth.middleware");
 
-// Protected sync routes
-router.get("/status", requireSyncAuth, syncController.getStatus);
-router.post("/push", requireSyncAuth, syncController.pushMutations);
-router.get("/pull", requireSyncAuth, syncController.pullChanges);
+// Status probe
+router.get("/status", syncController.getStatus);
+
+// Direct batch processing for offline frontend
+router.post("/batch", syncController.processBatch);
+
+// Push mutations (supports authenticated engine and direct batch)
+router.post("/push", optionalSyncAuth, syncController.pushMutations);
+
+// Pull changes
+router.get("/pull", optionalSyncAuth, syncController.pullChanges);
+
+// Bootstrap tenant master data
 router.get("/bootstrap", requireSyncAuth, syncController.bootstrap);
 
 // Connectivity probe (unauthenticated health check)

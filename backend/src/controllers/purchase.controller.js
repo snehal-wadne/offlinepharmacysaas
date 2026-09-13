@@ -165,9 +165,27 @@ const receivePurchase = async (req, res) => {
   }
 };
 
+const getPurchaseSummary = async (req, res) => {
+  try {
+    const organisationId = await getOrgId(req);
+    const summary = await purchaseService.getPurchaseSummary(organisationId);
+    res.status(200).json({
+      success: true,
+      data: summary,
+    });
+  } catch (error) {
+    console.error('Error fetching purchase summary:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch purchase summary',
+    });
+  }
+};
+
 module.exports = {
   getPurchases,
   getPurchaseById,
+  getPurchaseSummary,
   createPurchase,
   updatePurchaseStatus,
   receivePurchase,

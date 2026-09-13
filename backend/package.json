@@ -11,7 +11,8 @@
     "db:seed:branches": "node src/db/seed-branches.js",
     "db:seed:canonical": "node src/db/seed-canonical-demo.js",
     "db:setup": "node src/db/run-schema.js && node src/db/seed-dev.js && node src/db/seed-suppliers.js && node src/db/seed-products.js && node src/db/seed-purchases.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node src/tests/e2e-verification.test.js",
+    "test:e2e": "node src/tests/e2e-verification.test.js"
   },
   "keywords": [],
   "author": "",

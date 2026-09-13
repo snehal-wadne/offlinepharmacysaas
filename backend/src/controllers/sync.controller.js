@@ -15,27 +15,32 @@ const getStatus = async (req, res) => {
   }
 };
 
+const processBatch = async (req, res) => {
+  try {
+    const { mutations, batchId } = req.body;
+    const result = await syncService.processBatch(mutations || [], batchId);
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("[SyncController] Batch error:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 const pushMutations = async (req, res) => {
   try {
-    const { deviceId, mutations } = req.body;
-    if (!deviceId) {
-      return res
-        .status(400)
-        .json({ success: false, error: "Missing deviceId in push payload" });
+    const { deviceId, mutations, batchId } = req.body;
+    if (deviceId && Array.isArray(mutations)) {
+      const result = await syncService.processPushBatch({
+        deviceId,
+        mutations,
+        userContext: req.user,
+        tenantContext: req.tenantContext,
+      });
+      return res.status(200).json(result);
     }
-    if (!Array.isArray(mutations)) {
-      return res
-        .status(400)
-        .json({ success: false, error: "Mutations must be an array" });
-    }
-
-    const result = await syncService.processPushBatch({
-      deviceId,
-      mutations,
-      userContext: req.user,
-      tenantContext: req.tenantContext,
-    });
-    res.status(200).json(result);
+    // Fallback to processBatch for simple batch payloads
+    const result = await syncService.processBatch(mutations || [], batchId);
+    return res.status(200).json(result);
   } catch (error) {
     console.error("[SyncController] Push error:", error);
     res.status(500).json({ success: false, error: error.message });
@@ -107,6 +112,7 @@ const bootstrap = async (req, res) => {
 
 module.exports = {
   getStatus,
+  processBatch,
   pushMutations,
   pullChanges,
   testConnection,

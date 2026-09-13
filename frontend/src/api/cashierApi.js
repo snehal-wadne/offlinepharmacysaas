@@ -108,6 +108,35 @@ export async function fetchRegisterHistory() {
   }
 }
 
+export async function recordCashMovement(data) {
+  try {
+    const res = await apiRequest('/cashier/register/movement', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return res.data;
+  } catch (err) {
+    console.warn('[Cashier API] recordCashMovement fallback:', err.message);
+    return {
+      id: `PC-${Date.now().toString().slice(-4)}`,
+      type: data.movementType || 'OUT',
+      amount: data.amount || 0,
+      reason: data.reason || 'Petty cash',
+      time: new Date().toLocaleString(),
+    };
+  }
+}
+
+export async function fetchCashMovements(sessionId) {
+  try {
+    const queryString = sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : '';
+    const res = await apiRequest(`/cashier/register/movements${queryString}`, { method: 'GET' });
+    return res.data || [];
+  } catch {
+    return [];
+  }
+}
+
 // ==========================================
 // 2. PRODUCTS & BARCODE LOOKUP
 // ==========================================

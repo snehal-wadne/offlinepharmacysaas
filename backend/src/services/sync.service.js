@@ -1,31 +1,19 @@
 /**
- * Sync Service
+ * Sync Service (PostgreSQL Batch & Real-Time Sync Engine)
  *
- * Coordinates synchronization between the offline local store
- * and PostgreSQL (or Cloud DB) when a network connection is available.
+ * Coordinates client offline mutation batch processing and database synchronization.
  * Authoritative cloud synchronization service for offline-first PharmaFlow clients.
- *
- * Guarantees:
- * 1. Durable idempotency via `sync_mutations` table using `mutationId`.
- *    - Replay of identical payload returns cached original result.
- *    - Replay with divergent payload is explicitly detected and rejected.
- * 2. Independent mutation processing (batch transport != batch database transaction).
- * 3. Full business side effect parity with normal online checkout:
- *    - invoices + invoice_items
- *    - payments + payment_transactions (split payments supported) + payment_allocations
- *    - customer_ledger_entries (invoice debit & payment credit)
- *    - authoritative inventory batch decrement with row-locking & deficit alerts
- * 4. Idempotency record commits atomically with business records.
  */
 
 const crypto = require("crypto");
-const localStore = require("../db/localStore");
 const {
   pool,
   checkDbConnection,
   isDbOnline,
   getDbStatus,
 } = require("../db/connection");
+const cashierService = require("./cashier.service");
+const customerService = require("./customer.service");
 
 /**
  * Deterministic JSON payload fingerprint for idempotency verification
@@ -61,9 +49,7 @@ class SyncService {
    * Health and connectivity status for sync clients
    */
   async getStatus() {
-    const dbStatus = getDbStatus();
-    const stats = localStore.getStats();
-    const isOnline = isDbOnline();
+    const isOnline = await checkDbConnection();
     let mutationCount = 0;
 
     if (isOnline) {
@@ -78,13 +64,12 @@ class SyncService {
     return {
       success: true,
       online: isOnline,
-      mode: dbStatus.mode,
-      database: dbStatus.database,
-      pendingSyncCount: stats.pendingSyncCount,
-      lastUpdated: stats.lastUpdated,
-      syncQueue: localStore.getSyncQueue(),
+      mode: isOnline ? "ONLINE_POSTGRESQL" : "OFFLINE_LOCAL",
+      database: isOnline ? (process.env.DB_DATABASE || "falah_pharmacy") : "offline",
       processedMutationsCount: mutationCount,
       serverTime: new Date().toISOString(),
+      timestamp: new Date().toISOString(),
+      message: isOnline ? "Database connected and ready for sync" : "Database offline",
     };
   }
 
@@ -103,61 +88,125 @@ class SyncService {
     };
   }
 
-  /**
-   * Legacy queue sync for in-memory localStore fallback
-   */
-  async syncPending() {
+  async processBatch(mutations = [], batchId = null) {
     const isOnline = await checkDbConnection();
-    if (!isOnline) {
-      return {
-        success: false,
-        online: false,
-        message:
-          "Cannot sync while offline. All transactions remain safely stored locally.",
-        syncedCount: 0,
-        remainingCount: localStore.getSyncQueue().length,
-      };
-    }
-
-    const queue = localStore.getSyncQueue();
-    if (queue.length === 0) {
-      return {
-        success: true,
-        online: true,
-        message: "Sync queue is empty. System is fully synchronized.",
-        syncedCount: 0,
-        remainingCount: 0,
-      };
-    }
-
     const syncedIds = [];
-    for (const item of queue) {
+    const errors = [];
+
+    console.log(`📥 Received offline sync batch: ${mutations.length} mutations (Batch: ${batchId || 'N/A'})`);
+
+    for (const item of mutations) {
       try {
-        switch (item.action) {
-          case "CREATE_INVOICE":
+        const { id, type, action, data } = item;
+        const opType = (type || action || '').toUpperCase();
+        const payload = data || {};
+
+        switch (opType) {
+          case 'CREATE_INVOICE':
+          case 'SALE': {
+            const saleData = payload.invoice
+              ? {
+                  ...payload.invoice,
+                  items: (payload.items && payload.items.length > 0)
+                    ? payload.items
+                    : (payload.invoice.items || []),
+                  total: payload.invoice.grandTotal || payload.invoice.total,
+                  subtotal: payload.invoice.subtotal,
+                  tax: payload.invoice.tax,
+                  discount: payload.invoice.totalDiscounts || payload.invoice.discount,
+                  paymentMethod: payload.invoice.paymentMode || 'CASH',
+                }
+              : payload;
+
+            const invNum = saleData.invoiceNo || saleData.invoiceNumber;
+            if (invNum) {
+              const existingInv = await pool.query(
+                'SELECT id FROM invoices WHERE invoice_number = $1 LIMIT 1;',
+                [invNum]
+              );
+              if (existingInv.rows.length > 0) {
+                console.log(`ℹ️ Invoice ${invNum} already exists in PostgreSQL, marked synced.`);
+                syncedIds.push(id);
+                continue;
+              }
+            }
+            await cashierService.createSale(saleData);
+            syncedIds.push(id);
+            console.log(`✓ Synced offline invoice: ${invNum || id}`);
             break;
-          case "OPEN_SESSION":
-          case "CLOSE_SESSION":
+          }
+
+          case 'HOLD_BILL':
+          case 'PARK_BILL': {
+            await cashierService.saveHeldBill(payload);
+            syncedIds.push(id);
+            console.log(`✓ Synced offline held bill: ${payload.billNo || payload.holdId || id}`);
             break;
-          case "CREATE_RETURN":
+          }
+
+          case 'CREATE_RETURN':
+          case 'RETURN': {
+            await cashierService.processReturn(payload);
+            syncedIds.push(id);
+            console.log(`✓ Synced offline return: ${payload.invoiceNo || payload.returnNo || id}`);
             break;
+          }
+
+          case 'CREATE_CUSTOMER': {
+            let customerOrgId = payload.organisationId;
+            if (!customerOrgId) {
+              const defaultOrg = await pool.query('SELECT id FROM organisations LIMIT 1;');
+              customerOrgId = defaultOrg.rows[0]?.id;
+            }
+            if (payload.phone) {
+              const existingCust = await pool.query(
+                'SELECT id FROM customers WHERE organisation_id = $1 AND phone = $2 LIMIT 1;',
+                [customerOrgId, payload.phone.trim()]
+              );
+              if (existingCust.rows.length > 0) {
+                console.log(`ℹ️ Customer with phone ${payload.phone} already exists in PostgreSQL, marked synced.`);
+                syncedIds.push(id);
+                continue;
+              }
+            }
+            await customerService.createCustomer({
+              organisationId: customerOrgId,
+              name: payload.name || payload.fullName,
+              phone: payload.phone,
+              email: payload.email,
+              category: payload.category || 'Regular',
+              age: payload.age || 30,
+              gender: payload.gender || 'F',
+              city: payload.city || 'Mumbai',
+              creditLimit: payload.creditLimit || 0,
+            });
+            syncedIds.push(id);
+            console.log(`✓ Synced offline customer: ${payload.name || id}`);
+            break;
+          }
+
           default:
+            console.log(`✓ Processed general offline mutation: ${opType} (${id})`);
             break;
         }
-        syncedIds.push(item.id);
+
+        syncedIds.push(id);
       } catch (err) {
         console.warn(`Sync failed for item ${item.id}:`, err.message);
+        errors.push({ id: item.id, error: err.message });
       }
     }
 
-    localStore.clearSyncItems(syncedIds);
-
     return {
       success: true,
-      online: true,
-      message: `Successfully synchronized ${syncedIds.length} offline records.`,
-      syncedCount: syncedIds.length,
-      remainingCount: localStore.getSyncQueue().length,
+      online: isOnline,
+      batchId,
+      processedCount: syncedIds.length,
+      failedCount: errors.length,
+      syncedIds,
+      errors,
+      message: `Successfully processed ${syncedIds.length} offline records.`,
+      timestamp: new Date().toISOString(),
     };
   }
 
@@ -3399,3 +3448,5 @@ class SyncService {
 }
 
 module.exports = new SyncService();
+
+

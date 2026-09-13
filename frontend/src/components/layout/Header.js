@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { API_URL } from "../../config";
 import { MOCK_BRANCHES_LIST } from "../../data/managementMockData";
+import { useOfflineSync } from "../../offline/OfflineSyncContext";
 
 const DEFAULT_BRANCH_OPTIONS = [
   "All Branches",
@@ -31,8 +32,13 @@ export default function Header({
   onNavigate,
   branchRefreshKey = 0,
 }) {
+  const offlineSync = useOfflineSync();
+  const isOnline = offlineSync?.isOnline ?? true;
+  const pendingCount = offlineSync?.pendingCount ?? 0;
+  const isSyncing = offlineSync?.isSyncing ?? false;
+  const syncNow = offlineSync?.syncNow;
+
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [isOnline, setIsOnline] = useState(true);
   const [branchOptions, setBranchOptions] = useState(DEFAULT_BRANCH_OPTIONS);
 
   const fetchBranchesFromDb = async () => {
@@ -269,21 +275,53 @@ export default function Header({
           </Pressable>
         )}
 
-        {/* Sync Status Badge */}
-        {!isMobile && (
+        {/* Sync Status Badge (Desktop & Mobile) */}
+        <Pressable
+          onPress={() => {
+            if (pendingCount > 0 && !isSyncing && syncNow) {
+              syncNow();
+            }
+          }}
+          style={[
+            styles.syncBadge,
+            isSyncing
+              ? styles.syncBadgeSyncing
+              : (!isOnline || pendingCount > 0)
+              ? styles.syncBadgePending
+              : styles.syncBadge,
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Sync status and trigger"
+        >
           <View
-            style={[styles.syncBadge, !isOnline && styles.syncBadgeOffline]}
+            style={[
+              styles.syncDot,
+              isSyncing
+                ? styles.syncDotSyncing
+                : (!isOnline || pendingCount > 0)
+                ? styles.syncDotPending
+                : styles.syncDot,
+            ]}
+          />
+          <Text
+            style={[
+              styles.syncText,
+              isSyncing
+                ? styles.syncTextSyncing
+                : (!isOnline || pendingCount > 0)
+                ? styles.syncTextPending
+                : styles.syncText,
+            ]}
           >
-            <View
-              style={[styles.syncDot, !isOnline && styles.syncDotOffline]}
-            />
-            <Text
-              style={[styles.syncText, !isOnline && styles.syncTextOffline]}
-            >
-              {isOnline ? "Online" : "Offline"}
-            </Text>
-          </View>
-        )}
+            {isSyncing
+              ? `Syncing (${pendingCount})...`
+              : !isOnline
+              ? `Offline (${pendingCount})`
+              : pendingCount > 0
+              ? `Pending (${pendingCount}) • Sync Now`
+              : 'Online • Synced'}
+          </Text>
+        </Pressable>
 
         {/* Quick Settings Icon */}
         <Pressable
@@ -297,16 +335,37 @@ export default function Header({
 
         {/* User Profile */}
         <View style={styles.profileContainer}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initials || "C"}</Text>
+          <View
+            style={[
+              styles.avatar,
+              (currentUser?.isOwner || (currentUser?.role || '').toUpperCase() === 'OWNER') && {
+                backgroundColor: '#0D9488',
+              },
+            ]}
+          >
+            <Text style={styles.avatarText}>
+              {(currentUser?.isOwner || (currentUser?.role || '').toUpperCase() === 'OWNER')
+                ? '👑'
+                : initials || 'C'}
+            </Text>
           </View>
           {!isMobile && (
             <View style={styles.userInfoColumn}>
               <Text style={styles.userNameText}>
-                {displayName || "Admin Owner"}
+                {displayName || 'Admin Owner'}
               </Text>
-              <Text style={styles.userRoleText}>
-                {currentUser?.role || "Admin"}
+              <Text
+                style={[
+                  styles.userRoleText,
+                  (currentUser?.isOwner || (currentUser?.role || '').toUpperCase() === 'OWNER') && {
+                    color: '#0F766E',
+                    fontWeight: '800',
+                  },
+                ]}
+              >
+                {(currentUser?.isOwner || (currentUser?.role || '').toUpperCase() === 'OWNER')
+                  ? '👑 Pharmacy Owner'
+                  : currentUser?.roleName || currentUser?.role || 'Admin'}
               </Text>
             </View>
           )}
@@ -576,6 +635,26 @@ const styles = StyleSheet.create({
   },
   syncTextOffline: {
     color: "#B91C1C",
+  },
+  syncBadgePending: {
+    backgroundColor: "#FEF3C7",
+    borderColor: "#FDE68A",
+  },
+  syncDotPending: {
+    backgroundColor: "#D97706",
+  },
+  syncTextPending: {
+    color: "#B45309",
+  },
+  syncBadgeSyncing: {
+    backgroundColor: "#EFF6FF",
+    borderColor: "#BFDBFE",
+  },
+  syncDotSyncing: {
+    backgroundColor: "#2563EB",
+  },
+  syncTextSyncing: {
+    color: "#1D4ED8",
   },
   signOutButton: {
     marginLeft: 8,

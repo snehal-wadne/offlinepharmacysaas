@@ -66,8 +66,8 @@ const authenticateUser = async (req) => {
     }
   }
 
-  // 2. JWT Online Token: jwt_online_<userId>_<timestamp>
-  if (token.startsWith("jwt_online_")) {
+  // 2. JWT Online Token: jwt_online_<userId>_<timestamp>, jwt_pg_<userId>_<timestamp>, jwt_google_<userId>_<timestamp>
+  if (token.startsWith("jwt_online_") || token.startsWith("jwt_pg_") || token.startsWith("jwt_google_")) {
     const parts = token.split("_");
     const userId = parts[2];
     if (isUuid(userId)) {
@@ -288,7 +288,7 @@ const requireSyncAuth = async (req, res, next) => {
         }
       }
 
-      req.tenantContext = {
+    req.tenantContext = {
         organisationId: rawOrgId,
         branchId: rawBranchId || null,
       };
@@ -304,8 +304,19 @@ const requireSyncAuth = async (req, res, next) => {
   }
 };
 
+const optionalSyncAuth = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  const syncAuthHeader = req.headers["x-sync-auth"];
+  if (!authHeader && !syncAuthHeader) {
+    return next();
+  }
+  return requireSyncAuth(req, res, next);
+};
+
 module.exports = {
   requireSyncAuth,
+  optionalSyncAuth,
   authenticateUser,
   isUuid,
 };
+

@@ -4,6 +4,12 @@ import {
   MOCK_HELD_BILLS,
   MOCK_RECENT_INVOICES,
 } from "../data/cashierMockData";
+import {
+  fetchCashierProducts,
+  fetchHeldBills,
+  fetchRecentInvoices,
+  createPosSale,
+} from "../api/cashierApi";
 import { localPersistenceService } from "../db";
 import { syncEngine, bootstrapService } from "../sync";
 
@@ -28,6 +34,35 @@ export function PosProvider({ children, currentUser }) {
       ? syncEngine.getState()
       : { status: "IDLE", isOnline: true },
   );
+
+  // Hydrate live products, held bills, and recent invoices from PostgreSQL backend
+  useEffect(() => {
+    let isMounted = true;
+    async function hydratePosData() {
+      try {
+        const [liveProds, liveHeld, liveInvs] = await Promise.all([
+          fetchCashierProducts(),
+          fetchHeldBills(),
+          fetchRecentInvoices(),
+        ]);
+        if (isMounted) {
+          if (liveProds && Array.isArray(liveProds) && liveProds.length > 0) {
+            setProducts(liveProds);
+          }
+          if (liveHeld && Array.isArray(liveHeld) && liveHeld.length > 0) {
+            setHeldBills(liveHeld);
+          }
+          if (liveInvs && Array.isArray(liveInvs) && liveInvs.length > 0) {
+            setInvoices(liveInvs);
+          }
+        }
+      } catch (err) {
+        console.warn("POS live hydration fallback to offline cache:", err.message);
+      }
+    }
+    hydratePosData();
+    return () => { isMounted = false; };
+  }, []);
   const [returnHistory, setReturnHistory] = useState([
     {
       returnNo: "RET-2026-104",
