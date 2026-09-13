@@ -48,6 +48,7 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
   const [grnList, setGrnList] = useState(MOCK_GRN_LIST);
   const [availableProducts, setAvailableProducts] = useState([]);
   const [activeMenuId, setActiveMenuId] = useState(null);
+  const [statusModalGrn, setStatusModalGrn] = useState(null);
 
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -555,10 +556,7 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
                 return (
                   <View
                     key={grn.id}
-                    style={[
-                      styles.mobileGrnCard,
-                      { zIndex: isMenuOpen ? 999 : 1 },
-                    ]}
+                    style={styles.mobileGrnCard}
                   >
                     {/* Header Row: ID + Status + Action menu */}
                     <View style={styles.mobileCardTopRow}>
@@ -610,109 +608,13 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
 
                       <View style={styles.actionWrapper}>
                         <Pressable
-                          onPress={() =>
-                            setActiveMenuId((prev) =>
-                              prev === grn.id ? null : grn.id,
-                            )
-                          }
+                          onPress={() => setStatusModalGrn(grn)}
                           style={styles.threeDotsBtn}
                           accessibilityRole="button"
                           accessibilityLabel="Action menu"
                         >
                           <Text style={styles.threeDotsText}>⋮</Text>
                         </Pressable>
-
-                        {isMenuOpen && (
-                          <View
-                            style={[
-                              styles.menuPopover,
-                              styles.menuPopoverMobile,
-                            ]}
-                          >
-                            <Text style={styles.menuHeaderTitle}>
-                              Update Status
-                            </Text>
-
-                            <Pressable
-                              style={styles.menuItem}
-                              onPress={() =>
-                                handleStatusChange(grn, "Verified")
-                              }
-                            >
-                              <View
-                                style={[
-                                  styles.menuDot,
-                                  {
-                                    backgroundColor:
-                                      GRN_STATUS_BADGES["Verified"].dot,
-                                  },
-                                ]}
-                              />
-                              <Text
-                                style={[
-                                  styles.menuItemText,
-                                  grn.status === "Verified" &&
-                                    styles.menuItemTextActive,
-                                ]}
-                              >
-                                Verified
-                              </Text>
-                            </Pressable>
-
-                            <Pressable
-                              style={styles.menuItem}
-                              onPress={() =>
-                                handleStatusChange(grn, "Pending Inspection")
-                              }
-                            >
-                              <View
-                                style={[
-                                  styles.menuDot,
-                                  {
-                                    backgroundColor:
-                                      GRN_STATUS_BADGES["Pending Inspection"]
-                                        .dot,
-                                  },
-                                ]}
-                              />
-                              <Text
-                                style={[
-                                  styles.menuItemText,
-                                  grn.status === "Pending Inspection" &&
-                                    styles.menuItemTextActive,
-                                ]}
-                              >
-                                Pending Inspection
-                              </Text>
-                            </Pressable>
-
-                            <Pressable
-                              style={styles.menuItem}
-                              onPress={() =>
-                                handleStatusChange(grn, "Discrepancy")
-                              }
-                            >
-                              <View
-                                style={[
-                                  styles.menuDot,
-                                  {
-                                    backgroundColor:
-                                      GRN_STATUS_BADGES["Discrepancy"].dot,
-                                  },
-                                ]}
-                              />
-                              <Text
-                                style={[
-                                  styles.menuItemText,
-                                  grn.status === "Discrepancy" &&
-                                    styles.menuItemTextActive,
-                                ]}
-                              >
-                                Discrepancy
-                              </Text>
-                            </Pressable>
-                          </View>
-                        )}
                       </View>
                     </View>
 
@@ -933,10 +835,24 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
 
                         {/* Dropdown Menu */}
                         {isMenuOpen && (
-                          <View style={styles.menuPopover}>
-                            <Text style={styles.menuHeaderTitle}>
-                              Update Status
-                            </Text>
+                          <>
+                            {Platform.OS === 'web' && (
+                              <Pressable
+                                style={{
+                                  position: 'fixed',
+                                  top: 0,
+                                  left: 0,
+                                  right: 0,
+                                  bottom: 0,
+                                  zIndex: 998,
+                                }}
+                                onPress={() => setActiveMenuId(null)}
+                              />
+                            )}
+                            <View style={styles.menuPopover}>
+                              <Text style={styles.menuHeaderTitle}>
+                                Update Status
+                              </Text>
 
                             <Pressable
                               style={styles.menuItem}
@@ -1017,7 +933,8 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
                               </Text>
                             </Pressable>
                           </View>
-                        )}
+                        </>
+                      )}
                       </View>
                     </View>
                   );
@@ -1329,6 +1246,83 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
                   Confirm & Add to Stock
                 </Text>
               </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Mobile Action Sheet / Status Update Modal */}
+      <Modal
+        visible={!!statusModalGrn}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setStatusModalGrn(null)}
+      >
+        <Pressable
+          style={styles.actionSheetBackdrop}
+          onPress={() => setStatusModalGrn(null)}
+        >
+          <Pressable
+            style={styles.actionSheetCard}
+            onPress={(e) => e.stopPropagation?.()}
+          >
+            <View style={styles.actionSheetHeader}>
+              <View>
+                <Text style={styles.actionSheetTitle}>Update Status</Text>
+                <Text style={styles.actionSheetSub}>
+                  {statusModalGrn?.id} • {statusModalGrn?.supplier}
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => setStatusModalGrn(null)}
+                style={styles.actionSheetCloseBtn}
+              >
+                <Text style={styles.actionSheetCloseText}>✕</Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.actionSheetBody}>
+              {["Verified", "Pending Inspection", "Discrepancy"].map((statusOption) => {
+                const badgeConfig = GRN_STATUS_BADGES[statusOption] || GRN_STATUS_BADGES.Verified;
+                const isSelected = statusModalGrn?.status === statusOption;
+
+                return (
+                  <Pressable
+                    key={statusOption}
+                    style={[
+                      styles.actionSheetOption,
+                      isSelected && styles.actionSheetOptionSelected,
+                    ]}
+                    onPress={() => {
+                      const target = statusModalGrn;
+                      setStatusModalGrn(null);
+                      handleStatusChange(target, statusOption);
+                    }}
+                  >
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                      <View
+                        style={[
+                          styles.actionSheetOptionDot,
+                          { backgroundColor: badgeConfig.dot },
+                        ]}
+                      />
+                      <Text
+                        style={[
+                          styles.actionSheetOptionText,
+                          isSelected && styles.actionSheetOptionTextSelected,
+                        ]}
+                      >
+                        {statusOption}
+                      </Text>
+                    </View>
+                    {isSelected && (
+                      <Text style={{ color: "#0F766E", fontWeight: "700", fontSize: 14 }}>
+                        ✓
+                      </Text>
+                    )}
+                  </Pressable>
+                );
+              })}
             </View>
           </Pressable>
         </Pressable>
@@ -1887,5 +1881,91 @@ const styles = StyleSheet.create({
   mobileReceivedByText: {
     fontSize: 11.5,
     color: "#64748B",
+  },
+  actionSheetBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.6)",
+    justifyContent: "flex-end",
+    alignItems: "center",
+    zIndex: 99999,
+  },
+  actionSheetCard: {
+    width: "100%",
+    maxWidth: 500,
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    padding: 20,
+    paddingBottom: Platform.OS === "ios" ? 34 : 20,
+    ...Platform.select({
+      web: {
+        boxShadow: "0 -10px 25px -5px rgba(0, 0, 0, 0.2)",
+      },
+      default: {
+        elevation: 20,
+      },
+    }),
+  },
+  actionSheetHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+    paddingBottom: 14,
+    marginBottom: 12,
+  },
+  actionSheetTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  actionSheetSub: {
+    fontSize: 12,
+    color: "#64748B",
+    marginTop: 2,
+    fontWeight: "500",
+  },
+  actionSheetCloseBtn: {
+    padding: 6,
+    backgroundColor: "#F1F5F9",
+    borderRadius: 20,
+  },
+  actionSheetCloseText: {
+    fontSize: 13,
+    color: "#64748B",
+    fontWeight: "700",
+  },
+  actionSheetBody: {
+    gap: 8,
+  },
+  actionSheetOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  actionSheetOptionSelected: {
+    backgroundColor: "#F0FDFA",
+    borderColor: "#0F766E",
+  },
+  actionSheetOptionDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  actionSheetOptionText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#334155",
+  },
+  actionSheetOptionTextSelected: {
+    color: "#0F766E",
+    fontWeight: "700",
   },
 });

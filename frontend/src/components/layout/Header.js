@@ -172,7 +172,7 @@ export default function Header({
       style={[styles.headerContainer, isMobile && styles.headerContainerMobile]}
     >
       {/* Left: Mobile Hamburger Button & Branch Info */}
-      <View style={styles.leftSection}>
+      <View style={[styles.leftSection, isMobile && styles.leftSectionMobile]}>
         {isMobile && (
           <Pressable
             onPress={onToggleMobileMenu}
@@ -185,7 +185,7 @@ export default function Header({
         )}
 
         {/* Active Branch Switcher Dropdown */}
-        <View style={styles.branchSelectorRow}>
+        <View style={[styles.branchSelectorRow, isMobile && styles.branchSelectorRowMobile]}>
           {!isMobile && <Text style={styles.branchLabel}>Store / Branch</Text>}
           <View style={styles.branchAnchorContainer}>
             <Pressable
@@ -193,12 +193,12 @@ export default function Header({
                 if (!dropdownOpen) fetchBranchesFromDb();
                 setDropdownOpen(!dropdownOpen);
               }}
-              style={styles.branchButton}
+              style={[styles.branchButton, isMobile && styles.branchButtonMobile]}
               accessibilityRole="button"
               accessibilityLabel="Select Branch"
             >
               <Text style={styles.branchStoreIcon}>📍</Text>
-              <Text style={styles.branchButtonText} numberOfLines={1}>
+              <Text style={[styles.branchButtonText, isMobile && styles.branchButtonTextMobile]} numberOfLines={1}>
                 {currentBranch}
               </Text>
               <Text style={styles.chevron}>▾</Text>
@@ -422,7 +422,7 @@ export default function Header({
       )}
 
       {/* Right: Sync Status & User Profile */}
-      <View style={styles.rightSection}>
+      <View style={[styles.rightSection, isMobile && styles.rightSectionMobile]}>
         {/* Subscription Plan Quick Badge */}
         {!isMobile && (
           <Pressable
@@ -448,6 +448,7 @@ export default function Header({
           }}
           style={[
             styles.syncBadge,
+            isMobile && styles.syncBadgeMobile,
             isSyncing
               ? styles.syncBadgeSyncing
               : !isOnline || pendingCount > 0
@@ -470,45 +471,56 @@ export default function Header({
           <Text
             style={[
               styles.syncText,
+              isMobile && styles.syncTextMobile,
               isSyncing
                 ? styles.syncTextSyncing
                 : !isOnline || pendingCount > 0
                   ? styles.syncTextPending
                   : styles.syncText,
             ]}
+            numberOfLines={1}
           >
             {isSyncing
-              ? `Syncing (${pendingCount})...`
+              ? isMobile
+                ? `Syncing...`
+                : `Syncing (${pendingCount})...`
               : !isOnline
-                ? `Offline (${pendingCount})`
+                ? isMobile
+                  ? `Offline (${pendingCount})`
+                  : `Offline (${pendingCount})`
                 : pendingCount > 0
-                  ? `Pending (${pendingCount}) • Sync Now`
-                  : "Online • Synced"}
+                  ? isMobile
+                    ? `⚡ ${pendingCount} Sync`
+                    : `Pending (${pendingCount}) • Sync Now`
+                  : isMobile
+                    ? "Synced"
+                    : "Online • Synced"}
           </Text>
         </Pressable>
 
         {/* Quick Settings Icon */}
         <Pressable
           onPress={() => onNavigate && onNavigate("tax-settings")}
-          style={styles.quickSettingsButton}
+          style={[styles.quickSettingsButton, isMobile && styles.quickSettingsButtonMobile]}
           accessibilityRole="button"
           accessibilityLabel="Settings"
         >
-          <Text style={styles.quickSettingsIcon}>⚙️</Text>
+          <Text style={[styles.quickSettingsIcon, isMobile && { fontSize: 13 }]}>⚙️</Text>
         </Pressable>
 
         {/* User Profile */}
-        <View style={styles.profileContainer}>
+        <View style={[styles.profileContainer, isMobile && styles.profileContainerMobile]}>
           <View
             style={[
               styles.avatar,
+              isMobile && styles.avatarMobile,
               (currentUser?.isOwner ||
                 (currentUser?.role || "").toUpperCase() === "OWNER") && {
                 backgroundColor: "#0D9488",
               },
             ]}
           >
-            <Text style={styles.avatarText}>
+            <Text style={[styles.avatarText, isMobile && styles.avatarTextMobile]}>
               {currentUser?.isOwner ||
               (currentUser?.role || "").toUpperCase() === "OWNER"
                 ? "👑"
@@ -541,11 +553,13 @@ export default function Header({
           {onSignOut && (
             <Pressable
               onPress={onSignOut}
-              style={styles.signOutButton}
+              style={[styles.signOutButton, isMobile && styles.signOutButtonMobile]}
               accessibilityRole="button"
               accessibilityLabel="Sign Out"
             >
-              <Text style={styles.signOutText}>Sign Out</Text>
+              <Text style={[styles.signOutText, isMobile && styles.signOutTextMobile]}>
+                {isMobile ? "🚪" : "Sign Out"}
+              </Text>
             </Pressable>
           )}
         </View>
@@ -567,16 +581,17 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   headerContainerMobile: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
+    height: 56,
   },
   hamburgerButton: {
-    padding: 8,
-    marginRight: 4,
+    padding: 6,
+    marginRight: 2,
     borderRadius: 6,
     backgroundColor: "#F1F5F9",
   },
   hamburgerIcon: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "bold",
     color: "#0F766E",
   },
@@ -585,10 +600,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 14,
   },
+  leftSectionMobile: {
+    gap: 6,
+  },
   branchSelectorRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
+  },
+  branchSelectorRowMobile: {
+    gap: 6,
   },
   branchLabel: {
     fontSize: 12,
@@ -614,10 +635,20 @@ const styles = StyleSheet.create({
       },
     }),
   },
+  branchButtonMobile: {
+    paddingVertical: 4,
+    paddingHorizontal: 7,
+    maxWidth: 110,
+    gap: 4,
+  },
   branchButtonText: {
     fontSize: 13.5,
     fontWeight: "600",
     color: "#0F172A",
+  },
+  branchButtonTextMobile: {
+    fontSize: 11.5,
+    maxWidth: 62,
   },
   chevron: {
     fontSize: 12,
@@ -627,6 +658,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 20,
+  },
+  rightSectionMobile: {
+    gap: 6,
   },
   syncBadge: {
     flexDirection: "row",
@@ -891,6 +925,31 @@ const styles = StyleSheet.create({
   syncTextSyncing: {
     color: "#1D4ED8",
   },
+  syncBadgeMobile: {
+    paddingVertical: 3,
+    paddingHorizontal: 6,
+    gap: 4,
+    borderRadius: 12,
+  },
+  syncTextMobile: {
+    fontSize: 10.5,
+    fontWeight: "700",
+  },
+  profileContainerMobile: {
+    gap: 4,
+  },
+  avatarMobile: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+  },
+  avatarTextMobile: {
+    fontSize: 10,
+  },
+  quickSettingsButtonMobile: {
+    padding: 5,
+    borderRadius: 6,
+  },
   signOutButton: {
     marginLeft: 8,
     paddingVertical: 5,
@@ -901,10 +960,19 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFF",
     cursor: "pointer",
   },
+  signOutButtonMobile: {
+    marginLeft: 2,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+    borderRadius: 6,
+  },
   signOutText: {
     fontSize: 11.5,
     fontWeight: "600",
     color: "#64748B",
+  },
+  signOutTextMobile: {
+    fontSize: 12,
   },
   headerPlanBadge: {
     flexDirection: "row",

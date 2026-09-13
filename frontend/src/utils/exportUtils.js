@@ -55,12 +55,6 @@ export function exportToCSV(headers, rows, filename) {
 export function exportToPDF(title, subtitle, headers, rows, filename) {
   if (typeof window === 'undefined') return;
 
-  const printWindow = window.open('', '_blank');
-  if (!printWindow) {
-    alert('Pop-up blocker is preventing PDF export. Please allow pop-ups for this site.');
-    return;
-  }
-
   const currentDate = new Date().toLocaleDateString('en-IN', {
     dateStyle: 'medium',
   });
@@ -74,43 +68,66 @@ export function exportToPDF(title, subtitle, headers, rows, filename) {
     <head>
       <title>${title}</title>
       <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
       <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         body {
           font-family: 'Inter', sans-serif;
           color: #1e293b;
           margin: 0;
-          padding: 40px;
+          padding: 24px;
           background-color: #ffffff;
         }
+        .toolbar {
+          display: flex;
+          justify-content: flex-end;
+          gap: 10px;
+          margin-bottom: 20px;
+          background: #f8fafc;
+          padding: 10px 14px;
+          border-radius: 8px;
+          border: 1px solid #e2e8f0;
+        }
+        .btn {
+          padding: 8px 14px;
+          border-radius: 6px;
+          font-weight: 700;
+          font-size: 13px;
+          cursor: pointer;
+          border: none;
+        }
+        .btn-print { background-color: #0d9488; color: #ffffff; }
+        .btn-close { background-color: #e2e8f0; color: #334155; }
         .header {
           border-bottom: 2px solid #e2e8f0;
-          padding-bottom: 20px;
-          margin-bottom: 30px;
+          padding-bottom: 16px;
+          margin-bottom: 20px;
         }
         .title-row {
           display: flex;
           justify-content: space-between;
           align-items: flex-start;
+          flex-wrap: wrap;
+          gap: 12px;
         }
         .title {
-          font-size: 26px;
+          font-size: 22px;
           font-weight: 800;
           color: #0f172a;
-          margin: 0 0 6px 0;
+          margin: 0 0 4px 0;
         }
         .subtitle {
-          font-size: 14px;
+          font-size: 13px;
           color: #64748b;
           margin: 0;
           max-width: 600px;
-          line-height: 1.5;
+          line-height: 1.4;
         }
         .meta-info {
           text-align: right;
-          font-size: 12px;
+          font-size: 11.5px;
           color: #64748b;
-          line-height: 1.6;
+          line-height: 1.5;
         }
         .meta-label {
           font-weight: 600;
@@ -119,8 +136,12 @@ export function exportToPDF(title, subtitle, headers, rows, filename) {
         .logo {
           font-weight: 800;
           color: #167c68;
-          font-size: 18px;
-          margin-bottom: 8px;
+          font-size: 16px;
+          margin-bottom: 4px;
+        }
+        .table-responsive {
+          width: 100%;
+          overflow-x: auto;
         }
         table {
           width: 100%;
@@ -135,79 +156,58 @@ export function exportToPDF(title, subtitle, headers, rows, filename) {
           text-transform: uppercase;
           letter-spacing: 0.5px;
           text-align: left;
-          padding: 12px 14px;
+          padding: 10px 12px;
           border-bottom: 2px solid #e2e8f0;
         }
         td {
-          padding: 12px 14px;
-          font-size: 13px;
+          padding: 10px 12px;
+          font-size: 12.5px;
           border-bottom: 1px solid #e2e8f0;
           color: #334155;
         }
         tr:nth-child(even) td {
           background-color: #f8fafc;
         }
-        .text-center {
-          text-align: center;
-        }
-        .text-right {
-          text-align: right;
-        }
-        .font-semibold {
-          font-weight: 600;
-        }
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        .font-semibold { font-weight: 600; }
         .badge {
           display: inline-block;
-          padding: 4px 8px;
+          padding: 3px 8px;
           border-radius: 12px;
-          font-size: 11px;
+          font-size: 10.5px;
           font-weight: 700;
           text-align: center;
         }
-        .badge-optimal {
-          background-color: #dcfce7;
-          color: #15803d;
-        }
-        .badge-moderate {
-          background-color: #fef3c7;
-          color: #b45309;
-        }
-        .badge-slow {
-          background-color: #fee2e2;
-          color: #b91c1c;
-        }
-        .badge-critical {
-          background-color: #fee2e2;
-          color: #b91c1c;
-        }
-        .badge-high {
-          background-color: #fee2e2;
-          color: #b91c1c;
-        }
-        .badge-medium {
-          background-color: #fef3c7;
-          color: #b45309;
-        }
-        .badge-low {
-          background-color: #dcfce7;
-          color: #15803d;
-        }
-        .badge-expired {
-          background-color: #fee2e2;
-          color: #b91c1c;
+        .badge-optimal { background-color: #dcfce7; color: #15803d; }
+        .badge-moderate { background-color: #fef3c7; color: #b45309; }
+        .badge-slow { background-color: #fee2e2; color: #b91c1c; }
+        .badge-critical { background-color: #fee2e2; color: #b91c1c; }
+        .badge-high { background-color: #fee2e2; color: #b91c1c; }
+        .badge-medium { background-color: #fef3c7; color: #b45309; }
+        .badge-low { background-color: #dcfce7; color: #15803d; }
+        .badge-expired { background-color: #fee2e2; color: #b91c1c; }
+        @media screen and (max-width: 768px) {
+          body { padding: 12px; }
+          .title { font-size: 18px; }
+          .meta-info { text-align: left; margin-top: 8px; }
+          th, td { padding: 8px 6px; font-size: 11px; }
         }
         @media print {
-          body {
-            padding: 20px;
-          }
+          .toolbar { display: none; }
+          body { padding: 15px; }
         }
       </style>
     </head>
     <body>
+      <div class="toolbar">
+        <button class="btn btn-print" onclick="window.print()">🖨️ Print / Save PDF</button>
+        <button class="btn btn-close" onclick="window.close()">✕ Close</button>
+      </div>
       <div class="header">
         <div class="title-row">
           <div>
-            <div class="logo">FALAH PHARMACY ERP</div>
+            <div class="logo">PHARMAFLOW PHARMACY ERP</div>
             <h1 class="title">${title}</h1>
             <p class="subtitle">${subtitle}</p>
           </div>
@@ -219,63 +219,60 @@ export function exportToPDF(title, subtitle, headers, rows, filename) {
           </div>
         </div>
       </div>
-      <table>
-        <thead>
-          <tr>
-            ${headers.map(h => `<th>${h}</th>`).join('')}
-          </tr>
-        </thead>
-        <tbody>
-          ${rows.map(row => `
+      <div class="table-responsive">
+        <table>
+          <thead>
             <tr>
-              ${row.map((cell, cellIdx) => {
-                let cellClass = '';
-                const header = headers[cellIdx].toUpperCase();
-                
-                // Content alignment helpers based on header name
-                if (header.includes('COUNT') || header.includes('POS') || header.includes('RATE') || header.includes('SCORE') || header.includes('DAYS') || header.includes('QUANTITY') || header.includes('BATCH') || header.includes('DATE')) {
-                  cellClass = 'text-center';
-                } else if (header.includes('VALUATION') || header.includes('SPENT') || header.includes('REVENUE') || header.includes('VALUE') || header.includes('COST')) {
-                  cellClass = 'text-right font-semibold';
-                }
-                
-                const stringVal = cell === null || cell === undefined ? '' : String(cell);
-                
-                // Badge wrapping for health, risk, and urgency statuses
-                if (header.includes('HEALTH') || header.includes('URGENCY') || header.includes('LEVEL') || header.includes('RISK')) {
-                  let badgeClass = 'badge';
-                  const valLower = stringVal.toLowerCase();
-                  if (valLower.includes('optimal') || valLower.includes('low')) {
-                    badgeClass += ' badge-low';
-                  } else if (valLower.includes('moderate') || valLower.includes('medium')) {
-                    badgeClass += ' badge-medium';
-                  } else if (valLower.includes('slow') || valLower.includes('high')) {
-                    badgeClass += ' badge-high';
-                  } else if (valLower.includes('critical') || valLower.includes('expired')) {
-                    badgeClass += ' badge-critical';
-                  }
-                  return `<td class="text-center"><span class="${badgeClass}">${stringVal}</span></td>`;
-                }
-
-                return `<td class="${cellClass}">${stringVal}</td>`;
-              }).join('')}
+              ${headers.map(h => `<th>${h}</th>`).join('')}
             </tr>
-          `).join('')}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            ${rows.map(row => `
+              <tr>
+                ${row.map((cell, cellIdx) => {
+                  let cellClass = '';
+                  const header = (headers[cellIdx] || '').toUpperCase();
+                  
+                  if (header.includes('COUNT') || header.includes('POS') || header.includes('RATE') || header.includes('SCORE') || header.includes('DAYS') || header.includes('QUANTITY') || header.includes('BATCH') || header.includes('DATE')) {
+                    cellClass = 'text-center';
+                  } else if (header.includes('VALUATION') || header.includes('SPENT') || header.includes('REVENUE') || header.includes('VALUE') || header.includes('COST')) {
+                    cellClass = 'text-right font-semibold';
+                  }
+                  
+                  const stringVal = cell === null || cell === undefined ? '' : String(cell);
+                  
+                  if (header.includes('HEALTH') || header.includes('URGENCY') || header.includes('LEVEL') || header.includes('RISK')) {
+                    let badgeClass = 'badge';
+                    const valLower = stringVal.toLowerCase();
+                    if (valLower.includes('optimal') || valLower.includes('low')) {
+                      badgeClass += ' badge-low';
+                    } else if (valLower.includes('moderate') || valLower.includes('medium')) {
+                      badgeClass += ' badge-medium';
+                    } else if (valLower.includes('slow') || valLower.includes('high')) {
+                      badgeClass += ' badge-high';
+                    } else if (valLower.includes('critical') || valLower.includes('expired')) {
+                      badgeClass += ' badge-critical';
+                    }
+                    return `<td class="text-center"><span class="${badgeClass}">${stringVal}</span></td>`;
+                  }
+
+                  return `<td class="${cellClass}">${stringVal}</td>`;
+                }).join('')}
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
       <script>
         window.onload = function() {
-          window.print();
-          setTimeout(function() { window.close(); }, 500);
+          window.focus();
         };
       </script>
     </body>
     </html>
   `;
 
-  printWindow.document.open();
-  printWindow.document.write(html);
-  printWindow.document.close();
+  openPrintDocument(html, filename || 'Report');
 }
 
 /**
@@ -363,13 +360,14 @@ export function exportTaxInvoice(po) {
     <head>
       <title>Tax Invoice - ${poId}</title>
       <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
       <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         body {
           font-family: 'Inter', sans-serif;
           color: #0f172a;
           margin: 0;
-          padding: 24px;
+          padding: 20px;
           background-color: #ffffff;
         }
         .toolbar {
@@ -522,6 +520,17 @@ export function exportTaxInvoice(po) {
           padding-top: 4px;
           font-weight: 600;
           font-size: 11px;
+        }
+        @media screen and (max-width: 768px) {
+          body { padding: 10px; }
+          .invoice-card { padding: 14px; border: 1px solid #cbd5e1; }
+          .invoice-header { flex-direction: column; gap: 12px; }
+          .invoice-title-block { text-align: left; }
+          .grid-2 { grid-template-columns: 1fr; gap: 10px; }
+          table { display: block; overflow-x: auto; width: 100%; }
+          .totals-table { width: 100%; }
+          .footer-note { flex-direction: column; gap: 16px; align-items: flex-start; }
+          .sign-box { width: 100%; text-align: left; }
         }
         @media print {
           .toolbar { display: none; }
@@ -695,13 +704,14 @@ export function exportCustomerLedgerStatement(account, statementRows = []) {
     <head>
       <title>Ledger Statement - ${custName} (${custId})</title>
       <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
       <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         body {
           font-family: 'Inter', sans-serif;
           color: #0f172a;
           margin: 0;
-          padding: 24px;
+          padding: 20px;
           background-color: #ffffff;
         }
         .toolbar {
@@ -710,12 +720,12 @@ export function exportCustomerLedgerStatement(account, statementRows = []) {
           gap: 12px;
           margin-bottom: 20px;
           background: #f8fafc;
-          padding: 12px 16px;
+          padding: 10px 14px;
           border-radius: 8px;
           border: 1px solid #e2e8f0;
         }
         .btn {
-          padding: 8px 16px;
+          padding: 8px 14px;
           border-radius: 6px;
           font-weight: 700;
           font-size: 13px;
@@ -727,7 +737,7 @@ export function exportCustomerLedgerStatement(account, statementRows = []) {
         .statement-card {
           border: 1.5px solid #cbd5e1;
           border-radius: 8px;
-          padding: 28px;
+          padding: 24px;
           max-width: 850px;
           margin: 0 auto;
         }
@@ -738,39 +748,39 @@ export function exportCustomerLedgerStatement(account, statementRows = []) {
           padding-bottom: 16px;
           margin-bottom: 20px;
         }
-        .company-name { font-size: 22px; font-weight: 800; color: #0f766e; }
-        .company-sub { font-size: 11.5px; color: #64748b; margin-top: 4px; }
+        .company-name { font-size: 20px; font-weight: 800; color: #0f766e; }
+        .company-sub { font-size: 11px; color: #64748b; margin-top: 4px; }
         .kpi-row {
           display: grid;
           grid-template-columns: repeat(4, 1fr);
-          gap: 12px;
-          margin-bottom: 20px;
+          gap: 10px;
+          margin-bottom: 18px;
         }
         .kpi-card {
           border: 1px solid #e2e8f0;
           border-radius: 6px;
-          padding: 10px;
+          padding: 8px;
           background: #f8fafc;
           text-align: center;
         }
-        .kpi-label { font-size: 11px; font-weight: 600; color: #64748b; }
-        .kpi-val { font-size: 16px; font-weight: 800; color: #0f172a; margin-top: 4px; }
+        .kpi-label { font-size: 10px; font-weight: 600; color: #64748b; }
+        .kpi-val { font-size: 15px; font-weight: 800; color: #0f172a; margin-top: 2px; }
         table {
           width: 100%;
           border-collapse: collapse;
-          margin-top: 14px;
+          margin-top: 12px;
           font-size: 12px;
         }
         th {
           background-color: #f1f5f9;
           color: #334155;
           font-weight: 700;
-          padding: 10px 8px;
+          padding: 8px 6px;
           border: 1px solid #cbd5e1;
           text-align: left;
         }
         td {
-          padding: 10px 8px;
+          padding: 8px 6px;
           border: 1px solid #e2e8f0;
         }
         .text-right { text-align: right; }
@@ -778,13 +788,21 @@ export function exportCustomerLedgerStatement(account, statementRows = []) {
         .debit { color: #dc2626; font-weight: 700; }
         .credit { color: #16a34a; font-weight: 700; }
         .footer-box {
-          margin-top: 24px;
-          padding-top: 16px;
+          margin-top: 20px;
+          padding-top: 14px;
           border-top: 1px solid #e2e8f0;
           display: flex;
           justify-content: space-between;
           font-size: 11px;
           color: #64748b;
+        }
+        @media screen and (max-width: 768px) {
+          body { padding: 10px; }
+          .statement-card { padding: 12px; border: 1px solid #cbd5e1; }
+          .header { flex-direction: column; gap: 10px; }
+          .kpi-row { grid-template-columns: 1fr 1fr; gap: 8px; }
+          table { display: block; overflow-x: auto; width: 100%; }
+          .footer-box { flex-direction: column; gap: 14px; }
         }
         @media print {
           .toolbar { display: none; }
@@ -918,25 +936,26 @@ export function printPaymentReceipt(receipt) {
     <head>
       <title>Payment Receipt - ${rcptId}</title>
       <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
       <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Courier+Prime:wght@400;700&display=swap');
         body {
           font-family: 'Inter', sans-serif;
           color: #0f172a;
           margin: 0;
-          padding: 24px;
+          padding: 16px;
           background-color: #f8fafc;
         }
         .toolbar {
           display: flex;
           justify-content: flex-end;
           gap: 12px;
-          margin-bottom: 20px;
+          margin-bottom: 16px;
           max-width: 440px;
           margin: 0 auto 16px auto;
         }
         .btn {
-          padding: 8px 16px;
+          padding: 8px 14px;
           border-radius: 6px;
           font-weight: 700;
           font-size: 13px;
@@ -986,6 +1005,10 @@ export function printPaymentReceipt(receipt) {
         .amount-label { font-size: 11px; font-weight: 700; color: #166534; text-transform: uppercase; }
         .amount-val { font-size: 24px; font-weight: 900; color: #15803d; margin-top: 4px; }
         .footer-note { font-size: 10.5px; color: #94a3b8; text-align: center; margin-top: 14px; }
+        @media screen and (max-width: 768px) {
+          body { padding: 8px; }
+          .receipt-card { padding: 14px; width: 100%; max-width: 100%; box-sizing: border-box; }
+        }
         @media print {
           .toolbar { display: none; }
           body { padding: 0; background: none; }
