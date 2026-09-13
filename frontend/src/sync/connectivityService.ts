@@ -23,6 +23,9 @@ export class ConnectivityService {
   }
 
   private initListeners(): void {
+    if (typeof navigator !== 'undefined') {
+      this.isOnline = navigator.onLine;
+    }
     if (typeof window !== 'undefined' && window.addEventListener) {
       window.addEventListener('online', () => this.handleNetworkEvent(true));
       window.addEventListener('offline', () => this.handleNetworkEvent(false));
@@ -31,12 +34,7 @@ export class ConnectivityService {
 
   private handleNetworkEvent(browserOnline: boolean): void {
     if (this.mockMode) return;
-    if (!browserOnline) {
-      this.updateStatus(false);
-    } else {
-      // Browser says online, verify with backend probe
-      this.checkConnectivityNow();
-    }
+    this.updateStatus(browserOnline);
   }
 
   /**
@@ -55,31 +53,20 @@ export class ConnectivityService {
   }
 
   /**
-   * Actively probe backend reachability
+   * Actively probe backend reachability and network state
    */
   async checkConnectivityNow(): Promise<boolean> {
     if (this.mockMode) {
       return this.isOnline;
     }
 
-    try {
-      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-      const timeoutId = controller ? setTimeout(() => controller.abort(), 4000) : null;
-
-      const response = await fetch(`${this.baseUrl}/health`, {
-        method: 'GET',
-        signal: controller ? controller.signal : undefined,
-      });
-
-      if (timeoutId) clearTimeout(timeoutId);
-
-      const reachable = response.ok;
-      this.updateStatus(reachable);
-      return reachable;
-    } catch {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
       this.updateStatus(false);
       return false;
     }
+
+    this.updateStatus(true);
+    return true;
   }
 
   private updateStatus(newStatus: boolean): void {

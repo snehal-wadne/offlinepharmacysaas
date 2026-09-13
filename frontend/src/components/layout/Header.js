@@ -453,9 +453,7 @@ export default function Header({
               ? styles.syncBadgeSyncing
               : !isOnline
                 ? styles.syncBadgeOffline
-                : pendingCount > 0
-                  ? styles.syncBadgePending
-                  : styles.syncBadge,
+                : styles.syncBadge,
           ]}
           accessibilityRole="button"
           accessibilityLabel="Sync status and trigger"
@@ -467,9 +465,7 @@ export default function Header({
                 ? styles.syncDotSyncing
                 : !isOnline
                   ? styles.syncDotOffline
-                  : pendingCount > 0
-                    ? styles.syncDotPending
-                    : styles.syncDot,
+                  : styles.syncDot,
             ]}
           />
           <Text
@@ -480,18 +476,12 @@ export default function Header({
                 ? styles.syncTextSyncing
                 : !isOnline
                   ? styles.syncTextOffline
-                  : pendingCount > 0
-                    ? styles.syncTextPending
-                    : styles.syncText,
+                  : styles.syncText,
             ]}
             numberOfLines={1}
           >
             {isSyncing
-              ? isMobile
-                ? "Syncing..."
-                : pendingCount > 0
-                  ? `Syncing (${pendingCount})...`
-                  : "Syncing..."
+              ? "Syncing..."
               : !isOnline
                 ? isMobile
                   ? pendingCount > 0
@@ -500,13 +490,9 @@ export default function Header({
                   : pendingCount > 0
                     ? `Offline (${pendingCount})`
                     : "Offline"
-                : pendingCount > 0
-                  ? isMobile
-                    ? `⚡ ${pendingCount} Sync`
-                    : `Online (${pendingCount}) • Sync Now`
-                  : isMobile
-                    ? "Online"
-                    : "Online • Synced"}
+                : isMobile
+                  ? "Online"
+                  : "Online • Synced"}
           </Text>
         </Pressable>
 

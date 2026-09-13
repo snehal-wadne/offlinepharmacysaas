@@ -4,7 +4,7 @@
  * Provides real-time reactive sync status and offline operations across the application.
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { db } from '../db/pharmaflowDb';
 import { LocalPersistenceService } from '../db/services/localPersistenceService';
 import { syncEngine } from '../sync/syncEngine';
@@ -20,6 +20,8 @@ export function OfflineSyncProvider({ children }) {
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState(null);
   const [syncBanner, setSyncBanner] = useState(null);
+  const prevOnlineRef = useRef(isOnline);
+  const lastSyncTimeRef = useRef(0);
 
   // Reactive state for local offline data
   const [products, setProducts] = useState([]);
@@ -65,8 +67,15 @@ export function OfflineSyncProvider({ children }) {
   // Sync runner function
   const triggerSync = useCallback(async (isAuto = false) => {
     if (isSyncing) return;
+    const now = Date.now();
+    // Throttle auto-sync to at most once every 15 seconds to prevent tight loops
+    if (isAuto && now - lastSyncTimeRef.current < 15000) {
+      return;
+    }
+    lastSyncTimeRef.current = now;
+
     try {
-      await syncEngine.syncNow();
+      await syncEngine.syncNow(!isAuto);
       setSyncBanner({
         type: 'success',
         message: `✅ Sync completed successfully.`,
@@ -84,12 +93,13 @@ export function OfflineSyncProvider({ children }) {
     }
   }, [isSyncing]);
 
-  // Immediately sync all data to the cloud when online and pending records exist
+  // Steady auto-sync: only fire when network transitions from offline to online
   useEffect(() => {
-    if (isOnline && pendingCount > 0 && !isSyncing) {
+    if (!prevOnlineRef.current && isOnline) {
       triggerSync(true);
     }
-  }, [isOnline, pendingCount, isSyncing, triggerSync]);
+    prevOnlineRef.current = isOnline;
+  }, [isOnline, triggerSync]);
 
   // ============================================================
   // OFFLINE MUTATION ACTIONS

@@ -328,7 +328,7 @@ export class SyncEngine {
 
         this.updateState({
           lastError: classified.message,
-          status: classified.category === 'AUTHENTICATION' ? 'ERROR' : 'OFFLINE',
+          status: classified.category === 'AUTHENTICATION' ? 'ERROR' : (this.connService.getIsOnline() ? 'ONLINE' : 'OFFLINE'),
         });
         await this.refreshCounts();
         break; // Stop loop on transport failure
