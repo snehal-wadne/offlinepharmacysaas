@@ -19,7 +19,7 @@ import {
 } from '../../data/customersMockData';
 import { SkeletonTableRow, SkeletonItemCard } from '../../components/common/SkeletonLoader';
 import PaginationControls from '../../components/common/PaginationControls';
-import { exportCustomerLedgerStatement } from '../../utils/exportUtils';
+import { exportCustomerLedgerStatement, exportToCSV } from '../../utils/exportUtils';
 
 export default function CustomerLedgerScreen({ onShowToast, onNavigate }) {
   const { width } = useWindowDimensions();
@@ -133,6 +133,42 @@ export default function CustomerLedgerScreen({ onShowToast, onNavigate }) {
     }
   };
 
+  const handleExportAllLedgers = () => {
+    const headers = [
+      'Account ID',
+      'Customer / Patient Name',
+      'Phone',
+      'Branch',
+      'Credit Limit',
+      'Current Outstanding',
+      'Aging Bucket',
+      'Credit Status',
+      'Last Invoice No',
+      'Last Invoice Date',
+      'Last Payment Amount',
+      'Last Payment Date',
+    ];
+    const rows = filteredAccounts.map((acc) => [
+      acc.id || '',
+      acc.name || '',
+      acc.phone || '',
+      acc.branch || 'Main Branch',
+      acc.creditLimit || '₹10,000.00',
+      acc.currentBalance || acc.currentDue || '₹0.00',
+      acc.agingBucket || '0-15 Days',
+      acc.creditStatus || 'Healthy',
+      acc.lastInvoiceNo || '',
+      acc.lastInvoiceDate || '',
+      acc.lastPaymentAmount || '',
+      acc.lastPaymentDate || '',
+    ]);
+
+    exportToCSV(headers, rows, `customer_master_credit_ledgers_${new Date().toISOString().slice(0, 10)}.csv`);
+    if (onShowToast) {
+      onShowToast(`✓ Exported ${filteredAccounts.length} Master Credit Ledger records as CSV!`);
+    }
+  };
+
   return (
     <ScrollView
       style={styles.container}
@@ -157,7 +193,7 @@ export default function CustomerLedgerScreen({ onShowToast, onNavigate }) {
         </View>
 
         <Pressable
-          onPress={() => onShowToast && onShowToast('✓ Exported Master Credit Ledger Statement as CSV!')}
+          onPress={handleExportAllLedgers}
           style={styles.exportBtnPrimary}
           accessibilityRole="button"
         >

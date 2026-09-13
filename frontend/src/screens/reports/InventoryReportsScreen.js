@@ -14,7 +14,7 @@ import {
   MOCK_INVENTORY_CATEGORY_VALUATION,
   MOCK_FAST_MOVING_ITEMS,
 } from '../../data/reportsMockData';
-import { exportToCSV } from '../../utils/exportUtils';
+import { exportToCSV, openPrintDocument } from '../../utils/exportUtils';
 import { SkeletonTableRow } from '../../components/common/SkeletonLoader';
 import PaginationControls from '../../components/common/PaginationControls';
 
@@ -64,18 +64,6 @@ export default function InventoryReportsScreen({ onShowToast, onNavigate }) {
       ];
       exportToCSV(headers, rows, 'inventory_valuation_and_forecast.csv');
     } else if (type === 'pdf') {
-      // Custom double-table PDF export
-      if (Platform.OS !== 'web') {
-        alert('PDF export is available on web only');
-        return;
-      }
-      if (typeof window === 'undefined') return;
-      const printWindow = window.open('', '_blank');
-      if (!printWindow) {
-        alert('Pop-up blocker is preventing PDF export. Please allow pop-ups for this site.');
-        return;
-      }
-
       const currentDate = new Date().toLocaleDateString('en-IN', { dateStyle: 'medium' });
       const currentTime = new Date().toLocaleTimeString('en-IN', { timeStyle: 'short' });
 
@@ -290,17 +278,14 @@ export default function InventoryReportsScreen({ onShowToast, onNavigate }) {
 
           <script>
             window.onload = function() {
-              window.print();
-              setTimeout(function() { window.close(); }, 500);
+              window.focus();
             };
           </script>
         </body>
         </html>
       `;
 
-      printWindow.document.open();
-      printWindow.document.write(html);
-      printWindow.document.close();
+      openPrintDocument(html, 'Inventory_Valuation_and_Forecast_Report');
     }
 
     if (onShowToast) {

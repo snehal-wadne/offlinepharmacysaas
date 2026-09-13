@@ -20,6 +20,7 @@ import {
 } from '../../data/managementMockData';
 import { SkeletonTableRow } from '../../components/common/SkeletonLoader';
 import PaginationControls from '../../components/common/PaginationControls';
+import { exportToCSV } from '../../utils/exportUtils';
 
 export default function UsersScreen({ onShowToast, onNavigate }) {
   const { width } = useWindowDimensions();
@@ -301,10 +302,31 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
     }
   };
 
-  // Export Roster simulation
+  // Export Staff Directory to CSV
   const handleExportRoster = () => {
+    const headers = [
+      'User ID',
+      'Name',
+      'Role',
+      'Email',
+      'Phone',
+      'Branch Location',
+      'Status',
+      'Last Active / Login',
+    ];
+    const rows = filteredUsers.map((u) => [
+      u.id || '',
+      u.name || '',
+      u.role || '',
+      u.email || '',
+      u.phone || '',
+      u.branch || 'Main Branch',
+      u.status || 'Active',
+      u.lastActive || 'Today',
+    ]);
+    exportToCSV(headers, rows, `pharmacy_staff_directory_${new Date().toISOString().slice(0, 10)}.csv`);
     if (onShowToast) {
-      onShowToast(`✓ Exported FIT Staff Directory (${filteredUsers.length} users) to CSV`);
+      onShowToast(`✓ Exported Staff Directory (${filteredUsers.length} users) to CSV`);
     }
   };
 

@@ -16,6 +16,7 @@ import {
 } from '../../data/managementMockData';
 import { SkeletonTableRow } from '../../components/common/SkeletonLoader';
 import PaginationControls from '../../components/common/PaginationControls';
+import { exportAuditLogReport, exportSingleAuditLogPDF } from '../../utils/exportUtils';
 
 export default function AuditLogScreen({ onShowToast, onNavigate }) {
   const { width } = useWindowDimensions();
@@ -89,11 +90,24 @@ export default function AuditLogScreen({ onShowToast, onNavigate }) {
     setModalVisible(true);
   };
 
-  const handleExportLogs = () => {
+  const handleExportLogs = (format = 'pdf') => {
+    exportAuditLogReport(filteredLogs, format, activeKpiFilter);
     if (onShowToast) {
       onShowToast(
-        `✓ Exported ${filteredLogs.length} audit records as signed regulatory report.`
+        `✓ Exported ${filteredLogs.length} regulatory audit records as ${format.toUpperCase()} report.`
       );
+    }
+  };
+
+  const handleExportSingleLog = (log, format = 'pdf') => {
+    if (!log) return;
+    if (format === 'csv') {
+      exportAuditLogReport([log], 'csv', `Event ${log.id}`);
+    } else {
+      exportSingleAuditLogPDF(log);
+    }
+    if (onShowToast) {
+      onShowToast(`✓ Exported audit record ${log.id} (${format.toUpperCase()})`);
     }
   };
 
@@ -172,70 +186,127 @@ export default function AuditLogScreen({ onShowToast, onNavigate }) {
       showsVerticalScrollIndicator={true}
     >
       {/* 1. Header & Title Banner */}
-      <View style={styles.headerRow}>
+      <View style={[styles.headerRow, isMobile && styles.headerRowMobile]}>
         <View style={styles.titleWrapper}>
           <Text style={styles.pageTitle}>System & Compliance Audit Log</Text>
           <Text style={styles.pageSubtitle}>
             Immutable regulatory tracking of billing discounts, price overrides, stock adjustments, and permission changes.
           </Text>
         </View>
-        <Pressable
-          onPress={handleExportLogs}
-          style={styles.exportBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Export Audit Log"
-        >
-          <Text style={styles.exportBtnIcon}>📥</Text>
-          <Text style={styles.exportBtnText}>Export Audit Report</Text>
-        </Pressable>
+
+        {/* Export Actions (PDF & CSV) */}
+        <View style={[styles.headerActionBtns, isMobile && styles.headerActionBtnsMobile]}>
+          <Pressable
+            onPress={() => handleExportLogs('csv')}
+            style={styles.exportBtnSecondary}
+            accessibilityRole="button"
+            accessibilityLabel="Export Audit Log CSV"
+          >
+            <Text style={styles.exportBtnIcon}>📊</Text>
+            <Text style={styles.exportBtnTextSecondary}>Export CSV</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => handleExportLogs('pdf')}
+            style={styles.exportBtnPrimary}
+            accessibilityRole="button"
+            accessibilityLabel="Export Audit Log PDF Report"
+          >
+            <Text style={styles.exportBtnIcon}>📥</Text>
+            <Text style={styles.exportBtnTextPrimary}>Export Audit Report</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* Regulatory Compliance Journal Notice Banner */}
+      <View style={styles.complianceNoticeBanner}>
+        <Text style={styles.complianceNoticeIcon}>🔒</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.complianceNoticeTitle}>
+            Regulatory Compliance Journal • Immutable Records
+          </Text>
+          <Text style={styles.complianceNoticeSubtitle}>
+            All regulatory audit entries (price overrides, billing adjustments, stock movements, and user roles) are permanently preserved and cannot be modified or deleted.
+          </Text>
+        </View>
       </View>
 
       {/* 2. Interactive KPI Cards (Acts as clean, visual filter controllers) */}
       <View style={[styles.kpiRow, isCompact && styles.kpiRowCompact]}>
-        <View style={[styles.kpiCardWrapper, activeKpiFilter === 'ALL' && styles.kpiCardActiveRing]}>
+        <View
+          style={[
+            styles.kpiCardWrapper,
+            isMobile && styles.kpiCardWrapperMobile,
+            activeKpiFilter === 'ALL' && styles.kpiCardActiveRing,
+          ]}
+        >
           <InventoryStatCard
-            label="All Activity Stream"
+            label="All Activity"
             value={String(totalCount)}
-            subtext="Click to view all audit events"
+            subtext="Click to view all events"
             variant="teal"
             onPress={() => setActiveKpiFilter('ALL')}
           />
         </View>
 
-        <View style={[styles.kpiCardWrapper, activeKpiFilter === 'CRITICAL' && styles.kpiCardActiveRing]}>
+        <View
+          style={[
+            styles.kpiCardWrapper,
+            isMobile && styles.kpiCardWrapperMobile,
+            activeKpiFilter === 'CRITICAL' && styles.kpiCardActiveRing,
+          ]}
+        >
           <InventoryStatCard
-            label="Critical & Overrides"
-            value={`${criticalCount} Events`}
+            label="Critical Events"
+            value={String(criticalCount)}
             subtext="Discounts, price & bill edits"
             variant="orange"
             onPress={() => setActiveKpiFilter('CRITICAL')}
           />
         </View>
 
-        <View style={[styles.kpiCardWrapper, activeKpiFilter === 'STOCK' && styles.kpiCardActiveRing]}>
+        <View
+          style={[
+            styles.kpiCardWrapper,
+            isMobile && styles.kpiCardWrapperMobile,
+            activeKpiFilter === 'STOCK' && styles.kpiCardActiveRing,
+          ]}
+        >
           <InventoryStatCard
-            label="Stock Movements"
-            value={`${stockCount} Batches`}
+            label="Stock Transfers"
+            value={String(stockCount)}
             subtext="Adjustments & store transfers"
             variant="blue"
             onPress={() => setActiveKpiFilter('STOCK')}
           />
         </View>
 
-        <View style={[styles.kpiCardWrapper, activeKpiFilter === 'RX' && styles.kpiCardActiveRing]}>
+        <View
+          style={[
+            styles.kpiCardWrapper,
+            isMobile && styles.kpiCardWrapperMobile,
+            activeKpiFilter === 'RX' && styles.kpiCardActiveRing,
+          ]}
+        >
           <InventoryStatCard
-            label="Rx Dispensations"
-            value={`${rxCount} Validated`}
+            label="Rx Validated"
+            value={String(rxCount)}
             subtext="Schedule H prescription signs"
             variant="green"
             onPress={() => setActiveKpiFilter('RX')}
           />
         </View>
 
-        <View style={[styles.kpiCardWrapper, activeKpiFilter === 'SECURITY' && styles.kpiCardActiveRing]}>
+        <View
+          style={[
+            styles.kpiCardWrapper,
+            isMobile && styles.kpiCardWrapperMobile,
+            activeKpiFilter === 'SECURITY' && styles.kpiCardActiveRing,
+          ]}
+        >
           <InventoryStatCard
             label="User & Security"
-            value={`${securityCount} Roles`}
+            value={String(securityCount)}
             subtext="Permissions & staff updates"
             variant="amber"
             onPress={() => setActiveKpiFilter('SECURITY')}
@@ -663,21 +734,47 @@ export default function AuditLogScreen({ onShowToast, onNavigate }) {
 
               {/* Footer */}
               <View style={styles.modalFooter}>
-                <Pressable
-                  onPress={() => handleNavigateToSource(selectedLog)}
-                  style={styles.openSourceBtn}
-                >
-                  <Text style={styles.openSourceBtnText}>
-                    Go to Source Module ({selectedLog.module}) ↗
+                <View style={styles.modalFooterNotice}>
+                  <Text style={styles.modalFooterNoticeText}>
+                    🔒 Immutable Regulatory Entry: This audit event is permanently sealed and cannot be modified or deleted.
                   </Text>
-                </Pressable>
+                </View>
 
-                <Pressable
-                  onPress={() => setModalVisible(false)}
-                  style={styles.modalCloseBtnBottom}
-                >
-                  <Text style={styles.modalCloseBtnBottomText}>Close</Text>
-                </Pressable>
+                <View style={styles.modalFooterActions}>
+                  <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+                    <Pressable
+                      onPress={() => handleExportSingleLog(selectedLog, 'pdf')}
+                      style={styles.modalExportPdfBtn}
+                      accessibilityRole="button"
+                    >
+                      <Text style={styles.modalExportPdfBtnText}>🖨️ Export PDF</Text>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => handleExportSingleLog(selectedLog, 'csv')}
+                      style={styles.modalExportCsvBtn}
+                      accessibilityRole="button"
+                    >
+                      <Text style={styles.modalExportCsvBtnText}>📊 Export CSV</Text>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => handleNavigateToSource(selectedLog)}
+                      style={styles.openSourceBtn}
+                    >
+                      <Text style={styles.openSourceBtnText}>
+                        Source Module ({selectedLog.module}) ↗
+                      </Text>
+                    </Pressable>
+                  </View>
+
+                  <Pressable
+                    onPress={() => setModalVisible(false)}
+                    style={styles.modalCloseBtnBottom}
+                  >
+                    <Text style={styles.modalCloseBtnBottomText}>Close</Text>
+                  </Pressable>
+                </View>
               </View>
             </View>
           </View>
@@ -704,9 +801,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 20,
+    marginBottom: 16,
     flexWrap: 'wrap',
     gap: 12,
+  },
+  headerRowMobile: {
+    flexDirection: 'column',
+    gap: 12,
+  },
+  headerActionBtns: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  headerActionBtnsMobile: {
+    width: '100%',
+    justifyContent: 'flex-start',
   },
   titleWrapper: {
     flex: 1,
@@ -724,14 +834,14 @@ const styles = StyleSheet.create({
     marginTop: 4,
     lineHeight: 18,
   },
-  exportBtn: {
+  exportBtnPrimary: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#0F766E',
-    paddingVertical: 10,
-    paddingHorizontal: 18,
+    paddingVertical: 9,
+    paddingHorizontal: 16,
     borderRadius: 8,
-    gap: 8,
+    gap: 6,
     cursor: 'pointer',
     ...Platform.select({
       web: {
@@ -739,13 +849,55 @@ const styles = StyleSheet.create({
       },
     }),
   },
+  exportBtnTextPrimary: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  exportBtnSecondary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    gap: 6,
+    cursor: 'pointer',
+  },
+  exportBtnTextSecondary: {
+    color: '#334155',
+    fontSize: 13,
+    fontWeight: '600',
+  },
   exportBtnIcon: {
     fontSize: 14,
   },
-  exportBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13.5,
-    fontWeight: '700',
+  complianceNoticeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 16,
+    gap: 10,
+  },
+  complianceNoticeIcon: {
+    fontSize: 18,
+  },
+  complianceNoticeTitle: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#166534',
+  },
+  complianceNoticeSubtitle: {
+    fontSize: 11.5,
+    color: '#15803D',
+    marginTop: 2,
+    lineHeight: 16,
   },
   kpiRow: {
     flexDirection: 'row',
@@ -759,6 +911,10 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 160,
     borderRadius: 12,
+  },
+  kpiCardWrapperMobile: {
+    minWidth: '47%',
+    maxWidth: '48.5%',
   },
   kpiCardActiveRing: {
     borderWidth: 2,
@@ -1283,27 +1439,71 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   modalFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     padding: 14,
     borderTopWidth: 1,
     borderTopColor: '#E2E8F0',
     backgroundColor: '#F8FAFC',
   },
-  openSourceBtn: {
+  modalFooterNotice: {
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    marginBottom: 10,
+  },
+  modalFooterNoticeText: {
+    fontSize: 11,
+    color: '#0F766E',
+    fontWeight: '700',
+  },
+  modalFooterActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  modalExportPdfBtn: {
     backgroundColor: '#0F766E',
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    cursor: 'pointer',
+  },
+  modalExportPdfBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  modalExportCsvBtn: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    cursor: 'pointer',
+  },
+  modalExportCsvBtnText: {
+    color: '#334155',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  openSourceBtn: {
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 6,
     cursor: 'pointer',
   },
   openSourceBtnText: {
-    color: '#FFFFFF',
+    color: '#334155',
     fontWeight: '700',
     fontSize: 12,
   },
   modalCloseBtnBottom: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#E2E8F0',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 6,
@@ -1312,7 +1512,7 @@ const styles = StyleSheet.create({
   modalCloseBtnBottomText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#475569',
+    color: '#334155',
   },
   // Mobile Audit Log Cards
   mobileAuditList: {

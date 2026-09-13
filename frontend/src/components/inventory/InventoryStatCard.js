@@ -52,10 +52,22 @@ export default function InventoryStatCard({
       </View>
 
       {/* Main KPI Value */}
-      <Text style={styles.cardValue}>{value}</Text>
+      <Text
+        style={[
+          styles.cardValue,
+          isMobile && styles.cardValueMobile,
+        ]}
+        numberOfLines={1}
+      >
+        {value}
+      </Text>
 
       {/* Subtext */}
-      {displaySubtext ? <Text style={styles.cardSubtext}>{displaySubtext}</Text> : null}
+      {displaySubtext ? (
+        <Text style={styles.cardSubtext} numberOfLines={2}>
+          {displaySubtext}
+        </Text>
+      ) : null}
     </Pressable>
   );
 }
@@ -121,6 +133,10 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     letterSpacing: -0.5,
     marginVertical: 2,
+  },
+  cardValueMobile: {
+    fontSize: 20,
+    letterSpacing: -0.3,
   },
   cardSubtext: {
     fontSize: 11,

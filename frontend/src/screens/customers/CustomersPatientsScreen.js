@@ -23,6 +23,7 @@ import {
   updateCustomer,
   deleteCustomer,
 } from '../../api/customerApi';
+import { exportToCSV, exportToPDF } from '../../utils/exportUtils';
 
 export default function CustomersPatientsScreen({ onShowToast, onNavigate }) {
   const { width } = useWindowDimensions();
@@ -338,6 +339,47 @@ export default function CustomersPatientsScreen({ onShowToast, onNavigate }) {
   };
 
   const handleExportData = (type) => {
+    const headers = [
+      'Patient ID',
+      'Name',
+      'Phone',
+      'Email',
+      'Age',
+      'Gender',
+      'Category',
+      'Prescriptions Count',
+      'Total Spent',
+      'Last Visit',
+      'Allergies',
+      'Chronic Conditions',
+    ];
+    const rows = filteredCustomers.map((c) => [
+      c.id || '',
+      c.name || '',
+      c.phone || '',
+      c.email || '',
+      c.age || '',
+      c.gender || '',
+      c.category || 'Regular',
+      c.prescriptionsCount || c.prescriptions || '0',
+      c.totalSpent || '₹0.00',
+      c.lastVisit || 'N/A',
+      Array.isArray(c.allergies) ? c.allergies.join('; ') : (c.allergies || 'None'),
+      Array.isArray(c.chronicConditions) ? c.chronicConditions.join('; ') : (c.chronicConditions || 'None'),
+    ]);
+
+    if (type === 'csv') {
+      exportToCSV(headers, rows, `customer_patient_registry_${new Date().toISOString().slice(0, 10)}.csv`);
+    } else if (type === 'pdf') {
+      exportToPDF(
+        'Customer & Patient Registry Directory',
+        'Comprehensive patient registry with prescription history, visits, and clinical risk flags.',
+        headers,
+        rows,
+        `customer_patient_registry_${new Date().toISOString().slice(0, 10)}.pdf`
+      );
+    }
+
     if (onShowToast) {
       onShowToast(`✓ Exported ${filteredCustomers.length} customer records as ${type.toUpperCase()}!`);
     }
@@ -395,6 +437,14 @@ export default function CustomersPatientsScreen({ onShowToast, onNavigate }) {
             accessibilityRole="button"
           >
             <Text style={styles.exportBtnTextSecondary}>Export CSV</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => handleExportData('pdf')}
+            style={styles.exportBtnSecondary}
+            accessibilityRole="button"
+          >
+            <Text style={styles.exportBtnTextSecondary}>Export PDF</Text>
           </Pressable>
 
           <Pressable

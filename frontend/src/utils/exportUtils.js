@@ -1095,3 +1095,330 @@ export function printPaymentReceipt(receipt) {
   openPrintDocument(html, `Payment_Receipt_${rcptId}`);
 }
 
+/**
+ * Export Regulatory Compliance Audit Log Report to PDF or CSV
+ */
+export function exportAuditLogReport(logs = [], format = 'pdf', filterLabel = 'All') {
+  if (!logs || logs.length === 0) return;
+
+  const dateStr = new Date().toLocaleDateString('en-IN', { dateStyle: 'medium' });
+  const timeStr = new Date().toLocaleTimeString('en-IN', { timeStyle: 'short' });
+  const totalRecords = logs.length;
+  const criticalCount = logs.filter(l => l.severity === 'Critical' || l.actionType === 'PRICE_OVERRIDE' || l.actionType === 'BILL_CANCELLED').length;
+  const stockCount = logs.filter(l => l.actionType === 'STOCK_ADJUSTMENT' || l.actionType === 'STOCK_TRANSFER').length;
+  const rxCount = logs.filter(l => l.actionType === 'RX_APPROVED' || l.severity === 'Success').length;
+  const securityCount = logs.filter(l => l.actionType === 'ROLE_MODIFIED' || l.actionType === 'USER_CREATED').length;
+
+  if (format === 'csv') {
+    const headers = [
+      'Event ID',
+      'Timestamp',
+      'Actor Name',
+      'Actor Role',
+      'Branch Location',
+      'Action Type',
+      'Action Label',
+      'Module',
+      'Target Entity / Ref',
+      'Severity',
+      'Reason / Justification',
+      'Old / Before Value',
+      'New / After Value',
+    ];
+    const rows = logs.map(l => [
+      l.id || '',
+      l.timestamp || '',
+      l.actor?.name || 'System',
+      l.actor?.role || 'Admin',
+      l.branch || 'Main Branch',
+      l.actionType || '',
+      l.actionLabel || '',
+      l.module || '',
+      l.entityRef || '',
+      l.severity || 'Normal',
+      l.reason || 'Standard operational transaction',
+      l.diff?.before ? JSON.stringify(l.diff.before) : '',
+      l.diff?.after ? JSON.stringify(l.diff.after) : '',
+    ]);
+
+    exportToCSV(headers, rows, `system_audit_log_report_${new Date().toISOString().slice(0, 10)}.csv`);
+    return;
+  }
+
+  // Format HTML for PDF Print Document
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>System & Compliance Audit Log Report</title>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        body {
+          font-family: 'Inter', sans-serif;
+          color: #0f172a;
+          margin: 0;
+          padding: 20px;
+          background-color: #ffffff;
+        }
+        .toolbar {
+          display: flex;
+          justify-content: flex-end;
+          gap: 12px;
+          margin-bottom: 20px;
+          background: #f8fafc;
+          padding: 10px 14px;
+          border-radius: 8px;
+          border: 1px solid #e2e8f0;
+        }
+        .btn {
+          padding: 8px 14px;
+          border-radius: 6px;
+          font-weight: 700;
+          font-size: 13px;
+          cursor: pointer;
+          border: none;
+        }
+        .btn-print { background-color: #0f766e; color: #ffffff; }
+        .btn-close { background-color: #e2e8f0; color: #334155; }
+        .report-card {
+          border: 1.5px solid #cbd5e1;
+          border-radius: 8px;
+          padding: 24px;
+          max-width: 980px;
+          margin: 0 auto;
+        }
+        .header {
+          display: flex;
+          justify-content: space-between;
+          border-bottom: 2px solid #0f766e;
+          padding-bottom: 16px;
+          margin-bottom: 16px;
+        }
+        .company-name { font-size: 20px; font-weight: 800; color: #0f766e; }
+        .company-sub { font-size: 11px; color: #64748b; margin-top: 4px; }
+        .compliance-badge {
+          display: inline-block;
+          background: #f0fdfa;
+          border: 1px solid #99f6e4;
+          color: #0f766e;
+          font-size: 11px;
+          font-weight: 800;
+          padding: 4px 8px;
+          border-radius: 4px;
+          margin-top: 6px;
+        }
+        .kpi-row {
+          display: grid;
+          grid-template-columns: repeat(5, 1fr);
+          gap: 8px;
+          margin-bottom: 16px;
+        }
+        .kpi-card {
+          border: 1px solid #e2e8f0;
+          border-radius: 6px;
+          padding: 8px;
+          background: #f8fafc;
+          text-align: center;
+        }
+        .kpi-label { font-size: 9.5px; font-weight: 700; color: #64748b; text-transform: uppercase; }
+        .kpi-val { font-size: 16px; font-weight: 800; color: #0f172a; margin-top: 2px; }
+        .regulatory-banner {
+          background-color: #f0fdf4;
+          border: 1px solid #bbf7d0;
+          border-radius: 6px;
+          padding: 10px 14px;
+          font-size: 11.5px;
+          color: #166534;
+          margin-bottom: 16px;
+        }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-top: 8px;
+          font-size: 11.5px;
+        }
+        th {
+          background-color: #f1f5f9;
+          color: #334155;
+          font-weight: 700;
+          padding: 8px 6px;
+          border: 1px solid #cbd5e1;
+          text-align: left;
+          text-transform: uppercase;
+          font-size: 10px;
+        }
+        td {
+          padding: 7px 6px;
+          border: 1px solid #e2e8f0;
+          vertical-align: top;
+        }
+        .sev-critical { color: #dc2626; font-weight: 800; }
+        .sev-warning { color: #d97706; font-weight: 700; }
+        .sev-success { color: #16a34a; font-weight: 700; }
+        .sev-normal { color: #0f766e; font-weight: 700; }
+        .badge {
+          display: inline-block;
+          padding: 2px 6px;
+          border-radius: 4px;
+          font-size: 10px;
+          font-weight: 800;
+        }
+        .footer-box {
+          margin-top: 24px;
+          padding-top: 14px;
+          border-top: 1px solid #e2e8f0;
+          display: flex;
+          justify-content: space-between;
+          font-size: 11px;
+          color: #64748b;
+        }
+        @media screen and (max-width: 768px) {
+          body { padding: 8px; }
+          .report-card { padding: 12px; }
+          .header { flex-direction: column; gap: 8px; }
+          .kpi-row { grid-template-columns: repeat(2, 1fr); }
+          table { display: block; overflow-x: auto; width: 100%; }
+        }
+        @media print {
+          .toolbar { display: none; }
+          body { padding: 0; }
+          .report-card { border: none; padding: 0; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="toolbar">
+        <button class="btn btn-print" onclick="window.print()">🖨️ Print / Save as PDF</button>
+        <button class="btn btn-close" onclick="window.close()">✕ Close</button>
+      </div>
+
+      <div class="report-card">
+        <div class="header">
+          <div>
+            <div class="company-name">PHARMAFLOW PHARMACY ERP</div>
+            <div class="company-sub">
+              Official Regulatory Compliance & Audit Trail Report<br/>
+              GSTIN: 27AABCP1234F1Z9 • Drug License: MH-PUN-2026-4412
+            </div>
+            <div class="compliance-badge">🔒 CERTIFIED IMMUTABLE AUDIT LOG</div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 17px; font-weight: 800; color: #0f172a;">AUDIT TRAIL EXPORT</div>
+            <div style="font-size: 11.5px; color: #64748b; margin-top: 3px;">Date: ${dateStr} • ${timeStr}</div>
+            <div style="font-size: 11.5px; color: #64748b;">Filter: <strong>${filterLabel}</strong> (${totalRecords} Records)</div>
+          </div>
+        </div>
+
+        <div class="regulatory-banner">
+          <strong>GxP / Regulatory Notice:</strong> This document contains an immutable, tamper-evident chronological event log tracking price overrides, discounts, stock adjustments, Rx dispensations, and permission changes for regulatory audit and compliance.
+        </div>
+
+        <div class="kpi-row">
+          <div class="kpi-card">
+            <div class="kpi-label">TOTAL LOGS</div>
+            <div class="kpi-val">${totalRecords}</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">CRITICAL & OVERRIDES</div>
+            <div class="kpi-val" style="color: #ea580c;">${criticalCount}</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">STOCK MOVEMENTS</div>
+            <div class="kpi-val" style="color: #2563eb;">${stockCount}</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">RX VALIDATED</div>
+            <div class="kpi-val" style="color: #16a34a;">${rxCount}</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">SECURITY & ROLES</div>
+            <div class="kpi-val" style="color: #d97706;">${securityCount}</div>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 110px;">Timestamp & ID</th>
+              <th style="width: 120px;">Actor / User</th>
+              <th style="width: 125px;">Action</th>
+              <th style="width: 130px;">Target Entity</th>
+              <th style="width: 80px;">Branch</th>
+              <th style="width: 70px;">Severity</th>
+              <th>Justification & Details</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${logs.map((l) => {
+              const sevClass = l.severity === 'Critical' ? 'sev-critical' : l.severity === 'Warning' ? 'sev-warning' : l.severity === 'Success' ? 'sev-success' : 'sev-normal';
+              return `
+                <tr>
+                  <td>
+                    <strong>${l.id}</strong><br/>
+                    <span style="color: #64748b; font-size: 10px;">${l.timestamp}</span>
+                  </td>
+                  <td>
+                    <strong>${l.actor?.name || 'System'}</strong><br/>
+                    <span style="color: #64748b; font-size: 10px;">${l.actor?.role || 'Staff'}</span>
+                  </td>
+                  <td>
+                    <span class="badge" style="background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe;">${l.actionType}</span><br/>
+                    <span style="font-size: 10px; color: #64748b;">${l.actionLabel || ''}</span>
+                  </td>
+                  <td>
+                    <strong>${l.entityRef}</strong><br/>
+                    <span style="font-size: 10px; color: #64748b;">[${l.module}]</span>
+                  </td>
+                  <td>${l.branch || 'Main'}</td>
+                  <td><span class="${sevClass}">● ${l.severity || 'Normal'}</span></td>
+                  <td>
+                    <div>${l.reason || 'Standard transaction execution.'}</div>
+                    ${l.diff?.before ? `
+                      <div style="font-size: 10px; color: #64748b; margin-top: 2px;">
+                        <span style="color: #dc2626;">Before:</span> ${JSON.stringify(l.diff.before)} ➔ 
+                        <span style="color: #16a34a;">After:</span> ${JSON.stringify(l.diff.after)}
+                      </div>
+                    ` : ''}
+                  </td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+
+        <div class="footer-box">
+          <div>
+            • <strong>Compliance Certification:</strong> Generated by PharmaFlow Secure Regulatory Engine.<br/>
+            • Certified that no records have been altered, suppressed, or deleted.
+          </div>
+          <div style="text-align: center; width: 180px;">
+            <div style="border-top: 1px solid #94a3b8; margin-top: 26px; padding-top: 4px; font-weight: 700; font-size: 11px;">
+              System Compliance Officer
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <script>
+        window.onload = function() {
+          window.focus();
+        };
+      </script>
+    </body>
+    </html>
+  `;
+
+  openPrintDocument(html, `System_Audit_Log_Report_${new Date().toISOString().slice(0, 10)}`);
+}
+
+/**
+ * Export Individual Audit Log Record Dossier to PDF
+ */
+export function exportSingleAuditLogPDF(log) {
+  if (!log) return;
+  exportAuditLogReport([log], 'pdf', `Event ID: ${log.id}`);
+}
+
+
