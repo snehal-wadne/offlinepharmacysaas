@@ -27,21 +27,21 @@ router.get('/register/movements', requireSyncAuth, cashierController.getCashMove
 router.get('/register/summary', requireSyncAuth, cashierController.getSessionSummary);
 
 // --- Products & Barcode Search ---
-router.get('/products', cashierController.searchProducts);
+router.get('/products', requireSyncAuth, cashierController.searchProducts);
 
 // --- POS Sales ---
-router.post('/sales', cashierController.createSale);
-router.get('/sales/recent', cashierController.getRecentSales);
-router.get('/sales/:invoiceNo', cashierController.getSaleByInvoiceNo);
+router.post('/sales', requireSyncAuth, cashierController.createSale);
+router.get('/sales/recent', requireSyncAuth, cashierController.getRecentSales);
+router.get('/sales/:invoiceNo', requireSyncAuth, cashierController.getSaleByInvoiceNo);
 
 // --- Held Bills ---
-router.get('/held-bills', cashierController.getHeldBills);
-router.post('/held-bills', cashierController.saveHeldBill);
-router.delete('/held-bills/:holdId', cashierController.deleteHeldBill);
+router.get('/held-bills', requireSyncAuth, cashierController.getHeldBills);
+router.post('/held-bills', requireSyncAuth, cashierController.saveHeldBill);
+router.delete('/held-bills/:holdId', requireSyncAuth, cashierController.deleteHeldBill);
 
 // --- Sales Returns ---
-router.get('/returns/search', cashierController.searchReturnInvoice);
-router.post('/returns', cashierController.processReturn);
-router.get('/returns/history', cashierController.getReturnHistory);
+router.get('/returns/search', requireSyncAuth, cashierController.searchReturnInvoice);
+router.post('/returns', requireSyncAuth, cashierController.processReturn);
+router.get('/returns/history', requireSyncAuth, cashierController.getReturnHistory);
 
 module.exports = router;

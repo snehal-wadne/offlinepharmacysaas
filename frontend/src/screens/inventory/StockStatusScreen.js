@@ -22,6 +22,7 @@ import {
   MOCK_EXPIRY_BATCHES,
 } from "../../data/lowStockExpiryMockData";
 import { fetchInventory } from "../../api/inventoryApi";
+import BulkImportModal from "../../components/inventory/BulkImportModal";
 
 const STOCK_STATUS_BADGES = {
   "In Stock": { bg: "#DCFCE7", text: "#15803D" },
@@ -83,6 +84,7 @@ export default function StockStatusScreen({
   // Quick Toggles
   const [criticalOnly, setCriticalOnly] = useState(false);
   const [autoReorderAutomation, setAutoReorderAutomation] = useState(false);
+  const [bulkImportModalOpen, setBulkImportModalOpen] = useState(false);
 
   // Live DB Low Stock Items (Quantity < 50 Rule)
   const dbLowStockItems = rawInventory
@@ -481,6 +483,22 @@ export default function StockStatusScreen({
                 ]}
               >
                 Auto-Reorder Engine
+              </Text>
+            </Pressable>
+
+            {/* Bulk CSV Import Button (PRD-10, DAT-01) */}
+            <Pressable
+              onPress={() => setBulkImportModalOpen(true)}
+              style={[
+                styles.filterTogglePill,
+                { backgroundColor: "#0F766E", borderColor: "#0F766E", flexDirection: "row", alignItems: "center" },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Bulk import medicines from CSV"
+            >
+              <Text style={{ fontSize: 13, marginRight: 5 }}>📥</Text>
+              <Text style={[styles.filterToggleText, { color: "#FFFFFF", fontWeight: "700" }]}>
+                Import CSV
               </Text>
             </Pressable>
           </View>
@@ -1121,6 +1139,15 @@ export default function StockStatusScreen({
           </View>
         </View>
       </Modal>
+
+      {/* Bulk Catalog CSV Import Modal (PRD-10, DAT-01) */}
+      <BulkImportModal
+        visible={bulkImportModalOpen}
+        onClose={() => setBulkImportModalOpen(false)}
+        onImportComplete={() => loadInventoryData()}
+        onShowToast={onShowToast}
+        selectedBranch={selectedBranch}
+      />
     </ScrollView>
   );
 }

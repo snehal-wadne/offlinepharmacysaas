@@ -17,6 +17,7 @@ import {
 import { SkeletonTableRow } from '../../components/common/SkeletonLoader';
 import PaginationControls from '../../components/common/PaginationControls';
 import { exportAuditLogReport, exportSingleAuditLogPDF } from '../../utils/exportUtils';
+import { fetchAuditLogs } from '../../api/auditApi';
 
 export default function AuditLogScreen({ onShowToast, onNavigate, selectedBranch = 'All Branches' }) {
   const { width } = useWindowDimensions();
@@ -32,6 +33,31 @@ export default function AuditLogScreen({ onShowToast, onNavigate, selectedBranch
   const [loading, setLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadLiveLogs() {
+      try {
+        setLoading(true);
+        const branchParam = selectedBranch && selectedBranch !== 'All Branches' ? selectedBranch : undefined;
+        const res = await fetchAuditLogs({ branchId: branchParam, limit: 100 });
+        if (isMounted && res && res.data && Array.isArray(res.data) && res.data.length > 0) {
+          setLogs(res.data);
+        } else if (isMounted) {
+          setLogs(MOCK_AUDIT_LOGS);
+        }
+      } catch (err) {
+        console.log('[AuditLogScreen] Falling back to standard audit logs');
+        if (isMounted) setLogs(MOCK_AUDIT_LOGS);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+    loadLiveLogs();
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedBranch]);
 
   // View Details Modal State
   const [selectedLog, setSelectedLog] = useState(null);

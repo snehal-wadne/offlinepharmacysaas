@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,7 @@ import {
 import { exportToCSV, exportToPDF } from '../../utils/exportUtils';
 import { SkeletonTableRow } from '../../components/common/SkeletonLoader';
 import PaginationControls from '../../components/common/PaginationControls';
+import { fetchExpiryReport } from '../../api/reportApi';
 
 const RISK_BADGES = {
   Critical: { bg: '#FEE2E2', text: '#B91C1C' },
@@ -25,16 +26,100 @@ const RISK_BADGES = {
   Expired: { bg: '#FEE2E2', text: '#991B1B' },
 };
 
-export default function ExpiryReportsScreen({ onShowToast, onNavigate }) {
+export default function ExpiryReportsScreen({ onShowToast, onNavigate, selectedBranch = 'All Branches' }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
   const isMobile = width < 768;
 
   const [searchQuery, setSearchQuery] = useState('');
   const [riskItems, setRiskItems] = useState(MOCK_EXPIRY_RISK_ITEMS);
+  const [kpis, setKpis] = useState(EXPIRY_REPORTS_KPIS);
   const [loading, setLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadExpiryData() {
+      try {
+        setLoading(true);
+        const res = await fetchExpiryReport({ branchId: selectedBranch });
+        if (!isMounted) return;
+
+        if (res && res.success && res.data) {
+          const summary = res.data.summary || {};
+          setKpis([
+            {
+              id: 'exp-rep-1',
+              label: 'Total Loss at Risk',
+              value: `₹${Number(summary.totalLossAtRisk || 0).toLocaleString('en-IN')}`,
+              subtext: selectedBranch === 'All Branches' ? 'Across all branches' : selectedBranch,
+              variant: 'red',
+            },
+            {
+              id: 'exp-rep-2',
+              label: 'Critical (< 30 Days)',
+              value: `${summary.within30DaysCount || 0}`,
+              subtext: 'Urgent action required',
+              variant: 'red',
+            },
+            {
+              id: 'exp-rep-3',
+              label: 'High Risk (30-60 Days)',
+              value: `${summary.within60DaysCount || 0}`,
+              subtext: 'Prioritize FEFO dispensing',
+              variant: 'amber',
+            },
+            {
+              id: 'exp-rep-4',
+              label: 'Already Expired',
+              value: `${summary.expiredCount || 0}`,
+              subtext: 'Move to quarantine',
+              variant: 'red',
+            },
+          ]);
+
+          if (res.data.batches && Array.isArray(res.data.batches) && res.data.batches.length > 0) {
+            const mapped = res.data.batches.map((b, idx) => {
+              const expDate = b.expiryDate ? new Date(b.expiryDate) : new Date();
+              const daysRem = Math.max(0, Math.ceil((expDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+              let riskLevel = 'Medium Risk';
+              let recommendedAction = 'FEFO Priority';
+              if (b.urgency === 'EXPIRED' || daysRem <= 0) {
+                riskLevel = 'Expired';
+                recommendedAction = 'Quarantine & Write-Off';
+              } else if (daysRem <= 30) {
+                riskLevel = 'Critical';
+                recommendedAction = 'Return to Vendor';
+              } else if (daysRem <= 60) {
+                riskLevel = 'High Risk';
+                recommendedAction = 'Apply 20% Discount';
+              }
+
+              return {
+                batchNo: b.batchNumber || `BAT-${idx + 100}`,
+                medicine: b.productName || 'Medicine',
+                supplier: 'Verified Distributor',
+                expiryDate: expDate.toISOString().split('T')[0],
+                daysRemaining: daysRem,
+                quantity: b.stockQuantity || 0,
+                costValue: `₹${Number(b.totalCostValuation || 0).toFixed(2)}`,
+                riskLevel,
+                recommendedAction,
+              };
+            });
+            setRiskItems(mapped);
+          }
+        }
+      } catch (err) {
+        console.warn('Backend expiry report unavailable, using local metrics:', err.message);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+    loadExpiryData();
+    return () => { isMounted = false; };
+  }, [selectedBranch]);
 
   const filteredItems = riskItems.filter((item) => {
     const q = searchQuery.toLowerCase();
@@ -136,7 +221,7 @@ export default function ExpiryReportsScreen({ onShowToast, onNavigate }) {
 
       {/* Top 4 KPI Cards */}
       <View style={[styles.kpiRow, isCompact && styles.kpiRowCompact]}>
-        {EXPIRY_REPORTS_KPIS.map((kpi) => (
+        {kpis.map((kpi) => (
           <InventoryStatCard
             key={kpi.id}
             label={kpi.label}

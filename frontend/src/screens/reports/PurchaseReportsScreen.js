@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -16,15 +16,77 @@ import {
 import { exportToCSV, exportToPDF } from '../../utils/exportUtils';
 import { SkeletonTableRow } from '../../components/common/SkeletonLoader';
 import PaginationControls from '../../components/common/PaginationControls';
+import { fetchProfitLossReport, fetchSalesReport } from '../../api/reportApi';
 
-export default function PurchaseReportsScreen({ onShowToast, onNavigate }) {
+export default function PurchaseReportsScreen({ onShowToast, onNavigate, selectedBranch = 'All Branches' }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
   const isMobile = width < 768;
 
   const [loading, setLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [kpis, setKpis] = useState(PURCHASE_REPORTS_KPIS);
   const itemsPerPage = 10;
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadPurchaseAnalytics() {
+      try {
+        setLoading(true);
+        const [pnlRes, salesRes] = await Promise.all([
+          fetchProfitLossReport({ branchId: selectedBranch }),
+          fetchSalesReport({ branchId: selectedBranch }),
+        ]);
+
+        if (!isMounted) return;
+
+        if (pnlRes && pnlRes.success && pnlRes.data) {
+          const pnl = pnlRes.data;
+          const grossRev = Number(pnl.grossRevenue || 0);
+          const cogs = Number(pnl.estimatedCogs || 0);
+          const profit = Number(pnl.grossProfit || 0);
+          const margin = pnl.profitMarginPercent || (grossRev > 0 ? ((profit / grossRev) * 100).toFixed(1) : 0);
+
+          setKpis([
+            {
+              id: 'rep-pur-1',
+              label: 'Est. Procurement COGS',
+              value: `₹${cogs.toLocaleString('en-IN')}`,
+              subtext: selectedBranch === 'All Branches' ? 'Across all branches' : selectedBranch,
+              variant: 'teal',
+            },
+            {
+              id: 'rep-pur-2',
+              label: 'Gross Revenue',
+              value: `₹${grossRev.toLocaleString('en-IN')}`,
+              subtext: `${pnl.invoicesCount || 0} invoices settled`,
+              variant: 'teal',
+            },
+            {
+              id: 'rep-pur-3',
+              label: 'Gross Profit',
+              value: `₹${profit.toLocaleString('en-IN')}`,
+              subtext: `${margin}% gross margin`,
+              variant: 'teal',
+            },
+            {
+              id: 'rep-pur-4',
+              label: 'Taxes Collected (GST)',
+              value: `₹${Number(pnl.taxCollected || 0).toLocaleString('en-IN')}`,
+              subtext: 'Output GST liability',
+              variant: 'amber',
+            },
+          ]);
+        }
+      } catch (err) {
+        console.warn('Backend purchase report unavailable, using local metrics:', err.message);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+    loadPurchaseAnalytics();
+    return () => { isMounted = false; };
+  }, [selectedBranch]);
 
   const totalPages = Math.ceil(MOCK_VENDOR_SPEND_ANALYSIS.length / itemsPerPage);
   const paginatedVendors = MOCK_VENDOR_SPEND_ANALYSIS.slice(
@@ -106,7 +168,7 @@ export default function PurchaseReportsScreen({ onShowToast, onNavigate }) {
 
       {/* Top 4 KPI Cards */}
       <View style={[styles.kpiRow, isCompact && styles.kpiRowCompact]}>
-        {PURCHASE_REPORTS_KPIS.map((kpi) => (
+        {kpis.map((kpi) => (
           <InventoryStatCard
             key={kpi.id}
             label={kpi.label}

@@ -155,6 +155,7 @@ const stockTransferRoutes = require("./routes/stock-transfer.routes");
 const taxRoutes = require("./routes/tax.routes");
 const reportRoutes = require("./routes/report.routes");
 const superadminRoutes = require("./routes/superadmin.routes");
+const auditRoutes = require("./routes/audit.routes");
 
 app.use("/api/purchases", purchaseRoutes);
 app.use("/api/goods-receipts", goodsReceiptRoutes);
@@ -174,6 +175,7 @@ app.use("/api/taxes", taxRoutes);
 app.use("/taxes", taxRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/superadmin", superadminRoutes);
+app.use("/api/audit-logs", auditRoutes);
 app.post("/api/login", authController.login);
 app.post("/api/login/google", authController.googleLogin);
 app.post("/api/auth/google", authController.googleLogin);

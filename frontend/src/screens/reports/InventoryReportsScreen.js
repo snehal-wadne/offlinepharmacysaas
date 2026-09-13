@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,7 @@ import {
 import { exportToCSV, openPrintDocument } from '../../utils/exportUtils';
 import { SkeletonTableRow } from '../../components/common/SkeletonLoader';
 import PaginationControls from '../../components/common/PaginationControls';
+import { fetchInventoryReport } from '../../api/reportApi';
 
 const HEALTH_BADGES = {
   Optimal: { bg: '#DCFCE7', text: '#15803D' },
@@ -30,17 +31,71 @@ const URGENCY_BADGES = {
   Low: { bg: '#DCFCE7', text: '#15803D' },
 };
 
-export default function InventoryReportsScreen({ onShowToast, onNavigate }) {
+export default function InventoryReportsScreen({ onShowToast, onNavigate, selectedBranch = 'All Branches' }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
   const isMobile = width < 768;
 
   const [loading, setLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [kpis, setKpis] = useState(INVENTORY_REPORTS_KPIS);
+  const [categoryData, setCategoryData] = useState(MOCK_INVENTORY_CATEGORY_VALUATION);
+  const [liveConnected, setLiveConnected] = useState(false);
   const itemsPerPage = 10;
 
-  const totalPages = Math.ceil(MOCK_INVENTORY_CATEGORY_VALUATION.length / itemsPerPage);
-  const paginatedCategories = MOCK_INVENTORY_CATEGORY_VALUATION.slice(
+  useEffect(() => {
+    let isMounted = true;
+    async function loadReport() {
+      try {
+        setLoading(true);
+        const res = await fetchInventoryReport({ branchId: selectedBranch });
+        if (!isMounted) return;
+        if (res && res.success && res.data) {
+          setLiveConnected(true);
+          const summary = res.data.summary || {};
+          setKpis([
+            {
+              id: 'rep-inv-1',
+              label: 'Total Stock Valuation',
+              value: `₹${Number(summary.totalValuationMrp || 0).toLocaleString('en-IN')}`,
+              subtext: selectedBranch === 'All Branches' ? 'Across all branches' : selectedBranch,
+              variant: 'teal',
+            },
+            {
+              id: 'rep-inv-2',
+              label: 'Total Units in Stock',
+              value: `${Number(summary.totalUnitsInStock || 0).toLocaleString('en-IN')}`,
+              subtext: `${summary.totalBatches || 0} active batches`,
+              variant: 'teal',
+            },
+            {
+              id: 'rep-inv-3',
+              label: 'Low Stock Batches',
+              value: `${summary.lowStockBatches || 0}`,
+              subtext: 'Quantity < 50 units',
+              variant: 'amber',
+            },
+            {
+              id: 'rep-inv-4',
+              label: 'Expired / Near Expiry',
+              value: `${(Number(summary.expiredBatches || 0) + Number(summary.nearExpiryBatches || 0))}`,
+              subtext: `${summary.expiredBatches || 0} expired, ${summary.nearExpiryBatches || 0} near expiry`,
+              variant: 'red',
+            },
+          ]);
+        }
+      } catch (err) {
+        console.warn('Backend inventory report unavailable, using local metrics:', err.message);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+    loadReport();
+    return () => { isMounted = false; };
+  }, [selectedBranch]);
+
+  const totalPages = Math.ceil(categoryData.length / itemsPerPage);
+  const paginatedCategories = categoryData.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
@@ -330,7 +385,7 @@ export default function InventoryReportsScreen({ onShowToast, onNavigate }) {
 
       {/* Top 4 KPI Cards */}
       <View style={[styles.kpiRow, isCompact && styles.kpiRowCompact]}>
-        {INVENTORY_REPORTS_KPIS.map((kpi) => (
+        {kpis.map((kpi) => (
           <InventoryStatCard
             key={kpi.id}
             label={kpi.label}

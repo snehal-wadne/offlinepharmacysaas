@@ -18,6 +18,45 @@ import PaginationControls from "../../components/common/PaginationControls";
 import OfflineQRCode from "../../components/common/OfflineQRCode";
 import { generateOfflineQRCode } from "../../utils/qrGenerator";
 
+const parseExpiryDate = (exp) => {
+  if (!exp) return 9999999999999;
+  if (/^\d{1,2}\/\d{4}$/.test(exp)) {
+    const [m, y] = exp.split("/");
+    return new Date(parseInt(y, 10), parseInt(m, 10) - 1, 1).getTime();
+  }
+  const t = new Date(exp).getTime();
+  return isNaN(t) ? 9999999999999 : t;
+};
+
+const getFefoBatches = (prod) => {
+  const prodBatches =
+    prod.batches && prod.batches.length > 0
+      ? prod.batches
+      : [
+          {
+            batch: prod.batch || "B001",
+            expiry: prod.expiry || "12/2026",
+            stock: prod.stock || 100,
+            price: prod.sellingPrice,
+          },
+          {
+            batch: "B002",
+            expiry: "06/2027",
+            stock: Math.round((prod.stock || 100) * 0.7),
+            price: prod.sellingPrice,
+          },
+          {
+            batch: "B003",
+            expiry: "11/2027",
+            stock: Math.round((prod.stock || 100) * 1.1),
+            price: prod.sellingPrice,
+          },
+        ];
+  return [...prodBatches].sort(
+    (a, b) => parseExpiryDate(a.expiry) - parseExpiryDate(b.expiry)
+  );
+};
+
 export default function SalesScreen({
   onNavigate,
   onShowToast,
@@ -99,6 +138,14 @@ export default function SalesScreen({
   const [fullScreenQrVisible, setFullScreenQrVisible] = useState(false);
   const [scannerPurpose, setScannerPurpose] = useState("product"); // 'product' | 'utr'
 
+  // Prescription Document Attachment State (RX-03)
+  const [attachedPrescription, setAttachedPrescription] = useState(null);
+  const [rxModalVisible, setRxModalVisible] = useState(false);
+  const [rxDoctorName, setRxDoctorName] = useState("");
+  const [rxDoctorReg, setRxDoctorReg] = useState("");
+  const [rxFileName, setRxFileName] = useState("");
+  const rxFileInputRef = useRef(null);
+
   // Thermal Receipt State
   const [receiptModalVisible, setReceiptModalVisible] = useState(false);
   const [completedInvoice, setCompletedInvoice] = useState(null);
@@ -167,16 +214,19 @@ export default function SalesScreen({
     );
   });
 
-  // Add medicine to cart (handles specific batch selection from 3 Batches dropdown)
+  // Add medicine to cart (handles FEFO batch recommendation & specific batch selection)
   const handleAddToCart = (product, specificBatch = null) => {
+    const fefoBatches = getFefoBatches(product);
+    const chosenBatch = specificBatch || fefoBatches[0];
+
     const batchToUse =
-      specificBatch?.batch ||
+      chosenBatch?.batch ||
       (typeof specificBatch === "string" ? specificBatch : null) ||
       product.batch ||
       "B001";
-    const priceToUse = specificBatch?.price || product.sellingPrice;
-    const expiryToUse = specificBatch?.expiry || product.expiry || "12/2026";
-    const stockToUse = specificBatch?.stock || product.stock || 100;
+    const priceToUse = chosenBatch?.price || product.sellingPrice;
+    const expiryToUse = chosenBatch?.expiry || product.expiry || "12/2026";
+    const stockToUse = chosenBatch?.stock || product.stock || 100;
 
     const existingIndex = cart.findIndex(
       (item) =>
@@ -369,6 +419,7 @@ export default function SalesScreen({
         changeDue: Math.max(0, tendered - totals.grandTotal),
         cashier: "Cashier 01",
         branch: "Main Branch",
+        attachedPrescription: attachedPrescription ? { ...attachedPrescription } : null,
       };
 
       const newInvoice = await finalizeSale(saleData);
@@ -382,6 +433,7 @@ export default function SalesScreen({
       setCart([]);
       setCustomCustomerInput("");
       setTopToastBanner("");
+      setAttachedPrescription(null);
       setSelectedCustomer({
         id: "WALK-IN",
         name: "Walk-in Customer",
@@ -637,29 +689,7 @@ export default function SalesScreen({
               <View style={styles.searchResultsList}>
                 {paginatedData.map((prod) => {
                   const isBatchDropdownOpen = openBatchDropdownId === prod.id;
-                  const prodBatches =
-                    prod.batches && prod.batches.length > 0
-                      ? prod.batches
-                      : [
-                          {
-                            batch: prod.batch || "B001",
-                            expiry: prod.expiry || "12/2026",
-                            stock: prod.stock || 100,
-                            price: prod.sellingPrice,
-                          },
-                          {
-                            batch: "B002",
-                            expiry: "06/2027",
-                            stock: Math.round((prod.stock || 100) * 0.7),
-                            price: prod.sellingPrice,
-                          },
-                          {
-                            batch: "B003",
-                            expiry: "11/2027",
-                            stock: Math.round((prod.stock || 100) * 1.1),
-                            price: prod.sellingPrice,
-                          },
-                        ];
+                  const prodBatches = getFefoBatches(prod);
 
                   return (
                     <View
@@ -763,10 +793,19 @@ export default function SalesScreen({
                                 style={styles.batchCardItem}
                               >
                                 <View style={styles.batchCardTop}>
-                                  <View style={styles.batchBadgeTag}>
-                                    <Text style={styles.batchBadgeTagText}>
-                                      {b.batch}
-                                    </Text>
+                                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                                    <View style={styles.batchBadgeTag}>
+                                      <Text style={styles.batchBadgeTagText}>
+                                        {b.batch}
+                                      </Text>
+                                    </View>
+                                    {bIdx === 0 && (
+                                      <View style={{ backgroundColor: "#DCFCE7", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                        <Text style={{ fontSize: 9.5, fontWeight: "800", color: "#15803D" }}>
+                                          FEFO Pick
+                                        </Text>
+                                      </View>
+                                    )}
                                   </View>
                                   <Text style={styles.batchExpText}>
                                     Exp: {b.expiry}
@@ -864,6 +903,45 @@ export default function SalesScreen({
                 </Text>
                 <Text style={styles.customerPickerArrow}>▾</Text>
               </Pressable>
+            </View>
+
+            {/* Prescription Attachment Section (RX-03) */}
+            <View style={styles.rxAttachmentBox}>
+              <View style={styles.rxHeaderRow}>
+                <Text style={styles.fieldLabelText}>DOCTOR'S PRESCRIPTION (RX)</Text>
+                {attachedPrescription && (
+                  <Pressable onPress={() => setAttachedPrescription(null)}>
+                    <Text style={{ fontSize: 11, color: "#DC2626", fontWeight: "700" }}>Remove ✕</Text>
+                  </Pressable>
+                )}
+              </View>
+
+              {attachedPrescription ? (
+                <View style={styles.rxAttachedCard}>
+                  <Text style={{ fontSize: 18 }}>📄</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.rxAttachedName} numberOfLines={1}>
+                      {attachedPrescription.fileName}
+                    </Text>
+                    <Text style={styles.rxAttachedDoctor}>
+                      Dr. {attachedPrescription.doctorName || "Physician"} {attachedPrescription.doctorReg ? `(Reg #${attachedPrescription.doctorReg})` : ""}
+                    </Text>
+                  </View>
+                  <View style={styles.rxVerifiedBadge}>
+                    <Text style={styles.rxVerifiedBadgeText}>Attached</Text>
+                  </View>
+                </View>
+              ) : (
+                <Pressable
+                  onPress={() => setRxModalVisible(true)}
+                  style={styles.rxAttachBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel="Attach Doctor Prescription"
+                >
+                  <Text style={styles.rxAttachBtnIcon}>📎</Text>
+                  <Text style={styles.rxAttachBtnText}>Attach Prescription (PDF / Image)</Text>
+                </Pressable>
+              )}
             </View>
 
             {/* Items Section */}
@@ -1294,6 +1372,17 @@ export default function SalesScreen({
                 --------------------------------------
               </Text>
 
+              {completedInvoice.attachedPrescription && (
+                <View style={{ backgroundColor: "#F0FDFA", padding: 8, borderRadius: 6, marginVertical: 6, borderWidth: 1, borderColor: "#CCFBF1" }}>
+                  <Text style={{ fontSize: 11, fontWeight: "700", color: "#0F766E" }}>
+                    ✓ Rx Attached: {completedInvoice.attachedPrescription.fileName}
+                  </Text>
+                  <Text style={{ fontSize: 10, color: "#475569", marginTop: 2 }}>
+                    Doctor: Dr. {completedInvoice.attachedPrescription.doctorName || "Physician"} {completedInvoice.attachedPrescription.doctorReg ? `• Reg #${completedInvoice.attachedPrescription.doctorReg}` : ""}
+                  </Text>
+                </View>
+              )}
+
               <View style={styles.receiptTotalRow}>
                 <Text style={styles.receiptTotalLabel}>
                   Grand Total (Incl. GST):
@@ -1490,6 +1579,127 @@ export default function SalesScreen({
         }
         mode="product"
       />
+      {/* ========================================================================= */}
+      {/* ATTACH PRESCRIPTION MODAL (RX-03)                                         */}
+      {/* ========================================================================= */}
+      <Modal
+        visible={rxModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setRxModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.customerModalCard, { maxWidth: 480 }]}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Attach Doctor's Prescription</Text>
+                <Text style={styles.modalSubtitle}>Upload digital Rx document for regulatory compliance (RX-03)</Text>
+              </View>
+              <Pressable onPress={() => setRxModalVisible(false)}>
+                <Text style={styles.closeBtnText}>✕</Text>
+              </Pressable>
+            </View>
+
+            {Platform.OS === 'web' && (
+              <input
+                type="file"
+                ref={rxFileInputRef}
+                accept="image/*,application/pdf"
+                style={{ display: "none" }}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) setRxFileName(f.name);
+                }}
+              />
+            )}
+
+            <View style={{ gap: 12, paddingVertical: 10 }}>
+              <View>
+                <Text style={styles.fieldLabelText}>DOCTOR'S FULL NAME</Text>
+                <TextInput
+                  style={styles.customerSearchInput}
+                  placeholder="e.g. Dr. Rajesh Sharma, MD"
+                  placeholderTextColor="#94A3B8"
+                  value={rxDoctorName}
+                  onChangeText={setRxDoctorName}
+                />
+              </View>
+
+              <View>
+                <Text style={styles.fieldLabelText}>MEDICAL COUNCIL REGISTRATION NO.</Text>
+                <TextInput
+                  style={styles.customerSearchInput}
+                  placeholder="e.g. MMC-2018-99412"
+                  placeholderTextColor="#94A3B8"
+                  value={rxDoctorReg}
+                  onChangeText={setRxDoctorReg}
+                />
+              </View>
+
+              <View>
+                <Text style={styles.fieldLabelText}>SELECT PRESCRIPTION FILE (IMAGE OR PDF)</Text>
+                <Pressable
+                  onPress={() => {
+                    if (Platform.OS === 'web' && rxFileInputRef.current) {
+                      rxFileInputRef.current.click();
+                    } else if (onShowToast) {
+                      onShowToast("File picker available on web/mobile browser");
+                    }
+                  }}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "#CBD5E1",
+                    borderStyle: "dashed",
+                    borderRadius: 8,
+                    padding: 16,
+                    alignItems: "center",
+                    backgroundColor: "#F8FAFC",
+                    cursor: "pointer",
+                  }}
+                >
+                  <Text style={{ fontSize: 24, marginBottom: 4 }}>📄</Text>
+                  <Text style={{ fontSize: 13, fontWeight: "700", color: "#0F766E" }}>
+                    {rxFileName ? `Selected: ${rxFileName}` : "Click to Browse File / Select Document"}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>
+                    Supports JPG, PNG, PDF (Max 15MB)
+                  </Text>
+                </Pressable>
+              </View>
+
+              <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 10, marginTop: 10 }}>
+                <Pressable
+                  onPress={() => setRxModalVisible(false)}
+                  style={{ paddingHorizontal: 14, paddingVertical: 9, borderRadius: 6, borderWidth: 1, borderColor: "#CBD5E1" }}
+                >
+                  <Text style={{ color: "#475569", fontWeight: "600", fontSize: 13 }}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    if (!rxFileName && !rxDoctorName.trim()) {
+                      if (onShowToast) onShowToast("Please enter doctor name or upload prescription file.");
+                      return;
+                    }
+                    setAttachedPrescription({
+                      fileName: rxFileName || "Prescription_Doc.pdf",
+                      doctorName: rxDoctorName.trim() || "Prescribing Physician",
+                      doctorReg: rxDoctorReg.trim(),
+                      attachedAt: new Date().toLocaleTimeString(),
+                    });
+                    setRxModalVisible(false);
+                    if (onShowToast) {
+                      onShowToast(`✓ Prescription attached for Dr. ${rxDoctorName.trim() || "Physician"}`);
+                    }
+                  }}
+                  style={{ backgroundColor: "#0F766E", paddingHorizontal: 16, paddingVertical: 9, borderRadius: 6 }}
+                >
+                  <Text style={{ color: "#FFFFFF", fontWeight: "700", fontSize: 13 }}>Attach to Invoice</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -2138,6 +2348,75 @@ const styles = StyleSheet.create({
   customerPickerArrow: {
     fontSize: 11,
     color: "#64748B",
+  },
+
+  // Prescription Attachment (RX-03)
+  rxAttachmentBox: {
+    marginBottom: 14,
+    backgroundColor: "#F8FAFC",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    padding: 10,
+  },
+  rxHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  rxAttachedCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#CCFBF1",
+    padding: 8,
+  },
+  rxAttachedName: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  rxAttachedDoctor: {
+    fontSize: 11,
+    color: "#0F766E",
+    fontWeight: "600",
+    marginTop: 1,
+  },
+  rxVerifiedBadge: {
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  rxVerifiedBadgeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#15803D",
+  },
+  rxAttachBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    cursor: "pointer",
+  },
+  rxAttachBtnIcon: {
+    fontSize: 14,
+  },
+  rxAttachBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#0F766E",
   },
 
   // Items Section

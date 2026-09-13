@@ -32,6 +32,7 @@ import {
 import { API_URL } from "../../config";
 import { localPersistenceService } from "../../db";
 import { syncEngine } from "../../sync";
+import BulkImportModal from "../../components/inventory/BulkImportModal";
 
 export default function StockAdjustmentsScreen({
   onShowToast,
@@ -47,6 +48,7 @@ export default function StockAdjustmentsScreen({
   const [loading, setLoading] = useState(true);
   const [editingItemId, setEditingItemId] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [bulkImportModalOpen, setBulkImportModalOpen] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -1268,6 +1270,22 @@ export default function StockAdjustmentsScreen({
                 ]}
               >
                 Active Catalog
+              </Text>
+            </Pressable>
+
+            {/* Bulk CSV Import Button (PRD-10, DAT-01) */}
+            <Pressable
+              onPress={() => setBulkImportModalOpen(true)}
+              style={[
+                styles.filterTogglePill,
+                { backgroundColor: "#0F766E", borderColor: "#0F766E", flexDirection: "row", alignItems: "center" },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Bulk import medicines from CSV"
+            >
+              <Text style={{ fontSize: 13, marginRight: 5 }}>📥</Text>
+              <Text style={[styles.filterToggleText, { color: "#FFFFFF", fontWeight: "700" }]}>
+                Import CSV
               </Text>
             </Pressable>
           </View>
@@ -3087,6 +3105,15 @@ export default function StockAdjustmentsScreen({
           </View>
         </View>
       </Modal>
+
+      {/* Bulk Catalog CSV Import Modal (PRD-10, DAT-01) */}
+      <BulkImportModal
+        visible={bulkImportModalOpen}
+        onClose={() => setBulkImportModalOpen(false)}
+        onImportComplete={() => loadInventoryData()}
+        onShowToast={onShowToast}
+        selectedBranch={selectedBranch}
+      />
     </ScrollView>
   );
 }

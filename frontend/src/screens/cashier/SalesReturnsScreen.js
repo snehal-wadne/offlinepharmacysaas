@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import { usePos } from "../../context/PosContext";
 import BarcodeScannerModal from "../../components/common/BarcodeScannerModal";
 import { SkeletonTableRow } from "../../components/common/SkeletonLoader";
 import PaginationControls from "../../components/common/PaginationControls";
-import { useEffect } from "react";
+import { searchReturnInvoice } from "../../api/cashierApi";
 
 export default function SalesReturnsScreen({
   onNavigate,
@@ -227,7 +227,7 @@ export default function SalesReturnsScreen({
   };
 
   // Barcode scanned handler (Invoice or Product Barcode)
-  const handleBarcodeScanned = (scannedCode) => {
+  const handleBarcodeScanned = async (scannedCode) => {
     const code = scannedCode.trim().toLowerCase();
 
     // 1. Check if invoice number matches directly
@@ -273,8 +273,50 @@ export default function SalesReturnsScreen({
       return;
     }
 
+    // 3. Query backend directly for invoice or barcode
+    try {
+      const serverInv = await searchReturnInvoice(code);
+      if (serverInv && serverInv.invoiceNo) {
+        setSelectedInvoice(serverInv);
+        setSearchInvoice(serverInv.invoiceNo);
+        setScannerModalVisible(false);
+        if (isMobile) setMobileView("details");
+        if (onShowToast) {
+          onShowToast(`📷 Server located invoice #${serverInv.invoiceNo}`);
+        }
+        return;
+      }
+    } catch (e) {
+      // Backend offline or not found
+    }
+
     if (onShowToast) {
       onShowToast(`⚠️ No invoice found matching code "${scannedCode}".`);
+    }
+  };
+
+  const [isSearchingServer, setIsSearchingServer] = useState(false);
+  const handleServerInvoiceSearch = async (queryText = searchInvoice) => {
+    const q = (queryText || "").trim();
+    if (!q) return;
+    try {
+      setIsSearchingServer(true);
+      const res = await searchReturnInvoice(q);
+      if (res && res.invoiceNo) {
+        setSelectedInvoice(res);
+        if (isMobile) setMobileView("details");
+        if (onShowToast) {
+          onShowToast(`✓ Located invoice #${res.invoiceNo} for ${res.customer || "Customer"}`);
+        }
+      } else {
+        if (onShowToast) {
+          onShowToast(`⚠️ Invoice #${q} not found on server or local cache.`);
+        }
+      }
+    } catch (err) {
+      console.warn("Server return search error:", err.message);
+    } finally {
+      setIsSearchingServer(false);
     }
   };
 
@@ -434,12 +476,31 @@ export default function SalesReturnsScreen({
                 style={styles.searchInput}
                 value={searchInvoice}
                 onChangeText={setSearchInvoice}
+                onSubmitEditing={() => handleServerInvoiceSearch()}
                 placeholder="Search by invoice no. or customer"
                 placeholderTextColor="#94A3B8"
+                returnKeyType="search"
               />
               {searchInvoice ? (
                 <Pressable onPress={() => setSearchInvoice("")}>
                   <Text style={styles.clearSearchIcon}>✕</Text>
+                </Pressable>
+              ) : null}
+              {searchInvoice ? (
+                <Pressable
+                  onPress={() => handleServerInvoiceSearch()}
+                  style={{
+                    backgroundColor: "#0F766E",
+                    paddingHorizontal: 10,
+                    paddingVertical: 5,
+                    borderRadius: 6,
+                    marginLeft: 6,
+                  }}
+                  accessibilityLabel="Search Server"
+                >
+                  <Text style={{ color: "#FFFFFF", fontSize: 12, fontWeight: "600" }}>
+                    {isSearchingServer ? "..." : "Search"}
+                  </Text>
                 </Pressable>
               ) : null}
             </View>
