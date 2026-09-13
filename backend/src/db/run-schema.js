@@ -16,6 +16,10 @@ require("dotenv").config();
 const { pool } = require("./connection");
 
 const ensureDatabaseExists = async () => {
+  if (process.env.DATABASE_URL || process.env.SUPABASE_DATABASE_URL || process.env.SUPABASE_DB_URL) {
+    // Cloud database like Supabase already exists
+    return;
+  }
   const targetDb = process.env.DB_DATABASE || "falah_pharmacy";
   const client = new Client({
     host: process.env.DB_HOST || "localhost",
