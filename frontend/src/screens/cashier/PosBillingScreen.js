@@ -119,6 +119,10 @@ export default function PosBillingScreen({
     "Hydration",
   ];
   const filteredProducts = productsList.filter((prod) => {
+    // Exclude deactivated or inactive items
+    if (prod.isActive === false || prod.is_active === false || prod.status === 'Inactive' || prod.status === 'Disabled') {
+      return false;
+    }
     const q = searchQuery.toLowerCase();
     const matchSearch =
       prod.name.toLowerCase().includes(q) ||

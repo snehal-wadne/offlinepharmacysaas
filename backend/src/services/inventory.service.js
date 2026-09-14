@@ -792,6 +792,32 @@ const getItemBarcodeData = async (organisationId, identifier) => {
   };
 };
 
+const updateItemStatus = async (organisationId, identifier, isActive) => {
+  const isBool = Boolean(isActive);
+  const res = await pool.query(
+    `UPDATE products
+     SET is_active = $1, updated_at = CURRENT_TIMESTAMP
+     WHERE (id::text = $2 OR sku = $2 OR id IN (SELECT product_id FROM inventory_batches WHERE id::text = $2 OR batch_number = $2))
+       AND ($3::uuid IS NULL OR organisation_id = $3::uuid)
+     RETURNING id, sku, medicine_name, is_active;`,
+    [isBool, identifier, organisationId || null]
+  );
+  return res.rows[0] || null;
+};
+
+const updateItemRx = async (organisationId, identifier, isRxRequired) => {
+  const isBool = Boolean(isRxRequired);
+  const res = await pool.query(
+    `UPDATE products
+     SET is_rx_required = $1, updated_at = CURRENT_TIMESTAMP
+     WHERE (id::text = $2 OR sku = $2 OR id IN (SELECT product_id FROM inventory_batches WHERE id::text = $2 OR batch_number = $2))
+       AND ($3::uuid IS NULL OR organisation_id = $3::uuid)
+     RETURNING id, sku, medicine_name, is_rx_required;`,
+    [isBool, identifier, organisationId || null]
+  );
+  return res.rows[0] || null;
+};
+
 module.exports = {
   getInventory,
   getInventorySummary,
@@ -801,4 +827,6 @@ module.exports = {
   getStockMovements,
   generateCode128Svg,
   getItemBarcodeData,
+  updateItemStatus,
+  updateItemRx,
 };

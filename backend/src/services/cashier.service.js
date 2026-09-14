@@ -606,6 +606,7 @@ class CashierService {
         p.category,
         p.pack_size AS pack,
         p.is_rx_required AS "requiresPrescription",
+        p.is_active AS "isActive",
         ib.id AS "batchId",
         ib.batch_number AS batch,
         ib.expiry_date AS expiry,
@@ -615,12 +616,13 @@ class CashierService {
       FROM products p
       LEFT JOIN inventory_batches ib ON ib.product_id = p.id AND ib.quantity > 0 ${branchCondition}
       ${branchJoin}
+      WHERE COALESCE(p.is_active, true) = true
     `;
 
     if (term) {
       values.push(`%${term}%`);
       query += `
-        WHERE (p.sku ILIKE $${values.length} 
+        AND (p.sku ILIKE $${values.length} 
            OR p.medicine_name ILIKE $${values.length} 
            OR p.brand_name ILIKE $${values.length} 
            OR ib.batch_number ILIKE $${values.length})
@@ -650,6 +652,7 @@ class CashierService {
       mrp: Number(r.mrp) || 50,
       sellingPrice: Number(r.sellingPrice) || Number(r.mrp) || 45,
       requiresPrescription: Boolean(r.requiresPrescription),
+      isActive: r.isActive !== false,
     }));
 
     return {

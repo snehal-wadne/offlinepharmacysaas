@@ -28,6 +28,8 @@ import {
   deleteInventoryEntry,
   recordStockMovementApi,
   fetchItemBarcode,
+  updateItemStatusApi,
+  updateItemRxApi,
 } from "../../api/inventoryApi";
 import { API_URL } from "../../config";
 import { localPersistenceService } from "../../db";
@@ -282,15 +284,19 @@ export default function StockAdjustmentsScreen({
     }
   };
 
-  const handleToggleStatus = (itemId) => {
+  const handleToggleStatus = async (itemId) => {
+    let nextActive = false;
+    let targetItem = null;
+
     setStockItems((prev) =>
       prev.map((item) => {
         if (item.id === itemId) {
-          const nextActive = !item.isActive;
+          nextActive = !item.isActive;
+          targetItem = item;
           if (onShowToast) {
             onShowToast(
-              `[PATCH /api/inventory/${item.sku}/status] ${item.brandName || item.medicineName} status: ${
-                nextActive ? "Active (Live in billing)" : "Deactivated / Hidden"
+              `${item.brandName || item.medicineName} status: ${
+                nextActive ? "Active (Live in billing)" : "Deactivated / Hidden from Sales"
               }`,
             );
           }
@@ -299,16 +305,29 @@ export default function StockAdjustmentsScreen({
         return item;
       }),
     );
+
+    if (targetItem) {
+      const identifier = targetItem.sku || targetItem.productId || targetItem.id;
+      try {
+        await updateItemStatusApi(identifier, nextActive);
+      } catch (e) {
+        console.warn("Could not save status toggle to backend:", e.message);
+      }
+    }
   };
 
-  const handleToggleRx = (itemId) => {
+  const handleToggleRx = async (itemId) => {
+    let nextRx = false;
+    let targetItem = null;
+
     setStockItems((prev) =>
       prev.map((item) => {
         if (item.id === itemId) {
-          const nextRx = !item.rxRequired;
+          nextRx = !item.rxRequired;
+          targetItem = item;
           if (onShowToast) {
             onShowToast(
-              `[PATCH /api/inventory/${item.sku}/rx] ${item.brandName || item.medicineName}: Prescription required: ${
+              `${item.brandName || item.medicineName}: Prescription required: ${
                 nextRx ? "YES (Rx Needed)" : "NO (OTC)"
               }`,
             );
@@ -318,6 +337,15 @@ export default function StockAdjustmentsScreen({
         return item;
       }),
     );
+
+    if (targetItem) {
+      const identifier = targetItem.sku || targetItem.productId || targetItem.id;
+      try {
+        await updateItemRxApi(identifier, nextRx);
+      } catch (e) {
+        console.warn("Could not save Rx toggle to backend:", e.message);
+      }
+    }
   };
 
   const handleOpenActionMenu = (item) => {

@@ -32,6 +32,12 @@ router.get('/:id/barcode', inventoryController.getItemBarcode);
 // PUT /api/inventory/:id - Update inventory entry
 router.put('/:id', inventoryController.updateInventory);
 
+// PATCH /api/inventory/:id/status - Update active/inactive toggle
+router.patch('/:id/status', inventoryController.updateItemStatus);
+
+// PATCH /api/inventory/:id/rx - Update prescription requirement
+router.patch('/:id/rx', inventoryController.updateItemRx);
+
 // DELETE /api/inventory/:id - Delete inventory entry
 router.delete('/:id', inventoryController.deleteInventory);
 
