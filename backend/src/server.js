@@ -121,20 +121,71 @@ app.get("/", (req, res) => {
   });
 });
 
-app.get("/health", (req, res) => {
+app.get(["/health", "/api/health"], async (req, res) => {
+  const dbStatus = getDbStatus();
+  const startTime = Date.now();
+  let dbReachable = false;
+  let latencyMs = null;
+  let tableCount = null;
+
+  try {
+    const checkRes = await pool.query(
+      "SELECT count(*) as tbl_count FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'"
+    );
+    dbReachable = true;
+    latencyMs = Date.now() - startTime;
+    tableCount = parseInt(checkRes.rows[0].tbl_count, 10);
+  } catch (err) {
+    dbReachable = false;
+  }
+
   res.status(200).json({
     status: "OK",
     system: "Pharmacy Billing SaaS Backend",
     timestamp: new Date().toISOString(),
+    database: {
+      online: dbReachable,
+      mode: dbReachable ? "online" : "offline_local",
+      database: dbStatus.database || "falah_pharmacy",
+      tablesCount: tableCount,
+      latencyMs,
+      provider: process.env.DATABASE_URL?.includes("supabase.co") ? "Supabase" : "PostgreSQL",
+    },
   });
 });
 
-app.get("/api/health", (req, res) => {
-  res.status(200).json({
-    status: "OK",
-    system: "Pharmacy Billing SaaS Backend",
-    timestamp: new Date().toISOString(),
-  });
+app.get("/api/status", async (req, res) => {
+  const startTime = Date.now();
+  try {
+    const checkRes = await pool.query(
+      "SELECT count(*) as tbl_count FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'"
+    );
+    const latencyMs = Date.now() - startTime;
+    res.status(200).json({
+      success: true,
+      service: "Pharmacy Billing SaaS",
+      port: PORT,
+      database: {
+        online: true,
+        latencyMs,
+        tablesCount: parseInt(checkRes.rows[0].tbl_count, 10),
+        provider: process.env.DATABASE_URL?.includes("supabase.co") ? "Supabase" : "PostgreSQL",
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    res.status(200).json({
+      success: true,
+      service: "Pharmacy Billing SaaS",
+      port: PORT,
+      database: {
+        online: false,
+        error: err.message,
+        mode: "offline_local",
+      },
+      timestamp: new Date().toISOString(),
+    });
+  }
 });
 
 /**
