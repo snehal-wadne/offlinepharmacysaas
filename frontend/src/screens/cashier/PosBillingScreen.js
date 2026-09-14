@@ -19,6 +19,7 @@ import PaginationControls from '../../components/common/PaginationControls';
 import OfflineQRCode from '../../components/common/OfflineQRCode';
 import BarcodeScannerModal from '../../components/common/BarcodeScannerModal';
 import { generateOfflineQRCode } from '../../utils/qrGenerator';
+import { fetchCashierProducts } from '../../api/cashierApi';
 
 export default function PosBillingScreen({
   onNavigate,
@@ -26,10 +27,13 @@ export default function PosBillingScreen({
   isMultiBranch = true,
 }) {
   const offlineSync = useOfflineSync();
+  const [liveProducts, setLiveProducts] = useState([]);
   const productsList =
-    offlineSync?.products && offlineSync.products.length > 0
-      ? offlineSync.products
-      : MOCK_POS_PRODUCTS;
+    liveProducts.length > 0
+      ? liveProducts
+      : offlineSync?.products && offlineSync.products.length > 0
+        ? offlineSync.products
+        : MOCK_POS_PRODUCTS;
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const isCompact = width < 1100;
@@ -39,9 +43,23 @@ export default function PosBillingScreen({
   const [itemsPerPage, setItemsPerPage] = useState(20);
 
   useEffect(() => {
-    // Simulate loading since data is mostly synchronous here
-    const timer = setTimeout(() => setLoading(false), 500);
-    return () => clearTimeout(timer);
+    let isMounted = true;
+    async function loadCatalog() {
+      try {
+        const data = await fetchCashierProducts();
+        if (isMounted && Array.isArray(data) && data.length > 0) {
+          setLiveProducts(data);
+        }
+      } catch (err) {
+        console.warn("[PosBilling] Live catalog fallback:", err?.message);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+    loadCatalog();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Active Tab on Mobile: 'catalog' | 'cart'
