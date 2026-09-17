@@ -7,7 +7,7 @@
 const express = require("express");
 const router = express.Router();
 const syncController = require("../controllers/sync.controller");
-const { requireSyncAuth } = require("../middleware/sync-auth.middleware");
+const { requireSyncAuth } = require("../middlewares/sync-auth.middleware");
 
 // Status probe (Authenticated)
 router.get("/status", requireSyncAuth, syncController.getStatus);

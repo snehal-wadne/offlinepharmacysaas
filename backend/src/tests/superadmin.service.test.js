@@ -33,7 +33,7 @@ const platformDashboardRepo = require("../repositories/platform-dashboard.reposi
 const {
   generatePlatformToken,
   verifyPlatformToken,
-} = require("../middleware/superadmin-auth.middleware");
+} = require("../middlewares/superadmin-auth.middleware");
 
 const uniqueStr = (prefix) =>
   `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;

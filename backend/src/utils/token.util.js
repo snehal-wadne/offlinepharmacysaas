@@ -4,7 +4,7 @@
  * Replaces the previous unsigned `jwt_pg_<userId>_<timestamp>` / `pin_token_<userId>_<timestamp>`
  * tokens (trivially forgeable by anyone who knew or guessed a user's UUID) with an
  * HMAC-SHA256 signed token, mirroring the pattern already used for platform superadmin
- * tokens in middleware/superadmin-auth.middleware.js.
+ * tokens in middlewares/superadmin-auth.middleware.js.
  */
 
 const crypto = require('crypto');

@@ -9,7 +9,7 @@ const router = express.Router();
 const superadminController = require("../controllers/superadmin.controller");
 const {
   requirePlatformSuperadmin,
-} = require("../middleware/superadmin-auth.middleware");
+} = require("../middlewares/superadmin-auth.middleware");
 
 // ============================================================
 // PUBLIC PLATFORM & ONBOARDING ENDPOINTS

@@ -13,7 +13,7 @@
 const express = require('express');
 const router = express.Router();
 const cashierController = require('../controllers/cashier.controller');
-const { requireSyncAuth, optionalSyncAuth } = require('../middleware/sync-auth.middleware');
+const { requireSyncAuth, optionalSyncAuth } = require('../middlewares/sync-auth.middleware');
 
 // --- Base Cashier Directory Route ---
 router.get('/', (req, res) => {

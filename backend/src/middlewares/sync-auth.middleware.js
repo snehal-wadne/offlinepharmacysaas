@@ -44,6 +44,15 @@ const authenticateUser = async (req) => {
   const platformDecoded = verifyPlatformToken(token);
   if (platformDecoded) {
     if (platformDecoded.isDev) {
+      if (
+        process.env.NODE_ENV === "production" ||
+        process.env.ALLOW_DEV_AUTH !== "true"
+      ) {
+        return {
+          error: "Development tokens are disabled in this environment",
+          statusCode: 401,
+        };
+      }
       const res = await pool.query(
         `SELECT id, name, email, status, is_platform_superadmin
          FROM users
@@ -81,54 +90,61 @@ const authenticateUser = async (req) => {
     }
   }
 
-  // 3. JWT Online Token: jwt_online_<userId>_<timestamp>, jwt_pg_<userId>_<timestamp>, jwt_google_<userId>_<timestamp>
+  // 3. Development-only tokens (jwt_online_, offline_token_, test_user_, direct UUID)
+  // Strictly disabled in production or unless ALLOW_DEV_AUTH=true
   if (
-    token.startsWith("jwt_online_") ||
-    token.startsWith("jwt_pg_") ||
-    token.startsWith("jwt_google_")
+    process.env.NODE_ENV !== "production" &&
+    process.env.ALLOW_DEV_AUTH === "true"
   ) {
-    const parts = token.split("_");
-    const userId = parts[2];
-    if (isUuid(userId)) {
+    // 3a. JWT Online Token: jwt_online_<userId>_<timestamp>, jwt_pg_<userId>_<timestamp>, jwt_google_<userId>_<timestamp>
+    if (
+      token.startsWith("jwt_online_") ||
+      token.startsWith("jwt_pg_") ||
+      token.startsWith("jwt_google_")
+    ) {
+      const parts = token.split("_");
+      const userId = parts[2];
+      if (isUuid(userId)) {
+        const res = await pool.query(
+          `SELECT id, name, email, status, is_platform_superadmin
+           FROM users
+           WHERE id = $1 AND status = 'ACTIVE'`,
+          [userId],
+        );
+        if (res.rows.length > 0) {
+          return { user: res.rows[0] };
+        }
+      }
+    }
+
+    // 3b. Offline / Test Token: offline_token_<userId>_<timestamp> or test_user_<userId>
+    if (token.startsWith("offline_token_") || token.startsWith("test_user_")) {
+      const parts = token.split("_");
+      const userId = parts[parts.length - 2];
+      if (isUuid(userId)) {
+        const res = await pool.query(
+          `SELECT id, name, email, status, is_platform_superadmin
+           FROM users
+           WHERE id = $1 AND status = 'ACTIVE'`,
+          [userId],
+        );
+        if (res.rows.length > 0) {
+          return { user: res.rows[0] };
+        }
+      }
+    }
+
+    // 3c. Direct UUID token (for testing and microservice sync)
+    if (isUuid(token)) {
       const res = await pool.query(
         `SELECT id, name, email, status, is_platform_superadmin
          FROM users
          WHERE id = $1 AND status = 'ACTIVE'`,
-        [userId],
+        [token],
       );
       if (res.rows.length > 0) {
         return { user: res.rows[0] };
       }
-    }
-  }
-
-  // 3. Offline / Test Token: offline_token_<userId>_<timestamp> or test_user_<userId>
-  if (token.startsWith("offline_token_") || token.startsWith("test_user_")) {
-    const parts = token.split("_");
-    const userId = parts[parts.length - 2];
-    if (isUuid(userId)) {
-      const res = await pool.query(
-        `SELECT id, name, email, status, is_platform_superadmin
-         FROM users
-         WHERE id = $1 AND status = 'ACTIVE'`,
-        [userId],
-      );
-      if (res.rows.length > 0) {
-        return { user: res.rows[0] };
-      }
-    }
-  }
-
-  // 4. Direct UUID token (for testing and microservice sync)
-  if (isUuid(token)) {
-    const res = await pool.query(
-      `SELECT id, name, email, status, is_platform_superadmin
-       FROM users
-       WHERE id = $1 AND status = 'ACTIVE'`,
-      [token],
-    );
-    if (res.rows.length > 0) {
-      return { user: res.rows[0] };
     }
   }
 
@@ -311,6 +327,7 @@ const requireSyncAuth = async (req, res, next) => {
         organisationId: rawOrgId,
         branchId: rawBranchId || null,
       };
+      req.tenant = req.tenantContext;
     }
 
     next();

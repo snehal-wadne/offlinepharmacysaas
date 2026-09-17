@@ -10,7 +10,7 @@ const { pool } = require("../db/connection");
 const superadminService = require("../services/superadmin.service");
 const {
   generatePlatformToken,
-} = require("../middleware/superadmin-auth.middleware");
+} = require("../middlewares/superadmin-auth.middleware");
 const platformPharmacyRepo = require("../repositories/platform-pharmacy.repository");
 const subscriptionPlanRepo = require("../repositories/subscription-plan.repository");
 const platformPaymentRepo = require("../repositories/platform-payment.repository");

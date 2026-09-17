@@ -42,14 +42,24 @@ const generatePlatformToken = (user) => {
 const verifyPlatformToken = (token) => {
   if (!token) return null;
 
-  // Development convenience token
+  // Development convenience token - strictly gated behind non-production AND explicit ALLOW_DEV_AUTH=true
   if (token === "pf_platform_default_dev" || token === "dev_superadmin") {
-    return { isDev: true };
+    if (
+      process.env.NODE_ENV !== "production" &&
+      process.env.ALLOW_DEV_AUTH === "true"
+    ) {
+      return { isDev: true };
+    }
+    return null;
   }
 
   if (!token.startsWith("pf_platform_")) {
-    // Support legacy/dev token format: jwt_online_<userId>_<timestamp>
-    if (token.startsWith("jwt_online_")) {
+    // Support legacy/dev token format strictly in development mode
+    if (
+      token.startsWith("jwt_online_") &&
+      process.env.NODE_ENV !== "production" &&
+      process.env.ALLOW_DEV_AUTH === "true"
+    ) {
       const parts = token.split("_");
       return { userId: parts[2] };
     }
@@ -117,6 +127,16 @@ const requirePlatformSuperadmin = async (req, res, next) => {
   try {
     let user;
     if (decoded.isDev) {
+      if (
+        process.env.NODE_ENV === "production" ||
+        process.env.ALLOW_DEV_AUTH !== "true"
+      ) {
+        return res.status(401).json({
+          success: false,
+          error:
+            "Unauthorized: Development tokens are disabled in this environment.",
+        });
+      }
       const query = `
         SELECT id, name, email, status, is_platform_superadmin
         FROM users
