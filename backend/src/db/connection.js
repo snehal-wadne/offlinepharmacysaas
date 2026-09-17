@@ -20,7 +20,8 @@ const connectionString =
 const isRemoteOrSsl = Boolean(
   connectionString ||
   process.env.DB_SSL === "true" ||
-  (process.env.DB_HOST && !["localhost", "127.0.0.1"].includes(process.env.DB_HOST))
+  (process.env.DB_HOST &&
+    !["localhost", "127.0.0.1"].includes(process.env.DB_HOST)),
 );
 
 /**
@@ -32,6 +33,9 @@ const dbConfig = connectionString
       connectionString,
       ssl: isRemoteOrSsl ? { rejectUnauthorized: false } : false,
       connectionTimeoutMillis: 5000,
+      connectionTimeoutMillis: 15000,
+      idleTimeoutMillis: 30000,
+      max: 20,
     }
   : {
       host: process.env.DB_HOST || "localhost",
@@ -41,6 +45,9 @@ const dbConfig = connectionString
       database: process.env.DB_DATABASE || "falah_pharmacy",
       ssl: isRemoteOrSsl ? { rejectUnauthorized: false } : false,
       connectionTimeoutMillis: 5000,
+      connectionTimeoutMillis: 15000,
+      idleTimeoutMillis: 30000,
+      max: 20,
     };
 
 const pool = new Pool(dbConfig);
@@ -81,7 +88,9 @@ const checkDbConnection = async () => {
     }
   } catch (error) {
     if (isOnline) {
-      console.warn("⚠️ PostgreSQL connection lost. Running in OFFLINE local mode.");
+      console.warn(
+        "⚠️ PostgreSQL connection lost. Running in OFFLINE local mode.",
+      );
     }
     isOnline = false;
     lastError = error.message;
@@ -98,7 +107,9 @@ const startReconnectWatcher = (intervalMs = 20000) => {
     const wasOnline = isOnline;
     const nowOnline = await checkDbConnection();
     if (!wasOnline && nowOnline) {
-      console.log("🔄 PostgreSQL reconnected. Ready to synchronize offline transactions.");
+      console.log(
+        "🔄 PostgreSQL reconnected. Ready to synchronize offline transactions.",
+      );
     }
   }, intervalMs);
 
@@ -150,4 +161,3 @@ module.exports = {
     database: process.env.DB_DATABASE || "falah_pharmacy",
   }),
 };
-

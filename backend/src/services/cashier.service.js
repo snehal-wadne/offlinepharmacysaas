@@ -29,9 +29,9 @@ class CashierService {
     let customerId = overrideCustomerId;
 
     if (!organisationId) {
-      const orgRes = await pool.query("SELECT id FROM organisations LIMIT 1;");
-      organisationId =
-        orgRes.rows[0]?.id || "c206390c-2dae-41e5-a698-bf8259a73912";
+      throw new Error(
+        "Organisation context is required for cashier operations.",
+      );
     }
 
     if (!branchId) {
@@ -42,19 +42,37 @@ class CashierService {
       branchId = branchRes.rows[0]?.id;
     }
 
+    if (!branchId) {
+      throw new Error("Branch context is required for cashier operations.");
+    }
+
     if (!cashierId) {
       const userRes = await pool.query(
-        "SELECT id, name FROM users WHERE status = 'ACTIVE' ORDER BY created_at ASC LIMIT 1;",
+        `SELECT u.id FROM users u
+         JOIN organisation_memberships om ON om.user_id = u.id
+         WHERE om.organisation_id = $1 AND om.status = 'ACTIVE' AND u.status = 'ACTIVE'
+         ORDER BY om.created_at ASC LIMIT 1;`,
+        [organisationId],
       );
       cashierId = userRes.rows[0]?.id;
     }
 
     if (!customerId) {
-      const custRes = await pool.query(
-        "SELECT id, full_name, phone FROM customers WHERE organisation_id = $1 ORDER BY created_at ASC LIMIT 1;",
+      let custRes = await pool.query(
+        "SELECT id, full_name, phone FROM customers WHERE organisation_id = $1 AND status = 'ACTIVE' ORDER BY created_at ASC LIMIT 1;",
         [organisationId],
       );
-      customerId = custRes.rows[0]?.id;
+      if (custRes.rows.length === 0) {
+        const newCust = await pool.query(
+          `INSERT INTO customers (organisation_id, customer_number, full_name, phone, status)
+           VALUES ($1, 'CUST-WALKIN', 'Walk-in Customer', '9999999999', 'ACTIVE')
+           RETURNING id;`,
+          [organisationId],
+        );
+        customerId = newCust.rows[0]?.id;
+      } else {
+        customerId = custRes.rows[0].id;
+      }
     }
 
     return { organisationId, branchId, cashierId, customerId };
@@ -413,6 +431,8 @@ class CashierService {
     amount = 0,
     reason = "",
     sessionId = null,
+    organisationId: reqOrgId = null,
+    branchId: reqBranchId = null,
   }) {
     const amt = parseFloat(amount) || 0;
     if (amt <= 0) {
@@ -427,14 +447,15 @@ class CashierService {
       let targetSessionId = sessionId;
       let orgId, branchId, cashierId;
 
-      if (!targetSessionId) {
-        const openSessionRes = await client.query(`
-          SELECT id, organisation_id, branch_id, cashier_id
-          FROM cash_register_sessions
-          WHERE status = 'OPEN'
-          ORDER BY opened_at DESC
-          LIMIT 1;
-        `);
+      if (!targetSessionId && reqBranchId) {
+        const openSessionRes = await client.query(
+          `SELECT id, organisation_id, branch_id, cashier_id
+           FROM cash_register_sessions
+           WHERE branch_id = $1 AND status = 'OPEN'
+           ORDER BY opened_at DESC
+           LIMIT 1;`,
+          [reqBranchId],
+        );
         if (openSessionRes.rows.length > 0) {
           targetSessionId = openSessionRes.rows[0].id;
           orgId = openSessionRes.rows[0].organisation_id;
@@ -444,7 +465,7 @@ class CashierService {
       }
 
       if (!targetSessionId) {
-        const ctx = await this._resolveContext();
+        const ctx = await this._resolveContext(reqOrgId, reqBranchId);
         orgId = ctx.organisationId;
         branchId = ctx.branchId;
         cashierId = ctx.cashierId;
@@ -582,16 +603,27 @@ class CashierService {
 
   async searchProducts({ search = "", barcode = "", branchId = null }) {
     const term = (barcode || search || "").trim();
-    const isAllBranches = !branchId || branchId === 'all' || branchId === 'All Branches';
+    const isAllBranches =
+      !branchId || branchId === "all" || branchId === "All Branches";
 
-    let branchJoin = '';
-    let branchCondition = '';
+    let branchJoin = "";
     const values = [];
+    const whereClauses = [];
 
     if (!isAllBranches) {
       values.push(branchId);
-      branchJoin = 'INNER JOIN branches b ON b.id = ib.branch_id';
-      branchCondition = `AND (ib.branch_id::text = $${values.length} OR b.name ILIKE $${values.length})`;
+      branchJoin = "LEFT JOIN branches b ON b.id = ib.branch_id";
+      whereClauses.push(
+        `(ib.branch_id::text = $${values.length} OR b.name ILIKE $${values.length})`,
+      );
+    }
+
+    if (term) {
+      values.push(`%${term}%`);
+      whereClauses.push(`(p.sku ILIKE $${values.length} 
+         OR p.medicine_name ILIKE $${values.length} 
+         OR p.brand_name ILIKE $${values.length} 
+         OR ib.batch_number ILIKE $${values.length})`);
     }
 
     let query = `
@@ -613,18 +645,12 @@ class CashierService {
         COALESCE(ib.mrp, 0.00) AS mrp,
         ROUND((COALESCE(ib.mrp, 0.00) * 0.9)::numeric, 2) AS "sellingPrice"
       FROM products p
-      LEFT JOIN inventory_batches ib ON ib.product_id = p.id AND ib.quantity > 0 ${branchCondition}
+      LEFT JOIN inventory_batches ib ON ib.product_id = p.id AND ib.quantity > 0
       ${branchJoin}
     `;
 
-    if (term) {
-      values.push(`%${term}%`);
-      query += `
-        WHERE (p.sku ILIKE $${values.length} 
-           OR p.medicine_name ILIKE $${values.length} 
-           OR p.brand_name ILIKE $${values.length} 
-           OR ib.batch_number ILIKE $${values.length})
-      `;
+    if (whereClauses.length > 0) {
+      query += ` WHERE ${whereClauses.join(" AND ")}`;
     }
 
     query += ` ORDER BY p.medicine_name ASC, ib.expiry_date ASC LIMIT 50;`;

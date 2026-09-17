@@ -33,7 +33,7 @@ const { deleteCache } = require("../cache/cache");
  * Replace this with an organisation ID that exists
  * in the development database.
  */
-const organisationId = "PUT YOUR ORGANISATION_ID HERE";
+let organisationId = "566a2312-ea81-4be9-9007-a925538d4d74";
 
 /**
  * Builds the same tenant-safe cache key used by
@@ -69,6 +69,10 @@ const runTests = async () => {
     // --------------------------------------------------------
 
     console.log("--- Creating product ---");
+    const orgRes = await pool.query(
+      "SELECT id FROM organisations WHERE status = 'ACTIVE' LIMIT 1;",
+    );
+    if (orgRes.rows.length > 0) organisationId = orgRes.rows[0].id;
 
     product = await createProduct({
       organisationId,

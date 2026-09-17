@@ -64,16 +64,19 @@ async function runE2E() {
   const ownerToken = loginRes.body?.token;
   const user = loginRes.body?.user || {};
   const orgId = user.organisationId || "389edc41-8dca-4b2e-bade-981c496ca0ae";
-  const activeBranchId = user.branchId || "5de8bf81-d2f6-4609-bf8b-f42c97bf8c86";
+  const activeBranchId =
+    user.branchId || "5de8bf81-d2f6-4609-bf8b-f42c97bf8c86";
 
   const authHeaders = {
     Authorization: `Bearer ${ownerToken || "pf_platform_default_dev"}`,
+    Authorization: `Bearer ${ownerToken}`,
     "x-organisation-id": orgId,
     "x-branch-id": activeBranchId,
   };
 
   const syncAuthHeaders = {
     Authorization: "Bearer pf_platform_default_dev",
+    Authorization: `Bearer ${ownerToken}`,
     "x-organisation-id": orgId,
     "x-branch-id": activeBranchId,
   };

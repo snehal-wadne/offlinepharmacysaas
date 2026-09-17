@@ -7,9 +7,9 @@
  * 3. User Registration and Role/Branch Assignment in PostgreSQL
  */
 
-const bcrypt = require('bcrypt');
-const { pool } = require('../db/connection');
-const { signToken } = require('../utils/token.util');
+const bcrypt = require("bcrypt");
+const { pool } = require("../db/connection");
+const { signToken } = require("../utils/token.util");
 
 class AuthService {
   /**
@@ -17,7 +17,7 @@ class AuthService {
    */
   async login({ emailOrPhone, password, branchId }) {
     if (!emailOrPhone) {
-      throw new Error('Email or phone number is required.');
+      throw new Error("Email or phone number is required.");
     }
 
     const cleanIdentifier = emailOrPhone.trim().toLowerCase();
@@ -51,44 +51,54 @@ class AuthService {
     const user = res.rows[0];
 
     if (!user) {
-      throw new Error('Invalid email, phone number, or password.');
+      throw new Error("Invalid email, phone number, or password.");
     }
 
     if (!user.password_hash) {
-      throw new Error('This account has no password configured. Use Google Sign-In or contact your administrator.');
+      throw new Error(
+        "This account has no password configured. Use Google Sign-In or contact your administrator.",
+      );
     }
 
-    const match = await bcrypt.compare(password, user.password_hash).catch(() => false);
+    const match = await bcrypt
+      .compare(password, user.password_hash)
+      .catch(() => false);
     if (!match) {
-      throw new Error('Invalid credentials.');
+      throw new Error("Invalid credentials.");
     }
 
     // Resolve organisation if not set on user
     if (!user.organisation_id) {
-      const orgRes = await pool.query(`
-        SELECT id, name FROM organisations 
-        WHERE owner_id = $1 OR id = (SELECT organisation_id FROM branches LIMIT 1)
-        LIMIT 1;
-      `, [user.id]);
-      if (orgRes.rows.length > 0) {
-        user.organisation_id = orgRes.rows[0].id;
-        user.organisation_name = orgRes.rows[0].name;
-
-        // Persist membership for future queries
-        await pool.query(`
-          INSERT INTO organisation_memberships (organisation_id, user_id, status)
-          VALUES ($1, $2, 'ACTIVE')
-          ON CONFLICT DO NOTHING;
-        `, [user.organisation_id, user.id]).catch(() => {});
+      // 1. Check if user is owner of an active organisation
+      const ownerOrgRes = await pool.query(
+        "SELECT id, name FROM organisations WHERE owner_id = $1 AND status = 'ACTIVE' LIMIT 1;",
+        [user.id],
+      );
+      if (ownerOrgRes.rows.length > 0) {
+        user.organisation_id = ownerOrgRes.rows[0].id;
+        user.organisation_name = ownerOrgRes.rows[0].name;
+      } else {
+        // 2. Check active membership in organisation_memberships
+        const memRes = await pool.query(
+          `SELECT o.id, o.name FROM organisations o
+           JOIN organisation_memberships om ON om.organisation_id = o.id
+           WHERE om.user_id = $1 AND om.status = 'ACTIVE' AND o.status = 'ACTIVE'
+           ORDER BY om.created_at ASC LIMIT 1;`,
+          [user.id],
+        );
+        if (memRes.rows.length > 0) {
+          user.organisation_id = memRes.rows[0].id;
+          user.organisation_name = memRes.rows[0].name;
+        }
       }
     }
 
-    // Resolve branch
+    // Resolve branch strictly within user's organisation
     let branch = null;
-    if (branchId) {
+    if (branchId && user.organisation_id) {
       const branchRes = await pool.query(
-        'SELECT id, name, branch_code AS "branchCode" FROM branches WHERE id = $1 LIMIT 1;',
-        [branchId]
+        "SELECT id, name, branch_code AS \"branchCode\" FROM branches WHERE id = $1 AND organisation_id = $2 AND status = 'ACTIVE' LIMIT 1;",
+        [branchId, user.organisation_id],
       );
       if (branchRes.rows.length > 0) {
         branch = branchRes.rows[0];
@@ -96,17 +106,17 @@ class AuthService {
     }
     if (!branch && user.organisation_id) {
       const defaultBranchRes = await pool.query(
-        'SELECT id, name, branch_code AS "branchCode" FROM branches WHERE organisation_id = $1 AND status = \'ACTIVE\' ORDER BY created_at ASC LIMIT 1;',
-        [user.organisation_id]
+        "SELECT id, name, branch_code AS \"branchCode\" FROM branches WHERE organisation_id = $1 AND status = 'ACTIVE' ORDER BY created_at ASC LIMIT 1;",
+        [user.organisation_id],
       );
-      branch = defaultBranchRes.rows[0] || { id: null, name: 'Main Branch' };
+      branch = defaultBranchRes.rows[0] || null;
     }
 
     const token = signToken({ userId: user.id, email: user.email });
 
     return {
       success: true,
-      message: 'Login successful',
+      message: "Login successful",
       token,
       user: {
         id: user.id,
@@ -114,12 +124,12 @@ class AuthService {
         email: user.email,
         phone: user.phone,
         staffId: user.staffId,
-        role: user.role_identifier || user.role_name || 'ADMIN',
-        roleName: user.role_name || 'Administrator',
+        role: user.role_identifier || user.role_name || "ADMIN",
+        roleName: user.role_name || "Administrator",
         organisationId: user.organisation_id,
-        organisationName: user.organisation_name || 'Falah Pharmacy',
+        organisationName: user.organisation_name || "Falah Pharmacy",
         branchId: branch?.id,
-        branch: branch?.name || 'Main Branch',
+        branch: branch?.name || "Main Branch",
         isOffline: false,
       },
     };
@@ -130,7 +140,7 @@ class AuthService {
    */
   async pinLogin({ pin }) {
     if (!pin) {
-      throw new Error('PIN is required.');
+      throw new Error("PIN is required.");
     }
 
     // There is currently no per-user PIN column in the schema (users table has no
@@ -138,7 +148,9 @@ class AuthService {
     // active user was created first regardless of the PIN entered - i.e. any
     // 4-digit guess logged a stranger in as that account. Failing closed here
     // until a real per-user PIN hash is added to the schema and checked here.
-    throw new Error('Quick PIN login is not yet configured for this account. Please sign in with email/phone and password.');
+    throw new Error(
+      "Quick PIN login is not yet configured for this account. Please sign in with email/phone and password.",
+    );
   }
 
   /**
@@ -148,12 +160,15 @@ class AuthService {
     const { email, password, name, phone, roleId, organisationId } = userData;
 
     if (!email || !name) {
-      throw new Error('Email and name are required.');
+      throw new Error("Email and name are required.");
     }
 
-    const existingRes = await pool.query('SELECT id FROM users WHERE LOWER(email) = $1 LIMIT 1;', [email.trim().toLowerCase()]);
+    const existingRes = await pool.query(
+      "SELECT id FROM users WHERE LOWER(email) = $1 LIMIT 1;",
+      [email.trim().toLowerCase()],
+    );
     if (existingRes.rows.length > 0) {
-      throw new Error('User with this email already exists.');
+      throw new Error("User with this email already exists.");
     }
 
     let passwordHash = null;
@@ -161,32 +176,40 @@ class AuthService {
       passwordHash = await bcrypt.hash(password, 10);
     }
 
-    const insertUserRes = await pool.query(`
+    const insertUserRes = await pool.query(
+      `
       INSERT INTO users (name, email, password_hash, phone, status)
       VALUES ($1, $2, $3, $4, 'ACTIVE')
       RETURNING id, name, email, phone, status, created_at;
-    `, [name.trim(), email.trim().toLowerCase(), passwordHash, phone || null]);
+    `,
+      [name.trim(), email.trim().toLowerCase(), passwordHash, phone || null],
+    );
 
     const newUser = insertUserRes.rows[0];
 
     // If organisationId provided, add organisation membership
     if (organisationId) {
-      await pool.query(`
+      await pool
+        .query(
+          `
         INSERT INTO organisation_memberships (organisation_id, user_id, role_id)
         VALUES ($1, $2, $3);
-      `, [organisationId, newUser.id, roleId || null]).catch(err => {
-        console.warn('Membership assignment notice:', err.message);
-      });
+      `,
+          [organisationId, newUser.id, roleId || null],
+        )
+        .catch((err) => {
+          console.warn("Membership assignment notice:", err.message);
+        });
     }
 
     return {
       success: true,
-      message: 'User registered successfully',
+      message: "User registered successfully",
       user: {
         id: newUser.id,
         name: newUser.name,
         email: newUser.email,
-        role: 'STAFF',
+        role: "STAFF",
       },
     };
   }
@@ -196,117 +219,120 @@ class AuthService {
    */
   async googleLogin({ email, name, googleSub, role, branchId }) {
     if (!email) {
-      throw new Error('Google email is required.');
+      throw new Error("Google email is required.");
     }
 
     const cleanEmail = email.trim().toLowerCase();
     const effectiveSub = googleSub || `google_${cleanEmail}_${Date.now()}`;
 
-    // Owner elevation must never be decided by client-supplied input (the caller
-    // could simply POST role: "OWNER" for any email). It is decided solely by:
-    // 1. A fixed server-side allowlist of bootstrap owner emails, or
-    // 2. Already being recorded as the organisation's owner_id in the database
-    //    (checked further below via `defaultOrg.owner_id === user.id`).
-    const OWNER_EMAIL_ALLOWLIST = (process.env.OWNER_EMAILS || 'surajmore303@gmail.com,root@falah.com')
-      .split(',')
-      .map((e) => e.trim().toLowerCase())
-      .filter(Boolean);
-    const isOwnerRequested = OWNER_EMAIL_ALLOWLIST.includes(cleanEmail);
-
     // 1. Check if user already exists
-    const userQuery = `
-      SELECT 
-        u.id, 
-        u.name, 
-        u.email, 
-        u.phone, 
-        u.staff_id AS "staffId",
-        u.status, 
-        u.google_sub,
-        om.organisation_id,
-        ba.branch_id,
-        r.name AS role_name,
-        r.role_identifier,
-        o.name AS organisation_name,
-        o.owner_id
-      FROM users u
-      LEFT JOIN organisation_memberships om ON om.user_id = u.id
-      LEFT JOIN organisations o ON o.id = om.organisation_id
-      LEFT JOIN branch_assignments ba ON ba.membership_id = om.id
-      LEFT JOIN roles r ON r.id = ba.role_id
-      WHERE (LOWER(u.email) = $1 OR (u.google_sub IS NOT NULL AND u.google_sub = $2))
-        AND u.status = 'ACTIVE'
-      LIMIT 1;
-    `;
-
-    const res = await pool.query(userQuery, [cleanEmail, effectiveSub]);
-    let user = res.rows[0];
-
-    // 2. Fetch default organisation
-    const orgRes = await pool.query('SELECT id, name, owner_id FROM organisations ORDER BY created_at ASC LIMIT 1;');
-    const defaultOrg = orgRes.rows[0] || null;
+    const userRes = await pool.query(
+      `SELECT id, name, email, phone, staff_id AS "staffId", status, google_sub
+       FROM users
+       WHERE (LOWER(email) = $1 OR (google_sub IS NOT NULL AND google_sub = $2))
+         AND status = 'ACTIVE'
+       LIMIT 1;`,
+      [cleanEmail, effectiveSub],
+    );
+    let user = userRes.rows[0];
 
     if (!user) {
-      // Create new user in PostgreSQL
-      const displayName = name || cleanEmail.split('@')[0].replace('.', ' ').toUpperCase();
-      const insertRes = await pool.query(`
-        INSERT INTO users (name, email, google_sub, status)
-        VALUES ($1, $2, $3, 'ACTIVE')
-        RETURNING id, name, email, google_sub, status;
-      `, [displayName, cleanEmail, effectiveSub]);
+      // Create new user in PostgreSQL without automatic organisation assignment
+      const displayName =
+        name || cleanEmail.split("@")[0].replace(".", " ").toUpperCase();
+      const insertRes = await pool.query(
+        `INSERT INTO users (name, email, google_sub, status)
+         VALUES ($1, $2, $3, 'ACTIVE')
+         RETURNING id, name, email, google_sub, status;`,
+        [displayName, cleanEmail, effectiveSub],
+      );
       user = insertRes.rows[0];
-
-      // Assign to organisation
-      if (defaultOrg) {
-        user.organisation_id = defaultOrg.id;
-        user.organisation_name = defaultOrg.name;
-        user.owner_id = defaultOrg.owner_id;
-
-        await pool.query(`
-          INSERT INTO organisation_memberships (organisation_id, user_id, status)
-          VALUES ($1, $2, 'ACTIVE')
-          ON CONFLICT DO NOTHING;
-        `, [defaultOrg.id, user.id]).catch(() => {});
-      }
     } else if (googleSub && !user.google_sub) {
-      // Link google sub
-      await pool.query('UPDATE users SET google_sub = $1 WHERE id = $2;', [effectiveSub, user.id]).catch(() => {});
+      await pool
+        .query("UPDATE users SET google_sub = $1 WHERE id = $2;", [
+          effectiveSub,
+          user.id,
+        ])
+        .catch(() => {});
       user.google_sub = effectiveSub;
     }
 
-    // Determine Owner status
-    const isOwner = isOwnerRequested || (defaultOrg && defaultOrg.owner_id === user.id) || user.owner_id === user.id;
+    // 2. Resolve organisation context legitimately from database
+    let organisationId = null;
+    let organisationName = null;
+    let isOwner = false;
+    let roleIdentifier = "STAFF";
+    let roleName = "Staff";
 
-    if (isOwner && defaultOrg && defaultOrg.owner_id !== user.id) {
-      // If logging in as owner, ensure organisation owner_id points to user
-      await pool.query('UPDATE organisations SET owner_id = $1 WHERE id = $2;', [user.id, defaultOrg.id]).catch(() => {});
-      user.owner_id = user.id;
-    }
+    // Check if user owns an active organisation
+    const ownerOrgRes = await pool.query(
+      "SELECT id, name, owner_id FROM organisations WHERE owner_id = $1 AND status = 'ACTIVE' LIMIT 1;",
+      [user.id],
+    );
 
-    // Resolve branch
-    let branch = null;
-    if (branchId) {
-      const branchRes = await pool.query(
-        'SELECT id, name, branch_code AS "branchCode" FROM branches WHERE id = $1 LIMIT 1;',
-        [branchId]
+    if (ownerOrgRes.rows.length > 0) {
+      organisationId = ownerOrgRes.rows[0].id;
+      organisationName = ownerOrgRes.rows[0].name;
+      isOwner = true;
+      roleIdentifier = "OWNER";
+      roleName = "Pharmacy Owner";
+    } else {
+      // Check active membership in organisation_memberships
+      const memRes = await pool.query(
+        `SELECT om.organisation_id, o.name AS organisation_name, o.owner_id,
+                r.name AS role_name, r.role_identifier
+         FROM organisation_memberships om
+         JOIN organisations o ON o.id = om.organisation_id AND o.status = 'ACTIVE'
+         LEFT JOIN branch_assignments ba ON ba.membership_id = om.id
+         LEFT JOIN roles r ON r.id = ba.role_id
+         WHERE om.user_id = $1 AND om.status = 'ACTIVE'
+         ORDER BY om.created_at ASC
+         LIMIT 1;`,
+        [user.id],
       );
-      if (branchRes.rows.length > 0) {
-        branch = branchRes.rows[0];
+
+      if (memRes.rows.length > 0) {
+        const membership = memRes.rows[0];
+        organisationId = membership.organisation_id;
+        organisationName = membership.organisation_name;
+        isOwner = membership.owner_id === user.id;
+        roleIdentifier = isOwner
+          ? "OWNER"
+          : membership.role_identifier || "STAFF";
+        roleName = isOwner ? "Pharmacy Owner" : membership.role_name || "Staff";
       }
     }
-    if (!branch) {
-      const defaultBranchRes = await pool.query(
-        'SELECT id, name, branch_code AS "branchCode" FROM branches WHERE status = \'ACTIVE\' ORDER BY created_at ASC LIMIT 1;'
-      );
-      branch = defaultBranchRes.rows[0] || { id: null, name: 'Main Branch' };
+
+    // 3. Resolve branch strictly within resolved organisation
+    let branch = null;
+    if (organisationId) {
+      if (branchId) {
+        const branchRes = await pool.query(
+          "SELECT id, name, branch_code AS \"branchCode\" FROM branches WHERE id = $1 AND organisation_id = $2 AND status = 'ACTIVE' LIMIT 1;",
+          [branchId, organisationId],
+        );
+        if (branchRes.rows.length > 0) {
+          branch = branchRes.rows[0];
+        }
+      }
+      if (!branch) {
+        const defaultBranchRes = await pool.query(
+          "SELECT id, name, branch_code AS \"branchCode\" FROM branches WHERE organisation_id = $1 AND status = 'ACTIVE' ORDER BY created_at ASC LIMIT 1;",
+          [organisationId],
+        );
+        branch = defaultBranchRes.rows[0] || null;
+      }
     }
 
     const token = signToken({ userId: user.id, email: user.email });
-    const displayName = name || user.name || cleanEmail.split('@')[0].toUpperCase();
+    const displayName =
+      name || user.name || cleanEmail.split("@")[0].toUpperCase();
 
     return {
       success: true,
-      message: isOwner ? 'Welcome Pharmacy Owner! Google Login successful.' : 'Google Login successful',
+      message: isOwner
+        ? "Welcome Pharmacy Owner! Google Login successful."
+        : "Google Login successful",
       token,
       user: {
         id: user.id,
@@ -315,14 +341,18 @@ class AuthService {
         email: user.email,
         phone: user.phone || null,
         staffId: user.staffId || null,
-        role: isOwner ? 'OWNER' : (user.role_identifier || user.role_name || 'STAFF'),
-        roleName: isOwner ? 'Pharmacy Owner' : (user.role_name || 'Staff'),
-        accessLevel: isOwner ? 'Owner' : (user.role_identifier === 'ADMIN' ? 'Admin' : 'Staff'),
+        role: isOwner ? "OWNER" : roleIdentifier,
+        roleName,
+        accessLevel: isOwner
+          ? "Owner"
+          : roleIdentifier === "ADMIN"
+            ? "Admin"
+            : "Staff",
         isOwner: Boolean(isOwner),
-        organisationId: user.organisation_id || defaultOrg?.id,
-        organisationName: user.organisation_name || defaultOrg?.name || 'Falah Pharmacy',
-        branchId: branch?.id,
-        branch: branch?.name || 'Main Branch',
+        organisationId: organisationId || null,
+        organisationName: organisationName || null,
+        branchId: branch?.id || null,
+        branch: branch?.name || null,
         isOffline: false,
         isGoogleAuth: true,
       },
@@ -331,4 +361,3 @@ class AuthService {
 }
 
 module.exports = new AuthService();
-
