@@ -31,3 +31,6 @@ yarn-error.log*
 *.bat
 pharmacy_controls_mapping_report.*
 
+# Editor settings
+.vscode/
+

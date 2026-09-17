@@ -101,6 +101,8 @@ const verifyPlatformToken = (token) => {
   }
 };
 
+const { verifySupabaseToken } = require("../utils/supabase");
+
 /**
  * Express Middleware: Require Platform Superadmin clearance.
  */
@@ -114,7 +116,76 @@ const requirePlatformSuperadmin = async (req, res, next) => {
     });
   }
 
-  const token = authHeader.split(" ")[1];
+  const token = authHeader.split(" ")[1].trim();
+
+  // 1. Check Supabase Auth JWT
+  const supabaseDecoded = verifySupabaseToken(token);
+  if (supabaseDecoded && supabaseDecoded.sub) {
+    try {
+      const isUuid = (str) =>
+        typeof str === "string" &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          str,
+        );
+
+      const subUuid = isUuid(supabaseDecoded.sub)
+        ? supabaseDecoded.sub
+        : (() => {
+            const hash = crypto
+              .createHash("md5")
+              .update(supabaseDecoded.sub)
+              .digest("hex");
+            return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-a${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
+          })();
+
+      const userRes = await pool.query(
+        `SELECT id, name, email, status, is_platform_superadmin, supabase_auth_id
+         FROM users
+         WHERE (supabase_auth_id = $1 OR (supabase_auth_id IS NULL AND LOWER(email) = LOWER($2)))
+           AND status = 'ACTIVE'
+         LIMIT 1;`,
+        [subUuid, supabaseDecoded.email || ""],
+      );
+
+      const user = userRes.rows[0];
+      if (!user) {
+        return res.status(401).json({
+          success: false,
+          error: "Unauthorized: User account is inactive or not found.",
+        });
+      }
+
+      // JIT link if needed
+      if (!user.supabase_auth_id && subUuid) {
+        await pool
+          .query("UPDATE users SET supabase_auth_id = $1 WHERE id = $2;", [
+            subUuid,
+            user.id,
+          ])
+          .catch(() => {});
+        user.supabase_auth_id = subUuid;
+      }
+
+      if (!user.is_platform_superadmin) {
+        return res.status(403).json({
+          success: false,
+          error: "Forbidden: Platform Superadmin clearance required.",
+        });
+      }
+
+      req.superadmin = user;
+      req.user = user;
+      return next();
+    } catch (err) {
+      console.error("Superadmin auth middleware error:", err);
+      return res.status(500).json({
+        success: false,
+        error: "Internal security authentication error.",
+      });
+    }
+  }
+
+  // 2. Legacy Platform Tokens (pf_platform_... or dev)
   const decoded = verifyPlatformToken(token);
 
   if (!decoded || (!decoded.userId && !decoded.isDev)) {

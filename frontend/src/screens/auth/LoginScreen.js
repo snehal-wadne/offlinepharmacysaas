@@ -219,27 +219,51 @@ export default function LoginScreen({ onLoginSuccess }) {
       return;
     }
 
-    setIsLoading(true);
+    try {
+      const response = await fetch(`${API_URL}/api/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          email,
+          password: signUpPassword,
+        }),
+      });
 
-    // Register user session
-    setTimeout(() => {
-      setIsLoading(false);
-      setSuccessMessage("Account created successfully! Logging you in...");
+      const data = await response.json().catch(() => ({}));
+      if (response.ok && data.success) {
+        setSuccessMessage("Account created successfully! Logging you in...");
 
-      setTimeout(() => {
-        if (onLoginSuccess) {
-          onLoginSuccess({
-            id: `USR-${Date.now().toString().slice(-4)}`,
-            display_name: name,
-            name: name,
-            email: email,
-            role: signUpRole,
-            accessLevel: signUpRole === "Administrator" ? "Admin" : "Staff",
-            branch: signUpBranch,
-          });
+        // Auto-login with new credentials
+        const loginRes = await fetch(`${API_URL}/api/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            emailOrPhone: email,
+            password: signUpPassword,
+          }),
+        });
+
+        const loginData = await loginRes.json().catch(() => ({}));
+        setIsLoading(false);
+        if (loginRes.ok && loginData.user && onLoginSuccess) {
+          onLoginSuccess(loginData.user, loginData.token);
+          return;
         }
-      }, 700);
-    }, 900);
+
+        setAuthMode("signin");
+        setSignInEmail(email);
+        setSignInPassword(signUpPassword);
+      } else {
+        setIsLoading(false);
+        setErrorMessage(
+          data.error || "Failed to create account. Please try again.",
+        );
+      }
+    } catch (err) {
+      setIsLoading(false);
+      setErrorMessage("Network error during registration: " + err.message);
+    }
   };
 
   // Handle Google OAuth Sign-In (Owner & Staff)
@@ -263,7 +287,9 @@ export default function LoginScreen({ onLoginSuccess }) {
         body: JSON.stringify({
           email: googleUser.email,
           name: googleUser.name,
-          googleSub: googleUser.googleSub || `google_${googleUser.email.replace(/[^a-zA-Z0-9]/g, '_')}`,
+          googleSub:
+            googleUser.googleSub ||
+            `google_${googleUser.email.replace(/[^a-zA-Z0-9]/g, "_")}`,
         }),
         signal: controller.signal,
       });
@@ -284,7 +310,9 @@ export default function LoginScreen({ onLoginSuccess }) {
     } catch (e) {
       console.error("Google login request failed:", e.message);
       setIsLoading(false);
-      setErrorMessage("Unable to reach the server for Google sign-in. Please check your connection and try again.");
+      setErrorMessage(
+        "Unable to reach the server for Google sign-in. Please check your connection and try again.",
+      );
     }
   };
 
@@ -970,7 +998,12 @@ export default function LoginScreen({ onLoginSuccess }) {
                     </Text>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.googleAccName, acc.isOwner && { color: "#0F766E" }]}>
+                    <Text
+                      style={[
+                        styles.googleAccName,
+                        acc.isOwner && { color: "#0F766E" },
+                      ]}
+                    >
                       {acc.name}
                     </Text>
                     <Text style={styles.googleAccEmail}>{acc.email}</Text>
@@ -996,7 +1029,9 @@ export default function LoginScreen({ onLoginSuccess }) {
 
             {/* Custom Google Account Input */}
             <View style={styles.customGoogleBox}>
-              <Text style={styles.customGoogleTitle}>Use another Google Account</Text>
+              <Text style={styles.customGoogleTitle}>
+                Use another Google Account
+              </Text>
               <View style={styles.customGoogleInputRow}>
                 <Text style={{ fontSize: 14, marginRight: 6 }}>📧</Text>
                 <TextInput
@@ -1010,7 +1045,8 @@ export default function LoginScreen({ onLoginSuccess }) {
                 />
               </View>
               <Text style={styles.ownerCheckboxText}>
-                Your access level (Owner, Admin, or Staff) is assigned by the pharmacy's account records, not chosen here.
+                Your access level (Owner, Admin, or Staff) is assigned by the
+                pharmacy's account records, not chosen here.
               </Text>
               <Pressable
                 style={[

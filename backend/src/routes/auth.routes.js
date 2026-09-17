@@ -3,17 +3,22 @@
  *
  * Endpoints:
  * - POST /api/auth/login
- * - POST /api/auth/pin-login
  * - POST /api/auth/register
+ * - POST /api/auth/google
+ * - POST /api/auth/forgot-password
+ * - POST /api/auth/reset-password
+ * - POST /api/auth/pin-login (Fails closed)
  */
 
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const authController = require('../controllers/auth.controller');
+const authController = require("../controllers/auth.controller");
 
-router.post('/login', authController.login);
-router.post('/pin-login', authController.pinLogin);
-router.post('/register', authController.register);
-router.post('/google', authController.googleLogin);
+router.post("/login", authController.login);
+router.post("/register", authController.register);
+router.post("/google", authController.googleLogin);
+router.post("/forgot-password", authController.forgotPassword);
+router.post("/reset-password", authController.resetPassword);
+router.post("/pin-login", authController.pinLogin);
 
 module.exports = router;

@@ -30,6 +30,8 @@ const { seedSuperadmin } = require("./seed-superadmin");
 const {
   runMigration: migrateRolesPermissions,
 } = require("./migrate-roles-permissions");
+const { migrateSupabaseAuth } = require("./migrate-supabase-auth");
+const { bootstrapDemoAuth } = require("./bootstrap-demo-auth");
 
 async function setupDatabase() {
   console.log(
@@ -93,8 +95,10 @@ async function setupDatabase() {
     // -------------------------------------------------------------------------
     console.log("Step 4: Running superadmin platform migrations...");
     await migrateSuperadminPlatform();
+    await migrateSupabaseAuth();
     console.log(
       "  ✓ Platform tables, sequences, and subscription tiers verified.\n",
+      "  ✓ Platform tables, sequences, subscription tiers, and Supabase identity mapping verified.\n",
     );
 
     // -------------------------------------------------------------------------
@@ -103,6 +107,10 @@ async function setupDatabase() {
     console.log("Step 5: Provisioning platform superadmin...");
     const superadminId = await seedSuperadmin();
     console.log(`  ✓ Platform superadmin active (id: ${superadminId}).\n`);
+
+    console.log("Step 5b: Bootstrapping demo users for Supabase Auth...");
+    await bootstrapDemoAuth();
+    console.log("  ✓ Demo users mapped to Supabase Auth.\n");
 
     // -------------------------------------------------------------------------
     // Step 6: Baseline Tenant & Branch Provisioning

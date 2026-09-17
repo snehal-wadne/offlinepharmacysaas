@@ -34,6 +34,8 @@ professional_registration_number VARCHAR(100),
 working_shift VARCHAR(100),
 email_verified_at TIMESTAMPTZ,
 last_login_at TIMESTAMPTZ,
+-- Supabase Auth identity link (auth.users.id)
+supabase_auth_id UUID UNIQUE,
 -- Platform Superadmin flag. Only platform Superadmins have TRUE.
 is_platform_superadmin BOOLEAN NOT NULL DEFAULT FALSE,
 created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -44,8 +46,11 @@ CONSTRAINT users_auth_method_check
         CHECK (
             password_hash IS NOT NULL
             OR google_sub IS NOT NULL
+            OR supabase_auth_id IS NOT NULL
         )
 );
+
+CREATE INDEX IF NOT EXISTS idx_users_supabase_auth_id ON users (supabase_auth_id);
 
 CREATE INDEX IF NOT EXISTS idx_users_is_platform_superadmin ON users (is_platform_superadmin)
 WHERE
@@ -809,6 +814,7 @@ date_of_birth DATE, gender VARCHAR(30),
 
 -- Customer category shown by the customer-management
 -- workflow, for example REGULAR, CORPORATE, etc.
+
 
 category VARCHAR(50),
         address VARCHAR(500),

@@ -17,6 +17,7 @@
 const { pool } = require("../db/connection");
 const { verifyPlatformToken } = require("./superadmin-auth.middleware");
 const { verifyToken } = require("../utils/token.util");
+const { verifySupabaseToken } = require("../utils/supabase");
 
 const isUuid = (str) =>
   typeof str === "string" &&
@@ -41,6 +42,43 @@ const authenticateUser = async (req) => {
   }
 
   // 1. Platform Superadmin Tokens (pf_platform_... or dev superadmin)
+  // 1. Supabase Auth JWT (Primary)
+  const supabaseDecoded = verifySupabaseToken(token);
+  if (supabaseDecoded && supabaseDecoded.sub) {
+    const crypto = require("crypto");
+    const subUuid = isUuid(supabaseDecoded.sub)
+      ? supabaseDecoded.sub
+      : (() => {
+          const hash = crypto
+            .createHash("md5")
+            .update(supabaseDecoded.sub)
+            .digest("hex");
+          return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-a${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
+        })();
+
+    const res = await pool.query(
+      `SELECT id, name, email, status, is_platform_superadmin, supabase_auth_id
+       FROM users
+       WHERE (supabase_auth_id = $1 OR (supabase_auth_id IS NULL AND LOWER(email) = LOWER($2)))
+         AND status = 'ACTIVE'`,
+      [subUuid, supabaseDecoded.email || ""],
+    );
+    if (res.rows.length > 0) {
+      const u = res.rows[0];
+      if (!u.supabase_auth_id && subUuid) {
+        await pool
+          .query("UPDATE users SET supabase_auth_id = $1 WHERE id = $2", [
+            subUuid,
+            u.id,
+          ])
+          .catch(() => {});
+        u.supabase_auth_id = subUuid;
+      }
+      return { user: u };
+    }
+  }
+
+  // 2. Platform Superadmin Tokens (pf_platform_... or dev superadmin)
   const platformDecoded = verifyPlatformToken(token);
   if (platformDecoded) {
     if (platformDecoded.isDev) {

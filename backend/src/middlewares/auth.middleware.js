@@ -1,29 +1,91 @@
 /**
  * Authentication Middleware
  *
- * Extracts and validates bearer tokens, resolving the authenticated user,
- * organisation tenancy, and branch context from PostgreSQL.
+ * Extracts and validates bearer tokens using Supabase Auth JWTs,
+ * resolving the authenticated user identity, organisation tenancy,
+ * and branch context from PostgreSQL.
  */
 
 const { pool } = require("../db/connection");
+const { verifySupabaseToken } = require("../utils/supabase");
 const { verifyToken } = require("../utils/token.util");
 
 const authenticate = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
     const hasAuthHeader = Boolean(authHeader && authHeader.trim());
-    let userId = null;
+    let user = null;
 
     if (authHeader && authHeader.startsWith("Bearer ")) {
-      const token = authHeader.split(" ")[1];
-      const decoded = verifyToken(token);
-      if (decoded && decoded.userId) {
-        userId = decoded.userId;
+      const token = authHeader.split(" ")[1].trim();
+
+      // 1. Primary: Verify Supabase Auth JWT
+      const supabaseDecoded = verifySupabaseToken(token);
+      if (supabaseDecoded && supabaseDecoded.sub) {
+        const isUuid = (str) =>
+          typeof str === "string" &&
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+            str,
+          );
+
+        const subUuid = isUuid(supabaseDecoded.sub)
+          ? supabaseDecoded.sub
+          : (() => {
+              const crypto = require("crypto");
+              const hash = crypto
+                .createHash("md5")
+                .update(supabaseDecoded.sub)
+                .digest("hex");
+              return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-a${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
+            })();
+
+        const userRes = await pool.query(
+          `SELECT id, name, email, phone, staff_id AS "staffId", status, 
+                  is_platform_superadmin, supabase_auth_id
+           FROM users
+           WHERE (supabase_auth_id = $1 OR (supabase_auth_id IS NULL AND LOWER(email) = LOWER($2)))
+             AND status = 'ACTIVE'
+           LIMIT 1;`,
+          [subUuid, supabaseDecoded.email || ""],
+        );
+
+        if (userRes.rows.length > 0) {
+          user = userRes.rows[0];
+          // JIT link if supabase_auth_id was not yet set on existing matching user
+          if (!user.supabase_auth_id && subUuid) {
+            await pool
+              .query("UPDATE users SET supabase_auth_id = $1 WHERE id = $2;", [
+                subUuid,
+                user.id,
+              ])
+              .catch(() => {});
+            user.supabase_auth_id = subUuid;
+          }
+        }
+      }
+
+      // 2. Secondary: Backward-compatible support for signed tokens (pf_user_...)
+      if (!user) {
+        const legacyDecoded = verifyToken(token);
+        if (legacyDecoded && legacyDecoded.userId) {
+          const userRes = await pool.query(
+            `SELECT id, name, email, phone, staff_id AS "staffId", status, 
+                    is_platform_superadmin, supabase_auth_id
+             FROM users
+             WHERE id = $1 AND status = 'ACTIVE'
+             LIMIT 1;`,
+            [legacyDecoded.userId],
+          );
+          if (userRes.rows.length > 0) {
+            user = userRes.rows[0];
+          }
+        }
       }
     }
 
     // Development-only fallback: strictly gated behind non-production AND ALLOW_DEV_AUTH=true
     if (
+      !user &&
       !hasAuthHeader &&
       process.env.NODE_ENV !== "production" &&
       process.env.ALLOW_DEV_AUTH === "true"
@@ -57,32 +119,14 @@ const authenticate = async (req, res, next) => {
       }
     }
 
-    if (!userId) {
+    if (!user) {
       return res.status(401).json({
         success: false,
         message: "Invalid or missing authentication token.",
       });
     }
 
-    // 1. Authenticate user record
-    const userRes = await pool.query(
-      `SELECT id, name, email, phone, staff_id AS "staffId", status, is_platform_superadmin
-       FROM users
-       WHERE id = $1 AND status = 'ACTIVE'
-       LIMIT 1;`,
-      [userId],
-    );
-
-    if (userRes.rows.length === 0) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid token or inactive user account.",
-      });
-    }
-
-    const user = userRes.rows[0];
-
-    // 2. Query legitimate ACTIVE organisation memberships
+    // 2. Query legitimate ACTIVE organisation memberships from PostgreSQL
     const memRes = await pool.query(
       `SELECT 
          om.id AS membership_id,
@@ -198,6 +242,7 @@ const authenticate = async (req, res, next) => {
 
     req.user = {
       id: user.id,
+      supabaseAuthId: user.supabase_auth_id || null,
       name: user.name,
       email: user.email,
       phone: user.phone,

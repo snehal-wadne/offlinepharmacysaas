@@ -27,6 +27,7 @@
     "@react-navigation/drawer": "^6.6.15",
     "@react-navigation/native": "^6.1.17",
     "@react-navigation/stack": "^6.3.29",
+    "@supabase/supabase-js": "^2.116.0",
     "@types/react": "~18.2.79",
     "dexie": "^4.4.6",
     "expo": "~51.0.28",

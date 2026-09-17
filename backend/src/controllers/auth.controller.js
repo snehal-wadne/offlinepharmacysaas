@@ -1,17 +1,21 @@
 /**
  * Auth Controller
+ *
+ * Handles HTTP requests for:
+ * - Supabase password login & user creation
+ * - Verified Google OAuth session resolution
+ * - Supabase password recovery flows
  */
 
 const authService = require("../services/auth.service");
 
 const login = async (req, res) => {
   try {
-    const { emailOrPhone, password, email } = req.body;
-    const identifier = emailOrPhone || email;
+    const { emailOrPhone, password, email, branchId } = req.body;
     const result = await authService.login({
-      emailOrPhone: identifier,
+      emailOrPhone: emailOrPhone || email,
       password,
-      branchId: req.body.branchId,
+      branchId,
     });
     res.status(200).json(result);
   } catch (error) {
@@ -40,8 +44,9 @@ const register = async (req, res) => {
 
 const googleLogin = async (req, res) => {
   try {
-    const { email, name, googleSub, branchId } = req.body;
+    const { token, email, name, googleSub, branchId } = req.body;
     const result = await authService.googleLogin({
+      token,
       email,
       name,
       googleSub,
@@ -53,9 +58,31 @@ const googleLogin = async (req, res) => {
   }
 };
 
+const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+    const result = await authService.forgotPassword({ email });
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+};
+
+const resetPassword = async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+    const result = await authService.resetPassword({ token, newPassword });
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+};
+
 module.exports = {
   login,
   pinLogin,
   register,
   googleLogin,
+  forgotPassword,
+  resetPassword,
 };
