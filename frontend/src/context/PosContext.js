@@ -1,10 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import {
-  MOCK_POS_PRODUCTS,
-  MOCK_HELD_BILLS,
-  MOCK_RECENT_INVOICES,
-} from "../data/cashierMockData";
-import {
   fetchCashierProducts,
   fetchHeldBills,
   fetchRecentInvoices,
@@ -26,16 +21,16 @@ export function PosProvider({
   const effectiveUserId = currentUser?.id || null;
   const effectiveToken = currentUser?.token || null;
 
-  const [products, setProducts] = useState(MOCK_POS_PRODUCTS);
+  const [products, setProducts] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [isOfflineReady, setIsOfflineReady] = useState(false);
   const [activeBranch, setActiveBranch] = useState(
     selectedBranch && selectedBranch !== "All Branches" ? selectedBranch : null,
   );
   const [taxConfig, setTaxConfig] = useState(null);
-  const [heldBills, setHeldBills] = useState(MOCK_HELD_BILLS);
+  const [heldBills, setHeldBills] = useState([]);
   const [activeResumedDraft, setActiveResumedDraft] = useState(null);
-  const [invoices, setInvoices] = useState(MOCK_RECENT_INVOICES);
+  const [invoices, setInvoices] = useState([]);
   const [returnHistory, setReturnHistory] = useState([]);
   const [syncState, setSyncState] = useState(
     typeof syncEngine?.getState === "function"
@@ -70,11 +65,12 @@ export function PosProvider({
     async function hydratePosData() {
       try {
         const branchParam =
-          selectedBranch &&
+          currentUser?.branchId ||
+          (selectedBranch &&
           selectedBranch !== "All Branches" &&
           selectedBranch !== "No Active Branch"
             ? selectedBranch
-            : "";
+            : "");
         const [liveProds, liveHeld, liveInvs, liveReturns] = await Promise.all([
           fetchCashierProducts("", "", branchParam),
           fetchHeldBills(),
@@ -82,62 +78,56 @@ export function PosProvider({
           fetchReturnHistory ? fetchReturnHistory() : Promise.resolve([]),
         ]);
         if (isMounted) {
-          if (liveProds && Array.isArray(liveProds) && liveProds.length > 0) {
-            setProducts(liveProds);
-          }
-          if (liveHeld && Array.isArray(liveHeld) && liveHeld.length > 0) {
-            setHeldBills(
-              liveHeld.map((b) => ({
-                ...b,
-                total: parseFloat(b.total) || Number(b.total) || 0,
-                subtotal: parseFloat(b.subtotal) || Number(b.subtotal) || 0,
-                tax: parseFloat(b.tax) || Number(b.tax) || 0,
-                items: Array.isArray(b.items)
-                  ? b.items
-                  : Array.isArray(b.cart)
-                    ? b.cart
-                    : [],
-                itemsCount:
-                  parseInt(b.itemsCount, 10) ||
-                  (Array.isArray(b.items) ? b.items.length : 0) ||
-                  (Array.isArray(b.cart) ? b.cart.length : 0) ||
-                  1,
-                customerPhone: b.customerPhone || b.phone || "",
-                heldAt:
-                  b.heldAt ||
-                  (b.savedAt
-                    ? new Date(b.savedAt).toLocaleDateString("en-GB", {
-                        day: "2-digit",
-                        month: "short",
-                        year: "numeric",
-                      }) +
-                      ", " +
-                      new Date(b.savedAt).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })
-                    : "29 Aug 2026, 10:20 AM"),
-              })),
-            );
-          }
-          if (liveInvs && Array.isArray(liveInvs) && liveInvs.length > 0) {
-            setInvoices(
-              liveInvs.map((inv) => ({
-                ...inv,
-                total: parseFloat(inv.total) || Number(inv.total) || 0,
-                subtotal: parseFloat(inv.subtotal) || Number(inv.subtotal) || 0,
-                tax: parseFloat(inv.tax) || Number(inv.tax) || 0,
-                discount: parseFloat(inv.discount) || Number(inv.discount) || 0,
-              })),
-            );
-          }
-          if (
-            liveReturns &&
-            Array.isArray(liveReturns) &&
-            liveReturns.length > 0
-          ) {
-            setReturnHistory(liveReturns);
-          }
+          setProducts(Array.isArray(liveProds) ? liveProds : []);
+          setHeldBills(
+            Array.isArray(liveHeld)
+              ? liveHeld.map((b) => ({
+                  ...b,
+                  total: parseFloat(b.total) || Number(b.total) || 0,
+                  subtotal: parseFloat(b.subtotal) || Number(b.subtotal) || 0,
+                  tax: parseFloat(b.tax) || Number(b.tax) || 0,
+                  items: Array.isArray(b.items)
+                    ? b.items
+                    : Array.isArray(b.cart)
+                      ? b.cart
+                      : [],
+                  itemsCount:
+                    parseInt(b.itemsCount, 10) ||
+                    (Array.isArray(b.items) ? b.items.length : 0) ||
+                    (Array.isArray(b.cart) ? b.cart.length : 0) ||
+                    0,
+                  customerPhone: b.customerPhone || b.phone || "",
+                  heldAt:
+                    b.heldAt ||
+                    (b.savedAt
+                      ? new Date(b.savedAt).toLocaleDateString("en-GB", {
+                          day: "2-digit",
+                          month: "short",
+                          year: "numeric",
+                        }) +
+                        ", " +
+                        new Date(b.savedAt).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : "Recently"),
+                }))
+              : [],
+          );
+          setInvoices(
+            Array.isArray(liveInvs)
+              ? liveInvs.map((inv) => ({
+                  ...inv,
+                  total: parseFloat(inv.total) || Number(inv.total) || 0,
+                  subtotal:
+                    parseFloat(inv.subtotal) || Number(inv.subtotal) || 0,
+                  tax: parseFloat(inv.tax) || Number(inv.tax) || 0,
+                  discount:
+                    parseFloat(inv.discount) || Number(inv.discount) || 0,
+                }))
+              : [],
+          );
+          setReturnHistory(Array.isArray(liveReturns) ? liveReturns : []);
         }
       } catch (err) {
         console.warn(
@@ -297,8 +287,7 @@ export function PosProvider({
           });
       }
     } else {
-      // Unauthenticated / demo mode: use default mock POS products
-      setProducts(MOCK_POS_PRODUCTS);
+      setProducts([]);
       setIsOfflineReady(false);
     }
 

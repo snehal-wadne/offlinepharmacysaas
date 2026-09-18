@@ -11,10 +11,6 @@ import {
   Platform,
 } from 'react-native';
 import {
-  DEFAULT_REGISTER_SESSION,
-  MOCK_REGISTER_HISTORY,
-} from '../../data/cashierMockData';
-import {
   fetchCurrentRegisterSession,
   openRegisterShift,
   closeRegisterShift,
@@ -27,32 +23,48 @@ import PaginationControls from '../../components/common/PaginationControls';
 import { localPersistenceService } from '../../db';
 import { syncEngine } from '../../sync';
 
+const EMPTY_REGISTER_SESSION = {
+  id: null,
+  sessionId: null,
+  isOpen: false,
+  openedBy: '',
+  openedAt: null,
+  branch: '',
+  openingBalance: 0,
+  cashSales: 0,
+  upiSales: 0,
+  cardSales: 0,
+  creditSales: 0,
+  cashRefunds: 0,
+  totalDiscounts: 0,
+  expectedCash: 0,
+  notes: '',
+  isPendingClose: false,
+};
+
 export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBranch = true }) {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const isCompact = width < 1024;
 
   // Active Session State
-  const [session, setSession] = useState({
-    ...DEFAULT_REGISTER_SESSION,
-    expectedCash: 10780.0, // 2000 (Opening) + 8750 (Cash Sales) - 350 (Cash Refunds) + 500 (Float In) - 120 (Expenses Out)
-  });
+  const [session, setSession] = useState(EMPTY_REGISTER_SESSION);
 
-  // Form State for "Open Register" (Image 1 & 2)
+  // Form State for "Open Register"
   const [openingBalanceInput, setOpeningBalanceInput] = useState('2000.00');
   const [openingNote, setOpeningNote] = useState('');
 
-  // Modal 1: Close Register Modal (Image 3)
+  // Modal 1: Close Register Modal
   const [closeModalVisible, setCloseModalVisible] = useState(false);
-  const [countedCashInput, setCountedCashInput] = useState('10780.00');
+  const [countedCashInput, setCountedCashInput] = useState('0.00');
   const [closingNotes, setClosingNotes] = useState('');
 
   // Modal 2: View Register History Modal
   const [historyModalVisible, setHistoryModalVisible] = useState(false);
-  const [historyList, setHistoryList] = useState(MOCK_REGISTER_HISTORY);
+  const [historyList, setHistoryList] = useState([]);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState(null);
 
-  // Modal 3: Petty Cash / Cash Movement Modal (FRS CASH-03)
+  // Modal 3: Petty Cash / Cash Movement Modal
   const [cashMovementModalVisible, setCashMovementModalVisible] = useState(false);
   const [movementType, setMovementType] = useState('OUT'); // 'IN' | 'OUT'
   const [movementAmount, setMovementAmount] = useState('');
@@ -61,24 +73,7 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
   const [lastAddedMovementId, setLastAddedMovementId] = useState(null);
 
   // Persistent Petty Cash Movements Log for current session
-  const [pettyCashMovements, setPettyCashMovements] = useState([
-    {
-      id: 'PC-1001',
-      type: 'OUT',
-      amount: 120.0,
-      reason: 'Courier / delivery service charges',
-      time: '29 Aug 2026, 09:45 AM',
-      cashier: 'Cashier 01',
-    },
-    {
-      id: 'PC-1002',
-      type: 'IN',
-      amount: 500.0,
-      reason: 'Change float coins replenishment',
-      time: '29 Aug 2026, 10:15 AM',
-      cashier: 'Cashier 01',
-    },
-  ]);
+  const [pettyCashMovements, setPettyCashMovements] = useState([]);
 
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -139,45 +134,51 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
         ]);
 
         if (isMounted) {
-          if (!localOpenSession && currentSession && (currentSession.id || currentSession.status === 'OPEN')) {
-            const isOpen = currentSession.status === 'OPEN';
-            const openBal = parseFloat(currentSession.openingBalance || 2000.0);
-            const expCash = parseFloat(currentSession.expectedCash || currentSession.openingBalance || 2000.0);
-            setSession((prev) => ({
-              ...prev,
-              ...currentSession,
-              isOpen,
-              sessionId: currentSession.sessionCode || currentSession.sessionNumber || prev.sessionId,
-              openedBy: currentSession.openedBy || currentSession.cashierName || prev.openedBy,
-              openingBalance: openBal,
-              expectedCash: expCash > 0 ? expCash : openBal,
-            }));
+          if (!localOpenSession) {
+            if (currentSession && (currentSession.id || currentSession.status === 'OPEN')) {
+              const isOpen = currentSession.status === 'OPEN';
+              const openBal = parseFloat(currentSession.openingBalance || 0);
+              const expCash = parseFloat(currentSession.expectedCash || currentSession.openingBalance || 0);
+              setSession({
+                ...EMPTY_REGISTER_SESSION,
+                ...currentSession,
+                isOpen,
+                sessionId: currentSession.sessionCode || currentSession.sessionNumber || currentSession.id,
+                openedBy: currentSession.openedBy || currentSession.cashierName || 'Cashier',
+                openingBalance: openBal,
+                expectedCash: expCash > 0 ? expCash : openBal,
+              });
+            } else {
+              setSession(EMPTY_REGISTER_SESSION);
+            }
           }
 
-          if (historyData && Array.isArray(historyData) && historyData.length > 0) {
-            setHistoryList(historyData.map((h, i) => ({
-              id: h.sessionCode || h.sessionNumber || h.id || `REG-${i}`,
-              date: h.openedAt ? new Date(h.openedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '28 Aug 2026',
-              shift: h.shiftName || 'Day Shift',
-              cashier: h.cashierName || 'Cashier 01',
-              openedAt: h.openedAt ? new Date(h.openedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '09:00 AM',
-              closedAt: h.closedAt ? new Date(h.closedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '10:00 PM',
-              branch: h.branchName || 'Main Branch',
-              openingBalance: parseFloat(h.openingBalance) || 2000.0,
-              cashSales: parseFloat(h.totalSales || h.cashSales) || 0,
-              cashRefunds: parseFloat(h.cashRefunds) || 0,
-              pettyCashIn: 0,
-              pettyCashOut: 0,
-              expectedCash: parseFloat(h.expectedCash) || 0,
-              countedCash: parseFloat(h.countedCash) || 0,
-              variance: parseFloat(h.variance) || 0,
-              status: h.varianceStatus || h.status || 'Balanced',
-              notes: h.notes || 'Shift completed.',
-            })));
-          }
+          setHistoryList(
+            Array.isArray(historyData)
+              ? historyData.map((h, i) => ({
+                  id: h.sessionCode || h.sessionNumber || h.id || `REG-${i}`,
+                  date: h.openedAt ? new Date(h.openedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Today',
+                  shift: h.shiftName || 'Day Shift',
+                  cashier: h.cashierName || 'Cashier',
+                  openedAt: h.openedAt ? new Date(h.openedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '09:00 AM',
+                  closedAt: h.closedAt ? new Date(h.closedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '10:00 PM',
+                  branch: h.branchName || 'Main Branch',
+                  openingBalance: parseFloat(h.openingBalance) || 0,
+                  cashSales: parseFloat(h.totalSales || h.cashSales) || 0,
+                  cashRefunds: parseFloat(h.cashRefunds) || 0,
+                  pettyCashIn: 0,
+                  pettyCashOut: 0,
+                  expectedCash: parseFloat(h.expectedCash) || 0,
+                  countedCash: parseFloat(h.countedCash) || 0,
+                  variance: parseFloat(h.variance) || 0,
+                  status: h.varianceStatus || h.status || 'Balanced',
+                  notes: h.notes || 'Shift completed.',
+                }))
+              : []
+          );
 
-          if (!localMovements?.length && movementsData && Array.isArray(movementsData) && movementsData.length > 0) {
-            setPettyCashMovements(movementsData);
+          if (!localMovements?.length) {
+            setPettyCashMovements(Array.isArray(movementsData) ? movementsData : []);
           }
         }
       } catch (err) {

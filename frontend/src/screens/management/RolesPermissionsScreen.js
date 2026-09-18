@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -9,24 +9,24 @@ import {
   StyleSheet,
   useWindowDimensions,
   Platform,
-} from 'react-native';
+} from "react-native";
 import {
-  MOCK_ROLES_LIST,
+  SYSTEM_ROLES_LIST,
   PAGE_PERMISSION_MODULES,
   DEFAULT_ROLE_PAGE_PERMISSIONS,
-} from '../../data/managementMockData';
-import { SkeletonTableRow } from '../../components/common/SkeletonLoader';
+} from "../../constants/uiConstants";
+import { SkeletonTableRow } from "../../components/common/SkeletonLoader";
 
 export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
 
   // Selected Role (Default: Cashier as standard initial selection)
-  const [selectedRoleId, setSelectedRoleId] = useState('role-cashier');
+  const [selectedRoleId, setSelectedRoleId] = useState("role-cashier");
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
 
   // Search filter for pages/modules
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(false);
 
   // Collapsed Module Groups state
@@ -36,7 +36,7 @@ export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
   const [matrixState, setMatrixState] = useState(DEFAULT_ROLE_PAGE_PERMISSIONS);
 
   // Roles list
-  const [roles, setRoles] = useState(MOCK_ROLES_LIST);
+  const [roles, setRoles] = useState(SYSTEM_ROLES_LIST);
 
   // Active Role Lookup
   const activeRole = roles.find((r) => r.id === selectedRoleId) || roles[0];
@@ -80,7 +80,7 @@ export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
       onShowToast(
         isAllowed
           ? `✓ Allowed all pages in "${moduleObj.moduleName}" for ${activeRole.name}`
-          : `Disallowed all pages in "${moduleObj.moduleName}" for ${activeRole.name}`
+          : `Disallowed all pages in "${moduleObj.moduleName}" for ${activeRole.name}`,
       );
     }
   };
@@ -88,7 +88,9 @@ export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
   // Save changes
   const handleSaveChanges = () => {
     if (onShowToast) {
-      onShowToast(`✓ Page permissions for role "${activeRole.name}" successfully saved and active!`);
+      onShowToast(
+        `✓ Page permissions for role "${activeRole.name}" successfully saved and active!`,
+      );
       // TODO: Persist to backend when API endpoint is available
     }
   };
@@ -102,7 +104,9 @@ export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
         [selectedRoleId]: { ...initialPerms },
       }));
       if (onShowToast) {
-        onShowToast(`Reset "${activeRole.name}" permissions to system template defaults.`);
+        onShowToast(
+          `Reset "${activeRole.name}" permissions to system template defaults.`,
+        );
       }
     }
   };
@@ -116,14 +120,14 @@ export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
       (p) =>
         p.pageName.toLowerCase().includes(q) ||
         p.description.toLowerCase().includes(q) ||
-        module.moduleName.toLowerCase().includes(q)
+        module.moduleName.toLowerCase().includes(q),
     );
 
     return {
       ...module,
       pages: filteredPages,
     };
-  }).filter((m) => m.pages.length > 0);
+  }).filter((m) => m.pages?.length > 0);
 
   return (
     <ScrollView
@@ -171,7 +175,7 @@ export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
           />
           {searchQuery ? (
             <Pressable
-              onPress={() => setSearchQuery('')}
+              onPress={() => setSearchQuery("")}
               style={styles.clearSearchBtn}
             >
               <Text style={styles.clearSearchText}>✕</Text>
@@ -230,10 +234,11 @@ export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
                       {module.moduleName}
                     </Text>
                     <Text style={styles.modulePageCount}>
-                      ({module.pages.length} {module.pages.length === 1 ? 'page' : 'pages'})
+                      ({module.pages.length}{" "}
+                      {module.pages.length === 1 ? "page" : "pages"})
                     </Text>
                     <Text style={styles.moduleChevron}>
-                      {isCollapsed ? '⌄' : '⌃'}
+                      {isCollapsed ? "⌄" : "⌃"}
                     </Text>
                   </View>
 
@@ -256,7 +261,9 @@ export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
                       }}
                       style={styles.moduleDisallowAllBtn}
                     >
-                      <Text style={styles.moduleDisallowAllText}>✕ Disallow All</Text>
+                      <Text style={styles.moduleDisallowAllText}>
+                        ✕ Disallow All
+                      </Text>
                     </Pressable>
                   </View>
                 </Pressable>
@@ -270,10 +277,7 @@ export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
                     return (
                       <View
                         key={page.pageId}
-                        style={[
-                          styles.pageRow,
-                          isEven && styles.pageRowEven,
-                        ]}
+                        style={[styles.pageRow, isEven && styles.pageRowEven]}
                       >
                         {/* Page Name */}
                         <View style={styles.colPageInfo}>
@@ -284,7 +288,10 @@ export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
 
                         {/* Description */}
                         <View style={styles.colDescription}>
-                          <Text style={styles.descriptionText} numberOfLines={2}>
+                          <Text
+                            style={styles.descriptionText}
+                            numberOfLines={2}
+                          >
                             {page.description}
                           </Text>
                         </View>
@@ -294,16 +301,20 @@ export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
                           <View
                             style={[
                               styles.statusBadge,
-                              isAllowed ? styles.statusBadgeAllowed : styles.statusBadgeDenied,
+                              isAllowed
+                                ? styles.statusBadgeAllowed
+                                : styles.statusBadgeDenied,
                             ]}
                           >
                             <Text
                               style={[
                                 styles.statusBadgeText,
-                                isAllowed ? styles.statusTextAllowed : styles.statusTextDenied,
+                                isAllowed
+                                  ? styles.statusTextAllowed
+                                  : styles.statusTextDenied,
                               ]}
                             >
-                              {isAllowed ? '✓ Allowed' : '✕ Not Allowed'}
+                              {isAllowed ? "✓ Allowed" : "✕ Not Allowed"}
                             </Text>
                           </View>
                         </View>
@@ -311,19 +322,25 @@ export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
                         {/* Single Interactive Toggle Button */}
                         <View style={styles.colToggle}>
                           <Pressable
-                            onPress={() => handleTogglePagePermission(page.pageId)}
+                            onPress={() =>
+                              handleTogglePagePermission(page.pageId)
+                            }
                             style={[
                               styles.toggleSwitchTrack,
-                              isAllowed ? styles.toggleTrackAllowed : styles.toggleTrackDenied,
+                              isAllowed
+                                ? styles.toggleTrackAllowed
+                                : styles.toggleTrackDenied,
                             ]}
                             accessibilityRole="switch"
                             accessibilityState={{ checked: isAllowed }}
-                            accessibilityLabel={`Toggle permission for ${page.pageName}. Currently ${isAllowed ? 'Allowed' : 'Not Allowed'}`}
+                            accessibilityLabel={`Toggle permission for ${page.pageName}. Currently ${isAllowed ? "Allowed" : "Not Allowed"}`}
                           >
                             <View
                               style={[
                                 styles.toggleThumb,
-                                isAllowed ? styles.toggleThumbAllowed : styles.toggleThumbDenied,
+                                isAllowed
+                                  ? styles.toggleThumbAllowed
+                                  : styles.toggleThumbDenied,
                               ]}
                             />
                           </Pressable>
@@ -346,7 +363,10 @@ export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
             <View style={styles.legendItem}>
               <View style={styles.legendDotAllowed} />
               <Text style={styles.legendLabel}>
-                <Text style={{ fontWeight: '700', color: '#0F766E' }}>Allowed</Text>: User role has access to view & use this page
+                <Text style={{ fontWeight: "700", color: "#0F766E" }}>
+                  Allowed
+                </Text>
+                : User role has access to view & use this page
               </Text>
             </View>
 
@@ -354,24 +374,21 @@ export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
             <View style={styles.legendItem}>
               <View style={styles.legendDotDenied} />
               <Text style={styles.legendLabel}>
-                <Text style={{ fontWeight: '700', color: '#64748B' }}>Not Allowed</Text>: Page is restricted and hidden for this role
+                <Text style={{ fontWeight: "700", color: "#64748B" }}>
+                  Not Allowed
+                </Text>
+                : Page is restricted and hidden for this role
               </Text>
             </View>
           </View>
 
           {/* Action Buttons */}
           <View style={styles.footerActionsGroup}>
-            <Pressable
-              onPress={handleResetDefaults}
-              style={styles.resetBtn}
-            >
+            <Pressable onPress={handleResetDefaults} style={styles.resetBtn}>
               <Text style={styles.resetBtnText}>Reset Role Defaults</Text>
             </Pressable>
 
-            <Pressable
-              onPress={handleSaveChanges}
-              style={styles.saveBtn}
-            >
+            <Pressable onPress={handleSaveChanges} style={styles.saveBtn}>
               <Text style={styles.saveBtnText}>Save Changes</Text>
             </Pressable>
           </View>
@@ -390,7 +407,9 @@ export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
           onPress={() => setRoleDropdownOpen(false)}
         >
           <View style={styles.roleDropdownModalCard}>
-            <Text style={styles.roleDropdownHeaderTitle}>Select Role to Configure Permissions</Text>
+            <Text style={styles.roleDropdownHeaderTitle}>
+              Select Role to Configure Permissions
+            </Text>
             {roles.map((role) => {
               const isSelected = role.id === selectedRoleId;
               return (
@@ -432,7 +451,7 @@ export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
   },
   contentContainer: {
     padding: 24,
@@ -447,21 +466,21 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     fontSize: 22,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
     letterSpacing: -0.4,
   },
   pageSubtitle: {
     fontSize: 13,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 4,
   },
   controlsBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: 18,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
     gap: 14,
   },
   roleSelectorSection: {
@@ -469,24 +488,24 @@ const styles = StyleSheet.create({
   },
   roleSelectorLabel: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
+    fontWeight: "600",
+    color: "#64748B",
   },
   roleDropdownBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 9,
     minWidth: 220,
-    cursor: 'pointer',
+    cursor: "pointer",
     ...Platform.select({
       web: {
-        boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+        boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
       },
     }),
   },
@@ -494,26 +513,26 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
     marginRight: 8,
   },
   roleDropdownBtnText: {
     flex: 1,
     fontSize: 13.5,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   roleDropdownChevron: {
     fontSize: 12,
-    color: '#64748B',
+    color: "#64748B",
     marginLeft: 10,
   },
   searchBoxWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
     borderRadius: 8,
     paddingHorizontal: 12,
     width: 300,
@@ -526,55 +545,55 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 13,
-    color: '#0F172A',
-    outlineStyle: 'none',
+    color: "#0F172A",
+    outlineStyle: "none",
   },
   clearSearchBtn: {
     padding: 4,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   clearSearchText: {
     fontSize: 13,
-    color: '#94A3B8',
+    color: "#94A3B8",
   },
   tableCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    overflow: 'hidden',
+    borderColor: "#E2E8F0",
+    overflow: "hidden",
     ...Platform.select({
       web: {
-        boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
+        boxShadow: "0 4px 6px -1px rgba(0,0,0,0.05)",
       },
     }),
   },
   tableHeaderRow: {
-    flexDirection: 'row',
-    backgroundColor: '#F8FAFC',
+    flexDirection: "row",
+    backgroundColor: "#F8FAFC",
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: "#E2E8F0",
     paddingVertical: 12,
     paddingHorizontal: 20,
-    alignItems: 'center',
+    alignItems: "center",
   },
   headerCol: {
-    justifyContent: 'center',
+    justifyContent: "center",
   },
   thText: {
     fontSize: 11,
-    fontWeight: '800',
-    color: '#64748B',
-    textTransform: 'uppercase',
+    fontWeight: "800",
+    color: "#64748B",
+    textTransform: "uppercase",
     letterSpacing: 0.6,
   },
   thActionText: {
     fontSize: 11,
-    fontWeight: '800',
-    color: '#64748B',
-    textTransform: 'uppercase',
+    fontWeight: "800",
+    color: "#64748B",
+    textTransform: "uppercase",
     letterSpacing: 0.6,
-    textAlign: 'center',
+    textAlign: "center",
   },
   colPageInfo: {
     flex: 1.5,
@@ -586,32 +605,32 @@ const styles = StyleSheet.create({
   },
   colStatus: {
     width: 140,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   colToggle: {
     width: 120,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   moduleSection: {
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: "#F1F5F9",
   },
   moduleHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#F0FDFA',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#F0FDFA",
     paddingVertical: 11,
     paddingHorizontal: 20,
-    cursor: 'pointer',
+    cursor: "pointer",
     borderBottomWidth: 1,
-    borderBottomColor: '#CCFBF1',
+    borderBottomColor: "#CCFBF1",
   },
   moduleTitleGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   moduleIcon: {
@@ -619,101 +638,101 @@ const styles = StyleSheet.create({
   },
   moduleNameText: {
     fontSize: 13,
-    fontWeight: '800',
-    color: '#0F766E',
+    fontWeight: "800",
+    color: "#0F766E",
     letterSpacing: 0.5,
   },
   modulePageCount: {
     fontSize: 11,
-    fontWeight: '600',
-    color: '#14B8A6',
+    fontWeight: "600",
+    color: "#14B8A6",
   },
   moduleChevron: {
     fontSize: 12,
-    color: '#0F766E',
-    fontWeight: '700',
+    color: "#0F766E",
+    fontWeight: "700",
   },
   moduleActionButtons: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   moduleAllowAllBtn: {
-    backgroundColor: '#ECFDF5',
+    backgroundColor: "#ECFDF5",
     borderWidth: 1,
-    borderColor: '#A7F3D0',
+    borderColor: "#A7F3D0",
     paddingVertical: 4,
     paddingHorizontal: 10,
     borderRadius: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   moduleAllowAllText: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#059669',
+    fontWeight: "700",
+    color: "#059669",
   },
   moduleDisallowAllBtn: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: "#F1F5F9",
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
     paddingVertical: 4,
     paddingHorizontal: 10,
     borderRadius: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   moduleDisallowAllText: {
     fontSize: 11,
-    fontWeight: '600',
-    color: '#475569',
+    fontWeight: "600",
+    color: "#475569",
   },
   pageRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 14,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    backgroundColor: '#FFFFFF',
+    borderBottomColor: "#F1F5F9",
+    backgroundColor: "#FFFFFF",
   },
   pageRowEven: {
-    backgroundColor: '#FAFCFF',
+    backgroundColor: "#FAFCFF",
   },
   pageNameText: {
     fontSize: 13.5,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   descriptionText: {
     fontSize: 12.5,
-    color: '#64748B',
+    color: "#64748B",
     lineHeight: 18,
   },
   statusBadge: {
     paddingVertical: 4,
     paddingHorizontal: 10,
     borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   statusBadgeAllowed: {
-    backgroundColor: '#ECFDF5',
+    backgroundColor: "#ECFDF5",
     borderWidth: 1,
-    borderColor: '#A7F3D0',
+    borderColor: "#A7F3D0",
   },
   statusBadgeDenied: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: "#F1F5F9",
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
   },
   statusBadgeText: {
     fontSize: 11.5,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   statusTextAllowed: {
-    color: '#059669',
+    color: "#059669",
   },
   statusTextDenied: {
-    color: '#64748B',
+    color: "#64748B",
   },
   /* Toggle Switch Styles */
   toggleSwitchTrack: {
@@ -721,29 +740,29 @@ const styles = StyleSheet.create({
     height: 26,
     borderRadius: 14,
     padding: 2,
-    justifyContent: 'center',
-    cursor: 'pointer',
+    justifyContent: "center",
+    cursor: "pointer",
     ...Platform.select({
       web: {
-        transition: 'background-color 0.2s ease-in-out',
+        transition: "background-color 0.2s ease-in-out",
       },
     }),
   },
   toggleTrackAllowed: {
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
   },
   toggleTrackDenied: {
-    backgroundColor: '#CBD5E1',
+    backgroundColor: "#CBD5E1",
   },
   toggleThumb: {
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     ...Platform.select({
       web: {
-        transition: 'transform 0.2s ease-in-out',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+        transition: "transform 0.2s ease-in-out",
+        boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
       },
     }),
   },
@@ -755,91 +774,91 @@ const styles = StyleSheet.create({
   },
   /* Footer & Legend */
   tableFooterBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingVertical: 16,
     paddingHorizontal: 20,
-    backgroundColor: '#FAFCFF',
+    backgroundColor: "#FAFCFF",
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-    flexWrap: 'wrap',
+    borderTopColor: "#E2E8F0",
+    flexWrap: "wrap",
     gap: 16,
   },
   legendContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 16,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
   },
   legendTitle: {
     fontSize: 11,
-    fontWeight: '800',
-    color: '#334155',
+    fontWeight: "800",
+    color: "#334155",
     letterSpacing: 0.5,
   },
   legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
   },
   legendDotAllowed: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#10B981',
+    backgroundColor: "#10B981",
   },
   legendDotDenied: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#94A3B8',
+    backgroundColor: "#94A3B8",
   },
   legendLabel: {
     fontSize: 12,
-    color: '#475569',
+    color: "#475569",
   },
   footerActionsGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
   },
   resetBtn: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
     paddingVertical: 9,
     paddingHorizontal: 16,
     borderRadius: 8,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   resetBtnText: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#475569',
+    fontWeight: "600",
+    color: "#475569",
   },
   saveBtn: {
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
     paddingVertical: 9,
     paddingHorizontal: 20,
     borderRadius: 8,
-    cursor: 'pointer',
+    cursor: "pointer",
     ...Platform.select({
       web: {
-        boxShadow: '0 2px 4px rgba(15,118,110,0.2)',
+        boxShadow: "0 2px 4px rgba(15,118,110,0.2)",
       },
     }),
   },
   saveBtnText: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
   /* Empty State */
   emptySearchContainer: {
     padding: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   emptyIcon: {
     fontSize: 32,
@@ -847,29 +866,29 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 16,
-    fontWeight: '700',
-    color: '#1E293B',
+    fontWeight: "700",
+    color: "#1E293B",
   },
   emptySubtitle: {
     fontSize: 13,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 4,
   },
   /* Modal Overlay */
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.45)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(15, 23, 42, 0.45)",
+    justifyContent: "center",
+    alignItems: "center",
     padding: 20,
   },
   roleDropdownModalCard: {
-    width: '100%',
+    width: "100%",
     maxWidth: 460,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 14,
     padding: 20,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
@@ -877,26 +896,26 @@ const styles = StyleSheet.create({
   },
   roleDropdownHeaderTitle: {
     fontSize: 15,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
     marginBottom: 14,
   },
   roleDropdownOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderRadius: 8,
     marginBottom: 6,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
-    backgroundColor: '#FFFFFF',
-    cursor: 'pointer',
+    borderColor: "#F1F5F9",
+    backgroundColor: "#FFFFFF",
+    cursor: "pointer",
   },
   roleDropdownOptionSelected: {
-    borderColor: '#99F6E4',
-    backgroundColor: '#F0FDFA',
+    borderColor: "#99F6E4",
+    backgroundColor: "#F0FDFA",
   },
   roleOptionTextWrapper: {
     flex: 1,
@@ -904,20 +923,20 @@ const styles = StyleSheet.create({
   },
   roleOptionName: {
     fontSize: 13.5,
-    fontWeight: '700',
-    color: '#1E293B',
+    fontWeight: "700",
+    color: "#1E293B",
   },
   roleOptionNameSelected: {
-    color: '#0F766E',
+    color: "#0F766E",
   },
   roleOptionDesc: {
     fontSize: 11.5,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 2,
   },
   roleCheckmark: {
     fontSize: 15,
-    fontWeight: '800',
-    color: '#0F766E',
+    fontWeight: "800",
+    color: "#0F766E",
   },
 });

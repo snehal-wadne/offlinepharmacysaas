@@ -17,11 +17,9 @@ import {
   SkeletonItemCard,
 } from "../../components/common/SkeletonLoader";
 import PaginationControls from "../../components/common/PaginationControls";
-import {
-  MOCK_TRANSFERS,
-  TRANSFER_STATUS_FILTER,
-  TRANSFER_BRANCHES,
-} from "../../data/stockTransferMockData";
+import { TRANSFER_STATUS_FILTER } from "../../constants/uiConstants";
+import { fetchStockTransfers, fetchInventory } from "../../api/inventoryApi";
+import { fetchBranches } from "../../api/branchApi";
 import { localPersistenceService } from "../../db";
 import { syncEngine } from "../../sync";
 
@@ -56,116 +54,72 @@ export default function StockTransferScreen({ onShowToast }) {
   const [selectedMedicine, setSelectedMedicine] = useState(null);
   const [searchMedQuery, setSearchMedQuery] = useState("");
   const [showMedPicker, setShowMedPicker] = useState(false);
-  const [fromBranchModal, setFromBranchModal] = useState(
-    "FIT Main Campus Hospital Pharmacy",
-  );
-  const [toBranchModal, setToBranchModal] = useState(
-    "FIT Pune City OPD Pharmacy",
-  );
+  const [fromBranchModal, setFromBranchModal] = useState("Main Branch");
+  const [toBranchModal, setToBranchModal] = useState("Main Branch");
   const [transferQty, setTransferQty] = useState("50");
   const [transferReason, setTransferReason] = useState(
     "Inter-branch stock rebalancing",
   );
   const [transferError, setTransferError] = useState("");
 
-  const [branchesList, setBranchesList] = useState([
-    { id: "BR-01", name: "FIT Main Campus Hospital Pharmacy", city: "Pune" },
-    { id: "BR-02", name: "FIT Pune City OPD Pharmacy", city: "Pune" },
-    { id: "BR-03", name: "FIT Central Medical Warehouse", city: "Pune" },
-    { id: "BR-04", name: "FIT Student Health Center Dispensary", city: "Pune" },
-  ]);
-
-  const [availableProducts, setAvailableProducts] = useState([
-    {
-      id: "med-01",
-      productId: "prod-1",
-      medicineName: "Paracetamol 500mg",
-      brandName: "Crocin 500",
-      genericName: "Paracetamol IP",
-      strength: "500mg",
-      sku: "SKU-CRO-500",
-      batchNo: "BAT-9021",
-      quantity: 450,
-    },
-    {
-      id: "med-02",
-      productId: "prod-2",
-      medicineName: "Amoxicillin 250mg",
-      brandName: "Mox 250",
-      genericName: "Amoxicillin Trihydrate",
-      strength: "250mg",
-      sku: "SKU-MOX-250",
-      batchNo: "BAT-8842",
-      quantity: 280,
-    },
-    {
-      id: "med-03",
-      productId: "prod-3",
-      medicineName: "Ibuprofen 400mg",
-      brandName: "Brufen 400",
-      genericName: "Ibuprofen IP",
-      strength: "400mg",
-      sku: "SKU-BRU-400",
-      batchNo: "BAT-7719",
-      quantity: 320,
-    },
-    {
-      id: "med-04",
-      productId: "prod-4",
-      medicineName: "Cetirizine 10mg",
-      brandName: "Cetzine 10",
-      genericName: "Cetirizine Dihydrochloride",
-      strength: "10mg",
-      sku: "SKU-CET-010",
-      batchNo: "BAT-6634",
-      quantity: 600,
-    },
-    {
-      id: "med-05",
-      productId: "prod-5",
-      medicineName: "Azithromycin 500mg",
-      brandName: "Azee 500",
-      genericName: "Azithromycin IP",
-      strength: "500mg",
-      sku: "SKU-AZE-500",
-      batchNo: "BAT-5512",
-      quantity: 190,
-    },
-  ]);
+  const [branchesList, setBranchesList] = useState([]);
+  const [availableProducts, setAvailableProducts] = useState([]);
 
   useEffect(() => {
     let isMounted = true;
     loadTransfers();
+    loadBranches();
+    loadCatalog();
+
+    async function loadBranches() {
+      try {
+        const res = await fetchBranches();
+        if (isMounted && res && res.success) {
+          const list = Array.isArray(res.data?.data)
+            ? res.data.data
+            : Array.isArray(res.data)
+              ? res.data
+              : [];
+          const activeOnly = list.filter(
+            (b) => b.status === "ACTIVE" || b.status === "Active" || !b.status,
+          );
+          const mapped = activeOnly.map((b, idx) => ({
+            id: b.id || `BR-0${idx + 1}`,
+            name: b.name,
+            city: b.city || "",
+          }));
+          setBranchesList(mapped);
+          if (mapped.length > 0) {
+            setFromBranchModal(mapped[0].name);
+            setToBranchModal(mapped[1]?.name || mapped[0].name);
+          }
+        }
+      } catch (e) {
+        if (isMounted) setBranchesList([]);
+      }
+    }
 
     async function loadCatalog() {
       try {
-        if (typeof localPersistenceService?.getCatalogForPos === "function") {
-          const cat = await localPersistenceService.getCatalogForPos();
-          if (isMounted && Array.isArray(cat) && cat.length > 0) {
-            const mapped = cat.map((p, idx) => ({
-              id: p.productId || p.id || `prod-${idx}`,
-              productId: p.productId || p.id || `prod-${idx}`,
-              medicineName: p.name || "Medicine",
-              brandName: p.brand || p.name || "Medicine",
-              genericName: p.generic || p.name || "",
-              strength: p.strength || "500mg",
-              sku: p.sku || `SKU-${p.id || idx}`,
-              batchNo:
-                (Array.isArray(p.batches) && p.batches[0]?.batchNumber) ||
-                "BAT-1001",
-              quantity: Number(
-                (Array.isArray(p.batches) &&
-                  p.batches[0]?.availableQuantity) ||
-                  p.stock ||
-                  250,
-              ),
-            }));
-            setAvailableProducts(mapped);
-          }
+        const res = await fetchInventory();
+        if (isMounted && res && res.data && Array.isArray(res.data)) {
+          const mapped = res.data.map((p, idx) => ({
+            id: p.id || `prod-${idx}`,
+            productId: p.productId || p.id || `prod-${idx}`,
+            medicineName: p.medicineName || p.brandName || "Medicine",
+            brandName: p.brandName || p.medicineName || "Medicine",
+            genericName: p.genericName || p.medicineName || "",
+            strength: p.strength || "",
+            sku: p.sku || `SKU-${p.id || idx}`,
+            batchNo: p.batchNo || "B-1001",
+            quantity: Number(p.quantity || 0),
+          }));
+          setAvailableProducts(mapped);
         }
-      } catch (err) {}
+      } catch (err) {
+        if (isMounted) setAvailableProducts([]);
+      }
     }
-    loadCatalog();
 
     const subscribeFn =
       typeof syncEngine?.onStateChange === "function"
@@ -204,15 +158,17 @@ export default function StockTransferScreen({ onShowToast }) {
 
       if (Array.isArray(localTxs) && localTxs.length > 0) {
         setTransfers(localTxs);
-      } else if (!tenantCtx.isDemo) {
-        // Authenticated real tenant with 0 records -> EMPTY STATE, never fake data!
-        setTransfers([]);
       } else {
-        // Unauthenticated demo mode -> preserve MOCK_TRANSFERS
-        setTransfers(MOCK_TRANSFERS);
+        const apiRes = await fetchStockTransfers();
+        if (apiRes && apiRes.data && Array.isArray(apiRes.data)) {
+          setTransfers(apiRes.data);
+        } else {
+          setTransfers([]);
+        }
       }
     } catch (err) {
       console.warn("[StockTransferScreen] loadTransfers error:", err);
+      setTransfers([]);
     } finally {
       setLoading(false);
     }
@@ -395,9 +351,7 @@ export default function StockTransferScreen({ onShowToast }) {
     setFromBranchModal(
       branchesList[0]?.name || "FIT Main Campus Hospital Pharmacy",
     );
-    setToBranchModal(
-      branchesList[1]?.name || "FIT Pune City OPD Pharmacy",
-    );
+    setToBranchModal(branchesList[1]?.name || "FIT Pune City OPD Pharmacy");
     setTransferQty("50");
     setTransferReason("Inter-branch stock rebalancing");
     setTransferError("");
@@ -448,8 +402,7 @@ export default function StockTransferScreen({ onShowToast }) {
       syncStatus: "PENDING",
       createdBy: "Manager",
       notes: transferReason,
-      medicineName:
-        selectedMedicine.brandName || selectedMedicine.medicineName,
+      medicineName: selectedMedicine.brandName || selectedMedicine.medicineName,
     };
 
     // Prepend to transfer records list
@@ -465,9 +418,7 @@ export default function StockTransferScreen({ onShowToast }) {
     );
 
     try {
-      if (
-        typeof localPersistenceService?.transferLocalStock === "function"
-      ) {
+      if (typeof localPersistenceService?.transferLocalStock === "function") {
         await localPersistenceService.transferLocalStock({
           fromBranchId: fromBranchModal,
           toBranchId: toBranchModal,
@@ -475,11 +426,9 @@ export default function StockTransferScreen({ onShowToast }) {
           notes: transferReason,
           items: [
             {
-              productId:
-                selectedMedicine.productId || selectedMedicine.id,
+              productId: selectedMedicine.productId || selectedMedicine.id,
               productName:
-                selectedMedicine.brandName ||
-                selectedMedicine.medicineName,
+                selectedMedicine.brandName || selectedMedicine.medicineName,
               batchNumber: selectedMedicine.batchNo || "DEFAULT",
               quantity: qtyNum,
             },
@@ -953,7 +902,8 @@ export default function StockTransferScreen({ onShowToast }) {
               {/* Medicine Selector Bar with Quick Chips */}
               <View style={styles.medSelectSection}>
                 <Text style={styles.fieldLabelModal}>
-                  Select Medicine from Stock <Text style={styles.reqStar}>*</Text>
+                  Select Medicine from Stock{" "}
+                  <Text style={styles.reqStar}>*</Text>
                 </Text>
                 <View style={styles.medSearchContainer}>
                   <TextInput
@@ -1011,16 +961,16 @@ export default function StockTransferScreen({ onShowToast }) {
                             ]}
                             onPress={() => {
                               setSelectedMedicine(p);
-                              setSearchMedQuery(
-                                p.brandName || p.medicineName,
-                              );
+                              setSearchMedQuery(p.brandName || p.medicineName);
                               setShowMedPicker(false);
                             }}
                           >
                             <View style={{ flex: 1 }}>
                               <Text style={styles.medDropdownTitle}>
                                 {p.brandName || p.medicineName}{" "}
-                                <Text style={{ fontSize: 11, color: "#64748B" }}>
+                                <Text
+                                  style={{ fontSize: 11, color: "#64748B" }}
+                                >
                                   ({p.strength || "500mg"})
                                 </Text>
                               </Text>
@@ -1121,10 +1071,7 @@ export default function StockTransferScreen({ onShowToast }) {
               >
                 {/* Source Branch (From) */}
                 <View
-                  style={[
-                    styles.branchCol,
-                    isMobile && styles.branchColMobile,
-                  ]}
+                  style={[styles.branchCol, isMobile && styles.branchColMobile]}
                 >
                   <Text style={styles.fieldLabelModal}>
                     From Branch (Source) <Text style={styles.reqStar}>*</Text>
@@ -1155,7 +1102,15 @@ export default function StockTransferScreen({ onShowToast }) {
                               isSelected && styles.branchOptionItemFromActive,
                             ]}
                           >
-                            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
+                            <View
+                              style={{
+                                flexDirection: "row",
+                                alignItems: "center",
+                                gap: 8,
+                                flex: 1,
+                                minWidth: 0,
+                              }}
+                            >
                               <View
                                 style={[
                                   styles.branchDot,
@@ -1212,10 +1167,7 @@ export default function StockTransferScreen({ onShowToast }) {
 
                 {/* Destination Branch (To) */}
                 <View
-                  style={[
-                    styles.branchCol,
-                    isMobile && styles.branchColMobile,
-                  ]}
+                  style={[styles.branchCol, isMobile && styles.branchColMobile]}
                 >
                   <Text style={styles.fieldLabelModal}>
                     To Branch (Destination){" "}
@@ -1241,7 +1193,15 @@ export default function StockTransferScreen({ onShowToast }) {
                               isDisabled && styles.branchOptionDisabled,
                             ]}
                           >
-                            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
+                            <View
+                              style={{
+                                flexDirection: "row",
+                                alignItems: "center",
+                                gap: 8,
+                                flex: 1,
+                                minWidth: 0,
+                              }}
+                            >
                               <View
                                 style={[
                                   styles.branchDot,
@@ -1254,7 +1214,8 @@ export default function StockTransferScreen({ onShowToast }) {
                                     styles.branchOptionName,
                                     isSelected &&
                                       styles.branchOptionNameToActive,
-                                    isDisabled && styles.branchOptionNameDisabled,
+                                    isDisabled &&
+                                      styles.branchOptionNameDisabled,
                                   ]}
                                   numberOfLines={1}
                                 >

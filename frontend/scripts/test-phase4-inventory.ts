@@ -42,8 +42,6 @@ import { LocalPersistenceService } from '../src/db/services/localPersistenceServ
 import { SyncEngine } from '../src/sync/syncEngine';
 import { ConnectivityService } from '../src/sync/connectivityService';
 import { PullWorker } from '../src/sync/pullWorker';
-import { MOCK_STOCK_ITEMS } from '../src/data/currentStockMockData';
-import { MOCK_TRANSFERS } from '../src/data/stockTransferMockData';
 
 let passed = 0;
 let failed = 0;

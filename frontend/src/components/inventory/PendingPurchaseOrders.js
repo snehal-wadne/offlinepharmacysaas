@@ -6,18 +6,12 @@ import {
   StyleSheet,
   Platform,
 } from 'react-native';
-import { MOCK_PURCHASE_ORDERS } from '../../data/inventoryDashboardMockData';
-
 export default function PendingPurchaseOrders({
-  orders = MOCK_PURCHASE_ORDERS,
+  orders = [],
   onViewAll,
   onOrderPress,
 }) {
-  const orderList = Array.isArray(orders)
-    ? orders
-    : Array.isArray(MOCK_PURCHASE_ORDERS)
-    ? MOCK_PURCHASE_ORDERS
-    : [];
+  const orderList = Array.isArray(orders) ? orders : [];
 
   return (
     <View style={styles.cardContainer}>

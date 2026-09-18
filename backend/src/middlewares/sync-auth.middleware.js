@@ -295,16 +295,28 @@ const requireSyncAuth = async (req, res, next) => {
 
       // Branch validation (if specified)
       if (rawBranchId) {
+        let branchIdToVerify = rawBranchId;
         if (!isUuid(rawBranchId)) {
-          return res.status(400).json({
-            success: false,
-            error: `Invalid branch identifier format: ${rawBranchId}`,
-          });
+          const nameRes = await pool.query(
+            "SELECT id FROM branches WHERE organisation_id = $1 AND (name ILIKE $2 OR branch_code ILIKE $2) LIMIT 1;",
+            [rawOrgId, rawBranchId],
+          );
+          if (nameRes.rows.length > 0) {
+            branchIdToVerify = nameRes.rows[0].id;
+            if (req.query && req.query.branchId)
+              req.query.branchId = branchIdToVerify;
+            if (req.headers) req.headers["x-branch-id"] = branchIdToVerify;
+          } else {
+            return res.status(400).json({
+              success: false,
+              error: `Invalid branch identifier format: ${rawBranchId}`,
+            });
+          }
         }
 
         const brRes = await pool.query(
           "SELECT id, name, status, organisation_id FROM branches WHERE id = $1",
-          [rawBranchId],
+          [branchIdToVerify],
         );
 
         if (brRes.rows.length === 0) {
@@ -347,7 +359,7 @@ const requireSyncAuth = async (req, res, next) => {
             isBranchAuthorized = true;
           } else {
             const allowedBranchIds = baRes.rows.map((r) => r.branch_id);
-            if (allowedBranchIds.includes(rawBranchId)) {
+            if (allowedBranchIds.includes(branchIdToVerify)) {
               isBranchAuthorized = true;
             }
           }
@@ -359,13 +371,19 @@ const requireSyncAuth = async (req, res, next) => {
             error: `Forbidden: User ${req.user.id} is not authorized for branch ${rawBranchId}`,
           });
         }
-      }
 
-      req.tenantContext = {
-        organisationId: rawOrgId,
-        branchId: rawBranchId || null,
-      };
-      req.tenant = req.tenantContext;
+        req.tenantContext = {
+          organisationId: rawOrgId,
+          branchId: branchIdToVerify,
+        };
+        req.tenant = req.tenantContext;
+      } else {
+        req.tenantContext = {
+          organisationId: rawOrgId,
+          branchId: null,
+        };
+        req.tenant = req.tenantContext;
+      }
     }
 
     next();

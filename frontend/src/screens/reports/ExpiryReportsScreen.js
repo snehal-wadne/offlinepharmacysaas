@@ -10,10 +10,6 @@ import {
   Platform,
 } from 'react-native';
 import InventoryStatCard from '../../components/inventory/InventoryStatCard';
-import {
-  EXPIRY_REPORTS_KPIS,
-  MOCK_EXPIRY_RISK_ITEMS,
-} from '../../data/reportsMockData';
 import { exportToCSV, exportToPDF } from '../../utils/exportUtils';
 import { SkeletonTableRow } from '../../components/common/SkeletonLoader';
 import PaginationControls from '../../components/common/PaginationControls';
@@ -26,15 +22,22 @@ const RISK_BADGES = {
   Expired: { bg: '#FEE2E2', text: '#991B1B' },
 };
 
+const INITIAL_KPIS = [
+  { id: 'exp-rep-1', label: 'Total Loss at Risk', value: '₹0', subtext: '0 items', variant: 'red' },
+  { id: 'exp-rep-2', label: 'Critical (< 30 Days)', value: '0', subtext: '0 items', variant: 'red' },
+  { id: 'exp-rep-3', label: 'High Risk (30-60 Days)', value: '0', subtext: '0 items', variant: 'amber' },
+  { id: 'exp-rep-4', label: 'Already Expired', value: '0', subtext: '0 items', variant: 'red' },
+];
+
 export default function ExpiryReportsScreen({ onShowToast, onNavigate, selectedBranch = 'All Branches' }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
   const isMobile = width < 768;
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [riskItems, setRiskItems] = useState(MOCK_EXPIRY_RISK_ITEMS);
-  const [kpis, setKpis] = useState(EXPIRY_REPORTS_KPIS);
-  const [loading, setLoading] = useState(false);
+  const [riskItems, setRiskItems] = useState([]);
+  const [kpis, setKpis] = useState(INITIAL_KPIS);
+  const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -109,10 +112,17 @@ export default function ExpiryReportsScreen({ onShowToast, onNavigate, selectedB
               };
             });
             setRiskItems(mapped);
+          } else {
+            setRiskItems([]);
           }
+        } else {
+          setRiskItems([]);
+          setKpis(INITIAL_KPIS);
         }
       } catch (err) {
-        console.warn('Backend expiry report unavailable, using local metrics:', err.message);
+        console.warn('Backend expiry report error:', err.message);
+        setRiskItems([]);
+        setKpis(INITIAL_KPIS);
       } finally {
         if (isMounted) setLoading(false);
       }

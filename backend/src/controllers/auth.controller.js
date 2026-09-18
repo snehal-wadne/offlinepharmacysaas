@@ -143,8 +143,22 @@ const resetPassword = async (req, res) => {
   }
 };
 
+const getUsers = async (req, res) => {
+  try {
+    const organisationId = req.user?.organisation_id || req.user?.organisationId;
+    if (!organisationId) {
+      return res.status(400).json({ success: false, error: "Organisation context required." });
+    }
+    const users = await authService.getOrganisationUsers(organisationId);
+    res.status(200).json({ success: true, count: users.length, data: users });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 module.exports = {
   getMe,
+  getUsers,
   login,
   pinLogin,
   register,

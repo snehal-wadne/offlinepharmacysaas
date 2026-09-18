@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -9,29 +9,28 @@ import {
   StyleSheet,
   useWindowDimensions,
   Platform,
-} from 'react-native';
-import InventoryStatCard from '../../components/inventory/InventoryStatCard';
-import {
-  SUPPLIERS_KPIS,
-  MOCK_SUPPLIERS_LIST,
-  SUPPLIER_CATEGORY_FILTER,
-} from '../../data/suppliersMockData';
+} from "react-native";
+import InventoryStatCard from "../../components/inventory/InventoryStatCard";
+import { SUPPLIER_CATEGORY_FILTER } from "../../constants/uiConstants";
 import {
   fetchSuppliers,
   createSupplier,
   updateSupplier,
   updateSupplierStatus,
   deleteSupplier,
-} from '../../api/purchaseApi';
-import { SkeletonTableRow, SkeletonItemCard } from '../../components/common/SkeletonLoader';
-import PaginationControls from '../../components/common/PaginationControls';
+} from "../../api/purchaseApi";
+import {
+  SkeletonTableRow,
+  SkeletonItemCard,
+} from "../../components/common/SkeletonLoader";
+import PaginationControls from "../../components/common/PaginationControls";
 
 const SUPPLIER_CATEGORIES = [
-  'Medicines & Injections',
-  'Generic Medicines',
-  'Nutrition & Diagnostics',
-  'Supplements & Vitamins',
-  'Medical Consumables',
+  "Medicines & Injections",
+  "Generic Medicines",
+  "Nutrition & Diagnostics",
+  "Supplements & Vitamins",
+  "Medical Consumables",
 ];
 
 export default function SuppliersScreen({ onShowToast, onNavigate }) {
@@ -40,15 +39,15 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
   const isMobile = width < 768;
 
   // Search & Filter State
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('All Categories');
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("All Categories");
   const [toggleActiveOnly, setToggleActiveOnly] = useState(false);
   const [toggleGstinOnly, setToggleGstinOnly] = useState(false);
 
   // 3-Dots Action Menu State
   const [actionMenuModalOpen, setActionMenuModalOpen] = useState(false);
-  const [selectedSupplierForAction, setSelectedSupplierForAction] = useState(null);
-
+  const [selectedSupplierForAction, setSelectedSupplierForAction] =
+    useState(null);
 
   // Suppliers List State
   const [suppliers, setSuppliers] = useState([]);
@@ -63,13 +62,13 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
 
   const [formData, setFormData] = useState({
-    name: '',
-    category: 'Medicines & Injections',
-    contactPerson: '',
-    phone: '',
-    email: '',
-    city: 'Mumbai',
-    gstin: '',
+    name: "",
+    category: "Medicines & Injections",
+    contactPerson: "",
+    phone: "",
+    email: "",
+    city: "Mumbai",
+    gstin: "",
   });
   const [formErrors, setFormErrors] = useState({});
 
@@ -81,51 +80,70 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
     try {
       setLoading(true);
       const res = await fetchSuppliers();
-      if (res && res.data && Array.isArray(res.data) && res.data.length > 0) {
+      if (res && res.data && Array.isArray(res.data)) {
         setSuppliers(res.data);
       } else {
-        setSuppliers(MOCK_SUPPLIERS_LIST);
+        setSuppliers([]);
       }
     } catch (err) {
-      console.warn('Failed to load suppliers from DB:', err.message);
-      setSuppliers(MOCK_SUPPLIERS_LIST);
+      console.warn("Failed to load suppliers from DB:", err.message);
+      setSuppliers([]);
     } finally {
       setLoading(false);
     }
   };
 
   // Dynamic 4 Top KPI Cards Calculations
-  const activeCount = suppliers.filter((s) => s.status === 'Active' || s.status === 'ACTIVE').length;
-  const pendingCount = suppliers.filter((s) => s.status === 'Pending' || s.status === 'PENDING').length;
+  const activeCount = suppliers.filter(
+    (s) => s.status === "Active" || s.status === "ACTIVE",
+  ).length;
+  const pendingCount = suppliers.filter(
+    (s) => s.status === "Pending" || s.status === "PENDING",
+  ).length;
+  const outstandingSum = suppliers.reduce((sum, s) => {
+    const val =
+      typeof s.outstandingBalance === "number"
+        ? s.outstandingBalance
+        : typeof s.balance === "number"
+          ? s.balance
+          : parseFloat(
+              String(s.outstandingBalance || s.balance || "0").replace(
+                /[^0-9.]/g,
+                "",
+              ),
+            ) || 0;
+    return sum + val;
+  }, 0);
 
   const dynamicSuppliersKpis = [
     {
-      id: 'sup-kpi-1',
-      label: 'Total Suppliers',
+      id: "sup-kpi-1",
+      label: "Total Suppliers",
       value: suppliers.length.toLocaleString(),
-      subtext: 'Registered vendors',
-      variant: 'teal',
+      subtext:
+        suppliers.length > 0 ? "Registered vendors" : "0 suppliers registered",
+      variant: "teal",
     },
     {
-      id: 'sup-kpi-2',
-      label: 'Active Partners',
+      id: "sup-kpi-2",
+      label: "Active Partners",
       value: activeCount.toLocaleString(),
-      subtext: 'Verified suppliers',
-      variant: 'teal',
+      subtext: "Verified suppliers",
+      variant: "teal",
     },
     {
-      id: 'sup-kpi-3',
-      label: 'Pending Approvals',
+      id: "sup-kpi-3",
+      label: "Pending Approvals",
       value: pendingCount.toLocaleString(),
-      subtext: 'Awaiting verification',
-      variant: 'amber',
+      subtext: "Awaiting verification",
+      variant: "amber",
     },
     {
-      id: 'sup-kpi-4',
-      label: 'Outstanding Balance',
-      value: '₹1,84,600',
-      subtext: 'Accounts payable',
-      variant: 'orange',
+      id: "sup-kpi-4",
+      label: "Outstanding Balance",
+      value: `₹${outstandingSum.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
+      subtext: "Accounts payable",
+      variant: "orange",
     },
   ];
 
@@ -134,20 +152,22 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
     const sup = suppliers.find((s) => s.id === supId);
     if (!sup) return;
 
-    const nextStatusStr = sup.status === 'Active' ? 'Inactive' : 'Active';
-    const dbStatus = nextStatusStr === 'Active' ? 'ACTIVE' : 'INACTIVE';
+    const nextStatusStr = sup.status === "Active" ? "Inactive" : "Active";
+    const dbStatus = nextStatusStr === "Active" ? "ACTIVE" : "INACTIVE";
 
     try {
       await updateSupplierStatus(sup.id, dbStatus);
       setSuppliers((prev) =>
-        prev.map((s) => (s.id === supId ? { ...s, status: nextStatusStr } : s))
+        prev.map((s) => (s.id === supId ? { ...s, status: nextStatusStr } : s)),
       );
       if (onShowToast) {
-        onShowToast(`✓ Supplier "${sup.name}" marked ${nextStatusStr} in database!`);
+        onShowToast(
+          `✓ Supplier "${sup.name}" marked ${nextStatusStr} in database!`,
+        );
       }
     } catch (err) {
       setSuppliers((prev) =>
-        prev.map((s) => (s.id === supId ? { ...s, status: nextStatusStr } : s))
+        prev.map((s) => (s.id === supId ? { ...s, status: nextStatusStr } : s)),
       );
       if (onShowToast) {
         onShowToast(`Supplier "${sup.name}" marked ${nextStatusStr}`);
@@ -159,7 +179,11 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
     const nextVal = !toggleActiveOnly;
     setToggleActiveOnly(nextVal);
     if (onShowToast) {
-      onShowToast(nextVal ? 'Filter enabled: Active Suppliers Only' : 'Filter cleared: Showing All Suppliers');
+      onShowToast(
+        nextVal
+          ? "Filter enabled: Active Suppliers Only"
+          : "Filter cleared: Showing All Suppliers",
+      );
     }
   };
 
@@ -167,7 +191,11 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
     const nextVal = !toggleGstinOnly;
     setToggleGstinOnly(nextVal);
     if (onShowToast) {
-      onShowToast(nextVal ? 'Filter enabled: Verified GSTIN Only' : 'Filter cleared: Showing All');
+      onShowToast(
+        nextVal
+          ? "Filter enabled: Verified GSTIN Only"
+          : "Filter cleared: Showing All",
+      );
     }
   };
 
@@ -187,10 +215,13 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
       (sup.gstin && sup.gstin.toLowerCase().includes(q));
 
     const matchesCategory =
-      selectedCategory === 'All Categories' || sup.category === selectedCategory;
+      selectedCategory === "All Categories" ||
+      sup.category === selectedCategory;
 
-    const matchesActive = !toggleActiveOnly || sup.status === 'Active' || sup.status === 'ACTIVE';
-    const matchesGstin = !toggleGstinOnly || (sup.gstin && sup.gstin.length >= 15);
+    const matchesActive =
+      !toggleActiveOnly || sup.status === "Active" || sup.status === "ACTIVE";
+    const matchesGstin =
+      !toggleGstinOnly || (sup.gstin && sup.gstin.length >= 15);
 
     return matchesSearch && matchesCategory && matchesActive && matchesGstin;
   });
@@ -200,13 +231,13 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
     setEditingSupplierId(null);
     setCategoryDropdownOpen(false);
     setFormData({
-      name: '',
-      category: 'Medicines & Injections',
-      contactPerson: '',
-      phone: '',
-      email: '',
-      city: 'Mumbai',
-      gstin: '',
+      name: "",
+      category: "Medicines & Injections",
+      contactPerson: "",
+      phone: "",
+      email: "",
+      city: "Mumbai",
+      gstin: "",
     });
     setFormErrors({});
     setModalVisible(true);
@@ -217,13 +248,14 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
     setEditingSupplierId(sup.id);
     setCategoryDropdownOpen(false);
     setFormData({
-      name: sup.name || '',
-      category: sup.category || 'Medicines & Injections',
-      contactPerson: sup.contactPerson === 'N/A' ? '' : sup.contactPerson || '',
-      phone: sup.phone === 'N/A' ? '' : sup.phone || '',
-      email: sup.email === 'contact@supplier.example.com' ? '' : sup.email || '',
-      city: sup.city || 'Mumbai, MH',
-      gstin: sup.gstin === '27AABCS1429B1Z1' ? '' : sup.gstin || '',
+      name: sup.name || "",
+      category: sup.category || "Medicines & Injections",
+      contactPerson: sup.contactPerson === "N/A" ? "" : sup.contactPerson || "",
+      phone: sup.phone === "N/A" ? "" : sup.phone || "",
+      email:
+        sup.email === "contact@supplier.example.com" ? "" : sup.email || "",
+      city: sup.city || "Mumbai, MH",
+      gstin: sup.gstin === "27AABCS1429B1Z1" ? "" : sup.gstin || "",
     });
     setFormErrors({});
     setModalVisible(true);
@@ -247,7 +279,7 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
 
   const handleSaveSupplier = async () => {
     const errors = {};
-    if (!formData.name.trim()) errors.name = 'Supplier name is required';
+    if (!formData.name.trim()) errors.name = "Supplier name is required";
 
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
@@ -256,13 +288,17 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
 
     const payload = {
       name: formData.name.trim(),
-      category: formData.category ? formData.category.trim() : 'Medicines & Injections',
-      contactPerson: formData.contactPerson.trim() || 'Account Executive',
-      phone: formData.phone.trim() || '+91 98000 11111',
-      email: formData.email.trim() || `${formData.name.toLowerCase().replace(/[^a-z]/g, '')}@supplier.example.com`,
-      city: formData.city.trim() || 'Mumbai, MH',
-      gstin: formData.gstin.trim() || '27AABCS1429B1Z1',
-      status: 'ACTIVE',
+      category: formData.category
+        ? formData.category.trim()
+        : "Medicines & Injections",
+      contactPerson: formData.contactPerson.trim() || "Account Executive",
+      phone: formData.phone.trim() || "+91 98000 11111",
+      email:
+        formData.email.trim() ||
+        `${formData.name.toLowerCase().replace(/[^a-z]/g, "")}@supplier.example.com`,
+      city: formData.city.trim() || "Mumbai, MH",
+      gstin: formData.gstin.trim() || "27AABCS1429B1Z1",
+      status: "ACTIVE",
     };
 
     if (isEditingSupplier && editingSupplierId) {
@@ -274,10 +310,12 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
         setEditingSupplierId(null);
 
         if (onShowToast) {
-          onShowToast(`✓ Supplier "${formData.name}" information updated in database!`);
+          onShowToast(
+            `✓ Supplier "${formData.name}" information updated in database!`,
+          );
         }
       } catch (err) {
-        console.warn('Edit supplier DB failed, fallback local:', err.message);
+        console.warn("Edit supplier DB failed, fallback local:", err.message);
         setSuppliers((prev) =>
           prev.map((s) =>
             s.id === editingSupplierId
@@ -288,8 +326,8 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
                   phone: formData.phone || s.phone,
                   city: formData.city || s.city,
                 }
-              : s
-          )
+              : s,
+          ),
         );
         setModalVisible(false);
         setIsEditingSupplier(false);
@@ -306,21 +344,26 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
         await loadSuppliersData();
 
         if (onShowToast) {
-          onShowToast(`✓ Added ${formData.name.trim()} into suppliers database table!`);
+          onShowToast(
+            `✓ Added ${formData.name.trim()} into suppliers database table!`,
+          );
         }
       } catch (err) {
-        console.warn('DB supplier add failed, fallback local state:', err.message);
+        console.warn(
+          "DB supplier add failed, fallback local state:",
+          err.message,
+        );
         const newSup = {
           id: `SUP-${Date.now()}`,
           name: formData.name,
-          contactPerson: formData.contactPerson || 'Account Executive',
-          phone: formData.phone || '+91 98000 11111',
-          email: formData.email || 'orders@pharma.in',
-          city: formData.city || 'Mumbai',
-          gstin: formData.gstin || '27AABCT1234F1Z0',
-          balance: '₹0.00',
-          status: 'Active',
-          category: formData.category || 'Medicines & Injections',
+          contactPerson: formData.contactPerson || "Account Executive",
+          phone: formData.phone || "+91 98000 11111",
+          email: formData.email || "orders@pharma.in",
+          city: formData.city || "Mumbai",
+          gstin: formData.gstin || "27AABCT1234F1Z0",
+          balance: "₹0.00",
+          status: "Active",
+          category: formData.category || "Medicines & Injections",
         };
 
         setSuppliers((prev) => [newSup, ...prev]);
@@ -335,7 +378,7 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
 
   const handleCreatePOWithSupplier = (sup) => {
     if (onNavigate) {
-      onNavigate('purchases');
+      onNavigate("purchases");
     }
     if (onShowToast) {
       onShowToast(`Created draft PO with ${sup.name}`);
@@ -345,7 +388,10 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={[styles.contentContainer, isMobile && styles.contentContainerMobile]}
+      contentContainerStyle={[
+        styles.contentContainer,
+        isMobile && styles.contentContainerMobile,
+      ]}
       showsVerticalScrollIndicator={true}
     >
       {/* Header Row */}
@@ -353,11 +399,11 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
         <View>
           <Text style={styles.pageTitle}>Suppliers Directory</Text>
           <Text style={styles.pageSubtitle}>
-            Maintain pharmaceutical manufacturers, verified distributors, credit terms and GST records.
+            Maintain pharmaceutical manufacturers, verified distributors, credit
+            terms and GST records.
           </Text>
         </View>
         <View style={styles.headerRightActions}>
-
           <Pressable
             onPress={handleOpenModalForAdd}
             style={styles.newSupplierButton}
@@ -387,7 +433,9 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
       {/* Main Table Card */}
       <View style={styles.cardContainer}>
         {/* Search & Filter Header */}
-        <View style={[styles.filtersBar, isCompact && styles.filtersBarCompact]}>
+        <View
+          style={[styles.filtersBar, isCompact && styles.filtersBarCompact]}
+        >
           <View style={styles.searchBox}>
             <TextInput
               style={styles.searchInput}
@@ -397,7 +445,10 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
               onChangeText={setSearchQuery}
             />
             {searchQuery ? (
-              <Pressable onPress={() => setSearchQuery('')} style={styles.clearBtn}>
+              <Pressable
+                onPress={() => setSearchQuery("")}
+                style={styles.clearBtn}
+              >
                 <Text style={styles.clearBtnText}>✕</Text>
               </Pressable>
             ) : null}
@@ -458,7 +509,7 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
 
           {/* Category Filter Chips */}
           <View style={styles.filterChipRow}>
-            {(SUPPLIER_CATEGORY_FILTER || ['All Categories']).map((cat) => (
+            {(SUPPLIER_CATEGORY_FILTER || ["All Categories"]).map((cat) => (
               <Pressable
                 key={cat}
                 onPress={() => setSelectedCategory(cat)}
@@ -484,78 +535,105 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
           /* Mobile Supplier Cards */
           <View style={styles.mobileCardList}>
             {loading ? (
-              Array.from({ length: 3 }).map((_, i) => <SkeletonItemCard key={i} />)
+              Array.from({ length: 3 }).map((_, i) => (
+                <SkeletonItemCard key={i} />
+              ))
             ) : filteredSuppliers.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyTitle}>No suppliers found</Text>
-                <Text style={styles.emptySubtitle}>Try changing your search terms.</Text>
+                <Text style={styles.emptySubtitle}>
+                  Try changing your search terms.
+                </Text>
               </View>
             ) : (
-              filteredSuppliers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((sup, index) => (
-                <View key={sup.id} style={styles.mobileSupplierCard}>
-                  <View style={styles.mobileSupHeader}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.mobileSupName}>{sup.name}</Text>
-                      <Text style={styles.mobileCategoryText}>{sup.category} • Sr No: {index + 1}</Text>
+              filteredSuppliers
+                .slice(
+                  (currentPage - 1) * itemsPerPage,
+                  currentPage * itemsPerPage,
+                )
+                .map((sup, index) => (
+                  <View key={sup.id} style={styles.mobileSupplierCard}>
+                    <View style={styles.mobileSupHeader}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.mobileSupName}>{sup.name}</Text>
+                        <Text style={styles.mobileCategoryText}>
+                          {sup.category} • Sr No: {index + 1}
+                        </Text>
+                      </View>
+                      <View style={styles.statusBadgeActive}>
+                        <Text style={styles.statusBadgeTextActive}>
+                          {sup.status}
+                        </Text>
+                      </View>
                     </View>
-                    <View style={styles.statusBadgeActive}>
-                      <Text style={styles.statusBadgeTextActive}>{sup.status}</Text>
+
+                    <View style={styles.mobileGrid}>
+                      <View style={styles.mobileGridCol}>
+                        <Text style={styles.mobileLabel}>Contact Person</Text>
+                        <Text style={styles.mobileValBold}>
+                          {sup.contactPerson}
+                        </Text>
+                      </View>
+                      <View style={styles.mobileGridCol}>
+                        <Text style={styles.mobileLabel}>Phone</Text>
+                        <Text style={styles.mobileValBold}>{sup.phone}</Text>
+                      </View>
+                      <View style={styles.mobileGridCol}>
+                        <Text style={styles.mobileLabel}>Email</Text>
+                        <Text style={styles.mobileVal} numberOfLines={1}>
+                          {sup.email}
+                        </Text>
+                      </View>
+                      <View style={styles.mobileGridCol}>
+                        <Text style={styles.mobileLabel}>City</Text>
+                        <Text style={styles.mobileVal}>{sup.city}</Text>
+                      </View>
+                      <View style={styles.mobileGridCol}>
+                        <Text style={styles.mobileLabel}>GSTIN</Text>
+                        <Text style={styles.mobileVal}>{sup.gstin}</Text>
+                      </View>
+                      <View style={styles.mobileGridCol}>
+                        <Text style={styles.mobileLabel}>Balance Dues</Text>
+                        <Text
+                          style={[styles.mobileValBold, { color: "#DC2626" }]}
+                        >
+                          {sup.balance}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.mobileSupFooter}>
+                      <Pressable
+                        onPress={() => handleToggleSupplierStatus(sup.id)}
+                        style={[
+                          styles.mobileStatusToggleBtn,
+                          sup.status === "Active"
+                            ? styles.mobileStatusToggleActive
+                            : styles.mobileStatusToggleInactive,
+                        ]}
+                        accessibilityRole="switch"
+                        accessibilityState={{
+                          checked: sup.status === "Active",
+                        }}
+                      >
+                        <Text style={styles.mobileStatusToggleText}>
+                          {sup.status === "Active" ? "● Active" : "○ Inactive"}
+                        </Text>
+                      </Pressable>
+
+                      <Pressable
+                        onPress={() => handleOpenActionMenu(sup)}
+                        style={styles.mobileDotsActionBtn}
+                        accessibilityRole="button"
+                        accessibilityLabel="Supplier Actions"
+                      >
+                        <Text style={styles.mobileDotsActionText}>
+                          ⋮ Actions
+                        </Text>
+                      </Pressable>
                     </View>
                   </View>
-
-                  <View style={styles.mobileGrid}>
-                    <View style={styles.mobileGridCol}>
-                      <Text style={styles.mobileLabel}>Contact Person</Text>
-                      <Text style={styles.mobileValBold}>{sup.contactPerson}</Text>
-                    </View>
-                    <View style={styles.mobileGridCol}>
-                      <Text style={styles.mobileLabel}>Phone</Text>
-                      <Text style={styles.mobileValBold}>{sup.phone}</Text>
-                    </View>
-                    <View style={styles.mobileGridCol}>
-                      <Text style={styles.mobileLabel}>Email</Text>
-                      <Text style={styles.mobileVal} numberOfLines={1}>{sup.email}</Text>
-                    </View>
-                    <View style={styles.mobileGridCol}>
-                      <Text style={styles.mobileLabel}>City</Text>
-                      <Text style={styles.mobileVal}>{sup.city}</Text>
-                    </View>
-                    <View style={styles.mobileGridCol}>
-                      <Text style={styles.mobileLabel}>GSTIN</Text>
-                      <Text style={styles.mobileVal}>{sup.gstin}</Text>
-                    </View>
-                    <View style={styles.mobileGridCol}>
-                      <Text style={styles.mobileLabel}>Balance Dues</Text>
-                      <Text style={[styles.mobileValBold, { color: '#DC2626' }]}>{sup.balance}</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.mobileSupFooter}>
-                    <Pressable
-                      onPress={() => handleToggleSupplierStatus(sup.id)}
-                      style={[
-                        styles.mobileStatusToggleBtn,
-                        sup.status === 'Active' ? styles.mobileStatusToggleActive : styles.mobileStatusToggleInactive,
-                      ]}
-                      accessibilityRole="switch"
-                      accessibilityState={{ checked: sup.status === 'Active' }}
-                    >
-                      <Text style={styles.mobileStatusToggleText}>
-                        {sup.status === 'Active' ? '● Active' : '○ Inactive'}
-                      </Text>
-                    </Pressable>
-
-                    <Pressable
-                      onPress={() => handleOpenActionMenu(sup)}
-                      style={styles.mobileDotsActionBtn}
-                      accessibilityRole="button"
-                      accessibilityLabel="Supplier Actions"
-                    >
-                      <Text style={styles.mobileDotsActionText}>⋮ Actions</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              ))
+                ))
             )}
           </View>
         ) : (
@@ -565,15 +643,31 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
               {/* Header */}
               <View style={styles.tableHeader}>
                 <Text style={[styles.thCell, { width: 90 }]}>SR NO</Text>
-                <Text style={[styles.thCell, { width: 190 }]}>COMPANY NAME</Text>
-                <Text style={[styles.thCell, { width: 140 }]}>CONTACT PERSON</Text>
+                <Text style={[styles.thCell, { width: 190 }]}>
+                  COMPANY NAME
+                </Text>
+                <Text style={[styles.thCell, { width: 140 }]}>
+                  CONTACT PERSON
+                </Text>
                 <Text style={[styles.thCell, { width: 130 }]}>PHONE</Text>
                 <Text style={[styles.thCell, { width: 180 }]}>EMAIL</Text>
                 <Text style={[styles.thCell, { width: 130 }]}>CITY</Text>
                 <Text style={[styles.thCell, { width: 160 }]}>GSTIN</Text>
-                <Text style={[styles.thCell, { width: 120, textAlign: 'right' }]}>BALANCE DUE</Text>
-                <Text style={[styles.thCell, { width: 105, textAlign: 'center' }]}>STATUS TOGGLE</Text>
-                <Text style={[styles.thCell, { width: 90, textAlign: 'center' }]}>ACTIONS</Text>
+                <Text
+                  style={[styles.thCell, { width: 120, textAlign: "right" }]}
+                >
+                  BALANCE DUE
+                </Text>
+                <Text
+                  style={[styles.thCell, { width: 105, textAlign: "center" }]}
+                >
+                  STATUS TOGGLE
+                </Text>
+                <Text
+                  style={[styles.thCell, { width: 90, textAlign: "center" }]}
+                >
+                  ACTIONS
+                </Text>
               </View>
 
               {/* Rows */}
@@ -584,84 +678,137 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
               ) : filteredSuppliers.length === 0 ? (
                 <View style={styles.emptyState}>
                   <Text style={styles.emptyTitle}>No suppliers found</Text>
-                  <Text style={styles.emptySubtitle}>Try changing your search terms.</Text>
+                  <Text style={styles.emptySubtitle}>
+                    Try changing your search terms.
+                  </Text>
                 </View>
               ) : (
-                filteredSuppliers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((sup, index) => (
-                  <View
-                    key={sup.id}
-                    style={[
-                      styles.tableRow,
-                      index % 2 === 1 && styles.tableRowAlt,
-                    ]}
-                  >
-                    <Text style={[styles.tdCell, styles.supId, { width: 90, fontWeight: '700', color: '#0F172A' }]}>
-                      {index + 1}
-                    </Text>
-                    <View style={[{ width: 190 }]}>
-                      <Text style={[styles.tdCell, styles.supName]} numberOfLines={1}>
-                        {sup.name}
-                      </Text>
-                      <Text style={styles.categorySubtext}>{sup.category}</Text>
-                    </View>
-                    <Text style={[styles.tdCell, { width: 140 }]}>{sup.contactPerson}</Text>
-                    <Text style={[styles.tdCell, { width: 130 }]}>{sup.phone}</Text>
-                    <Text style={[styles.tdCell, styles.emailText, { width: 180 }]} numberOfLines={1}>
-                      {sup.email}
-                    </Text>
-                    <Text style={[styles.tdCell, { width: 130 }]}>{sup.city}</Text>
-                    <Text style={[styles.tdCell, styles.gstinText, { width: 160 }]}>{sup.gstin}</Text>
-                    <Text style={[styles.tdCell, styles.balanceText, { width: 120, textAlign: 'right' }]}>
-                      {sup.balance}
-                    </Text>
-
-                    {/* Status Toggle Switch */}
-                    <View style={[styles.statusWrapper, { width: 105 }]}>
-                      <Pressable
-                        onPress={() => handleToggleSupplierStatus(sup.id)}
-                        style={[
-                          styles.tableToggleTrack,
-                          sup.status === 'Active' ? styles.tableToggleActive : styles.tableToggleInactive,
-                        ]}
-                        accessibilityRole="switch"
-                        accessibilityState={{ checked: sup.status === 'Active' }}
-                      >
-                        <View
-                          style={[
-                            styles.tableToggleThumb,
-                            sup.status === 'Active' ? styles.tableToggleThumbActive : styles.tableToggleThumbInactive,
-                          ]}
-                        />
-                      </Pressable>
+                filteredSuppliers
+                  .slice(
+                    (currentPage - 1) * itemsPerPage,
+                    currentPage * itemsPerPage,
+                  )
+                  .map((sup, index) => (
+                    <View
+                      key={sup.id}
+                      style={[
+                        styles.tableRow,
+                        index % 2 === 1 && styles.tableRowAlt,
+                      ]}
+                    >
                       <Text
                         style={[
-                          styles.statusLabelText,
-                          sup.status === 'Active' ? styles.statusActiveText : styles.statusInactiveText,
+                          styles.tdCell,
+                          styles.supId,
+                          { width: 90, fontWeight: "700", color: "#0F172A" },
                         ]}
                       >
-                        {sup.status}
+                        {index + 1}
                       </Text>
-                    </View>
-
-                    {/* Action: 3-Dots Button */}
-                    <View style={[styles.actionWrapper, { width: 90 }]}>
-                      <Pressable
-                        onPress={() => handleOpenActionMenu(sup)}
-                        style={styles.actionDotsButton}
-                        accessibilityRole="button"
-                        accessibilityLabel="Supplier Actions"
+                      <View style={[{ width: 190 }]}>
+                        <Text
+                          style={[styles.tdCell, styles.supName]}
+                          numberOfLines={1}
+                        >
+                          {sup.name}
+                        </Text>
+                        <Text style={styles.categorySubtext}>
+                          {sup.category}
+                        </Text>
+                      </View>
+                      <Text style={[styles.tdCell, { width: 140 }]}>
+                        {sup.contactPerson}
+                      </Text>
+                      <Text style={[styles.tdCell, { width: 130 }]}>
+                        {sup.phone}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.tdCell,
+                          styles.emailText,
+                          { width: 180 },
+                        ]}
+                        numberOfLines={1}
                       >
-                        <Text style={styles.actionDotsButtonText}>⋮</Text>
-                      </Pressable>
+                        {sup.email}
+                      </Text>
+                      <Text style={[styles.tdCell, { width: 130 }]}>
+                        {sup.city}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.tdCell,
+                          styles.gstinText,
+                          { width: 160 },
+                        ]}
+                      >
+                        {sup.gstin}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.tdCell,
+                          styles.balanceText,
+                          { width: 120, textAlign: "right" },
+                        ]}
+                      >
+                        {sup.balance}
+                      </Text>
+
+                      {/* Status Toggle Switch */}
+                      <View style={[styles.statusWrapper, { width: 105 }]}>
+                        <Pressable
+                          onPress={() => handleToggleSupplierStatus(sup.id)}
+                          style={[
+                            styles.tableToggleTrack,
+                            sup.status === "Active"
+                              ? styles.tableToggleActive
+                              : styles.tableToggleInactive,
+                          ]}
+                          accessibilityRole="switch"
+                          accessibilityState={{
+                            checked: sup.status === "Active",
+                          }}
+                        >
+                          <View
+                            style={[
+                              styles.tableToggleThumb,
+                              sup.status === "Active"
+                                ? styles.tableToggleThumbActive
+                                : styles.tableToggleThumbInactive,
+                            ]}
+                          />
+                        </Pressable>
+                        <Text
+                          style={[
+                            styles.statusLabelText,
+                            sup.status === "Active"
+                              ? styles.statusActiveText
+                              : styles.statusInactiveText,
+                          ]}
+                        >
+                          {sup.status}
+                        </Text>
+                      </View>
+
+                      {/* Action: 3-Dots Button */}
+                      <View style={[styles.actionWrapper, { width: 90 }]}>
+                        <Pressable
+                          onPress={() => handleOpenActionMenu(sup)}
+                          style={styles.actionDotsButton}
+                          accessibilityRole="button"
+                          accessibilityLabel="Supplier Actions"
+                        >
+                          <Text style={styles.actionDotsButtonText}>⋮</Text>
+                        </Pressable>
+                      </View>
                     </View>
-                  </View>
-                ))
+                  ))
               )}
             </View>
           </ScrollView>
         )}
-        
-        <PaginationControls 
+
+        <PaginationControls
           currentPage={currentPage}
           totalPages={Math.ceil(filteredSuppliers.length / itemsPerPage)}
           onPageChange={setCurrentPage}
@@ -681,18 +828,34 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
           style={styles.modalBackdrop}
           onPress={() => setModalVisible(false)}
         >
-          <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
+          <Pressable
+            style={styles.modalCard}
+            onPress={(e) => e.stopPropagation()}
+          >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
-                {isEditingSupplier ? 'Edit Supplier Information' : 'Add New Pharmaceutical Supplier'}
+                {isEditingSupplier
+                  ? "Edit Supplier Information"
+                  : "Add New Pharmaceutical Supplier"}
               </Text>
-              <Pressable onPress={() => setModalVisible(false)} style={styles.closeBtn}>
+              <Pressable
+                onPress={() => setModalVisible(false)}
+                style={styles.closeBtn}
+              >
                 <Text style={styles.closeBtnText}>✕</Text>
               </Pressable>
             </View>
 
             <ScrollView style={styles.modalBody} nestedScrollEnabled={true}>
-              <View style={[styles.formRow, { zIndex: categoryDropdownOpen ? 1000 : 1, position: 'relative' }]}>
+              <View
+                style={[
+                  styles.formRow,
+                  {
+                    zIndex: categoryDropdownOpen ? 1000 : 1,
+                    position: "relative",
+                  },
+                ]}
+              >
                 <View style={styles.formFieldHalf}>
                   <Text style={styles.fieldLabel}>
                     Supplier / Vendor Name <Text style={styles.reqStar}>*</Text>
@@ -702,26 +865,37 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
                     placeholder="e.g., Torrent Pharma Dist."
                     placeholderTextColor="#94A3B8"
                     value={formData.name}
-                    onChangeText={(t) => setFormData((p) => ({ ...p, name: t }))}
+                    onChangeText={(t) =>
+                      setFormData((p) => ({ ...p, name: t }))
+                    }
                   />
-                  {formErrors.name && <Text style={styles.errorText}>{formErrors.name}</Text>}
+                  {formErrors.name && (
+                    <Text style={styles.errorText}>{formErrors.name}</Text>
+                  )}
                 </View>
 
-                <View style={[styles.formFieldHalf, { zIndex: 1000, position: 'relative' }]}>
+                <View
+                  style={[
+                    styles.formFieldHalf,
+                    { zIndex: 1000, position: "relative" },
+                  ]}
+                >
                   <Text style={styles.fieldLabel}>
                     Supplier Category <Text style={styles.reqStar}>*</Text>
                   </Text>
                   <Pressable
-                    onPress={() => setCategoryDropdownOpen(!categoryDropdownOpen)}
+                    onPress={() =>
+                      setCategoryDropdownOpen(!categoryDropdownOpen)
+                    }
                     style={styles.dropdownPickerBox}
                     accessibilityRole="combobox"
                     accessibilityLabel="Select Supplier Category"
                   >
                     <Text style={styles.dropdownPickerSelectedText}>
-                      {formData.category || 'Medicines & Injections'}
+                      {formData.category || "Medicines & Injections"}
                     </Text>
                     <Text style={styles.dropdownPickerChevron}>
-                      {categoryDropdownOpen ? '▲' : '▼'}
+                      {categoryDropdownOpen ? "▲" : "▼"}
                     </Text>
                   </Pressable>
 
@@ -749,7 +923,9 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
                             >
                               {cat}
                             </Text>
-                            {isSelected && <Text style={styles.checkIcon}>✓</Text>}
+                            {isSelected && (
+                              <Text style={styles.checkIcon}>✓</Text>
+                            )}
                           </Pressable>
                         );
                       })}
@@ -758,7 +934,9 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
                 </View>
               </View>
 
-              <View style={[styles.formRow, { zIndex: 1, position: 'relative' }]}>
+              <View
+                style={[styles.formRow, { zIndex: 1, position: "relative" }]}
+              >
                 <View style={styles.formFieldHalf}>
                   <Text style={styles.fieldLabel}>Contact Person</Text>
                   <TextInput
@@ -766,7 +944,9 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
                     placeholder="e.g., Ramesh Gupta"
                     placeholderTextColor="#94A3B8"
                     value={formData.contactPerson}
-                    onChangeText={(t) => setFormData((p) => ({ ...p, contactPerson: t }))}
+                    onChangeText={(t) =>
+                      setFormData((p) => ({ ...p, contactPerson: t }))
+                    }
                   />
                 </View>
 
@@ -777,12 +957,16 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
                     placeholder="+91 98XXX XXXXX"
                     placeholderTextColor="#94A3B8"
                     value={formData.phone}
-                    onChangeText={(t) => setFormData((p) => ({ ...p, phone: t }))}
+                    onChangeText={(t) =>
+                      setFormData((p) => ({ ...p, phone: t }))
+                    }
                   />
                 </View>
               </View>
 
-              <View style={[styles.formRow, { zIndex: 1, position: 'relative' }]}>
+              <View
+                style={[styles.formRow, { zIndex: 1, position: "relative" }]}
+              >
                 <View style={styles.formFieldHalf}>
                   <Text style={styles.fieldLabel}>Email Address</Text>
                   <TextInput
@@ -790,7 +974,9 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
                     placeholder="orders@vendor.com"
                     placeholderTextColor="#94A3B8"
                     value={formData.email}
-                    onChangeText={(t) => setFormData((p) => ({ ...p, email: t }))}
+                    onChangeText={(t) =>
+                      setFormData((p) => ({ ...p, email: t }))
+                    }
                   />
                 </View>
 
@@ -801,12 +987,16 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
                     placeholder="e.g., Mumbai, MH"
                     placeholderTextColor="#94A3B8"
                     value={formData.city}
-                    onChangeText={(t) => setFormData((p) => ({ ...p, city: t }))}
+                    onChangeText={(t) =>
+                      setFormData((p) => ({ ...p, city: t }))
+                    }
                   />
                 </View>
               </View>
 
-              <View style={[styles.formRow, { zIndex: 1, position: 'relative' }]}>
+              <View
+                style={[styles.formRow, { zIndex: 1, position: "relative" }]}
+              >
                 <View style={styles.formFieldHalf}>
                   <Text style={styles.fieldLabel}>GSTIN Tax Number</Text>
                   <TextInput
@@ -814,7 +1004,9 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
                     placeholder="e.g., 27AABCS1429B1Z1"
                     placeholderTextColor="#94A3B8"
                     value={formData.gstin}
-                    onChangeText={(t) => setFormData((p) => ({ ...p, gstin: t }))}
+                    onChangeText={(t) =>
+                      setFormData((p) => ({ ...p, gstin: t }))
+                    }
                   />
                 </View>
 
@@ -824,8 +1016,10 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
                     style={styles.modalInput}
                     placeholder="e.g., Net 30"
                     placeholderTextColor="#94A3B8"
-                    value={formData.paymentTerms || 'Net 30'}
-                    onChangeText={(t) => setFormData((p) => ({ ...p, paymentTerms: t }))}
+                    value={formData.paymentTerms || "Net 30"}
+                    onChangeText={(t) =>
+                      setFormData((p) => ({ ...p, paymentTerms: t }))
+                    }
                   />
                 </View>
               </View>
@@ -843,7 +1037,7 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
                 style={styles.submitModalButton}
               >
                 <Text style={styles.submitModalButtonText}>
-                  {isEditingSupplier ? 'Update Supplier' : 'Save Supplier'}
+                  {isEditingSupplier ? "Update Supplier" : "Save Supplier"}
                 </Text>
               </Pressable>
             </View>
@@ -862,12 +1056,17 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
           <View style={styles.actionMenuCard}>
             <View style={styles.actionMenuHeader}>
               <View>
-                <Text style={styles.actionMenuTitle}>{selectedSupplierForAction?.name}</Text>
+                <Text style={styles.actionMenuTitle}>
+                  {selectedSupplierForAction?.name}
+                </Text>
                 <Text style={styles.actionMenuSub}>
-                  GSTIN: {selectedSupplierForAction?.gstin || 'N/A'}
+                  GSTIN: {selectedSupplierForAction?.gstin || "N/A"}
                 </Text>
               </View>
-              <Pressable onPress={() => setActionMenuModalOpen(false)} style={styles.closeActionBtn}>
+              <Pressable
+                onPress={() => setActionMenuModalOpen(false)}
+                style={styles.closeActionBtn}
+              >
                 <Text style={styles.closeActionText}>✕</Text>
               </Pressable>
             </View>
@@ -883,8 +1082,12 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
               >
                 <Text style={styles.actionOptionIcon}>🛒</Text>
                 <View style={styles.actionOptionTextCol}>
-                  <Text style={styles.actionOptionTitle}>Create Purchase Order</Text>
-                  <Text style={styles.actionOptionDesc}>Draft new stock reorder for this supplier</Text>
+                  <Text style={styles.actionOptionTitle}>
+                    Create Purchase Order
+                  </Text>
+                  <Text style={styles.actionOptionDesc}>
+                    Draft new stock reorder for this supplier
+                  </Text>
                 </View>
               </Pressable>
 
@@ -898,8 +1101,12 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
               >
                 <Text style={styles.actionOptionIcon}>✏️</Text>
                 <View style={styles.actionOptionTextCol}>
-                  <Text style={styles.actionOptionTitle}>Edit Supplier Information</Text>
-                  <Text style={styles.actionOptionDesc}>Update company name, contact, phone, email, GSTIN</Text>
+                  <Text style={styles.actionOptionTitle}>
+                    Edit Supplier Information
+                  </Text>
+                  <Text style={styles.actionOptionDesc}>
+                    Update company name, contact, phone, email, GSTIN
+                  </Text>
                 </View>
               </Pressable>
 
@@ -914,7 +1121,11 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
                 <Text style={styles.actionOptionIcon}>🔄</Text>
                 <View style={styles.actionOptionTextCol}>
                   <Text style={styles.actionOptionTitle}>
-                    Toggle Status ({selectedSupplierForAction?.status === 'Active' ? 'Deactivate' : 'Activate'})
+                    Toggle Status (
+                    {selectedSupplierForAction?.status === "Active"
+                      ? "Deactivate"
+                      : "Activate"}
+                    )
                   </Text>
                   <Text style={styles.actionOptionDesc}>
                     Current status is {selectedSupplierForAction?.status}
@@ -927,14 +1138,18 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
                 onPress={() => {
                   setActionMenuModalOpen(false);
                   if (onShowToast) {
-                    onShowToast(`📑 Supplier ledger opened for ${selectedSupplierForAction?.name}`);
+                    onShowToast(
+                      `📑 Supplier ledger opened for ${selectedSupplierForAction?.name}`,
+                    );
                   }
                 }}
                 style={styles.actionOptionRow}
               >
                 <Text style={styles.actionOptionIcon}>📋</Text>
                 <View style={styles.actionOptionTextCol}>
-                  <Text style={styles.actionOptionTitle}>View Vendor Ledger & Balance</Text>
+                  <Text style={styles.actionOptionTitle}>
+                    View Vendor Ledger & Balance
+                  </Text>
                   <Text style={styles.actionOptionDesc}>
                     Balance due: {selectedSupplierForAction?.balance}
                   </Text>
@@ -947,17 +1162,20 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
                   setActionMenuModalOpen(false);
                   handleDeleteSupplierAction(selectedSupplierForAction);
                 }}
-                style={[styles.actionOptionRow, { backgroundColor: '#FEF2F2' }]}
+                style={[styles.actionOptionRow, { backgroundColor: "#FEF2F2" }]}
               >
                 <Text style={styles.actionOptionIcon}>🗑️</Text>
                 <View style={styles.actionOptionTextCol}>
-                  <Text style={[styles.actionOptionTitle, { color: '#DC2626' }]}>Delete Supplier</Text>
-                  <Text style={[styles.actionOptionDesc, { color: '#EF4444' }]}>
+                  <Text
+                    style={[styles.actionOptionTitle, { color: "#DC2626" }]}
+                  >
+                    Delete Supplier
+                  </Text>
+                  <Text style={[styles.actionOptionDesc, { color: "#EF4444" }]}>
                     Remove vendor record from database
                   </Text>
                 </View>
               </Pressable>
-
             </View>
           </View>
         </View>
@@ -983,105 +1201,106 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    flexWrap: "wrap",
     gap: 16,
   },
   headerRowMobile: {
-    flexDirection: 'column',
-    alignItems: 'stretch',
+    flexDirection: "column",
+    alignItems: "stretch",
     gap: 12,
   },
   pageTitle: {
     fontSize: 24,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
     letterSpacing: -0.4,
   },
   pageSubtitle: {
     fontSize: 13.5,
-    fontWeight: '500',
-    color: '#64748B',
+    fontWeight: "500",
+    color: "#64748B",
     marginTop: 4,
   },
   newSupplierButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#0F766E',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#0F766E",
     paddingVertical: 10,
     paddingHorizontal: 18,
     borderRadius: 8,
-    cursor: 'pointer',
+    cursor: "pointer",
     elevation: 2,
-    shadowColor: '#0F766E',
+    shadowColor: "#0F766E",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
   },
   newSupplierIcon: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: "700",
     marginRight: 6,
   },
   newSupplierText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 13.5,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   newSupButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#0F766E',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#0F766E",
     paddingVertical: 10,
     paddingHorizontal: 18,
     borderRadius: 8,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   newSupButtonHovered: {
-    backgroundColor: '#0D9488',
+    backgroundColor: "#0D9488",
   },
   newSupIcon: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: "700",
     marginRight: 6,
   },
   btnIcon: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: "700",
     marginRight: 6,
   },
   btnText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 13.5,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   newSupText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 13.5,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   kpiRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 16,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
   },
   kpiRowCompact: {
     gap: 12,
   },
   cardContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    overflow: 'hidden',
+    borderColor: "#E2E8F0",
+    overflow: "hidden",
     ...Platform.select({
       web: {
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)',
+        boxShadow:
+          "0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)",
       },
       default: {
         elevation: 1,
@@ -1094,90 +1313,90 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   mobileSupplierCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     padding: 14,
   },
   mobileSupHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
     paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: "#F1F5F9",
     gap: 8,
   },
   mobileSupName: {
     fontSize: 15,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   mobileCategoryText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#0F766E',
+    fontWeight: "600",
+    color: "#0F766E",
     marginTop: 2,
   },
   mobileGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     paddingVertical: 10,
     gap: 10,
   },
   mobileGridCol: {
-    width: '47%',
+    width: "47%",
   },
   mobileLabel: {
     fontSize: 11,
-    fontWeight: '600',
-    color: '#94A3B8',
-    textTransform: 'uppercase',
+    fontWeight: "600",
+    color: "#94A3B8",
+    textTransform: "uppercase",
   },
   mobileVal: {
     fontSize: 12.5,
-    color: '#334155',
+    color: "#334155",
     marginTop: 1,
   },
   mobileValBold: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
     marginTop: 1,
   },
   mobileSupFooter: {
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: "#F1F5F9",
   },
   mobileOrderBtn: {
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
     paddingVertical: 7,
     paddingHorizontal: 16,
     borderRadius: 6,
-    alignItems: 'center',
-    cursor: 'pointer',
+    alignItems: "center",
+    cursor: "pointer",
   },
   mobileOrderBtnText: {
     fontSize: 12.5,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
   filtersBar: {
     paddingHorizontal: 20,
     paddingVertical: 12,
-    backgroundColor: '#FAFAFA',
+    backgroundColor: "#FAFAFA",
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: "#F1F5F9",
     gap: 12,
   },
   filtersBarCompact: {
-    flexDirection: 'column',
+    flexDirection: "column",
   },
   filterChipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
     marginTop: 8,
   },
@@ -1185,30 +1404,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 6,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    cursor: 'pointer',
+    borderColor: "#E2E8F0",
+    cursor: "pointer",
   },
   filterChipActive: {
-    backgroundColor: '#0F766E',
-    borderColor: '#0F766E',
+    backgroundColor: "#0F766E",
+    borderColor: "#0F766E",
   },
   filterChipText: {
     fontSize: 12,
-    fontWeight: '500',
-    color: '#64748B',
+    fontWeight: "500",
+    color: "#64748B",
   },
   filterChipTextActive: {
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
   searchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     borderRadius: 8,
     paddingHorizontal: 12,
     height: 38,
@@ -1216,170 +1435,171 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 13,
-    color: '#0F172A',
-    outlineStyle: 'none',
+    color: "#0F172A",
+    outlineStyle: "none",
   },
   clearBtn: {
     padding: 4,
   },
   clearBtnText: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: "#94A3B8",
   },
   tableWrapper: {
     minWidth: 1250,
     paddingHorizontal: 8,
   },
   tableHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderBottomColor: "#E2E8F0",
+    backgroundColor: "#F8FAFC",
   },
   thCell: {
     fontSize: 11.5,
-    fontWeight: '700',
-    color: '#64748B',
+    fontWeight: "700",
+    color: "#64748B",
     paddingHorizontal: 6,
     letterSpacing: 0.3,
   },
   tableRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 13,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: "#F1F5F9",
   },
   tableRowAlt: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
   },
   tdCell: {
     fontSize: 13,
-    color: '#334155',
+    color: "#334155",
     paddingHorizontal: 6,
   },
   supId: {
-    fontWeight: '700',
-    color: '#0F766E',
+    fontWeight: "700",
+    color: "#0F766E",
   },
   supName: {
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   categorySubtext: {
     fontSize: 11,
-    color: '#64748B',
+    color: "#64748B",
     paddingHorizontal: 6,
     marginTop: 2,
   },
   emailText: {
-    color: '#2563EB',
+    color: "#2563EB",
   },
   gstinText: {
-    fontWeight: '600',
-    color: '#475569',
+    fontWeight: "600",
+    color: "#475569",
   },
   balanceText: {
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   statusWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   statusBadgeActive: {
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
-    backgroundColor: '#DCFCE7',
+    backgroundColor: "#DCFCE7",
   },
   statusBadgeTextActive: {
     fontSize: 11.5,
-    fontWeight: '700',
-    color: '#15803D',
+    fontWeight: "700",
+    color: "#15803D",
   },
   actionWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   orderBtn: {
     paddingVertical: 4,
     paddingHorizontal: 10,
     borderRadius: 6,
-    backgroundColor: '#0F766E',
-    cursor: 'pointer',
+    backgroundColor: "#0F766E",
+    cursor: "pointer",
   },
   orderBtnText: {
     fontSize: 11.5,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
   emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 40,
   },
   emptyTitle: {
     fontSize: 15,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   emptySubtitle: {
     fontSize: 13,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 2,
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.45)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(15, 23, 42, 0.45)",
+    alignItems: "center",
+    justifyContent: "center",
     padding: 20,
   },
   modalCard: {
-    width: '100%',
+    width: "100%",
     maxWidth: 620,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 14,
-    overflow: 'hidden',
+    overflow: "hidden",
     ...Platform.select({
       web: {
-        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+        boxShadow:
+          "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
       },
     }),
   },
   modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 22,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: "#F1F5F9",
   },
   modalTitle: {
     fontSize: 17,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   closeBtn: {
     padding: 6,
   },
   closeBtnText: {
     fontSize: 14,
-    color: '#94A3B8',
-    fontWeight: '700',
+    color: "#94A3B8",
+    fontWeight: "700",
   },
   modalBody: {
     padding: 22,
     maxHeight: 480,
   },
   formRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 14,
     marginBottom: 14,
   },
@@ -1391,277 +1611,277 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
     fontSize: 12.5,
-    fontWeight: '600',
-    color: '#334155',
+    fontWeight: "600",
+    color: "#334155",
     marginBottom: 6,
   },
   reqStar: {
-    color: '#DC2626',
+    color: "#DC2626",
   },
   modalInput: {
     height: 40,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     borderRadius: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     paddingHorizontal: 12,
     fontSize: 13,
-    color: '#0F172A',
-    outlineStyle: 'none',
+    color: "#0F172A",
+    outlineStyle: "none",
   },
   errorText: {
     fontSize: 11,
-    color: '#DC2626',
+    color: "#DC2626",
     marginTop: 3,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   modalFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
     gap: 12,
     paddingHorizontal: 22,
     paddingVertical: 14,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    backgroundColor: '#FAFAFA',
+    borderTopColor: "#F1F5F9",
+    backgroundColor: "#FAFAFA",
   },
   cancelButton: {
     paddingVertical: 9,
     paddingHorizontal: 16,
     borderRadius: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   cancelButtonText: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#64748B',
+    fontWeight: "600",
+    color: "#64748B",
   },
   submitModalButton: {
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
     paddingVertical: 9,
     paddingHorizontal: 20,
     borderRadius: 8,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   submitModalButtonText: {
     fontSize: 13.5,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
   headerRightActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
   },
   devGuideTopBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: "#F1F5F9",
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 8,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   devGuideTopBtnIcon: {
     fontSize: 13,
   },
   devGuideTopBtnText: {
     fontSize: 12.5,
-    fontWeight: '700',
-    color: '#334155',
+    fontWeight: "700",
+    color: "#334155",
   },
   filterTogglesGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
     marginTop: 8,
   },
   filterTogglePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
     paddingVertical: 5,
     paddingHorizontal: 10,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#F8FAFC',
-    cursor: 'pointer',
+    borderColor: "#CBD5E1",
+    backgroundColor: "#F8FAFC",
+    cursor: "pointer",
   },
   filterTogglePillActive: {
-    backgroundColor: '#F0FDFA',
-    borderColor: '#0F766E',
+    backgroundColor: "#F0FDFA",
+    borderColor: "#0F766E",
   },
   filterToggleDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#94A3B8',
+    backgroundColor: "#94A3B8",
   },
   filterToggleDotActive: {
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
   },
   filterToggleText: {
     fontSize: 11.5,
-    fontWeight: '600',
-    color: '#64748B',
+    fontWeight: "600",
+    color: "#64748B",
   },
   filterToggleTextActive: {
-    color: '#0F766E',
-    fontWeight: '700',
+    color: "#0F766E",
+    fontWeight: "700",
   },
   tableToggleTrack: {
     width: 36,
     height: 20,
     borderRadius: 10,
-    backgroundColor: '#CBD5E1',
+    backgroundColor: "#CBD5E1",
     padding: 2,
-    justifyContent: 'center',
-    cursor: 'pointer',
+    justifyContent: "center",
+    cursor: "pointer",
   },
   tableToggleActive: {
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
   },
   tableToggleInactive: {
-    backgroundColor: '#CBD5E1',
+    backgroundColor: "#CBD5E1",
   },
   tableToggleThumb: {
     width: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
   },
   tableToggleThumbActive: {
-    alignSelf: 'flex-end',
+    alignSelf: "flex-end",
   },
   tableToggleThumbInactive: {
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
   },
   statusLabelText: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: "700",
     marginTop: 2,
   },
   statusActiveText: {
-    color: '#0F766E',
+    color: "#0F766E",
   },
   statusInactiveText: {
-    color: '#64748B',
+    color: "#64748B",
   },
   mobileStatusToggleBtn: {
     paddingVertical: 5,
     paddingHorizontal: 10,
     borderRadius: 6,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: "#F1F5F9",
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    cursor: 'pointer',
+    borderColor: "#CBD5E1",
+    cursor: "pointer",
   },
   mobileStatusToggleActive: {
-    backgroundColor: '#DCFCE7',
-    borderColor: '#86EFAC',
+    backgroundColor: "#DCFCE7",
+    borderColor: "#86EFAC",
   },
   mobileStatusToggleInactive: {
-    backgroundColor: '#F1F5F9',
-    borderColor: '#CBD5E1',
+    backgroundColor: "#F1F5F9",
+    borderColor: "#CBD5E1",
   },
   mobileStatusToggleText: {
     fontSize: 11.5,
-    fontWeight: '700',
-    color: '#15803D',
+    fontWeight: "700",
+    color: "#15803D",
   },
   mobileDotsActionBtn: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: "#F1F5F9",
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
     paddingVertical: 7,
     paddingHorizontal: 14,
     borderRadius: 6,
-    alignItems: 'center',
-    cursor: 'pointer',
+    alignItems: "center",
+    cursor: "pointer",
   },
   mobileDotsActionText: {
     fontSize: 12.5,
-    fontWeight: '700',
-    color: '#334155',
+    fontWeight: "700",
+    color: "#334155",
   },
   actionDotsButton: {
     width: 32,
     height: 32,
     borderRadius: 6,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#F1F5F9",
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    cursor: 'pointer',
+    borderColor: "#E2E8F0",
+    cursor: "pointer",
   },
   actionDotsButtonText: {
     fontSize: 16,
-    fontWeight: '800',
-    color: '#334155',
+    fontWeight: "800",
+    color: "#334155",
     lineHeight: 18,
   },
   actionMenuCard: {
-    width: '100%',
+    width: "100%",
     maxWidth: 480,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    overflow: 'hidden',
+    borderColor: "#CBD5E1",
+    overflow: "hidden",
   },
   actionMenuHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     padding: 18,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderBottomColor: "#E2E8F0",
+    backgroundColor: "#F8FAFC",
   },
   actionMenuTitle: {
     fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   actionMenuSub: {
     fontSize: 11.5,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 2,
   },
   closeActionBtn: {
     padding: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   closeActionText: {
     fontSize: 18,
-    color: '#64748B',
-    fontWeight: '700',
+    color: "#64748B",
+    fontWeight: "700",
   },
   actionList: {
     padding: 10,
     gap: 4,
   },
   actionOptionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
     padding: 12,
     borderRadius: 8,
-    backgroundColor: '#FFFFFF',
-    cursor: 'pointer',
+    backgroundColor: "#FFFFFF",
+    cursor: "pointer",
   },
   actionOptionRowDev: {
-    backgroundColor: '#F0FDFA',
+    backgroundColor: "#F0FDFA",
     borderWidth: 1,
-    borderColor: '#99F6E4',
+    borderColor: "#99F6E4",
     marginTop: 4,
   },
   actionOptionIcon: {
@@ -1672,58 +1892,58 @@ const styles = StyleSheet.create({
   },
   actionOptionTitle: {
     fontSize: 13.5,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   actionOptionDesc: {
     fontSize: 11.5,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 1,
   },
   devGuideModalCard: {
-    width: '100%',
+    width: "100%",
     maxWidth: 780,
-    maxHeight: '90%',
-    backgroundColor: '#FFFFFF',
+    maxHeight: "90%",
+    backgroundColor: "#FFFFFF",
     borderRadius: 14,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   devGuideModalCardMobile: {
-    maxHeight: '95%',
+    maxHeight: "95%",
   },
   devGuideModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     padding: 18,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderBottomColor: "#E2E8F0",
+    backgroundColor: "#F8FAFC",
   },
   devGuideTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
   },
   devGuideIconBadge: {
     width: 36,
     height: 36,
     borderRadius: 8,
-    backgroundColor: '#0F766E',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#0F766E",
+    alignItems: "center",
+    justifyContent: "center",
   },
   devGuideIconText: {
     fontSize: 18,
   },
   devGuideModalTitle: {
     fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   devGuideModalSubtitle: {
     fontSize: 12,
-    color: '#64748B',
+    color: "#64748B",
   },
   devGuideModalBody: {
     padding: 20,
@@ -1733,149 +1953,153 @@ const styles = StyleSheet.create({
   },
   guideSecTitle: {
     fontSize: 14,
-    fontWeight: '800',
-    color: '#0F766E',
+    fontWeight: "800",
+    color: "#0F766E",
     marginBottom: 6,
   },
   guideSecDesc: {
     fontSize: 12,
-    color: '#475569',
+    color: "#475569",
     marginBottom: 8,
   },
   codeSnippet: {
-    backgroundColor: '#0F172A',
+    backgroundColor: "#0F172A",
     borderRadius: 8,
     padding: 12,
     marginTop: 6,
   },
   codeSnippetText: {
-    color: '#38BDF8',
+    color: "#38BDF8",
     fontSize: 11.5,
-    fontFamily: Platform.select({ web: 'Consolas, Monaco, monospace', default: 'System' }),
+    fontFamily: Platform.select({
+      web: "Consolas, Monaco, monospace",
+      default: "System",
+    }),
     lineHeight: 17,
   },
   endpointCard: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     borderRadius: 8,
     padding: 12,
     marginBottom: 10,
   },
   endpointHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     marginBottom: 4,
   },
   methodPost: {
-    backgroundColor: '#16A34A',
+    backgroundColor: "#16A34A",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
   },
   methodText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 10,
-    fontWeight: '800',
+    fontWeight: "800",
   },
   endpointRoute: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-    fontFamily: Platform.select({ web: 'monospace', default: 'System' }),
+    fontWeight: "700",
+    color: "#0F172A",
+    fontFamily: Platform.select({ web: "monospace", default: "System" }),
   },
   endpointDesc: {
     fontSize: 12,
-    color: '#475569',
+    color: "#475569",
   },
   devGuideModalFooter: {
     padding: 14,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
-    alignItems: 'flex-end',
+    borderTopColor: "#E2E8F0",
+    backgroundColor: "#F8FAFC",
+    alignItems: "flex-end",
   },
   closeDevGuideModalBtn: {
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
     paddingVertical: 8,
     paddingHorizontal: 18,
     borderRadius: 8,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   closeDevGuideModalBtnText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 12.5,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   dropdownPickerBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 9,
-    backgroundColor: '#F8FAFC',
-    cursor: 'pointer',
+    backgroundColor: "#F8FAFC",
+    cursor: "pointer",
   },
   dropdownPickerSelectedText: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   dropdownPickerChevron: {
     fontSize: 11,
-    color: '#64748B',
+    color: "#64748B",
   },
   dropdownMenuContainer: {
-    position: 'absolute',
+    position: "absolute",
     top: 68,
     left: 0,
     right: 0,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
     zIndex: 99999,
     ...Platform.select({
       web: {
-        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.22), 0 2px 8px rgba(0, 0, 0, 0.12)',
+        boxShadow:
+          "0 8px 24px rgba(0, 0, 0, 0.22), 0 2px 8px rgba(0, 0, 0, 0.12)",
       },
       default: {
         elevation: 12,
       },
     }),
     paddingVertical: 4,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   dropdownMenuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 14,
     paddingVertical: 10,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
-    borderBottomColor: '#F8FAFC',
-    cursor: 'pointer',
+    borderBottomColor: "#F8FAFC",
+    cursor: "pointer",
   },
   dropdownMenuItemActive: {
-    backgroundColor: '#F0FDFA',
+    backgroundColor: "#F0FDFA",
   },
   dropdownMenuText: {
     fontSize: 12.5,
-    fontWeight: '600',
-    color: '#334155',
+    fontWeight: "600",
+    color: "#334155",
   },
   dropdownMenuTextActive: {
-    color: '#0F766E',
-    fontWeight: '800',
+    color: "#0F766E",
+    fontWeight: "800",
   },
   checkIcon: {
     fontSize: 13,
-    fontWeight: '800',
-    color: '#0F766E',
+    fontWeight: "800",
+    color: "#0F766E",
   },
 });

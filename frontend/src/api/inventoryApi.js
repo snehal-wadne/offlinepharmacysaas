@@ -17,7 +17,6 @@ export async function fetchInventory(params = {}) {
 
   const queryString = query.toString() ? `?${query.toString()}` : "";
   return apiGet(`/inventory${queryString}`);
-  return apiGet(`/api/inventory${queryString}`);
 }
 
 /**
@@ -29,7 +28,6 @@ export async function fetchInventorySummary(params = {}) {
     query.append("branchId", params.branchId);
   const queryString = query.toString() ? `?${query.toString()}` : "";
   return apiGet(`/inventory/summary${queryString}`);
-  return apiGet(`/api/inventory/summary${queryString}`);
 }
 
 /**
@@ -42,7 +40,6 @@ export async function fetchStockMovements(params = {}) {
     query.append("branchId", params.branchId);
   const queryString = query.toString() ? `?${query.toString()}` : "";
   return apiGet(`/inventory/movements${queryString}`);
-  return apiGet(`/api/inventory/movements${queryString}`);
 }
 
 /**
@@ -50,7 +47,6 @@ export async function fetchStockMovements(params = {}) {
  */
 export async function recordStockMovementApi(movementData) {
   return apiPost("/inventory/movements", movementData);
-  return apiPost("/api/inventory/movements", movementData);
 }
 
 /**
@@ -58,7 +54,6 @@ export async function recordStockMovementApi(movementData) {
  */
 export async function saveInventoryEntry(itemData) {
   return apiPost("/inventory", itemData);
-  return apiPost("/api/inventory", itemData);
 }
 
 /**
@@ -66,7 +61,6 @@ export async function saveInventoryEntry(itemData) {
  */
 export async function updateInventoryEntry(id, itemData) {
   return apiPut(`/inventory/${id}`, itemData);
-  return apiPut(`/api/inventory/${id}`, itemData);
 }
 
 /**
@@ -74,7 +68,6 @@ export async function updateInventoryEntry(id, itemData) {
  */
 export async function deleteInventoryEntry(id) {
   return apiDelete(`/inventory/${id}`);
-  return apiDelete(`/api/inventory/${id}`);
 }
 
 /**
@@ -83,5 +76,22 @@ export async function deleteInventoryEntry(id) {
  */
 export async function fetchItemBarcode(id) {
   return apiGet(`/inventory/${id}/barcode`);
-  return apiGet(`/api/inventory/${id}/barcode`);
+}
+
+/**
+ * GET /api/stock-transfers
+ */
+export async function fetchStockTransfers(params = {}) {
+  const query = new URLSearchParams();
+  if (params.status && params.status !== "All Statuses")
+    query.append("status", params.status);
+  const queryString = query.toString() ? `?${query.toString()}` : "";
+  return apiGet(`/stock-transfers${queryString}`);
+}
+
+/**
+ * POST /api/stock-transfers
+ */
+export async function createStockTransferApi(data) {
+  return apiPost("/stock-transfers", data);
 }

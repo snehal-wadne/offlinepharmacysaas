@@ -16,6 +16,7 @@ const authController = require("../controllers/auth.controller");
 const { authenticate } = require("../middlewares/auth.middleware");
 
 router.get("/me", authenticate, authController.getMe);
+router.get("/users", authenticate, authController.getUsers);
 router.post("/login", authController.login);
 router.post("/register", authController.register);
 router.post("/google", authController.googleLogin);

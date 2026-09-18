@@ -7,7 +7,6 @@ import {
   Platform,
   useWindowDimensions,
 } from 'react-native';
-import { MOCK_RECENT_MOVEMENTS } from '../../data/inventoryDashboardMockData';
 
 const TYPE_CONFIG = {
   Purchase: {
@@ -66,18 +65,14 @@ const STATUS_CONFIG = {
 };
 
 export default function RecentStockMovements({
-  movements = MOCK_RECENT_MOVEMENTS,
+  movements = [],
   onViewAll,
   onMovementPress,
 }) {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
 
-  const movementList = Array.isArray(movements)
-    ? movements
-    : Array.isArray(MOCK_RECENT_MOVEMENTS)
-    ? MOCK_RECENT_MOVEMENTS
-    : [];
+  const movementList = Array.isArray(movements) ? movements : [];
 
   return (
     <View style={styles.cardContainer}>

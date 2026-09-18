@@ -31,7 +31,6 @@ import { LocalPersistenceService } from '../src/db/services/localPersistenceServ
 import { SyncEngine } from '../src/sync/syncEngine';
 import { ConnectivityService } from '../src/sync/connectivityService';
 import { PullWorker } from '../src/sync/pullWorker';
-import { MOCK_GRN_LIST } from '../src/data/goodsReceivingMockData';
 
 let passed = 0;
 let failed = 0;

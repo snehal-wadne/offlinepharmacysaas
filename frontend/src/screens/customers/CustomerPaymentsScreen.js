@@ -11,13 +11,12 @@ import {
   Platform,
 } from "react-native";
 import InventoryStatCard from "../../components/inventory/InventoryStatCard";
+import { PAYMENT_MODE_FILTER } from "../../constants/uiConstants";
 import {
-  CUSTOMER_PAYMENTS_KPIS,
-  PAYMENT_MODE_FILTER,
-  MOCK_CUSTOMER_PAYMENTS_LIST,
-} from '../../data/customersMockData';
-import { SkeletonTableRow, SkeletonItemCard } from '../../components/common/SkeletonLoader';
-import PaginationControls from '../../components/common/PaginationControls';
+  SkeletonTableRow,
+  SkeletonItemCard,
+} from "../../components/common/SkeletonLoader";
+import PaginationControls from "../../components/common/PaginationControls";
 import { localPersistenceService } from "../../db";
 import { syncEngine } from "../../sync";
 import { printPaymentReceipt } from "../../utils/exportUtils";
@@ -42,7 +41,7 @@ export default function CustomerPaymentsScreen({ onShowToast, onNavigate }) {
   const [selectedModeFilter, setSelectedModeFilter] = useState("All Modes");
 
   // Payments List State (Dexie-backed)
-  const [payments, setPayments] = useState(MOCK_CUSTOMER_PAYMENTS_LIST);
+  const [payments, setPayments] = useState([]);
   const [availableCustomers, setAvailableCustomers] = useState([]);
 
   const [loading, setLoading] = useState(false);
@@ -283,6 +282,55 @@ export default function CustomerPaymentsScreen({ onShowToast, onNavigate }) {
     }
   };
 
+  const totalReceived = payments.reduce((acc, p) => {
+    const val =
+      typeof p.amount === "number"
+        ? p.amount
+        : parseFloat(String(p.amount || "").replace(/[^0-9.]/g, "")) || 0;
+    return acc + val;
+  }, 0);
+  const upiCount = payments.filter(
+    (p) => p.paymentMode === "UPI / QR" || p.paymentMode === "UPI",
+  ).length;
+  const cashCount = payments.filter((p) => p.paymentMode === "Cash").length;
+  const pendingSyncCount = payments.filter(
+    (p) => p.syncStatus === "PENDING",
+  ).length;
+
+  const dynamicKpis = [
+    {
+      id: "kpi-1",
+      label: "TOTAL COLLECTIONS",
+      value: `₹${totalReceived.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      subtext: `${payments.length} receipts recorded`,
+      variant: "teal",
+    },
+    {
+      id: "kpi-2",
+      label: "UPI / DIGITAL PAYMENTS",
+      value: `${upiCount}`,
+      subtext: "Instant settlement",
+      variant: "blue",
+    },
+    {
+      id: "kpi-3",
+      label: "CASH RECEIVED",
+      value: `${cashCount}`,
+      subtext: "Cash register counter",
+      variant: "amber",
+    },
+    {
+      id: "kpi-4",
+      label: "PENDING SYNC",
+      value: `${pendingSyncCount}`,
+      subtext:
+        pendingSyncCount > 0
+          ? "Queued for cloud sync"
+          : "Fully synced to cloud",
+      variant: pendingSyncCount > 0 ? "orange" : "green",
+    },
+  ];
+
   return (
     <ScrollView
       style={styles.container}
@@ -320,7 +368,7 @@ export default function CustomerPaymentsScreen({ onShowToast, onNavigate }) {
 
       {/* Top 4 Responsive KPI Cards */}
       <View style={[styles.kpiRow, isCompact && styles.kpiRowCompact]}>
-        {CUSTOMER_PAYMENTS_KPIS.map((kpi) => (
+        {dynamicKpis.map((kpi) => (
           <View
             key={kpi.id}
             style={[styles.kpiCol, isMobile && styles.kpiColMobile]}
@@ -404,7 +452,9 @@ export default function CustomerPaymentsScreen({ onShowToast, onNavigate }) {
           /* Mobile Payment Receipt Cards */
           <View style={styles.mobileCardList}>
             {loading ? (
-              Array.from({ length: 3 }).map((_, i) => <SkeletonItemCard key={i} />)
+              Array.from({ length: 3 }).map((_, i) => (
+                <SkeletonItemCard key={i} />
+              ))
             ) : filteredPayments.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyTitle}>No payment receipts found</Text>
@@ -413,134 +463,148 @@ export default function CustomerPaymentsScreen({ onShowToast, onNavigate }) {
                 </Text>
               </View>
             ) : (
-              filteredPayments.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((rcpt) => {
-                const modeStyle = MODE_BADGES[rcpt.paymentMode] || MODE_BADGES.Cash;
-                const displayAmount = rcpt.amount || rcpt.amountPaid || '₹0.00';
-                const displayDate = rcpt.date || rcpt.paymentDate || '';
-                const displayLinked = rcpt.linkedRef || rcpt.linkedInvoices || 'Direct Payment';
+              filteredPayments
+                .slice(
+                  (currentPage - 1) * itemsPerPage,
+                  currentPage * itemsPerPage,
+                )
+                .map((rcpt) => {
+                  const modeStyle =
+                    MODE_BADGES[rcpt.paymentMode] || MODE_BADGES.Cash;
+                  const displayAmount =
+                    rcpt.amount || rcpt.amountPaid || "₹0.00";
+                  const displayDate = rcpt.date || rcpt.paymentDate || "";
+                  const displayLinked =
+                    rcpt.linkedRef || rcpt.linkedInvoices || "Direct Payment";
 
-                return (
-                  <View key={rcpt.id} style={styles.mobileReceiptCard}>
-                    <View style={styles.mobileCardHeader}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.mobileRcptId}>{rcpt.id}</Text>
-                        <Text style={styles.mobileRcptCust}>
-                          {rcpt.customerName}
-                        </Text>
-                      </View>
-                      <View
-                        style={
-                          rcpt.syncStatus === "PENDING"
-                            ? styles.statusBadgePending
-                            : styles.statusBadgeCompleted
-                        }
-                      >
-                        <Text
+                  return (
+                    <View key={rcpt.id} style={styles.mobileReceiptCard}>
+                      <View style={styles.mobileCardHeader}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.mobileRcptId}>{rcpt.id}</Text>
+                          <Text style={styles.mobileRcptCust}>
+                            {rcpt.customerName}
+                          </Text>
+                        </View>
+                        <View
                           style={
                             rcpt.syncStatus === "PENDING"
-                              ? styles.statusBadgeTextPending
-                              : styles.statusBadgeTextCompleted
+                              ? styles.statusBadgePending
+                              : styles.statusBadgeCompleted
                           }
                         >
-                          {rcpt.syncStatus === "PENDING"
-                            ? "Pending Sync"
-                            : rcpt.status || "Completed"}
-                        </Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.mobileGrid}>
-                      <View style={styles.mobileGridCol}>
-                        <Text style={styles.mobileLabel}>Amount Paid</Text>
-                        <Text
-                          style={[
-                            styles.mobileValBold,
-                            { color: "#0F766E", fontSize: 14 },
-                          ]}
-                        >
-                          {displayAmount}
-                        </Text>
-                      </View>
-                      <View style={styles.mobileGridCol}>
-                        <Text style={styles.mobileLabel}>Payment Mode</Text>
-                        <View
-                          style={[
-                            styles.modeBadge,
-                            { backgroundColor: modeStyle.bg, marginTop: 3 },
-                          ]}
-                        >
                           <Text
-                            style={[
-                              styles.modeBadgeText,
-                              { color: modeStyle.text },
-                            ]}
+                            style={
+                              rcpt.syncStatus === "PENDING"
+                                ? styles.statusBadgeTextPending
+                                : styles.statusBadgeTextCompleted
+                            }
                           >
-                            {rcpt.paymentMode}
+                            {rcpt.syncStatus === "PENDING"
+                              ? "Pending Sync"
+                              : rcpt.status || "Completed"}
                           </Text>
                         </View>
                       </View>
-                      <View style={styles.mobileGridCol}>
-                        <Text style={styles.mobileLabel}>Date & Time</Text>
-                        <Text style={styles.mobileVal}>{displayDate}</Text>
-                      </View>
-                      <View style={styles.mobileGridCol}>
-                        <Text style={styles.mobileLabel}>Linked Invoice</Text>
-                        <Text
-                          style={[styles.mobileValBold, { color: "#334155" }]}
-                        >
-                          {displayLinked}
-                        </Text>
-                      </View>
-                      <View style={styles.mobileGridCol}>
-                        <Text style={styles.mobileLabel}>Ref / UTR No</Text>
-                        <Text style={styles.mobileVal}>
-                          {rcpt.transactionRef}
-                        </Text>
-                      </View>
-                      <View style={styles.mobileGridCol}>
-                        <Text style={styles.mobileLabel}>Cashier / Staff</Text>
-                        <Text style={styles.mobileVal}>{rcpt.receivedBy}</Text>
-                      </View>
-                    </View>
 
-                    <View
-                      style={[
-                        styles.mobileCardFooter,
-                        { flexDirection: "row", gap: 8 },
-                      ]}
-                    >
-                      <Pressable
-                        onPress={() => handleViewVoucher(rcpt)}
+                      <View style={styles.mobileGrid}>
+                        <View style={styles.mobileGridCol}>
+                          <Text style={styles.mobileLabel}>Amount Paid</Text>
+                          <Text
+                            style={[
+                              styles.mobileValBold,
+                              { color: "#0F766E", fontSize: 14 },
+                            ]}
+                          >
+                            {displayAmount}
+                          </Text>
+                        </View>
+                        <View style={styles.mobileGridCol}>
+                          <Text style={styles.mobileLabel}>Payment Mode</Text>
+                          <View
+                            style={[
+                              styles.modeBadge,
+                              { backgroundColor: modeStyle.bg, marginTop: 3 },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.modeBadgeText,
+                                { color: modeStyle.text },
+                              ]}
+                            >
+                              {rcpt.paymentMode}
+                            </Text>
+                          </View>
+                        </View>
+                        <View style={styles.mobileGridCol}>
+                          <Text style={styles.mobileLabel}>Date & Time</Text>
+                          <Text style={styles.mobileVal}>{displayDate}</Text>
+                        </View>
+                        <View style={styles.mobileGridCol}>
+                          <Text style={styles.mobileLabel}>Linked Invoice</Text>
+                          <Text
+                            style={[styles.mobileValBold, { color: "#334155" }]}
+                          >
+                            {displayLinked}
+                          </Text>
+                        </View>
+                        <View style={styles.mobileGridCol}>
+                          <Text style={styles.mobileLabel}>Ref / UTR No</Text>
+                          <Text style={styles.mobileVal}>
+                            {rcpt.transactionRef}
+                          </Text>
+                        </View>
+                        <View style={styles.mobileGridCol}>
+                          <Text style={styles.mobileLabel}>
+                            Cashier / Staff
+                          </Text>
+                          <Text style={styles.mobileVal}>
+                            {rcpt.receivedBy}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View
                         style={[
-                          styles.mobilePrintBtn,
-                          {
-                            flex: 1,
-                            backgroundColor: "#E0F2FE",
-                            borderColor: "#BAE6FD",
-                          },
+                          styles.mobileCardFooter,
+                          { flexDirection: "row", gap: 8 },
                         ]}
-                        accessibilityRole="button"
                       >
-                        <Text
+                        <Pressable
+                          onPress={() => handleViewVoucher(rcpt)}
                           style={[
-                            styles.mobilePrintBtnText,
-                            { color: "#0369A1", fontWeight: "700" },
+                            styles.mobilePrintBtn,
+                            {
+                              flex: 1,
+                              backgroundColor: "#E0F2FE",
+                              borderColor: "#BAE6FD",
+                            },
                           ]}
+                          accessibilityRole="button"
                         >
-                          📄 View Voucher
-                        </Text>
-                      </Pressable>
-                      <Pressable
-                        onPress={() => handlePrintReceipt(rcpt)}
-                        style={[styles.mobilePrintBtn, { flex: 1 }]}
-                        accessibilityRole="button"
-                      >
-                        <Text style={styles.mobilePrintBtnText}>🖨 Print</Text>
-                      </Pressable>
+                          <Text
+                            style={[
+                              styles.mobilePrintBtnText,
+                              { color: "#0369A1", fontWeight: "700" },
+                            ]}
+                          >
+                            📄 View Voucher
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => handlePrintReceipt(rcpt)}
+                          style={[styles.mobilePrintBtn, { flex: 1 }]}
+                          accessibilityRole="button"
+                        >
+                          <Text style={styles.mobilePrintBtnText}>
+                            🖨 Print
+                          </Text>
+                        </Pressable>
+                      </View>
                     </View>
-                  </View>
-                );
-              })
+                  );
+                })
             )}
           </View>
         ) : (
@@ -596,142 +660,156 @@ export default function CustomerPaymentsScreen({ onShowToast, onNavigate }) {
                   </Text>
                 </View>
               ) : (
-                filteredPayments.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((rcpt, index) => {
-                  const modeStyle = MODE_BADGES[rcpt.paymentMode] || MODE_BADGES.Cash;
-                  const displayAmount = rcpt.amount || rcpt.amountPaid || '₹0.00';
-                  const displayDate = rcpt.date || rcpt.paymentDate || '';
-                  const displayLinked = rcpt.linkedRef || rcpt.linkedInvoices || 'Direct Payment';
+                filteredPayments
+                  .slice(
+                    (currentPage - 1) * itemsPerPage,
+                    currentPage * itemsPerPage,
+                  )
+                  .map((rcpt, index) => {
+                    const modeStyle =
+                      MODE_BADGES[rcpt.paymentMode] || MODE_BADGES.Cash;
+                    const displayAmount =
+                      rcpt.amount || rcpt.amountPaid || "₹0.00";
+                    const displayDate = rcpt.date || rcpt.paymentDate || "";
+                    const displayLinked =
+                      rcpt.linkedRef || rcpt.linkedInvoices || "Direct Payment";
 
-                  return (
-                    <View
-                      key={rcpt.id}
-                      style={[
-                        styles.tableRow,
-                        index % 2 === 1 && styles.tableRowAlt,
-                      ]}
-                    >
-                      <Text
+                    return (
+                      <View
+                        key={rcpt.id}
                         style={[
-                          styles.tdCell,
-                          styles.receiptNoText,
-                          { width: 130 },
+                          styles.tableRow,
+                          index % 2 === 1 && styles.tableRowAlt,
                         ]}
                       >
-                        {rcpt.id}
-                      </Text>
-                      <Text style={[styles.tdCell, { width: 140 }]}>
-                        {displayDate}
-                      </Text>
-                      <View style={[{ width: 180 }]}>
                         <Text
-                          style={[styles.tdCell, styles.customerNameText]}
-                          numberOfLines={1}
-                        >
-                          {rcpt.customerName}
-                        </Text>
-                        <Text style={styles.customerIdSubtext}>
-                          {rcpt.customerId}
-                        </Text>
-                      </View>
-                      <Text
-                        style={[
-                          styles.tdCell,
-                          { width: 190, color: "#334155", fontWeight: "500" },
-                        ]}
-                      >
-                        {displayLinked}
-                      </Text>
-
-                      {/* Payment Mode Badge */}
-                      <View style={[styles.modeCellWrapper, { width: 130 }]}>
-                        <View
                           style={[
-                            styles.modeBadge,
-                            { backgroundColor: modeStyle.bg },
+                            styles.tdCell,
+                            styles.receiptNoText,
+                            { width: 130 },
                           ]}
                         >
+                          {rcpt.id}
+                        </Text>
+                        <Text style={[styles.tdCell, { width: 140 }]}>
+                          {displayDate}
+                        </Text>
+                        <View style={[{ width: 180 }]}>
                           <Text
+                            style={[styles.tdCell, styles.customerNameText]}
+                            numberOfLines={1}
+                          >
+                            {rcpt.customerName}
+                          </Text>
+                          <Text style={styles.customerIdSubtext}>
+                            {rcpt.customerId}
+                          </Text>
+                        </View>
+                        <Text
+                          style={[
+                            styles.tdCell,
+                            { width: 190, color: "#334155", fontWeight: "500" },
+                          ]}
+                        >
+                          {displayLinked}
+                        </Text>
+
+                        {/* Payment Mode Badge */}
+                        <View style={[styles.modeCellWrapper, { width: 130 }]}>
+                          <View
                             style={[
-                              styles.modeBadgeText,
-                              { color: modeStyle.text },
+                              styles.modeBadge,
+                              { backgroundColor: modeStyle.bg },
                             ]}
                           >
-                            {rcpt.paymentMode}
-                          </Text>
+                            <Text
+                              style={[
+                                styles.modeBadgeText,
+                                { color: modeStyle.text },
+                              ]}
+                            >
+                              {rcpt.paymentMode}
+                            </Text>
+                          </View>
                         </View>
-                      </View>
 
-                      <Text
-                        style={[styles.tdCell, styles.utrText, { width: 170 }]}
-                      >
-                        {rcpt.transactionRef}
-                      </Text>
-
-                      <Text
-                        style={[
-                          styles.tdCell,
-                          styles.paidAmountText,
-                          { width: 110, textAlign: "right" },
-                        ]}
-                      >
-                        {displayAmount}
-                      </Text>
-
-                      <Text style={[styles.tdCell, { width: 140 }]}>
-                        {rcpt.receivedBy}
-                      </Text>
-
-                      {/* Status */}
-                      <View style={[styles.statusCellWrapper, { width: 90 }]}>
-                        <View
-                          style={
-                            rcpt.syncStatus === "PENDING"
-                              ? styles.statusBadgePending
-                              : styles.statusBadgeCompleted
-                          }
+                        <Text
+                          style={[
+                            styles.tdCell,
+                            styles.utrText,
+                            { width: 170 },
+                          ]}
                         >
-                          <Text
+                          {rcpt.transactionRef}
+                        </Text>
+
+                        <Text
+                          style={[
+                            styles.tdCell,
+                            styles.paidAmountText,
+                            { width: 110, textAlign: "right" },
+                          ]}
+                        >
+                          {displayAmount}
+                        </Text>
+
+                        <Text style={[styles.tdCell, { width: 140 }]}>
+                          {rcpt.receivedBy}
+                        </Text>
+
+                        {/* Status */}
+                        <View style={[styles.statusCellWrapper, { width: 90 }]}>
+                          <View
                             style={
                               rcpt.syncStatus === "PENDING"
-                                ? styles.statusBadgeTextPending
-                                : styles.statusBadgeTextCompleted
+                                ? styles.statusBadgePending
+                                : styles.statusBadgeCompleted
                             }
                           >
-                            {rcpt.syncStatus === "PENDING"
-                              ? "Pending"
-                              : rcpt.status || "Completed"}
-                          </Text>
+                            <Text
+                              style={
+                                rcpt.syncStatus === "PENDING"
+                                  ? styles.statusBadgeTextPending
+                                  : styles.statusBadgeTextCompleted
+                              }
+                            >
+                              {rcpt.syncStatus === "PENDING"
+                                ? "Pending"
+                                : rcpt.status || "Completed"}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* Actions */}
+                        <View
+                          style={[styles.actionsCellWrapper, { width: 140 }]}
+                        >
+                          <Pressable
+                            onPress={() => handleViewVoucher(rcpt)}
+                            style={styles.voucherBtn}
+                            accessibilityRole="button"
+                            accessibilityLabel="View Voucher"
+                          >
+                            <Text style={styles.voucherBtnText}>Voucher</Text>
+                          </Pressable>
+                          <Pressable
+                            onPress={() => handlePrintReceipt(rcpt)}
+                            style={styles.printBtn}
+                            accessibilityRole="button"
+                            accessibilityLabel="Print Receipt"
+                          >
+                            <Text style={styles.printBtnText}>Print</Text>
+                          </Pressable>
                         </View>
                       </View>
-
-                      {/* Actions */}
-                      <View style={[styles.actionsCellWrapper, { width: 140 }]}>
-                        <Pressable
-                          onPress={() => handleViewVoucher(rcpt)}
-                          style={styles.voucherBtn}
-                          accessibilityRole="button"
-                          accessibilityLabel="View Voucher"
-                        >
-                          <Text style={styles.voucherBtnText}>Voucher</Text>
-                        </Pressable>
-                        <Pressable
-                          onPress={() => handlePrintReceipt(rcpt)}
-                          style={styles.printBtn}
-                          accessibilityRole="button"
-                          accessibilityLabel="Print Receipt"
-                        >
-                          <Text style={styles.printBtnText}>Print</Text>
-                        </Pressable>
-                      </View>
-                    </View>
-                  );
-                })
+                    );
+                  })
               )}
             </View>
           </ScrollView>
         )}
-        
-        <PaginationControls 
+
+        <PaginationControls
           currentPage={currentPage}
           totalPages={Math.ceil(filteredPayments.length / itemsPerPage)}
           onPageChange={setCurrentPage}

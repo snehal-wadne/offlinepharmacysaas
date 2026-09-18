@@ -17,10 +17,6 @@ import {
   SkeletonItemCard,
 } from "../../components/common/SkeletonLoader";
 import PaginationControls from "../../components/common/PaginationControls";
-import {
-  MOCK_LOW_STOCK_ITEMS,
-  MOCK_EXPIRY_BATCHES,
-} from "../../data/lowStockExpiryMockData";
 import { fetchInventory } from "../../api/inventoryApi";
 import BulkImportModal from "../../components/inventory/BulkImportModal";
 
@@ -68,9 +64,12 @@ export default function StockStatusScreen({
       const res = await fetchInventory({ branchId: branchParam });
       if (res && res.data && Array.isArray(res.data)) {
         setRawInventory(res.data);
+      } else {
+        setRawInventory([]);
       }
     } catch (err) {
       console.warn("Failed to load inventory for Stock Status:", err.message);
+      setRawInventory([]);
     } finally {
       setLoading(false);
     }
@@ -113,8 +112,7 @@ export default function StockStatusScreen({
       };
     });
 
-  const baseLowStockList =
-    rawInventory.length > 0 ? dbLowStockItems : MOCK_LOW_STOCK_ITEMS;
+  const baseLowStockList = dbLowStockItems;
   const lowStockItemsList = selectedBranch && selectedBranch !== "All Branches"
     ? baseLowStockList.filter((i) => !i.branch || i.branch === selectedBranch || i.branchId === selectedBranch)
     : baseLowStockList;
@@ -147,8 +145,7 @@ export default function StockStatusScreen({
     };
   });
 
-  const baseExpiryList =
-    rawInventory.length > 0 ? dbExpiryItems : MOCK_EXPIRY_BATCHES;
+  const baseExpiryList = dbExpiryItems;
   const expiryItemsList = selectedBranch && selectedBranch !== "All Branches"
     ? baseExpiryList.filter((i) => !i.branch || i.branch === selectedBranch || i.branchId === selectedBranch)
     : baseExpiryList;

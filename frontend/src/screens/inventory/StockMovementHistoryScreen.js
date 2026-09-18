@@ -24,28 +24,7 @@ const COLORS = {
   border: '#E2E8F0',
 };
 
-const MOCK_MOVEMENTS = [
-  { id: 1, date: '29 Aug 2026', type: 'Purchase', product: 'Paracetamol 500mg', batch: 'B-1001', quantity: 500, reference: 'PO-1025', branch: 'Main Branch', user: 'Admin', reason: 'New stock received' },
-  { id: 2, date: '29 Aug 2026', type: 'Sale', product: 'Amoxicillin 500mg', batch: 'B-2001', quantity: -120, reference: 'INV-2401', branch: 'BR-02', user: 'Staff', reason: 'Customer sale' },
-  { id: 3, date: '29 Aug 2026', type: 'Transfer', product: 'Vitamin C 500mg', batch: 'B-7001', quantity: -100, reference: 'TR-001', branch: 'Main Branch', user: 'Manager', reason: 'Branch transfer' },
-  { id: 4, date: '28 Aug 2026', type: 'Adjustment', product: 'Metformin 500mg', batch: 'B-3001', quantity: -5, reference: 'ADJ-003', branch: 'Main Branch', user: 'Admin', reason: 'Stock count correction' },
-  { id: 5, date: '28 Aug 2026', type: 'Sale', product: 'Cetirizine 10mg', batch: 'B-6001', quantity: -80, reference: 'INV-2400', branch: 'BR-03', user: 'Staff', reason: 'Customer sale' },
-  { id: 6, date: '28 Aug 2026', type: 'Purchase', product: 'Vitamin D3 1000IU', batch: 'B-D301', quantity: 200, reference: 'PO-1024', branch: 'BR-03', user: 'Manager', reason: 'New stock received' },
-  { id: 7, date: '27 Aug 2026', type: 'Return', product: 'Ibuprofen 400mg', batch: 'B-8001', quantity: 30, reference: 'RET-008', branch: 'Main Branch', user: 'Admin', reason: 'Customer return' },
-  { id: 8, date: '27 Aug 2026', type: 'Adjustment', product: 'Omeprazole 20mg', batch: 'B-5001', quantity: -5, reference: 'ADJ-004', branch: 'BR-02', user: 'Manager', reason: 'Expired stock removal' },
-  { id: 9, date: '27 Aug 2026', type: 'Sale', product: 'Atorvastatin 10mg', batch: 'B-4001', quantity: -50, reference: 'INV-2399', branch: 'Main Branch', user: 'Staff', reason: 'Customer sale' },
-  { id: 10, date: '26 Aug 2026', type: 'Transfer', product: 'Metformin 500mg', batch: 'B-3001', quantity: 200, reference: 'TR-002', branch: 'BR-03', user: 'Admin', reason: 'Received from Main Branch' },
-  { id: 11, date: '26 Aug 2026', type: 'Stocktake', product: 'Aspirin 75mg', batch: 'B-A001', quantity: 0, reference: 'ST-2026-07', branch: 'BR-02', user: 'Manager', reason: 'Count matched' },
-  { id: 12, date: '25 Aug 2026', type: 'Purchase', product: 'Azithromycin 500mg', batch: 'B-9001', quantity: 300, reference: 'PO-1023', branch: 'Main Branch', user: 'Admin', reason: 'New stock received' },
-  { id: 13, date: '25 Aug 2026', type: 'Adjustment', product: 'Paracetamol 500mg', batch: 'B-1001', quantity: -5, reference: 'ADJ-001', branch: 'Main Branch', user: 'Manager', reason: 'Damaged' },
-  { id: 14, date: '24 Aug 2026', type: 'Sale', product: 'Insulin Glargine', batch: 'B-1101', quantity: -10, reference: 'INV-2398', branch: 'Main Branch', user: 'Staff', reason: 'Customer sale' },
-  { id: 15, date: '24 Aug 2026', type: 'Return', product: 'Metformin 500mg', batch: 'B-3001', quantity: 15, reference: 'RET-007', branch: 'BR-02', user: 'Admin', reason: 'Supplier return' },
-  { id: 16, date: '23 Aug 2026', type: 'Transfer', product: 'Cetirizine 10mg', batch: 'B-6001', quantity: 50, reference: 'TR-007', branch: 'BR-05', user: 'Manager', reason: 'Received from Main Branch' },
-  { id: 17, date: '23 Aug 2026', type: 'Stocktake', product: 'Omeprazole 20mg', batch: 'B-5001', quantity: -3, reference: 'ST-2026-06', branch: 'Main Branch', user: 'Admin', reason: 'Discrepancy adjusted' },
-  { id: 18, date: '22 Aug 2026', type: 'Purchase', product: 'Omega-3 1000mg', batch: 'B-2001O', quantity: 400, reference: 'PO-1022', branch: 'BR-04', user: 'Manager', reason: 'New stock received' },
-  { id: 19, date: '22 Aug 2026', type: 'Sale', product: 'Vitamin C 500mg', batch: 'B-7001', quantity: -200, reference: 'INV-2397', branch: 'BR-04', user: 'Staff', reason: 'Customer sale' },
-  { id: 20, date: '21 Aug 2026', type: 'Adjustment', product: 'Fluconazole 150mg', batch: 'B-F001', quantity: -10, reference: 'ADJ-014', branch: 'BR-03', user: 'Admin', reason: 'Expired' },
-];
+const MOCK_MOVEMENTS = [];
 
 export default function StockMovementHistoryScreen({ navigation, route }) {
   const [searchQuery, setSearchQuery] = useState('');

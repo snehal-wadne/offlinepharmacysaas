@@ -11,17 +11,17 @@ import {
   Platform,
 } from "react-native";
 import InventoryStatCard from "../../components/inventory/InventoryStatCard";
-import {
-  MOCK_GRN_LIST,
-  GRN_STATUS_FILTER,
-} from "../../data/goodsReceivingMockData";
+import { GRN_STATUS_FILTER } from "../../constants/uiConstants";
 import {
   fetchGoodsReceipts,
   createGoodsReceipt,
   updateGoodsReceiptStatus,
-} from '../../api/purchaseApi';
-import { SkeletonTableRow, SkeletonItemCard } from '../../components/common/SkeletonLoader';
-import PaginationControls from '../../components/common/PaginationControls';
+} from "../../api/purchaseApi";
+import {
+  SkeletonTableRow,
+  SkeletonItemCard,
+} from "../../components/common/SkeletonLoader";
+import PaginationControls from "../../components/common/PaginationControls";
 import { localPersistenceService } from "../../db";
 import { syncEngine } from "../../sync";
 
@@ -45,7 +45,7 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("All Statuses");
-  const [grnList, setGrnList] = useState(MOCK_GRN_LIST);
+  const [grnList, setGrnList] = useState([]);
   const [availableProducts, setAvailableProducts] = useState([]);
   const [activeMenuId, setActiveMenuId] = useState(null);
   const [statusModalGrn, setStatusModalGrn] = useState(null);
@@ -70,17 +70,19 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
           serverRecords = response.data.map((grn) => ({
             realId: grn.id,
             id: grn.receiptNumber || grn.receipt_number || grn.id,
-            poReference: grn.purchaseNumber || grn.poReference || "PO-1026",
-            supplier: grn.supplierName || grn.supplier || "Sun Pharma Care",
+            poReference: grn.purchaseNumber || grn.poReference || "Direct GRN",
+            supplier: grn.supplierName || grn.supplier || "Supplier",
             receivedDate:
-              grn.receivedDate || grn.received_date || "29 Aug 2026",
-            receivedBy: grn.receivedBy || "Manager",
-            itemsCount: grn.itemsCount || 4,
-            packagesCount: grn.packageCount || grn.package_count || 8,
+              grn.receivedDate ||
+              grn.received_date ||
+              (grn.created_at
+                ? new Date(grn.created_at).toLocaleDateString()
+                : "Recent"),
+            receivedBy: grn.receivedBy || "Staff",
+            itemsCount: grn.itemsCount || (grn.items ? grn.items.length : 0),
+            packagesCount: grn.packageCount || grn.package_count || 1,
             invoiceNo:
-              grn.supplierInvoiceNumber ||
-              grn.supplier_invoice_number ||
-              "INV-SP-9012",
+              grn.supplierInvoiceNumber || grn.supplier_invoice_number || "N/A",
             status:
               grn.status === "VERIFIED"
                 ? "Verified"
@@ -108,11 +110,11 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
       if (combined.length > 0) {
         setGrnList(combined);
       } else {
-        setGrnList(MOCK_GRN_LIST);
+        setGrnList([]);
       }
     } catch (err) {
       console.warn("[GoodsReceivingScreen] Error loading GRN list:", err);
-      setGrnList(MOCK_GRN_LIST);
+      setGrnList([]);
     } finally {
       setLoading(false);
     }
@@ -537,7 +539,9 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
         {isMobile ? (
           <View style={styles.mobileCardsList}>
             {loading ? (
-              Array.from({ length: 3 }).map((_, i) => <SkeletonItemCard key={i} />)
+              Array.from({ length: 3 }).map((_, i) => (
+                <SkeletonItemCard key={i} />
+              ))
             ) : filteredGRNs.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyTitle}>
@@ -548,123 +552,127 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
                 </Text>
               </View>
             ) : (
-              filteredGRNs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((grn) => {
-                const badge =
-                  GRN_STATUS_BADGES[grn.status] || GRN_STATUS_BADGES.Verified;
-                const isMenuOpen = activeMenuId === grn.id;
+              filteredGRNs
+                .slice(
+                  (currentPage - 1) * itemsPerPage,
+                  currentPage * itemsPerPage,
+                )
+                .map((grn) => {
+                  const badge =
+                    GRN_STATUS_BADGES[grn.status] || GRN_STATUS_BADGES.Verified;
+                  const isMenuOpen = activeMenuId === grn.id;
 
-                return (
-                  <View
-                    key={grn.id}
-                    style={styles.mobileGrnCard}
-                  >
-                    {/* Header Row: ID + Status + Action menu */}
-                    <View style={styles.mobileCardTopRow}>
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          gap: 6,
-                          flexWrap: "wrap",
-                        }}
-                      >
-                        <Text style={styles.grnId}>{grn.id}</Text>
+                  return (
+                    <View key={grn.id} style={styles.mobileGrnCard}>
+                      {/* Header Row: ID + Status + Action menu */}
+                      <View style={styles.mobileCardTopRow}>
                         <View
-                          style={[
-                            styles.statusBadge,
-                            { backgroundColor: badge.bg },
-                          ]}
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 6,
+                            flexWrap: "wrap",
+                          }}
                         >
-                          <Text
-                            style={[
-                              styles.statusBadgeText,
-                              { color: badge.text },
-                            ]}
-                          >
-                            {grn.status}
-                          </Text>
-                        </View>
-                        {grn.syncStatus && grn.syncStatus !== "SYNCED" && (
+                          <Text style={styles.grnId}>{grn.id}</Text>
                           <View
                             style={[
                               styles.statusBadge,
-                              {
-                                backgroundColor: "#FEF3C7",
-                                paddingVertical: 1,
-                              },
+                              { backgroundColor: badge.bg },
                             ]}
                           >
                             <Text
                               style={[
                                 styles.statusBadgeText,
-                                { color: "#B45309", fontSize: 10 },
+                                { color: badge.text },
                               ]}
                             >
-                              {grn.syncStatus}
+                              {grn.status}
                             </Text>
                           </View>
-                        )}
+                          {grn.syncStatus && grn.syncStatus !== "SYNCED" && (
+                            <View
+                              style={[
+                                styles.statusBadge,
+                                {
+                                  backgroundColor: "#FEF3C7",
+                                  paddingVertical: 1,
+                                },
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.statusBadgeText,
+                                  { color: "#B45309", fontSize: 10 },
+                                ]}
+                              >
+                                {grn.syncStatus}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+
+                        <View style={styles.actionWrapper}>
+                          <Pressable
+                            onPress={() => setStatusModalGrn(grn)}
+                            style={styles.threeDotsBtn}
+                            accessibilityRole="button"
+                            accessibilityLabel="Action menu"
+                          >
+                            <Text style={styles.threeDotsText}>⋮</Text>
+                          </Pressable>
+                        </View>
                       </View>
 
-                      <View style={styles.actionWrapper}>
-                        <Pressable
-                          onPress={() => setStatusModalGrn(grn)}
-                          style={styles.threeDotsBtn}
-                          accessibilityRole="button"
-                          accessibilityLabel="Action menu"
-                        >
-                          <Text style={styles.threeDotsText}>⋮</Text>
-                        </Pressable>
-                      </View>
-                    </View>
-
-                    {/* Supplier Name */}
-                    <Text style={styles.mobileSupplierName}>
-                      {grn.supplier}
-                    </Text>
-
-                    {/* Key-Value Details Grid */}
-                    <View style={styles.mobileDetailsGrid}>
-                      <View style={styles.mobileDetailItem}>
-                        <Text style={styles.mobileDetailLabel}>PO REF</Text>
-                        <Text style={styles.poRef}>{grn.poReference}</Text>
-                      </View>
-                      <View style={styles.mobileDetailItem}>
-                        <Text style={styles.mobileDetailLabel}>INVOICE NO</Text>
-                        <Text style={styles.mobileDetailVal}>
-                          {grn.invoiceNo}
-                        </Text>
-                      </View>
-                      <View style={styles.mobileDetailItem}>
-                        <Text style={styles.mobileDetailLabel}>
-                          RECEIVED DATE
-                        </Text>
-                        <Text style={styles.mobileDetailVal}>
-                          {grn.receivedDate}
-                        </Text>
-                      </View>
-                      <View style={styles.mobileDetailItem}>
-                        <Text style={styles.mobileDetailLabel}>
-                          ITEMS / PACKAGES
-                        </Text>
-                        <Text style={styles.mobileDetailVal}>
-                          {grn.itemsCount} items ({grn.packagesCount} pkgs)
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* Footer */}
-                    <View style={styles.mobileCardFooter}>
-                      <Text style={styles.mobileReceivedByText}>
-                        👤 Received by:{" "}
-                        <Text style={{ fontWeight: "600", color: "#0F172A" }}>
-                          {grn.receivedBy}
-                        </Text>
+                      {/* Supplier Name */}
+                      <Text style={styles.mobileSupplierName}>
+                        {grn.supplier}
                       </Text>
+
+                      {/* Key-Value Details Grid */}
+                      <View style={styles.mobileDetailsGrid}>
+                        <View style={styles.mobileDetailItem}>
+                          <Text style={styles.mobileDetailLabel}>PO REF</Text>
+                          <Text style={styles.poRef}>{grn.poReference}</Text>
+                        </View>
+                        <View style={styles.mobileDetailItem}>
+                          <Text style={styles.mobileDetailLabel}>
+                            INVOICE NO
+                          </Text>
+                          <Text style={styles.mobileDetailVal}>
+                            {grn.invoiceNo}
+                          </Text>
+                        </View>
+                        <View style={styles.mobileDetailItem}>
+                          <Text style={styles.mobileDetailLabel}>
+                            RECEIVED DATE
+                          </Text>
+                          <Text style={styles.mobileDetailVal}>
+                            {grn.receivedDate}
+                          </Text>
+                        </View>
+                        <View style={styles.mobileDetailItem}>
+                          <Text style={styles.mobileDetailLabel}>
+                            ITEMS / PACKAGES
+                          </Text>
+                          <Text style={styles.mobileDetailVal}>
+                            {grn.itemsCount} items ({grn.packagesCount} pkgs)
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Footer */}
+                      <View style={styles.mobileCardFooter}>
+                        <Text style={styles.mobileReceivedByText}>
+                          👤 Received by:{" "}
+                          <Text style={{ fontWeight: "600", color: "#0F172A" }}>
+                            {grn.receivedBy}
+                          </Text>
+                        </Text>
+                      </View>
                     </View>
-                  </View>
-                );
-              })
+                  );
+                })
             )}
           </View>
         ) : (
@@ -717,234 +725,248 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
                   </Text>
                 </View>
               ) : (
-                filteredGRNs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((grn, index) => {
-                  const badge =
-                    GRN_STATUS_BADGES[grn.status] || GRN_STATUS_BADGES.Verified;
-                  const isMenuOpen = activeMenuId === grn.id;
+                filteredGRNs
+                  .slice(
+                    (currentPage - 1) * itemsPerPage,
+                    currentPage * itemsPerPage,
+                  )
+                  .map((grn, index) => {
+                    const badge =
+                      GRN_STATUS_BADGES[grn.status] ||
+                      GRN_STATUS_BADGES.Verified;
+                    const isMenuOpen = activeMenuId === grn.id;
 
-                  return (
-                    <View
-                      key={grn.id}
-                      style={[
-                        styles.tableRow,
-                        index % 2 === 1 && styles.tableRowAlt,
-                        { zIndex: isMenuOpen ? 999 : 1 },
-                      ]}
-                    >
-                      <Text
-                        style={[styles.tdCell, styles.grnId, { width: 130 }]}
-                      >
-                        {grn.id}
-                      </Text>
-                      <Text
-                        style={[styles.tdCell, styles.poRef, { width: 100 }]}
-                      >
-                        {grn.poReference}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.tdCell,
-                          styles.supplierText,
-                          { width: 160 },
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {grn.supplier}
-                      </Text>
-                      <Text style={[styles.tdCell, { width: 120 }]}>
-                        {grn.receivedDate}
-                      </Text>
-                      <Text style={[styles.tdCell, { width: 120 }]}>
-                        {grn.receivedBy}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.tdCell,
-                          { width: 70, textAlign: "center", fontWeight: "600" },
-                        ]}
-                      >
-                        {grn.itemsCount}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.tdCell,
-                          { width: 90, textAlign: "center" },
-                        ]}
-                      >
-                        {grn.packagesCount}
-                      </Text>
-                      <Text style={[styles.tdCell, { width: 120 }]}>
-                        {grn.invoiceNo}
-                      </Text>
-
-                      {/* Status Badge */}
+                    return (
                       <View
-                        style={[styles.statusWrapper, { width: 140, gap: 4 }]}
+                        key={grn.id}
+                        style={[
+                          styles.tableRow,
+                          index % 2 === 1 && styles.tableRowAlt,
+                          { zIndex: isMenuOpen ? 999 : 1 },
+                        ]}
                       >
-                        <View
+                        <Text
+                          style={[styles.tdCell, styles.grnId, { width: 130 }]}
+                        >
+                          {grn.id}
+                        </Text>
+                        <Text
+                          style={[styles.tdCell, styles.poRef, { width: 100 }]}
+                        >
+                          {grn.poReference}
+                        </Text>
+                        <Text
                           style={[
-                            styles.statusBadge,
-                            { backgroundColor: badge.bg },
+                            styles.tdCell,
+                            styles.supplierText,
+                            { width: 160 },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {grn.supplier}
+                        </Text>
+                        <Text style={[styles.tdCell, { width: 120 }]}>
+                          {grn.receivedDate}
+                        </Text>
+                        <Text style={[styles.tdCell, { width: 120 }]}>
+                          {grn.receivedBy}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.tdCell,
+                            {
+                              width: 70,
+                              textAlign: "center",
+                              fontWeight: "600",
+                            },
                           ]}
                         >
-                          <Text
-                            style={[
-                              styles.statusBadgeText,
-                              { color: badge.text },
-                            ]}
-                          >
-                            {grn.status}
-                          </Text>
-                        </View>
-                        {grn.syncStatus && grn.syncStatus !== "SYNCED" && (
+                          {grn.itemsCount}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.tdCell,
+                            { width: 90, textAlign: "center" },
+                          ]}
+                        >
+                          {grn.packagesCount}
+                        </Text>
+                        <Text style={[styles.tdCell, { width: 120 }]}>
+                          {grn.invoiceNo}
+                        </Text>
+
+                        {/* Status Badge */}
+                        <View
+                          style={[styles.statusWrapper, { width: 140, gap: 4 }]}
+                        >
                           <View
                             style={[
                               styles.statusBadge,
-                              {
-                                backgroundColor: "#FEF3C7",
-                                paddingVertical: 1,
-                              },
+                              { backgroundColor: badge.bg },
                             ]}
                           >
                             <Text
                               style={[
                                 styles.statusBadgeText,
-                                { color: "#B45309", fontSize: 10 },
+                                { color: badge.text },
                               ]}
                             >
-                              {grn.syncStatus}
+                              {grn.status}
                             </Text>
                           </View>
-                        )}
+                          {grn.syncStatus && grn.syncStatus !== "SYNCED" && (
+                            <View
+                              style={[
+                                styles.statusBadge,
+                                {
+                                  backgroundColor: "#FEF3C7",
+                                  paddingVertical: 1,
+                                },
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.statusBadgeText,
+                                  { color: "#B45309", fontSize: 10 },
+                                ]}
+                              >
+                                {grn.syncStatus}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+
+                        {/* 3-Dots Action Column */}
+                        <View style={[styles.actionWrapper, { width: 60 }]}>
+                          <Pressable
+                            onPress={() =>
+                              setActiveMenuId((prev) =>
+                                prev === grn.id ? null : grn.id,
+                              )
+                            }
+                            style={styles.threeDotsBtn}
+                            accessibilityRole="button"
+                            accessibilityLabel="Action menu"
+                          >
+                            <Text style={styles.threeDotsText}>⋮</Text>
+                          </Pressable>
+
+                          {/* Dropdown Menu */}
+                          {isMenuOpen && (
+                            <>
+                              {Platform.OS === "web" && (
+                                <Pressable
+                                  style={{
+                                    position: "fixed",
+                                    top: 0,
+                                    left: 0,
+                                    right: 0,
+                                    bottom: 0,
+                                    zIndex: 998,
+                                  }}
+                                  onPress={() => setActiveMenuId(null)}
+                                />
+                              )}
+                              <View style={styles.menuPopover}>
+                                <Text style={styles.menuHeaderTitle}>
+                                  Update Status
+                                </Text>
+
+                                <Pressable
+                                  style={styles.menuItem}
+                                  onPress={() =>
+                                    handleStatusChange(grn, "Verified")
+                                  }
+                                >
+                                  <View
+                                    style={[
+                                      styles.menuDot,
+                                      {
+                                        backgroundColor:
+                                          GRN_STATUS_BADGES["Verified"].dot,
+                                      },
+                                    ]}
+                                  />
+                                  <Text
+                                    style={[
+                                      styles.menuItemText,
+                                      grn.status === "Verified" &&
+                                        styles.menuItemTextActive,
+                                    ]}
+                                  >
+                                    Verified
+                                  </Text>
+                                </Pressable>
+
+                                <Pressable
+                                  style={styles.menuItem}
+                                  onPress={() =>
+                                    handleStatusChange(
+                                      grn,
+                                      "Pending Inspection",
+                                    )
+                                  }
+                                >
+                                  <View
+                                    style={[
+                                      styles.menuDot,
+                                      {
+                                        backgroundColor:
+                                          GRN_STATUS_BADGES[
+                                            "Pending Inspection"
+                                          ].dot,
+                                      },
+                                    ]}
+                                  />
+                                  <Text
+                                    style={[
+                                      styles.menuItemText,
+                                      grn.status === "Pending Inspection" &&
+                                        styles.menuItemTextActive,
+                                    ]}
+                                  >
+                                    Pending Inspection
+                                  </Text>
+                                </Pressable>
+
+                                <Pressable
+                                  style={styles.menuItem}
+                                  onPress={() =>
+                                    handleStatusChange(grn, "Discrepancy")
+                                  }
+                                >
+                                  <View
+                                    style={[
+                                      styles.menuDot,
+                                      {
+                                        backgroundColor:
+                                          GRN_STATUS_BADGES["Discrepancy"].dot,
+                                      },
+                                    ]}
+                                  />
+                                  <Text
+                                    style={[
+                                      styles.menuItemText,
+                                      grn.status === "Discrepancy" &&
+                                        styles.menuItemTextActive,
+                                    ]}
+                                  >
+                                    Discrepancy
+                                  </Text>
+                                </Pressable>
+                              </View>
+                            </>
+                          )}
+                        </View>
                       </View>
-
-                      {/* 3-Dots Action Column */}
-                      <View style={[styles.actionWrapper, { width: 60 }]}>
-                        <Pressable
-                          onPress={() =>
-                            setActiveMenuId((prev) =>
-                              prev === grn.id ? null : grn.id,
-                            )
-                          }
-                          style={styles.threeDotsBtn}
-                          accessibilityRole="button"
-                          accessibilityLabel="Action menu"
-                        >
-                          <Text style={styles.threeDotsText}>⋮</Text>
-                        </Pressable>
-
-                        {/* Dropdown Menu */}
-                        {isMenuOpen && (
-                          <>
-                            {Platform.OS === 'web' && (
-                              <Pressable
-                                style={{
-                                  position: 'fixed',
-                                  top: 0,
-                                  left: 0,
-                                  right: 0,
-                                  bottom: 0,
-                                  zIndex: 998,
-                                }}
-                                onPress={() => setActiveMenuId(null)}
-                              />
-                            )}
-                            <View style={styles.menuPopover}>
-                              <Text style={styles.menuHeaderTitle}>
-                                Update Status
-                              </Text>
-
-                            <Pressable
-                              style={styles.menuItem}
-                              onPress={() =>
-                                handleStatusChange(grn, "Verified")
-                              }
-                            >
-                              <View
-                                style={[
-                                  styles.menuDot,
-                                  {
-                                    backgroundColor:
-                                      GRN_STATUS_BADGES["Verified"].dot,
-                                  },
-                                ]}
-                              />
-                              <Text
-                                style={[
-                                  styles.menuItemText,
-                                  grn.status === "Verified" &&
-                                    styles.menuItemTextActive,
-                                ]}
-                              >
-                                Verified
-                              </Text>
-                            </Pressable>
-
-                            <Pressable
-                              style={styles.menuItem}
-                              onPress={() =>
-                                handleStatusChange(grn, "Pending Inspection")
-                              }
-                            >
-                              <View
-                                style={[
-                                  styles.menuDot,
-                                  {
-                                    backgroundColor:
-                                      GRN_STATUS_BADGES["Pending Inspection"]
-                                        .dot,
-                                  },
-                                ]}
-                              />
-                              <Text
-                                style={[
-                                  styles.menuItemText,
-                                  grn.status === "Pending Inspection" &&
-                                    styles.menuItemTextActive,
-                                ]}
-                              >
-                                Pending Inspection
-                              </Text>
-                            </Pressable>
-
-                            <Pressable
-                              style={styles.menuItem}
-                              onPress={() =>
-                                handleStatusChange(grn, "Discrepancy")
-                              }
-                            >
-                              <View
-                                style={[
-                                  styles.menuDot,
-                                  {
-                                    backgroundColor:
-                                      GRN_STATUS_BADGES["Discrepancy"].dot,
-                                  },
-                                ]}
-                              />
-                              <Text
-                                style={[
-                                  styles.menuItemText,
-                                  grn.status === "Discrepancy" &&
-                                    styles.menuItemTextActive,
-                                ]}
-                              >
-                                Discrepancy
-                              </Text>
-                            </Pressable>
-                          </View>
-                        </>
-                      )}
-                      </View>
-                    </View>
-                  );
-                })
+                    );
+                  })
               )}
             </View>
           </ScrollView>
         )}
-        
-        <PaginationControls 
+
+        <PaginationControls
           currentPage={currentPage}
           totalPages={Math.ceil(filteredGRNs.length / itemsPerPage)}
           onPageChange={setCurrentPage}
@@ -1282,47 +1304,63 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
             </View>
 
             <View style={styles.actionSheetBody}>
-              {["Verified", "Pending Inspection", "Discrepancy"].map((statusOption) => {
-                const badgeConfig = GRN_STATUS_BADGES[statusOption] || GRN_STATUS_BADGES.Verified;
-                const isSelected = statusModalGrn?.status === statusOption;
+              {["Verified", "Pending Inspection", "Discrepancy"].map(
+                (statusOption) => {
+                  const badgeConfig =
+                    GRN_STATUS_BADGES[statusOption] ||
+                    GRN_STATUS_BADGES.Verified;
+                  const isSelected = statusModalGrn?.status === statusOption;
 
-                return (
-                  <Pressable
-                    key={statusOption}
-                    style={[
-                      styles.actionSheetOption,
-                      isSelected && styles.actionSheetOptionSelected,
-                    ]}
-                    onPress={() => {
-                      const target = statusModalGrn;
-                      setStatusModalGrn(null);
-                      handleStatusChange(target, statusOption);
-                    }}
-                  >
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  return (
+                    <Pressable
+                      key={statusOption}
+                      style={[
+                        styles.actionSheetOption,
+                        isSelected && styles.actionSheetOptionSelected,
+                      ]}
+                      onPress={() => {
+                        const target = statusModalGrn;
+                        setStatusModalGrn(null);
+                        handleStatusChange(target, statusOption);
+                      }}
+                    >
                       <View
-                        style={[
-                          styles.actionSheetOptionDot,
-                          { backgroundColor: badgeConfig.dot },
-                        ]}
-                      />
-                      <Text
-                        style={[
-                          styles.actionSheetOptionText,
-                          isSelected && styles.actionSheetOptionTextSelected,
-                        ]}
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 10,
+                        }}
                       >
-                        {statusOption}
-                      </Text>
-                    </View>
-                    {isSelected && (
-                      <Text style={{ color: "#0F766E", fontWeight: "700", fontSize: 14 }}>
-                        ✓
-                      </Text>
-                    )}
-                  </Pressable>
-                );
-              })}
+                        <View
+                          style={[
+                            styles.actionSheetOptionDot,
+                            { backgroundColor: badgeConfig.dot },
+                          ]}
+                        />
+                        <Text
+                          style={[
+                            styles.actionSheetOptionText,
+                            isSelected && styles.actionSheetOptionTextSelected,
+                          ]}
+                        >
+                          {statusOption}
+                        </Text>
+                      </View>
+                      {isSelected && (
+                        <Text
+                          style={{
+                            color: "#0F766E",
+                            fontWeight: "700",
+                            fontSize: 14,
+                          }}
+                        >
+                          ✓
+                        </Text>
+                      )}
+                    </Pressable>
+                  );
+                },
+              )}
             </View>
           </Pressable>
         </Pressable>

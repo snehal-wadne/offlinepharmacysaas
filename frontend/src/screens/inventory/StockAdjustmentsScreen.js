@@ -18,10 +18,6 @@ import {
 } from "../../components/common/SkeletonLoader";
 import PaginationControls from "../../components/common/PaginationControls";
 import {
-  CURRENT_STOCK_KPIS,
-  MOCK_STOCK_ITEMS,
-} from "../../data/currentStockMockData";
-import {
   fetchInventory,
   saveInventoryEntry,
   updateInventoryEntry,
@@ -29,6 +25,7 @@ import {
   recordStockMovementApi,
   fetchItemBarcode,
 } from "../../api/inventoryApi";
+import { fetchBranches } from "../../api/branchApi";
 import { API_URL } from "../../config";
 import { localPersistenceService } from "../../db";
 import { syncEngine } from "../../sync";
@@ -150,30 +147,28 @@ export default function StockAdjustmentsScreen({
 
       if (localProds.length > 0) {
         setStockItems(localProds);
-      } else if (!tenantCtx.isDemo) {
-        // Authenticated real tenant with 0 items: display empty real state
-        setStockItems([]);
       } else {
-        // Fall back to mock items ONLY in unauthenticated / demo mode
-        setStockItems(
-          MOCK_STOCK_ITEMS.map((item, idx) => ({
-            ...item,
-            isActive: item.isActive !== undefined ? item.isActive : true,
-            rxRequired:
-              item.rxRequired !== undefined ? item.rxRequired : idx % 2 === 0,
-          })),
-        );
+        const branchParam =
+          selectedBranch && selectedBranch !== "All Branches"
+            ? selectedBranch
+            : undefined;
+        const invRes = await fetchInventory({ branchId: branchParam });
+        if (invRes && invRes.data && Array.isArray(invRes.data)) {
+          setStockItems(
+            invRes.data.map((item, idx) => ({
+              ...item,
+              isActive: item.isActive !== undefined ? item.isActive : true,
+              rxRequired:
+                item.rxRequired !== undefined ? item.rxRequired : idx % 2 === 0,
+            })),
+          );
+        } else {
+          setStockItems([]);
+        }
       }
     } catch (err) {
       console.warn("Failed to load inventory:", err.message);
-      setStockItems(
-        MOCK_STOCK_ITEMS.map((item, idx) => ({
-          ...item,
-          isActive: item.isActive !== undefined ? item.isActive : true,
-          rxRequired:
-            item.rxRequired !== undefined ? item.rxRequired : idx % 2 === 0,
-        })),
-      );
+      setStockItems([]);
     } finally {
       setLoading(false);
     }
@@ -204,12 +199,7 @@ export default function StockAdjustmentsScreen({
     "Inter-branch stock rebalancing",
   );
   const [transferError, setTransferError] = useState("");
-  const [branchesList, setBranchesList] = useState([
-    { id: "BR-01", name: "FIT Main Campus Hospital Pharmacy", city: "Pune" },
-    { id: "BR-02", name: "FIT Pune City OPD Pharmacy", city: "Pune" },
-    { id: "BR-03", name: "FIT Central Medical Warehouse", city: "Pune" },
-    { id: "BR-04", name: "FIT Student Health Center Dispensary", city: "Pune" },
-  ]);
+  const [branchesList, setBranchesList] = useState([]);
 
   // Barcode & Thermal Shelf Tag Modal State
   const [barcodeModalOpen, setBarcodeModalOpen] = useState(false);
@@ -226,31 +216,24 @@ export default function StockAdjustmentsScreen({
   });
 
   const loadBranchesData = async () => {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
     try {
-      const token = typeof localStorage !== 'undefined' ? localStorage.getItem('token') || '' : '';
-      const res = await fetch(`${API_URL}/branches`, {
-        headers: {
-          ...(token && { 'Authorization': `Bearer ${token}` })
-        },
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-      if (res.ok) {
-        const json = await res.json();
-        if (json.success && Array.isArray(json.data) && json.data.length > 0) {
-          const activeOnly = json.data.filter(
-            (b) => b.status === "ACTIVE" || b.status === "Active" || !b.status,
-          );
-          setBranchesList(
-            activeOnly.map((b, idx) => ({
-              id: b.id || `BR-0${idx + 1}`,
-              name: b.name,
-              city: b.city || "Pune",
-            })),
-          );
-        }
+      const res = await fetchBranches();
+      if (res && res.success) {
+        const list = Array.isArray(res.data?.data)
+          ? res.data.data
+          : Array.isArray(res.data)
+            ? res.data
+            : [];
+        const activeOnly = list.filter(
+          (b) => b.status === "ACTIVE" || b.status === "Active" || !b.status,
+        );
+        setBranchesList(
+          activeOnly.map((b, idx) => ({
+            id: b.id || `BR-0${idx + 1}`,
+            name: b.name,
+            city: b.city || "",
+          })),
+        );
       }
     } catch (e) {
       console.warn("Failed to fetch branches from API:", e.message);
@@ -653,6 +636,8 @@ export default function StockAdjustmentsScreen({
       setBarcodeLoading(false);
     }
   };
+
+  console.log("Products data: ", stockItems);
 
   const handlePrintBarcodeLabel = () => {
     if (!barcodeItemData) return;
@@ -1278,13 +1263,23 @@ export default function StockAdjustmentsScreen({
               onPress={() => setBulkImportModalOpen(true)}
               style={[
                 styles.filterTogglePill,
-                { backgroundColor: "#0F766E", borderColor: "#0F766E", flexDirection: "row", alignItems: "center" },
+                {
+                  backgroundColor: "#0F766E",
+                  borderColor: "#0F766E",
+                  flexDirection: "row",
+                  alignItems: "center",
+                },
               ]}
               accessibilityRole="button"
               accessibilityLabel="Bulk import medicines from CSV"
             >
               <Text style={{ fontSize: 13, marginRight: 5 }}>📥</Text>
-              <Text style={[styles.filterToggleText, { color: "#FFFFFF", fontWeight: "700" }]}>
+              <Text
+                style={[
+                  styles.filterToggleText,
+                  { color: "#FFFFFF", fontWeight: "700" },
+                ]}
+              >
                 Import CSV
               </Text>
             </Pressable>
@@ -2255,10 +2250,7 @@ export default function StockAdjustmentsScreen({
               >
                 {/* Source Branch (From) */}
                 <View
-                  style={[
-                    styles.branchCol,
-                    isMobile && styles.branchColMobile,
-                  ]}
+                  style={[styles.branchCol, isMobile && styles.branchColMobile]}
                 >
                   <Text style={styles.fieldLabelModal}>
                     From Branch (Source) <Text style={styles.reqStar}>*</Text>
@@ -2288,7 +2280,15 @@ export default function StockAdjustmentsScreen({
                               isSelected && styles.branchOptionItemFromActive,
                             ]}
                           >
-                            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
+                            <View
+                              style={{
+                                flexDirection: "row",
+                                alignItems: "center",
+                                gap: 8,
+                                flex: 1,
+                                minWidth: 0,
+                              }}
+                            >
                               <View
                                 style={[
                                   styles.branchDot,
@@ -2345,10 +2345,7 @@ export default function StockAdjustmentsScreen({
 
                 {/* Destination Branch (To) */}
                 <View
-                  style={[
-                    styles.branchCol,
-                    isMobile && styles.branchColMobile,
-                  ]}
+                  style={[styles.branchCol, isMobile && styles.branchColMobile]}
                 >
                   <Text style={styles.fieldLabelModal}>
                     To Branch (Destination){" "}
@@ -2374,7 +2371,15 @@ export default function StockAdjustmentsScreen({
                               isDisabled && styles.branchOptionDisabled,
                             ]}
                           >
-                            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
+                            <View
+                              style={{
+                                flexDirection: "row",
+                                alignItems: "center",
+                                gap: 8,
+                                flex: 1,
+                                minWidth: 0,
+                              }}
+                            >
                               <View
                                 style={[
                                   styles.branchDot,
@@ -2387,7 +2392,8 @@ export default function StockAdjustmentsScreen({
                                     styles.branchOptionName,
                                     isSelected &&
                                       styles.branchOptionNameToActive,
-                                    isDisabled && styles.branchOptionNameDisabled,
+                                    isDisabled &&
+                                      styles.branchOptionNameDisabled,
                                   ]}
                                   numberOfLines={1}
                                 >

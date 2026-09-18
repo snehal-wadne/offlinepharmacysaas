@@ -9,16 +9,10 @@ import {
   Platform,
   ActivityIndicator,
 } from "react-native";
-import { MOCK_BRANCHES_LIST } from "../../data/managementMockData";
 import { useOfflineSync } from "../../offline/OfflineSyncContext";
 import { apiGet } from "../../api/apiClient";
 
-const DEFAULT_BRANCH_OPTIONS = [
-  "All Branches",
-  ...MOCK_BRANCHES_LIST.filter(
-    (b) => b.status === "Active" || b.status === "ACTIVE",
-  ).map((b) => b.name),
-];
+const DEFAULT_BRANCH_OPTIONS = ["All Branches"];
 
 export default function Header({
   currentBranch = "All Branches",
@@ -53,28 +47,27 @@ export default function Header({
       const result = await apiGet("/api/branches");
       if (result.success) {
         const json = result.data;
-        if (json.success && Array.isArray(json.data) && json.data.length > 0) {
-          const activeBranches = json.data.filter(
-            (b) => b.status === "ACTIVE" || b.status === "Active" || !b.status,
-          );
-          const dbNames = activeBranches.map((b) => b.name);
-          const combined = [
-            "All Branches",
-            ...dbNames.filter((n) => n !== "All Branches"),
-          ];
-          setBranchOptions(combined);
-          return;
-        }
+        const branchList = Array.isArray(json)
+          ? json
+          : json?.data && Array.isArray(json.data)
+            ? json.data
+            : [];
+        const activeBranches = branchList.filter(
+          (b) => b.status === "ACTIVE" || b.status === "Active" || !b.status,
+        );
+        const dbNames = activeBranches.map((b) => b.name);
+        const combined = [
+          "All Branches",
+          ...dbNames.filter((n) => n !== "All Branches"),
+        ];
+        setBranchOptions(combined);
+        return;
       }
     } catch (err) {
       console.warn("Could not fetch database branches in Header:", err.message);
     }
 
-    // Fallback: filter MOCK_BRANCHES_LIST for active branches
-    const activeMock = MOCK_BRANCHES_LIST.filter(
-      (b) => b.status === "Active" || b.status === "ACTIVE",
-    ).map((b) => b.name);
-    setBranchOptions(["All Branches", ...activeMock]);
+    setBranchOptions(["All Branches"]);
   };
 
   // --- Global Search (products & customers) ---
@@ -157,7 +150,8 @@ export default function Header({
     fetchBranchesFromDb();
   }, [branchRefreshKey]);
 
-  const displayName = currentUser?.display_name || "User";
+  const displayName = currentUser?.name || "User";
+
   const initials = displayName
     .split(" ")
     .map((n) => n[0])

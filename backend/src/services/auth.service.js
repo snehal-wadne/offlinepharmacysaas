@@ -1073,6 +1073,37 @@ class AuthService {
         "Password has been successfully updated. Please sign in with your new password.",
     };
   }
+  /**
+   * List users/members belonging to an organisation
+   */
+
+  async getOrganisationUsers(organisationId) {
+    if (!organisationId) return [];
+    const query = `
+      SELECT 
+        u.id, 
+        u.name, 
+        u.email, 
+        u.phone, 
+        u.staff_id AS "staffId",
+        u.created_at AS "createdAt",
+        om.status, 
+        ba.role_id,
+        COALESCE(r.name, 'Pharmacist') AS role,
+        r.role_identifier AS "roleCode",
+        COALESCE(b.name, 'Main Branch') AS "primaryBranch",
+        b.id AS "branchId"
+      FROM organisation_memberships om
+      JOIN users u ON u.id = om.user_id
+      LEFT JOIN branch_assignments ba ON ba.membership_id = om.id AND ba.is_primary = true
+      LEFT JOIN branches b ON b.id = ba.branch_id
+      LEFT JOIN roles r ON r.id = ba.role_id
+      WHERE om.organisation_id = $1
+      ORDER BY u.name ASC;
+    `;
+    const res = await pool.query(query, [organisationId]);
+    return res.rows;
+  }
 }
 
 module.exports = new AuthService();

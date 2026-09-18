@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -10,10 +10,7 @@ import {
   useWindowDimensions,
   Platform,
 } from "react-native";
-import {
-  MOCK_CUSTOMERS_LIST,
-  MOCK_CUSTOMER_DETAILS_DATA,
-} from '../../data/customersMockData';
+import { fetchCustomers } from '../../api/customerApi';
 import { SkeletonTableRow, SkeletonItemCard } from '../../components/common/SkeletonLoader';
 
 export default function CustomerDetailsScreen({
@@ -28,7 +25,8 @@ export default function CustomerDetailsScreen({
 
   // Active Customer state
   const [selectedCustomerId, setSelectedCustomerId] = useState(customerId);
-  const [loading, setLoading] = useState(false);
+  const [customer, setCustomer] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   // Active Tab: 'purchases' | 'returns' | 'ledger' | 'info'
   const [activeTab, setActiveTab] = useState("purchases");
@@ -42,25 +40,59 @@ export default function CustomerDetailsScreen({
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [invoiceModalVisible, setInvoiceModalVisible] = useState(false);
 
-  // Customer Data Lookup
-  const customerBase = useMemo(() => {
-    return (
-      MOCK_CUSTOMERS_LIST.find((c) => c.id === selectedCustomerId) ||
-      MOCK_CUSTOMERS_LIST[0]
-    );
+  useEffect(() => {
+    let isMounted = true;
+    async function loadCustomer() {
+      try {
+        setLoading(true);
+        const res = await fetchCustomers();
+        if (isMounted && res && res.success && Array.isArray(res.data)) {
+          const found = res.data.find(
+            (c) => c.id === selectedCustomerId || c.customerNumber === selectedCustomerId
+          );
+          setCustomer(found || res.data[0] || null);
+        } else if (isMounted) {
+          setCustomer(null);
+        }
+      } catch (err) {
+        console.warn('[CustomerDetails] Failed to load customer:', err.message);
+        if (isMounted) setCustomer(null);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+    loadCustomer();
+    return () => { isMounted = false; };
   }, [selectedCustomerId]);
 
-  const customerDetailed = useMemo(() => {
-    return (
-      MOCK_CUSTOMER_DETAILS_DATA[selectedCustomerId] ||
-      MOCK_CUSTOMER_DETAILS_DATA["CUST-1040"]
-    );
-  }, [selectedCustomerId]);
+  const profile = useMemo(() => {
+    if (!customer) return {};
+    return {
+      id: customer.customerNumber || customer.customer_number || customer.id,
+      name: customer.name,
+      phone: customer.phone || '',
+      email: customer.email || '',
+      age: customer.age || '30',
+      gender: customer.gender || 'M',
+      category: customer.category || 'Regular',
+      city: customer.city || 'Mumbai',
+      address: customer.address || '',
+      doctorName: customer.doctorName || 'Dr. Farooq Siddiqui',
+      doctorSpecialization: customer.doctorSpecialty || 'General Physician',
+      activeRxNo: customer.activeRxNo || '',
+      creditLimit: `₹${Number(customer.creditLimit || customer.credit_limit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
+      outstandingBalance: `₹${Number(customer.outstandingBalance || customer.outstanding_balance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
+      totalPurchasesCount: `${customer.totalInvoices || customer.invoices?.length || 0} Orders`,
+      totalSpent: `₹${Number(customer.totalSpent || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
+      loyaltyPoints: customer.loyaltyPoints || 0,
+      status: customer.status || 'Active',
+      customerSince: customer.created_at ? new Date(customer.created_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Active Member',
+    };
+  }, [customer]);
 
-  const profile = customerDetailed?.profile || customerBase || {};
-  const invoices = customerDetailed?.invoices || [];
-  const returns = customerDetailed?.returns || [];
-  const ledger = customerDetailed?.ledger || [];
+  const invoices = customer?.invoices || [];
+  const returns = customer?.returns || [];
+  const ledger = customer?.ledger || [];
 
   // Filtered invoices by search
   const filteredInvoices = invoices.filter((inv) =>
@@ -194,8 +226,7 @@ export default function CustomerDetailsScreen({
                 <Text style={styles.statLabel}>Total Purchases</Text>
               </View>
               <Text style={styles.statValueBold}>
-                {profile.totalPurchasesCount ||
-                  `${profile.totalInvoices || 12} Orders`}
+                {profile.totalPurchasesCount || '0 Orders'}
               </Text>
             </View>
 
@@ -206,7 +237,7 @@ export default function CustomerDetailsScreen({
                 <Text style={styles.statLabelOrange}>Outstanding Balance</Text>
               </View>
               <Text style={styles.statValueOrange}>
-                {profile.outstandingBalance || "₹250.00"}
+                {profile.outstandingBalance || "₹0.00"}
               </Text>
             </View>
 
@@ -217,7 +248,7 @@ export default function CustomerDetailsScreen({
                 <Text style={styles.statLabel}>Credit Limit</Text>
               </View>
               <Text style={styles.statValueBold}>
-                {profile.creditLimit || "₹2,000.00"}
+                {profile.creditLimit || "₹0.00"}
               </Text>
             </View>
           </View>

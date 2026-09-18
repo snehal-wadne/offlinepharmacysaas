@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 import {
   View,
   Text,
@@ -7,18 +7,12 @@ import {
   StyleSheet,
   Platform,
   useWindowDimensions,
-} from 'react-native';
-import { MOCK_STOCK_SUMMARY } from '../../data/inventoryDashboardMockData';
-
-export default function StockSummary({ data = MOCK_STOCK_SUMMARY, onViewAll }) {
+} from "react-native";
+export default function StockSummary({ data = [], onViewAll }) {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
 
-  const stockList = Array.isArray(data)
-    ? data
-    : Array.isArray(MOCK_STOCK_SUMMARY)
-    ? MOCK_STOCK_SUMMARY
-    : [];
+  const stockList = Array.isArray(data) ? data : [];
 
   return (
     <View style={styles.cardContainer}>
@@ -26,7 +20,9 @@ export default function StockSummary({ data = MOCK_STOCK_SUMMARY, onViewAll }) {
       <View style={styles.cardHeader}>
         <View>
           <Text style={styles.cardTitle}>Stock Summary</Text>
-          <Text style={styles.cardSubtitle}>Categorized live item breakdown</Text>
+          <Text style={styles.cardSubtitle}>
+            Categorized live item breakdown
+          </Text>
         </View>
         <Pressable
           onPress={onViewAll}
@@ -43,7 +39,9 @@ export default function StockSummary({ data = MOCK_STOCK_SUMMARY, onViewAll }) {
         <View style={styles.mobileCardsContainer}>
           {stockList.length === 0 ? (
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No stock summary data available</Text>
+              <Text style={styles.emptyText}>
+                No stock summary data available
+              </Text>
             </View>
           ) : (
             stockList.map((row, index) => (
@@ -53,9 +51,13 @@ export default function StockSummary({ data = MOCK_STOCK_SUMMARY, onViewAll }) {
                 style={styles.mobileCategoryCard}
               >
                 <View style={styles.mobileCardHeader}>
-                  <Text style={styles.mobileCategoryTitle}>{row.category || '-'}</Text>
+                  <Text style={styles.mobileCategoryTitle}>
+                    {row.category || "-"}
+                  </Text>
                   <View style={styles.totalBadge}>
-                    <Text style={styles.totalBadgeText}>{row.totalItems ?? 0} Items</Text>
+                    <Text style={styles.totalBadgeText}>
+                      {row.totalItems ?? 0} Items
+                    </Text>
                   </View>
                 </View>
 
@@ -65,14 +67,20 @@ export default function StockSummary({ data = MOCK_STOCK_SUMMARY, onViewAll }) {
                     <Text style={styles.inStockVal}>{row.inStock ?? 0}</Text>
                   </View>
 
-                  <View style={[styles.mobileMetricBadge, styles.lowStockBadge]}>
+                  <View
+                    style={[styles.mobileMetricBadge, styles.lowStockBadge]}
+                  >
                     <Text style={styles.mobileMetricLabel}>LOW STOCK</Text>
                     <Text style={styles.lowStockVal}>{row.lowStock ?? 0}</Text>
                   </View>
 
-                  <View style={[styles.mobileMetricBadge, styles.outOfStockBadge]}>
+                  <View
+                    style={[styles.mobileMetricBadge, styles.outOfStockBadge]}
+                  >
                     <Text style={styles.mobileMetricLabel}>OUT OF STOCK</Text>
-                    <Text style={styles.outOfStockVal}>{row.outOfStock ?? 0}</Text>
+                    <Text style={styles.outOfStockVal}>
+                      {row.outOfStock ?? 0}
+                    </Text>
                   </View>
                 </View>
               </Pressable>
@@ -94,7 +102,9 @@ export default function StockSummary({ data = MOCK_STOCK_SUMMARY, onViewAll }) {
             {/* Table Rows */}
             {stockList.length === 0 ? (
               <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>No stock summary data available</Text>
+                <Text style={styles.emptyText}>
+                  No stock summary data available
+                </Text>
               </View>
             ) : (
               stockList.map((row, index) => (
@@ -105,13 +115,23 @@ export default function StockSummary({ data = MOCK_STOCK_SUMMARY, onViewAll }) {
                     index % 2 === 1 && styles.tableRowAlt,
                   ]}
                 >
-                  <Text style={[styles.tdCell, styles.categoryCol, styles.categoryText]}>
-                    {row.category || '-'}
+                  <Text
+                    style={[
+                      styles.tdCell,
+                      styles.categoryCol,
+                      styles.categoryText,
+                    ]}
+                  >
+                    {row.category || "-"}
                   </Text>
-                  <Text style={[styles.tdCell, styles.numCol, styles.totalText]}>
+                  <Text
+                    style={[styles.tdCell, styles.numCol, styles.totalText]}
+                  >
                     {row.totalItems ?? 0}
                   </Text>
-                  <Text style={[styles.tdCell, styles.numCol, styles.inStockText]}>
+                  <Text
+                    style={[styles.tdCell, styles.numCol, styles.inStockText]}
+                  >
                     {row.inStock ?? 0}
                   </Text>
                   <Text
@@ -127,7 +147,9 @@ export default function StockSummary({ data = MOCK_STOCK_SUMMARY, onViewAll }) {
                     style={[
                       styles.tdCell,
                       styles.numCol,
-                      row.outOfStock > 0 ? styles.outOfStockText : styles.zeroText,
+                      row.outOfStock > 0
+                        ? styles.outOfStockText
+                        : styles.zeroText,
                     ]}
                   >
                     {row.outOfStock ?? 0}
@@ -147,7 +169,9 @@ export default function StockSummary({ data = MOCK_STOCK_SUMMARY, onViewAll }) {
           accessibilityRole="button"
           accessibilityLabel="View All Stock Inventory"
         >
-          <Text style={styles.viewAllBtnText}>📦 View All Stock Inventory →</Text>
+          <Text style={styles.viewAllBtnText}>
+            📦 View All Stock Inventory →
+          </Text>
         </Pressable>
       </View>
     </View>
@@ -156,14 +180,15 @@ export default function StockSummary({ data = MOCK_STOCK_SUMMARY, onViewAll }) {
 
 const styles = StyleSheet.create({
   cardContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    overflow: 'hidden',
+    borderColor: "#E2E8F0",
+    overflow: "hidden",
     ...Platform.select({
       web: {
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)',
+        boxShadow:
+          "0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)",
       },
       default: {
         elevation: 1,
@@ -174,34 +199,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    borderBottomColor: "#E2E8F0",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   cardTitle: {
     fontSize: 16,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   cardSubtitle: {
     fontSize: 12,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 2,
   },
   headerActionBtn: {
-    backgroundColor: '#F0FDFA',
+    backgroundColor: "#F0FDFA",
     borderWidth: 1,
-    borderColor: '#CCFBF1',
+    borderColor: "#CCFBF1",
     paddingVertical: 5,
     paddingHorizontal: 12,
     borderRadius: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   headerActionText: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#0F766E',
+    fontWeight: "700",
+    color: "#0F766E",
   },
   tableContainer: {
     minWidth: 500,
@@ -209,17 +234,17 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   tableHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: "#E2E8F0",
   },
   thCell: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#64748B',
-    textTransform: 'uppercase',
+    fontWeight: "700",
+    color: "#64748B",
+    textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   categoryCol: {
@@ -227,85 +252,85 @@ const styles = StyleSheet.create({
   },
   numCol: {
     width: 90,
-    textAlign: 'center',
+    textAlign: "center",
   },
   tableRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: "#F1F5F9",
   },
   tableRowAlt: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
   },
   tdCell: {
     fontSize: 13,
   },
   categoryText: {
-    fontWeight: '600',
-    color: '#334155',
+    fontWeight: "600",
+    color: "#334155",
   },
   totalText: {
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   inStockText: {
-    fontWeight: '600',
-    color: '#15803D',
+    fontWeight: "600",
+    color: "#15803D",
   },
   lowStockText: {
-    fontWeight: '700',
-    color: '#D97706',
+    fontWeight: "700",
+    color: "#D97706",
   },
   outOfStockText: {
-    fontWeight: '700',
-    color: '#DC2626',
+    fontWeight: "700",
+    color: "#DC2626",
   },
   zeroText: {
-    color: '#94A3B8',
+    color: "#94A3B8",
   },
   cardFooter: {
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
+    borderTopColor: "#E2E8F0",
+    backgroundColor: "#F8FAFC",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-start",
   },
   viewAllBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 10,
     paddingHorizontal: 18,
     borderRadius: 8,
-    backgroundColor: '#0F766E',
-    cursor: 'pointer',
+    backgroundColor: "#0F766E",
+    cursor: "pointer",
     ...Platform.select({
       web: {
-        boxShadow: '0 1px 2px rgba(15, 118, 110, 0.2)',
+        boxShadow: "0 1px 2px rgba(15, 118, 110, 0.2)",
       },
     }),
   },
   viewAllBtnText: {
     fontSize: 13.5,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontWeight: "700",
+    color: "#FFFFFF",
     letterSpacing: 0.2,
   },
   emptyContainer: {
     paddingVertical: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
   },
   emptyText: {
     fontSize: 13,
-    color: '#94A3B8',
-    fontStyle: 'italic',
+    color: "#94A3B8",
+    fontStyle: "italic",
   },
 
   /* Mobile Category KPI Cards */
@@ -314,42 +339,42 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   mobileCategoryCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     padding: 12,
-    cursor: 'pointer',
+    cursor: "pointer",
     ...Platform.select({
       web: {
-        boxShadow: '0 1px 2px rgba(0, 0, 0, 0.03)',
+        boxShadow: "0 1px 2px rgba(0, 0, 0, 0.03)",
       },
     }),
   },
   mobileCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 10,
   },
   mobileCategoryTitle: {
     fontSize: 14,
-    fontWeight: '750',
-    color: '#0F172A',
+    fontWeight: "750",
+    color: "#0F172A",
   },
   totalBadge: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: "#F1F5F9",
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
   },
   totalBadgeText: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#475569',
+    fontWeight: "700",
+    color: "#475569",
   },
   mobileMetricsRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 8,
   },
   mobileMetricBadge: {
@@ -357,37 +382,37 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 8,
     borderRadius: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   mobileMetricLabel: {
     fontSize: 9.5,
-    fontWeight: '750',
+    fontWeight: "750",
     letterSpacing: 0.3,
     marginBottom: 2,
   },
   inStockBadge: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: "#DCFCE7",
   },
   inStockVal: {
     fontSize: 14,
-    fontWeight: '800',
-    color: '#15803D',
+    fontWeight: "800",
+    color: "#15803D",
   },
   lowStockBadge: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: "#FEF3C7",
   },
   lowStockVal: {
     fontSize: 14,
-    fontWeight: '800',
-    color: '#B45309',
+    fontWeight: "800",
+    color: "#B45309",
   },
   outOfStockBadge: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: "#FEE2E2",
   },
   outOfStockVal: {
     fontSize: 14,
-    fontWeight: '800',
-    color: '#DC2626',
+    fontWeight: "800",
+    color: "#DC2626",
   },
 });

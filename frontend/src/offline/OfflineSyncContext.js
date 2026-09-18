@@ -4,17 +4,24 @@
  * Provides real-time reactive sync status and offline operations across the application.
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { db } from '../db/pharmaflowDb';
-import { LocalPersistenceService } from '../db/services/localPersistenceService';
-import { syncEngine } from '../sync/syncEngine';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+} from "react";
+import { db } from "../db/pharmaflowDb";
+import { LocalPersistenceService } from "../db/services/localPersistenceService";
+import { syncEngine } from "../sync/syncEngine";
 
 const localPersistenceService = new LocalPersistenceService(db);
 const OfflineSyncContext = createContext(null);
 
 export function OfflineSyncProvider({ children }) {
   const [isOnline, setIsOnline] = useState(
-    typeof navigator !== "undefined" ? navigator.onLine : true
+    typeof navigator !== "undefined" ? navigator.onLine : true,
   );
   const [pendingCount, setPendingCount] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -38,7 +45,12 @@ export function OfflineSyncProvider({ children }) {
       setPendingCount(state.pendingCount);
       setIsSyncing(state.isSyncing);
       if (state.lastSuccessfulSyncAt) {
-        setLastSyncedAt(new Date(state.lastSuccessfulSyncAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+        setLastSyncedAt(
+          new Date(state.lastSuccessfulSyncAt).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+        );
       }
     });
 
@@ -46,6 +58,7 @@ export function OfflineSyncProvider({ children }) {
       try {
         const prods = await db.products.toArray();
         setProducts(prods);
+        console.log("Offline Products: ", prods);
 
         const custs = await db.customers.toArray();
         setCustomers(custs);
@@ -53,7 +66,10 @@ export function OfflineSyncProvider({ children }) {
         const invRecords = await localPersistenceService.getRecentInvoices();
         setInvoices(invRecords);
       } catch (err) {
-        console.warn("[OfflineSyncContext] Local data load warning:", err.message);
+        console.warn(
+          "[OfflineSyncContext] Local data load warning:",
+          err.message,
+        );
       }
     };
     loadData();
@@ -65,33 +81,36 @@ export function OfflineSyncProvider({ children }) {
   }, []);
 
   // Sync runner function
-  const triggerSync = useCallback(async (isAuto = false) => {
-    if (isSyncing) return;
-    const now = Date.now();
-    // Throttle auto-sync to at most once every 15 seconds to prevent tight loops
-    if (isAuto && now - lastSyncTimeRef.current < 15000) {
-      return;
-    }
-    lastSyncTimeRef.current = now;
+  const triggerSync = useCallback(
+    async (isAuto = false) => {
+      if (isSyncing) return;
+      const now = Date.now();
+      // Throttle auto-sync to at most once every 15 seconds to prevent tight loops
+      if (isAuto && now - lastSyncTimeRef.current < 15000) {
+        return;
+      }
+      lastSyncTimeRef.current = now;
 
-    try {
-      await syncEngine.syncNow(!isAuto);
-      setSyncBanner({
-        type: 'success',
-        message: `✅ Sync completed successfully.`,
-      });
-      setTimeout(() => setSyncBanner(null), 4000);
-    } catch (e) {
-      console.warn('Sync attempt failed:', e.message);
-      if (!isAuto) {
+      try {
+        await syncEngine.syncNow(!isAuto);
         setSyncBanner({
-          type: 'warning',
-          message: `⚠️ Sync failed: ${e.message}`,
+          type: "success",
+          message: `✅ Sync completed successfully.`,
         });
         setTimeout(() => setSyncBanner(null), 4000);
+      } catch (e) {
+        console.warn("Sync attempt failed:", e.message);
+        if (!isAuto) {
+          setSyncBanner({
+            type: "warning",
+            message: `⚠️ Sync failed: ${e.message}`,
+          });
+          setTimeout(() => setSyncBanner(null), 4000);
+        }
       }
-    }
-  }, [isSyncing]);
+    },
+    [isSyncing],
+  );
 
   // Steady auto-sync: only fire when network transitions from offline to online
   useEffect(() => {
@@ -108,7 +127,7 @@ export function OfflineSyncProvider({ children }) {
   const recordSaleOffline = useCallback(async (invoiceData, cartItems = []) => {
     const saleData = { ...invoiceData, items: cartItems };
     await localPersistenceService.commitLocalSale(saleData);
-    
+
     // Reload data
     const prods = await db.products.toArray();
     setProducts(prods);
@@ -121,17 +140,25 @@ export function OfflineSyncProvider({ children }) {
   const recordHoldBillOffline = useCallback(async (billData) => {
     setHeldBills((prev) => {
       const draftId = billData.holdId || billData.billNo;
-      return [billData, ...prev.filter((b) => (b.holdId || b.billNo) !== draftId)];
+      return [
+        billData,
+        ...prev.filter((b) => (b.holdId || b.billNo) !== draftId),
+      ];
     });
     return billData;
   }, []);
 
   const deleteHoldBillOffline = useCallback((draftId) => {
-    setHeldBills((prev) => prev.filter((b) => (b.holdId || b.billNo) !== draftId));
+    setHeldBills((prev) =>
+      prev.filter((b) => (b.holdId || b.billNo) !== draftId),
+    );
   }, []);
 
   const recordPurchaseOffline = useCallback(async (poData) => {
-    setPurchases((prev) => [poData, ...prev.filter((p) => p.poNumber !== poData.poNumber)]);
+    setPurchases((prev) => [
+      poData,
+      ...prev.filter((p) => p.poNumber !== poData.poNumber),
+    ]);
     return poData;
   }, []);
 
@@ -171,7 +198,9 @@ export function OfflineSyncProvider({ children }) {
 export function useOfflineSync() {
   const context = useContext(OfflineSyncContext);
   if (!context) {
-    throw new Error('useOfflineSync must be used within an OfflineSyncProvider');
+    throw new Error(
+      "useOfflineSync must be used within an OfflineSyncProvider",
+    );
   }
   return context;
 }

@@ -25,7 +25,6 @@ import { InventoryRepository } from '../repositories/inventoryRepository';
 import { TransactionRepository } from '../repositories/transactionRepository';
 import { OutboxRepository } from '../repositories/outboxRepository';
 import { generateUUID } from '../utils/uuid';
-import { MOCK_POS_PRODUCTS } from '../../data/cashierMockData';
 
 export const DEFAULT_ORG_ID = 'ORG-DEFAULT';
 export const DEFAULT_BRANCH_ID = 'BRANCH-MAIN';
@@ -82,32 +81,24 @@ export class LocalPersistenceService {
     this.defaultOrgId = organisationId;
     this.defaultBranchId = branchId;
     const deviceId = await this.syncMetaRepo.getDeviceId();
-
-    // In production offline mode, only seed mock data if explicitly requested or in default demo mode without real tenant context
-    const isMockDemo = organisationId === DEFAULT_ORG_ID;
-    const shouldSeedMock = options.seedMockIfEmpty ?? isMockDemo;
-
-    const count = await this.db.products.count();
-    if (count === 0 && shouldSeedMock && MOCK_POS_PRODUCTS && MOCK_POS_PRODUCTS.length > 0) {
-      await this.seedInitialCatalog(organisationId, branchId);
-    }
-
     const finalCount = await this.db.products.count();
     return { deviceId, productCount: finalCount };
   }
 
   /**
-   * Seeds initial products and inventory batches from POS mock catalog
+   * Seeds initial products and inventory batches from catalog records
    */
   async seedInitialCatalog(
     organisationId = DEFAULT_ORG_ID,
-    branchId = DEFAULT_BRANCH_ID
+    branchId = DEFAULT_BRANCH_ID,
+    products: any[] = []
   ): Promise<void> {
+    if (!products || products.length === 0) return;
     const now = new Date().toISOString();
     const productRecords: ProductRecord[] = [];
     const inventoryRecords: InventoryBatchRecord[] = [];
 
-    for (const item of MOCK_POS_PRODUCTS) {
+    for (const item of products) {
       const productId = item.id || `PRD-${generateUUID().slice(0, 6)}`;
 
       productRecords.push({

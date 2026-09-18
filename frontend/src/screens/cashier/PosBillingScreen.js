@@ -11,8 +11,7 @@ import {
   Platform,
   Image,
 } from 'react-native';
-import { MOCK_POS_PRODUCTS } from '../../data/cashierMockData';
-import { MOCK_CUSTOMERS_LIST } from '../../data/customersMockData';
+import { fetchCustomers } from '../../api/customerApi';
 import { useOfflineSync } from '../../offline/OfflineSyncContext';
 import { SkeletonItemCard } from '../../components/common/SkeletonLoader';
 import PaginationControls from '../../components/common/PaginationControls';
@@ -26,22 +25,32 @@ export default function PosBillingScreen({
   isMultiBranch = true,
 }) {
   const offlineSync = useOfflineSync();
-  const productsList =
-    offlineSync?.products && offlineSync.products.length > 0
-      ? offlineSync.products
-      : MOCK_POS_PRODUCTS;
+  const productsList = Array.isArray(offlineSync?.products) ? offlineSync.products : [];
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const isCompact = width < 1100;
   
   const [loading, setLoading] = useState(true);
+  const [customersList, setCustomersList] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
 
   useEffect(() => {
-    // Simulate loading since data is mostly synchronous here
-    const timer = setTimeout(() => setLoading(false), 500);
-    return () => clearTimeout(timer);
+    let isMounted = true;
+    async function loadCustomers() {
+      try {
+        const res = await fetchCustomers();
+        if (isMounted && res && Array.isArray(res.data)) {
+          setCustomersList(res.data);
+        }
+      } catch (err) {
+        console.warn('Failed to load customers for POS:', err.message);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+    loadCustomers();
+    return () => { isMounted = false; };
   }, []);
 
   // Active Tab on Mobile: 'catalog' | 'cart'
@@ -1047,9 +1056,9 @@ export default function PosBillingScreen({
             </Pressable>
 
             <ScrollView style={{ maxHeight: 300 }}>
-              {MOCK_CUSTOMERS_LIST.filter(
+              {customersList.filter(
                 (c) =>
-                  c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
+                  c.name?.toLowerCase().includes(customerSearch.toLowerCase()) ||
                   (c.phone && String(c.phone).includes(customerSearch))
               ).map((c) => (
                 <Pressable
@@ -1064,14 +1073,19 @@ export default function PosBillingScreen({
                   <View>
                     <Text style={styles.custOptionName}>{c.name}</Text>
                     <Text style={styles.custOptionMeta}>
-                      {c.phone} • {c.category}
+                      {c.phone} • {c.category || "General"}
                     </Text>
                   </View>
                   <Text style={styles.custOptionCredit}>
-                    Dues: {c.currentBalance}
+                    Dues: ₹{c.currentBalance || 0}
                   </Text>
                 </Pressable>
               ))}
+              {customersList.length === 0 && (
+                <View style={{ padding: 16, alignItems: 'center' }}>
+                  <Text style={{ color: '#94A3B8', fontSize: 13 }}>No customers registered yet</Text>
+                </View>
+              )}
             </ScrollView>
           </View>
         </View>

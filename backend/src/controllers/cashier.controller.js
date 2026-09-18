@@ -398,6 +398,7 @@ const searchProducts = async (req, res) => {
       req.headers["x-branch-id"] ||
       req.tenant?.branchId ||
       null;
+
     const result = await cashierService.searchProducts({
       search,
       barcode,

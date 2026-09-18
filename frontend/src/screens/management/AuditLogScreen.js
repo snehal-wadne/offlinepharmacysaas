@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -9,27 +9,31 @@ import {
   StyleSheet,
   useWindowDimensions,
   Platform,
-} from 'react-native';
-import InventoryStatCard from '../../components/inventory/InventoryStatCard';
+} from "react-native";
+import InventoryStatCard from "../../components/inventory/InventoryStatCard";
+import { SkeletonTableRow } from "../../components/common/SkeletonLoader";
+import PaginationControls from "../../components/common/PaginationControls";
 import {
-  MOCK_AUDIT_LOGS,
-} from '../../data/managementMockData';
-import { SkeletonTableRow } from '../../components/common/SkeletonLoader';
-import PaginationControls from '../../components/common/PaginationControls';
-import { exportAuditLogReport, exportSingleAuditLogPDF } from '../../utils/exportUtils';
-import { fetchAuditLogs } from '../../api/auditApi';
+  exportAuditLogReport,
+  exportSingleAuditLogPDF,
+} from "../../utils/exportUtils";
+import { fetchAuditLogs } from "../../api/auditApi";
 
-export default function AuditLogScreen({ onShowToast, onNavigate, selectedBranch = 'All Branches' }) {
+export default function AuditLogScreen({
+  onShowToast,
+  onNavigate,
+  selectedBranch = "All Branches",
+}) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
   const isMobile = width < 768;
 
   // Search & KPI Filter State
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeKpiFilter, setActiveKpiFilter] = useState('ALL'); // 'ALL' | 'CRITICAL' | 'STOCK' | 'RX' | 'SECURITY'
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeKpiFilter, setActiveKpiFilter] = useState("ALL"); // 'ALL' | 'CRITICAL' | 'STOCK' | 'RX' | 'SECURITY'
 
   // Audit Logs State
-  const [logs, setLogs] = useState(MOCK_AUDIT_LOGS);
+  const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -39,16 +43,45 @@ export default function AuditLogScreen({ onShowToast, onNavigate, selectedBranch
     async function loadLiveLogs() {
       try {
         setLoading(true);
-        const branchParam = selectedBranch && selectedBranch !== 'All Branches' ? selectedBranch : undefined;
+        const branchParam =
+          selectedBranch && selectedBranch !== "All Branches"
+            ? selectedBranch
+            : undefined;
         const res = await fetchAuditLogs({ branchId: branchParam, limit: 100 });
-        if (isMounted && res && res.data && Array.isArray(res.data) && res.data.length > 0) {
-          setLogs(res.data);
+        if (isMounted && res && res.data && Array.isArray(res.data)) {
+          const mapped = res.data.map((l) => ({
+            id: l.id || `LOG-${Math.random().toString(36).substr(2, 6)}`,
+            action: l.action || "SYSTEM_EVENT",
+            actionLabel:
+              l.actionLabel || l.action?.replace(/_/g, " ") || "System Event",
+            actionType: l.actionType || l.entityType || "SYSTEM",
+            severity:
+              l.severity ||
+              (l.action?.includes("DELETE") || l.action?.includes("CANCEL")
+                ? "Critical"
+                : "Info"),
+            entityRef:
+              l.entityRef ||
+              (l.entityType ? `${l.entityType}: ${l.entityId || ""}` : ""),
+            timestamp: l.createdAt
+              ? new Date(l.createdAt).toLocaleString("en-IN")
+              : l.timestamp || "Recent",
+            branch: l.branch || l.branchName || "Main Branch",
+            ipAddress: l.ipAddress || "127.0.0.1",
+            actor: {
+              name: l.userName || l.actor?.name || "Staff User",
+              role: l.userRole || l.actor?.role || "Staff",
+            },
+            reason: l.metadata?.reason || l.reason || "",
+            metadata: l.metadata || {},
+          }));
+          setLogs(mapped);
         } else if (isMounted) {
-          setLogs(MOCK_AUDIT_LOGS);
+          setLogs([]);
         }
       } catch (err) {
-        console.log('[AuditLogScreen] Falling back to standard audit logs');
-        if (isMounted) setLogs(MOCK_AUDIT_LOGS);
+        console.warn("[AuditLogScreen] Audit API error:", err.message);
+        if (isMounted) setLogs([]);
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -64,7 +97,7 @@ export default function AuditLogScreen({ onShowToast, onNavigate, selectedBranch
   const [modalVisible, setModalVisible] = useState(false);
 
   // Branch-scoped base logs
-  const isBranchFiltered = selectedBranch && selectedBranch !== 'All Branches';
+  const isBranchFiltered = selectedBranch && selectedBranch !== "All Branches";
   const scopedLogs = isBranchFiltered
     ? logs.filter((l) => {
         if (!l.branch) return true;
@@ -77,16 +110,20 @@ export default function AuditLogScreen({ onShowToast, onNavigate, selectedBranch
   // Dynamic KPI Counts
   const totalCount = scopedLogs.length;
   const criticalCount = scopedLogs.filter(
-    (l) => l.severity === 'Critical' || l.actionType === 'PRICE_OVERRIDE' || l.actionType === 'BILL_CANCELLED'
+    (l) =>
+      l.severity === "Critical" ||
+      l.actionType === "PRICE_OVERRIDE" ||
+      l.actionType === "BILL_CANCELLED",
   ).length;
   const stockCount = scopedLogs.filter(
-    (l) => l.actionType === 'STOCK_ADJUSTMENT' || l.actionType === 'STOCK_TRANSFER'
+    (l) =>
+      l.actionType === "STOCK_ADJUSTMENT" || l.actionType === "STOCK_TRANSFER",
   ).length;
   const rxCount = scopedLogs.filter(
-    (l) => l.actionType === 'RX_APPROVED' || l.severity === 'Success'
+    (l) => l.actionType === "RX_APPROVED" || l.severity === "Success",
   ).length;
   const securityCount = scopedLogs.filter(
-    (l) => l.actionType === 'ROLE_MODIFIED' || l.actionType === 'USER_CREATED'
+    (l) => l.actionType === "ROLE_MODIFIED" || l.actionType === "USER_CREATED",
   ).length;
 
   // Filtered Logs based on Search and Selected Interactive KPI Card
@@ -103,14 +140,21 @@ export default function AuditLogScreen({ onShowToast, onNavigate, selectedBranch
       (log.reason && log.reason.toLowerCase().includes(q));
 
     let matchesKpi = true;
-    if (activeKpiFilter === 'CRITICAL') {
-      matchesKpi = log.severity === 'Critical' || log.actionType === 'PRICE_OVERRIDE' || log.actionType === 'BILL_CANCELLED';
-    } else if (activeKpiFilter === 'STOCK') {
-      matchesKpi = log.actionType === 'STOCK_ADJUSTMENT' || log.actionType === 'STOCK_TRANSFER';
-    } else if (activeKpiFilter === 'RX') {
-      matchesKpi = log.actionType === 'RX_APPROVED' || log.severity === 'Success';
-    } else if (activeKpiFilter === 'SECURITY') {
-      matchesKpi = log.actionType === 'ROLE_MODIFIED' || log.actionType === 'USER_CREATED';
+    if (activeKpiFilter === "CRITICAL") {
+      matchesKpi =
+        log.severity === "Critical" ||
+        log.actionType === "PRICE_OVERRIDE" ||
+        log.actionType === "BILL_CANCELLED";
+    } else if (activeKpiFilter === "STOCK") {
+      matchesKpi =
+        log.actionType === "STOCK_ADJUSTMENT" ||
+        log.actionType === "STOCK_TRANSFER";
+    } else if (activeKpiFilter === "RX") {
+      matchesKpi =
+        log.actionType === "RX_APPROVED" || log.severity === "Success";
+    } else if (activeKpiFilter === "SECURITY") {
+      matchesKpi =
+        log.actionType === "ROLE_MODIFIED" || log.actionType === "USER_CREATED";
     }
 
     return matchesSearch && matchesKpi;
@@ -119,7 +163,7 @@ export default function AuditLogScreen({ onShowToast, onNavigate, selectedBranch
   const totalPages = Math.ceil(filteredLogs.length / itemsPerPage);
   const paginatedLogs = filteredLogs.slice(
     (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
+    currentPage * itemsPerPage,
   );
 
   const handleOpenDetails = (log) => {
@@ -127,89 +171,112 @@ export default function AuditLogScreen({ onShowToast, onNavigate, selectedBranch
     setModalVisible(true);
   };
 
-  const handleExportLogs = (format = 'pdf') => {
+  const handleExportLogs = (format = "pdf") => {
     exportAuditLogReport(filteredLogs, format, activeKpiFilter);
     if (onShowToast) {
       onShowToast(
-        `✓ Exported ${filteredLogs.length} regulatory audit records as ${format.toUpperCase()} report.`
+        `✓ Exported ${filteredLogs.length} regulatory audit records as ${format.toUpperCase()} report.`,
       );
     }
   };
 
-  const handleExportSingleLog = (log, format = 'pdf') => {
+  const handleExportSingleLog = (log, format = "pdf") => {
     if (!log) return;
-    if (format === 'csv') {
-      exportAuditLogReport([log], 'csv', `Event ${log.id}`);
+    if (format === "csv") {
+      exportAuditLogReport([log], "csv", `Event ${log.id}`);
     } else {
       exportSingleAuditLogPDF(log);
     }
     if (onShowToast) {
-      onShowToast(`✓ Exported audit record ${log.id} (${format.toUpperCase()})`);
+      onShowToast(
+        `✓ Exported audit record ${log.id} (${format.toUpperCase()})`,
+      );
     }
   };
 
   const handleNavigateToSource = (log) => {
-    let targetRoute = 'dashboard';
-    const mod = (log.module || '').toLowerCase();
-    const act = (log.actionType || '').toLowerCase();
+    let targetRoute = "dashboard";
+    const mod = (log.module || "").toLowerCase();
+    const act = (log.actionType || "").toLowerCase();
 
-    if (mod.includes('user') || act.includes('user')) {
-      targetRoute = 'users';
-    } else if (mod.includes('role') || act.includes('role') || act.includes('permission')) {
-      targetRoute = 'roles';
-    } else if (mod.includes('branch') || act.includes('branch')) {
-      targetRoute = 'branches';
-    } else if (mod.includes('stock') || mod.includes('inventory') || act.includes('stock')) {
-      targetRoute = 'stock-adjustments';
-    } else if (mod.includes('sale') || mod.includes('pos') || mod.includes('billing') || act.includes('price')) {
-      targetRoute = 'new-sale';
-    } else if (mod.includes('ledger') || mod.includes('khata') || act.includes('credit') || act.includes('due') || act.includes('settle')) {
-      targetRoute = 'customer-ledger';
-    } else if (mod.includes('customer')) {
-      targetRoute = 'customers-patients';
-    } else if (mod.includes('purchase') || mod.includes('receiving')) {
-      targetRoute = 'purchases';
+    if (mod.includes("user") || act.includes("user")) {
+      targetRoute = "users";
+    } else if (
+      mod.includes("role") ||
+      act.includes("role") ||
+      act.includes("permission")
+    ) {
+      targetRoute = "roles";
+    } else if (mod.includes("branch") || act.includes("branch")) {
+      targetRoute = "branches";
+    } else if (
+      mod.includes("stock") ||
+      mod.includes("inventory") ||
+      act.includes("stock")
+    ) {
+      targetRoute = "stock-adjustments";
+    } else if (
+      mod.includes("sale") ||
+      mod.includes("pos") ||
+      mod.includes("billing") ||
+      act.includes("price")
+    ) {
+      targetRoute = "new-sale";
+    } else if (
+      mod.includes("ledger") ||
+      mod.includes("khata") ||
+      act.includes("credit") ||
+      act.includes("due") ||
+      act.includes("settle")
+    ) {
+      targetRoute = "customer-ledger";
+    } else if (mod.includes("customer")) {
+      targetRoute = "customers-patients";
+    } else if (mod.includes("purchase") || mod.includes("receiving")) {
+      targetRoute = "purchases";
     }
 
     if (onNavigate) {
       onNavigate(targetRoute);
     }
     if (onShowToast) {
-      onShowToast(`✓ Opened source module [${log.module}] for ${log.entityRef}`);
+      onShowToast(
+        `✓ Opened source module [${log.module}] for ${log.entityRef}`,
+      );
     }
     setModalVisible(false);
   };
 
   const getActionBadgeStyle = (actionType) => {
     switch (actionType) {
-      case 'PRICE_OVERRIDE':
-        return { bg: '#FEF2F2', border: '#FECACA', text: '#DC2626' };
-      case 'REFUND_ISSUED':
-      case 'BILL_CANCELLED':
-        return { bg: '#FFF7ED', border: '#FFEDD5', text: '#EA580C' };
-      case 'STOCK_ADJUSTMENT':
-      case 'STOCK_TRANSFER':
-        return { bg: '#EFF6FF', border: '#BFDBFE', text: '#2563EB' };
-      case 'ROLE_MODIFIED':
-      case 'USER_CREATED':
-        return { bg: '#F5F3FF', border: '#DDD6FE', text: '#7C3AED' };
-      case 'RX_APPROVED':
-        return { bg: '#F0FDF4', border: '#BBF7D0', text: '#15803D' };
+      case "PRICE_OVERRIDE":
+        return { bg: "#FEF2F2", border: "#FECACA", text: "#DC2626" };
+      case "REFUND_ISSUED":
+      case "BILL_CANCELLED":
+        return { bg: "#FFF7ED", border: "#FFEDD5", text: "#EA580C" };
+      case "STOCK_ADJUSTMENT":
+      case "STOCK_TRANSFER":
+        return { bg: "#EFF6FF", border: "#BFDBFE", text: "#2563EB" };
+      case "ROLE_MODIFIED":
+      case "USER_CREATED":
+        return { bg: "#F5F3FF", border: "#DDD6FE", text: "#7C3AED" };
+      case "RX_APPROVED":
+        return { bg: "#F0FDF4", border: "#BBF7D0", text: "#15803D" };
       default:
-        return { bg: '#F1F5F9', border: '#E2E8F0', text: '#475569' };
+        return { bg: "#F1F5F9", border: "#E2E8F0", text: "#475569" };
     }
   };
 
   const getSeverityStyle = (severity) => {
     switch (severity) {
-      case 'Critical':
-        return { bg: '#FEF2F2', text: '#DC2626', dot: '#DC2626' };
-      case 'Warning':
-        return { bg: '#FFFBEB', text: '#D97706', dot: '#D97706' };
-      case 'Success':
-        return { bg: '#F0FDF4', text: '#16A34A', dot: '#16A34A' };
+      case "Critical":
+        return { bg: "#FEF2F2", text: "#DC2626", dot: "#DC2626" };
+      case "Warning":
+        return { bg: "#FFFBEB", text: "#D97706", dot: "#D97706" };
+      case "Success":
+        return { bg: "#F0FDF4", text: "#16A34A", dot: "#16A34A" };
       default:
-        return { bg: '#F0FDFA', text: '#0F766E', dot: '#0F766E' };
+        return { bg: "#F0FDFA", text: "#0F766E", dot: "#0F766E" };
     }
   };
 
@@ -227,14 +294,20 @@ export default function AuditLogScreen({ onShowToast, onNavigate, selectedBranch
         <View style={styles.titleWrapper}>
           <Text style={styles.pageTitle}>System & Compliance Audit Log</Text>
           <Text style={styles.pageSubtitle}>
-            Immutable regulatory tracking of billing discounts, price overrides, stock adjustments, and permission changes.
+            Immutable regulatory tracking of billing discounts, price overrides,
+            stock adjustments, and permission changes.
           </Text>
         </View>
 
         {/* Export Actions (PDF & CSV) */}
-        <View style={[styles.headerActionBtns, isMobile && styles.headerActionBtnsMobile]}>
+        <View
+          style={[
+            styles.headerActionBtns,
+            isMobile && styles.headerActionBtnsMobile,
+          ]}
+        >
           <Pressable
-            onPress={() => handleExportLogs('csv')}
+            onPress={() => handleExportLogs("csv")}
             style={styles.exportBtnSecondary}
             accessibilityRole="button"
             accessibilityLabel="Export Audit Log CSV"
@@ -244,7 +317,7 @@ export default function AuditLogScreen({ onShowToast, onNavigate, selectedBranch
           </Pressable>
 
           <Pressable
-            onPress={() => handleExportLogs('pdf')}
+            onPress={() => handleExportLogs("pdf")}
             style={styles.exportBtnPrimary}
             accessibilityRole="button"
             accessibilityLabel="Export Audit Log PDF Report"
@@ -263,7 +336,9 @@ export default function AuditLogScreen({ onShowToast, onNavigate, selectedBranch
             Regulatory Compliance Journal • Immutable Records
           </Text>
           <Text style={styles.complianceNoticeSubtitle}>
-            All regulatory audit entries (price overrides, billing adjustments, stock movements, and user roles) are permanently preserved and cannot be modified or deleted.
+            All regulatory audit entries (price overrides, billing adjustments,
+            stock movements, and user roles) are permanently preserved and
+            cannot be modified or deleted.
           </Text>
         </View>
       </View>
@@ -274,7 +349,7 @@ export default function AuditLogScreen({ onShowToast, onNavigate, selectedBranch
           style={[
             styles.kpiCardWrapper,
             isMobile && styles.kpiCardWrapperMobile,
-            activeKpiFilter === 'ALL' && styles.kpiCardActiveRing,
+            activeKpiFilter === "ALL" && styles.kpiCardActiveRing,
           ]}
         >
           <InventoryStatCard
@@ -282,8 +357,8 @@ export default function AuditLogScreen({ onShowToast, onNavigate, selectedBranch
             value={String(totalCount)}
             subtext="Click to view all events"
             variant="teal"
-            style={{ width: '100%', minWidth: '100%', maxWidth: '100%' }}
-            onPress={() => setActiveKpiFilter('ALL')}
+            style={{ width: "100%", minWidth: "100%", maxWidth: "100%" }}
+            onPress={() => setActiveKpiFilter("ALL")}
           />
         </View>
 
@@ -291,7 +366,7 @@ export default function AuditLogScreen({ onShowToast, onNavigate, selectedBranch
           style={[
             styles.kpiCardWrapper,
             isMobile && styles.kpiCardWrapperMobile,
-            activeKpiFilter === 'CRITICAL' && styles.kpiCardActiveRing,
+            activeKpiFilter === "CRITICAL" && styles.kpiCardActiveRing,
           ]}
         >
           <InventoryStatCard
@@ -299,8 +374,8 @@ export default function AuditLogScreen({ onShowToast, onNavigate, selectedBranch
             value={String(criticalCount)}
             subtext="Discounts, price & bill edits"
             variant="orange"
-            style={{ width: '100%', minWidth: '100%', maxWidth: '100%' }}
-            onPress={() => setActiveKpiFilter('CRITICAL')}
+            style={{ width: "100%", minWidth: "100%", maxWidth: "100%" }}
+            onPress={() => setActiveKpiFilter("CRITICAL")}
           />
         </View>
 
@@ -308,7 +383,7 @@ export default function AuditLogScreen({ onShowToast, onNavigate, selectedBranch
           style={[
             styles.kpiCardWrapper,
             isMobile && styles.kpiCardWrapperMobile,
-            activeKpiFilter === 'STOCK' && styles.kpiCardActiveRing,
+            activeKpiFilter === "STOCK" && styles.kpiCardActiveRing,
           ]}
         >
           <InventoryStatCard
@@ -316,8 +391,8 @@ export default function AuditLogScreen({ onShowToast, onNavigate, selectedBranch
             value={String(stockCount)}
             subtext="Adjustments & store transfers"
             variant="blue"
-            style={{ width: '100%', minWidth: '100%', maxWidth: '100%' }}
-            onPress={() => setActiveKpiFilter('STOCK')}
+            style={{ width: "100%", minWidth: "100%", maxWidth: "100%" }}
+            onPress={() => setActiveKpiFilter("STOCK")}
           />
         </View>
 
@@ -325,7 +400,7 @@ export default function AuditLogScreen({ onShowToast, onNavigate, selectedBranch
           style={[
             styles.kpiCardWrapper,
             isMobile && styles.kpiCardWrapperMobile,
-            activeKpiFilter === 'RX' && styles.kpiCardActiveRing,
+            activeKpiFilter === "RX" && styles.kpiCardActiveRing,
           ]}
         >
           <InventoryStatCard
@@ -333,16 +408,18 @@ export default function AuditLogScreen({ onShowToast, onNavigate, selectedBranch
             value={String(rxCount)}
             subtext="Schedule H prescription signs"
             variant="green"
-            style={{ width: '100%', minWidth: '100%', maxWidth: '100%' }}
-            onPress={() => setActiveKpiFilter('RX')}
+            style={{ width: "100%", minWidth: "100%", maxWidth: "100%" }}
+            onPress={() => setActiveKpiFilter("RX")}
           />
         </View>
 
         <View
           style={[
             styles.kpiCardWrapper,
-            isMobile ? styles.kpiCardWrapperMobileFull : styles.kpiCardWrapperMobile,
-            activeKpiFilter === 'SECURITY' && styles.kpiCardActiveRing,
+            isMobile
+              ? styles.kpiCardWrapperMobileFull
+              : styles.kpiCardWrapperMobile,
+            activeKpiFilter === "SECURITY" && styles.kpiCardActiveRing,
           ]}
         >
           <InventoryStatCard
@@ -350,8 +427,8 @@ export default function AuditLogScreen({ onShowToast, onNavigate, selectedBranch
             value={String(securityCount)}
             subtext="Permissions & staff updates"
             variant="amber"
-            style={{ width: '100%', minWidth: '100%', maxWidth: '100%' }}
-            onPress={() => setActiveKpiFilter('SECURITY')}
+            style={{ width: "100%", minWidth: "100%", maxWidth: "100%" }}
+            onPress={() => setActiveKpiFilter("SECURITY")}
           />
         </View>
       </View>
@@ -368,27 +445,30 @@ export default function AuditLogScreen({ onShowToast, onNavigate, selectedBranch
             onChangeText={setSearchQuery}
           />
           {searchQuery ? (
-            <Pressable onPress={() => setSearchQuery('')} style={styles.clearSearchBtn}>
+            <Pressable
+              onPress={() => setSearchQuery("")}
+              style={styles.clearSearchBtn}
+            >
               <Text style={styles.clearSearchText}>✕</Text>
             </Pressable>
           ) : null}
         </View>
 
         {/* Active Filter Notice Pill */}
-        {activeKpiFilter !== 'ALL' || searchQuery ? (
+        {activeKpiFilter !== "ALL" || searchQuery ? (
           <View style={styles.activeFilterPillRow}>
             <Text style={styles.activeFilterPillText}>
-              Filtering by:{' '}
-              <Text style={{ fontWeight: '800', color: '#0F766E' }}>
-                {activeKpiFilter !== 'ALL' ? activeKpiFilter : ''}{' '}
-                {searchQuery ? `"${searchQuery}"` : ''}
-              </Text>{' '}
+              Filtering by:{" "}
+              <Text style={{ fontWeight: "800", color: "#0F766E" }}>
+                {activeKpiFilter !== "ALL" ? activeKpiFilter : ""}{" "}
+                {searchQuery ? `"${searchQuery}"` : ""}
+              </Text>{" "}
               ({filteredLogs.length} matches)
             </Text>
             <Pressable
               onPress={() => {
-                setActiveKpiFilter('ALL');
-                setSearchQuery('');
+                setActiveKpiFilter("ALL");
+                setSearchQuery("");
               }}
               style={styles.resetKpiFilterBtn}
             >
@@ -405,12 +485,14 @@ export default function AuditLogScreen({ onShowToast, onNavigate, selectedBranch
             <Text style={styles.tableTitle}>Event Activity Stream</Text>
             <View style={styles.countBadge}>
               <Text style={styles.countBadgeText}>
-                {filteredLogs.length} {filteredLogs.length === 1 ? 'Record' : 'Records'}
+                {filteredLogs.length}{" "}
+                {filteredLogs.length === 1 ? "Record" : "Records"}
               </Text>
             </View>
           </View>
           <Text style={styles.tableSubtitle}>
-            Full digital paper trail with before/after state diffs for regulatory compliance.
+            Full digital paper trail with before/after state diffs for
+            regulatory compliance.
           </Text>
         </View>
 
@@ -429,8 +511,8 @@ export default function AuditLogScreen({ onShowToast, onNavigate, selectedBranch
             </Text>
             <Pressable
               onPress={() => {
-                setActiveKpiFilter('ALL');
-                setSearchQuery('');
+                setActiveKpiFilter("ALL");
+                setSearchQuery("");
               }}
               style={styles.emptyResetBtn}
             >
@@ -449,31 +531,66 @@ export default function AuditLogScreen({ onShowToast, onNavigate, selectedBranch
                   <View style={styles.mobileAuditTop}>
                     <View>
                       <Text style={styles.timestampText}>{log.timestamp}</Text>
-                      <Text style={styles.relativeTimeText}>{log.id} • {log.relativeTime}</Text>
+                      <Text style={styles.relativeTimeText}>
+                        {log.id} • {log.relativeTime}
+                      </Text>
                     </View>
-                    <View style={[styles.sevBadge, { backgroundColor: sevStyle.bg }]}>
-                      <View style={[styles.sevDot, { backgroundColor: sevStyle.dot }]} />
-                      <Text style={[styles.sevText, { color: sevStyle.text }]}>{log.severity}</Text>
+                    <View
+                      style={[
+                        styles.sevBadge,
+                        { backgroundColor: sevStyle.bg },
+                      ]}
+                    >
+                      <View
+                        style={[
+                          styles.sevDot,
+                          { backgroundColor: sevStyle.dot },
+                        ]}
+                      />
+                      <Text style={[styles.sevText, { color: sevStyle.text }]}>
+                        {log.severity}
+                      </Text>
                     </View>
                   </View>
 
                   {/* Actor & Action */}
                   <View style={styles.mobileAuditActorRow}>
                     <View style={styles.actorAvatar}>
-                      <Text style={styles.actorAvatarText}>{log.actor.avatarInitials}</Text>
+                      <Text style={styles.actorAvatarText}>
+                        {log.actor.avatarInitials}
+                      </Text>
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.actorName}>{log.actor.name}</Text>
-                      <Text style={styles.actorRole}>{log.actor.role} • {log.branch}</Text>
+                      <Text style={styles.actorRole}>
+                        {log.actor.role} • {log.branch}
+                      </Text>
                     </View>
-                    <View style={[styles.actionBadge, { backgroundColor: actionBadge.bg, borderColor: actionBadge.border }]}>
-                      <Text style={[styles.actionBadgeText, { color: actionBadge.text }]}>{log.actionType}</Text>
+                    <View
+                      style={[
+                        styles.actionBadge,
+                        {
+                          backgroundColor: actionBadge.bg,
+                          borderColor: actionBadge.border,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.actionBadgeText,
+                          { color: actionBadge.text },
+                        ]}
+                      >
+                        {log.actionType}
+                      </Text>
                     </View>
                   </View>
 
                   {/* Entity & Details */}
                   <View style={styles.mobileAuditEntityBox}>
-                    <Text style={styles.mobileAuditEntityLabel}>Target Entity [{log.module}]:</Text>
+                    <Text style={styles.mobileAuditEntityLabel}>
+                      Target Entity [{log.module}]:
+                    </Text>
                     <Text style={styles.entityRefText}>{log.entityRef}</Text>
                     <Text style={styles.actionSubLabel}>{log.actionLabel}</Text>
                   </View>
@@ -495,7 +612,9 @@ export default function AuditLogScreen({ onShowToast, onNavigate, selectedBranch
                       accessibilityRole="button"
                       accessibilityLabel={`Go to source module ${log.module}`}
                     >
-                      <Text style={styles.openModuleBtnText}>Source Module ↗</Text>
+                      <Text style={styles.openModuleBtnText}>
+                        Source Module ↗
+                      </Text>
                     </Pressable>
                   </View>
                 </View>
@@ -507,12 +626,24 @@ export default function AuditLogScreen({ onShowToast, onNavigate, selectedBranch
             <View style={styles.tableWrapper}>
               {/* Header Row */}
               <View style={styles.tableHeaderRow}>
-                <Text style={[styles.thText, styles.colTimestamp]}>Timestamp & Ref</Text>
-                <Text style={[styles.thText, styles.colActor]}>Actor / User</Text>
-                <Text style={[styles.thText, styles.colAction]}>Action Performed</Text>
-                <Text style={[styles.thText, styles.colEntity]}>Target Entity / Ref</Text>
-                <Text style={[styles.thText, styles.colBranch]}>Branch Location</Text>
-                <Text style={[styles.thText, styles.colSeverity]}>Severity</Text>
+                <Text style={[styles.thText, styles.colTimestamp]}>
+                  Timestamp & Ref
+                </Text>
+                <Text style={[styles.thText, styles.colActor]}>
+                  Actor / User
+                </Text>
+                <Text style={[styles.thText, styles.colAction]}>
+                  Action Performed
+                </Text>
+                <Text style={[styles.thText, styles.colEntity]}>
+                  Target Entity / Ref
+                </Text>
+                <Text style={[styles.thText, styles.colBranch]}>
+                  Branch Location
+                </Text>
+                <Text style={[styles.thText, styles.colSeverity]}>
+                  Severity
+                </Text>
                 <Text style={[styles.thText, styles.colDetails]}>Actions</Text>
               </View>
 
@@ -532,7 +663,9 @@ export default function AuditLogScreen({ onShowToast, onNavigate, selectedBranch
                       <Text style={styles.timestampText}>{log.timestamp}</Text>
                       <View style={styles.logIdRow}>
                         <Text style={styles.logIdText}>{log.id}</Text>
-                        <Text style={styles.relativeTimeText}>• {log.relativeTime}</Text>
+                        <Text style={styles.relativeTimeText}>
+                          • {log.relativeTime}
+                        </Text>
                       </View>
                     </View>
 
@@ -571,7 +704,9 @@ export default function AuditLogScreen({ onShowToast, onNavigate, selectedBranch
                           {log.actionType}
                         </Text>
                       </View>
-                      <Text style={styles.actionSubLabel}>{log.actionLabel}</Text>
+                      <Text style={styles.actionSubLabel}>
+                        {log.actionLabel}
+                      </Text>
                     </View>
 
                     {/* Target Entity / Reference */}
@@ -656,7 +791,12 @@ export default function AuditLogScreen({ onShowToast, onNavigate, selectedBranch
           onRequestClose={() => setModalVisible(false)}
         >
           <View style={styles.modalOverlay}>
-            <View style={[styles.detailModalCard, isMobile && styles.modalCardMobile]}>
+            <View
+              style={[
+                styles.detailModalCard,
+                isMobile && styles.modalCardMobile,
+              ]}
+            >
               {/* Header */}
               <View style={styles.detailHeader}>
                 <View style={styles.detailHeaderLeft}>
@@ -664,7 +804,9 @@ export default function AuditLogScreen({ onShowToast, onNavigate, selectedBranch
                     <Text style={styles.eventBadgeText}>{selectedLog.id}</Text>
                   </View>
                   <View>
-                    <Text style={styles.detailTitle}>{selectedLog.actionLabel}</Text>
+                    <Text style={styles.detailTitle}>
+                      {selectedLog.actionLabel}
+                    </Text>
                     <Text style={styles.detailSubtitle}>
                       {selectedLog.timestamp} • {selectedLog.branch}
                     </Text>
@@ -684,27 +826,39 @@ export default function AuditLogScreen({ onShowToast, onNavigate, selectedBranch
                 <View style={styles.metaSummaryGrid}>
                   <View style={styles.metaCard}>
                     <Text style={styles.metaLabel}>Actor / User:</Text>
-                    <Text style={styles.metaVal}>{selectedLog.actor.name} ({selectedLog.actor.role})</Text>
-                    <Text style={styles.metaSubVal}>{selectedLog.actor.email}</Text>
+                    <Text style={styles.metaVal}>
+                      {selectedLog.actor.name} ({selectedLog.actor.role})
+                    </Text>
+                    <Text style={styles.metaSubVal}>
+                      {selectedLog.actor.email}
+                    </Text>
                   </View>
 
                   <View style={styles.metaCard}>
-                    <Text style={styles.metaLabel}>Network Client & Device:</Text>
-                    <Text style={styles.metaVal}>IP: {selectedLog.ipAddress}</Text>
+                    <Text style={styles.metaLabel}>
+                      Network Client & Device:
+                    </Text>
+                    <Text style={styles.metaVal}>
+                      IP: {selectedLog.ipAddress}
+                    </Text>
                     <Text style={styles.metaSubVal}>{selectedLog.device}</Text>
                   </View>
 
                   <View style={styles.metaCard}>
                     <Text style={styles.metaLabel}>Target Reference:</Text>
                     <Text style={styles.metaVal}>{selectedLog.entityRef}</Text>
-                    <Text style={styles.metaSubVal}>Module: {selectedLog.module}</Text>
+                    <Text style={styles.metaSubVal}>
+                      Module: {selectedLog.module}
+                    </Text>
                   </View>
                 </View>
 
                 {/* Stated Justification */}
                 {selectedLog.reason ? (
                   <View style={styles.reasonCard}>
-                    <Text style={styles.reasonTitle}>Stated Justification / Business Reason</Text>
+                    <Text style={styles.reasonTitle}>
+                      Stated Justification / Business Reason
+                    </Text>
                     <Text style={styles.reasonText}>{selectedLog.reason}</Text>
                   </View>
                 ) : null}
@@ -716,7 +870,9 @@ export default function AuditLogScreen({ onShowToast, onNavigate, selectedBranch
                       Before vs After State Comparison
                     </Text>
                     <View style={styles.diffVerifiedBadge}>
-                      <Text style={styles.diffVerifiedText}>Verified Snapshot</Text>
+                      <Text style={styles.diffVerifiedText}>
+                        Verified Snapshot
+                      </Text>
                     </View>
                   </View>
 
@@ -743,7 +899,9 @@ export default function AuditLogScreen({ onShowToast, onNavigate, selectedBranch
                             <Text style={styles.diffFieldName}>
                               {diff.fieldName || diff.field}
                             </Text>
-                            <Text style={styles.diffFieldKey}>{diff.field}</Text>
+                            <Text style={styles.diffFieldKey}>
+                              {diff.field}
+                            </Text>
                           </View>
 
                           <View style={styles.diffColOld}>
@@ -767,7 +925,8 @@ export default function AuditLogScreen({ onShowToast, onNavigate, selectedBranch
                   ) : (
                     <View style={styles.noDiffCard}>
                       <Text style={styles.noDiffText}>
-                        No field mutation data recorded for this informational event.
+                        No field mutation data recorded for this informational
+                        event.
                       </Text>
                     </View>
                   )}
@@ -778,26 +937,33 @@ export default function AuditLogScreen({ onShowToast, onNavigate, selectedBranch
               <View style={styles.modalFooter}>
                 <View style={styles.modalFooterNotice}>
                   <Text style={styles.modalFooterNoticeText}>
-                    🔒 Immutable Regulatory Entry: This audit event is permanently sealed and cannot be modified or deleted.
+                    🔒 Immutable Regulatory Entry: This audit event is
+                    permanently sealed and cannot be modified or deleted.
                   </Text>
                 </View>
 
                 <View style={styles.modalFooterActions}>
-                  <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+                  <View
+                    style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}
+                  >
                     <Pressable
-                      onPress={() => handleExportSingleLog(selectedLog, 'pdf')}
+                      onPress={() => handleExportSingleLog(selectedLog, "pdf")}
                       style={styles.modalExportPdfBtn}
                       accessibilityRole="button"
                     >
-                      <Text style={styles.modalExportPdfBtnText}>🖨️ Export PDF</Text>
+                      <Text style={styles.modalExportPdfBtnText}>
+                        🖨️ Export PDF
+                      </Text>
                     </Pressable>
 
                     <Pressable
-                      onPress={() => handleExportSingleLog(selectedLog, 'csv')}
+                      onPress={() => handleExportSingleLog(selectedLog, "csv")}
                       style={styles.modalExportCsvBtn}
                       accessibilityRole="button"
                     >
-                      <Text style={styles.modalExportCsvBtnText}>📊 Export CSV</Text>
+                      <Text style={styles.modalExportCsvBtnText}>
+                        📊 Export CSV
+                      </Text>
                     </Pressable>
 
                     <Pressable
@@ -829,7 +995,7 @@ export default function AuditLogScreen({ onShowToast, onNavigate, selectedBranch
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
   },
   contentContainer: {
     padding: 24,
@@ -840,25 +1006,25 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
     marginBottom: 16,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
     gap: 12,
   },
   headerRowMobile: {
-    flexDirection: 'column',
+    flexDirection: "column",
     gap: 12,
   },
   headerActionBtns: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
   },
   headerActionBtnsMobile: {
-    width: '100%',
-    justifyContent: 'flex-start',
+    width: "100%",
+    justifyContent: "flex-start",
   },
   titleWrapper: {
     flex: 1,
@@ -866,62 +1032,62 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     fontSize: 22,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
     letterSpacing: -0.4,
   },
   pageSubtitle: {
     fontSize: 13,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 4,
     lineHeight: 18,
   },
   exportBtnPrimary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#0F766E',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#0F766E",
     paddingVertical: 9,
     paddingHorizontal: 16,
     borderRadius: 8,
     gap: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
     ...Platform.select({
       web: {
-        boxShadow: '0 2px 4px rgba(15, 118, 110, 0.2)',
+        boxShadow: "0 2px 4px rgba(15, 118, 110, 0.2)",
       },
     }),
   },
   exportBtnTextPrimary: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   exportBtnSecondary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
     paddingVertical: 9,
     paddingHorizontal: 14,
     borderRadius: 8,
     gap: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   exportBtnTextSecondary: {
-    color: '#334155',
+    color: "#334155",
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   exportBtnIcon: {
     fontSize: 14,
   },
   complianceNoticeBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F0FDF4',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F0FDF4",
     borderWidth: 1,
-    borderColor: '#BBF7D0',
+    borderColor: "#BBF7D0",
     padding: 12,
     borderRadius: 10,
     marginBottom: 16,
@@ -932,23 +1098,23 @@ const styles = StyleSheet.create({
   },
   complianceNoticeTitle: {
     fontSize: 12.5,
-    fontWeight: '800',
-    color: '#166534',
+    fontWeight: "800",
+    color: "#166534",
   },
   complianceNoticeSubtitle: {
     fontSize: 11.5,
-    color: '#15803D',
+    color: "#15803D",
     marginTop: 2,
     lineHeight: 16,
   },
   kpiRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 12,
     marginBottom: 16,
   },
   kpiRowCompact: {
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
+    flexWrap: "wrap",
+    justifyContent: "space-between",
     gap: 10,
   },
   kpiCardWrapper: {
@@ -957,39 +1123,39 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   kpiCardWrapperMobile: {
-    width: '48.5%',
-    minWidth: '48.5%',
-    maxWidth: '48.5%',
+    width: "48.5%",
+    minWidth: "48.5%",
+    maxWidth: "48.5%",
     flexGrow: 0,
     flexShrink: 0,
   },
   kpiCardWrapperMobileFull: {
-    width: '100%',
-    minWidth: '100%',
-    maxWidth: '100%',
+    width: "100%",
+    minWidth: "100%",
+    maxWidth: "100%",
     flexGrow: 0,
     flexShrink: 0,
   },
   kpiCardActiveRing: {
     borderWidth: 2,
-    borderColor: '#0F766E',
+    borderColor: "#0F766E",
     borderRadius: 12,
   },
   cleanSearchCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     padding: 14,
     marginBottom: 16,
     gap: 10,
   },
   searchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     borderRadius: 8,
     paddingHorizontal: 12,
     height: 42,
@@ -1001,100 +1167,100 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 13,
-    color: '#0F172A',
-    outlineStyle: 'none',
+    color: "#0F172A",
+    outlineStyle: "none",
   },
   clearSearchBtn: {
     padding: 4,
   },
   clearSearchText: {
     fontSize: 14,
-    color: '#94A3B8',
+    color: "#94A3B8",
   },
   activeFilterPillRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#F0FDFA',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#F0FDFA",
     borderWidth: 1,
-    borderColor: '#CCFBF1',
+    borderColor: "#CCFBF1",
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 6,
   },
   activeFilterPillText: {
     fontSize: 12,
-    color: '#334155',
+    color: "#334155",
   },
   resetKpiFilterBtn: {
     paddingHorizontal: 8,
     paddingVertical: 2,
-    backgroundColor: '#CCFBF1',
+    backgroundColor: "#CCFBF1",
     borderRadius: 4,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   resetKpiFilterBtnText: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#0F766E',
+    fontWeight: "700",
+    color: "#0F766E",
   },
   tableCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    overflow: 'hidden',
+    borderColor: "#E2E8F0",
+    overflow: "hidden",
   },
   tableHeaderSection: {
     paddingHorizontal: 20,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: "#F1F5F9",
   },
   tableTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
   },
   tableTitle: {
     fontSize: 16,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   countBadge: {
-    backgroundColor: '#F0FDFA',
+    backgroundColor: "#F0FDFA",
     paddingVertical: 2,
     paddingHorizontal: 8,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#99F6E4',
+    borderColor: "#99F6E4",
   },
   countBadgeText: {
     fontSize: 11.5,
-    fontWeight: '700',
-    color: '#0F766E',
+    fontWeight: "700",
+    color: "#0F766E",
   },
   tableSubtitle: {
     fontSize: 12,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 2,
   },
   tableWrapper: {
     minWidth: 960,
   },
   tableHeaderRow: {
-    flexDirection: 'row',
-    backgroundColor: '#F8FAFC',
+    flexDirection: "row",
+    backgroundColor: "#F8FAFC",
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: "#E2E8F0",
     paddingVertical: 12,
     paddingHorizontal: 16,
   },
   thText: {
     fontSize: 11.5,
-    fontWeight: '700',
-    color: '#64748B',
-    textTransform: 'uppercase',
+    fontWeight: "700",
+    color: "#64748B",
+    textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   colTimestamp: { width: 170 },
@@ -1105,70 +1271,70 @@ const styles = StyleSheet.create({
   colSeverity: { width: 110 },
   colDetails: { width: 140 },
   tableRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: "#F1F5F9",
   },
   tableRowEven: {
-    backgroundColor: '#FAFCFF',
+    backgroundColor: "#FAFCFF",
   },
   timestampText: {
     fontSize: 12.5,
-    fontWeight: '600',
-    color: '#0F172A',
+    fontWeight: "600",
+    color: "#0F172A",
   },
   logIdRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
     marginTop: 2,
   },
   logIdText: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#0F766E',
+    fontWeight: "700",
+    color: "#0F766E",
   },
   relativeTimeText: {
     fontSize: 11,
-    color: '#94A3B8',
+    color: "#94A3B8",
   },
   actorCell: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   actorAvatar: {
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: "#F1F5F9",
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: "#CBD5E1",
+    alignItems: "center",
+    justifyContent: "center",
   },
   actorAvatarText: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#334155',
+    fontWeight: "700",
+    color: "#334155",
   },
   actorInfo: {
     flex: 1,
   },
   actorName: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   actorRole: {
     fontSize: 11,
-    color: '#64748B',
+    color: "#64748B",
   },
   actionBadge: {
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 4,
@@ -1176,35 +1342,35 @@ const styles = StyleSheet.create({
   },
   actionBadgeText: {
     fontSize: 10.5,
-    fontWeight: '800',
+    fontWeight: "800",
   },
   actionSubLabel: {
     fontSize: 11,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 2,
   },
   entityRefText: {
     fontSize: 12.5,
-    fontWeight: '700',
-    color: '#1E293B',
+    fontWeight: "700",
+    color: "#1E293B",
   },
   moduleNameText: {
     fontSize: 11,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 1,
   },
   branchNameText: {
     fontSize: 12,
-    color: '#475569',
+    color: "#475569",
   },
   sevBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 5,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 12,
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
   },
   sevDot: {
     width: 6,
@@ -1213,43 +1379,43 @@ const styles = StyleSheet.create({
   },
   sevText: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   actionsRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 6,
   },
   viewDiffBtn: {
-    backgroundColor: '#F0FDFA',
+    backgroundColor: "#F0FDFA",
     borderWidth: 1,
-    borderColor: '#99F6E4',
+    borderColor: "#99F6E4",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 5,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   viewDiffBtnText: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#0F766E',
+    fontWeight: "700",
+    color: "#0F766E",
   },
   openModuleBtn: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: "#F1F5F9",
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 5,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   openModuleBtnText: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#475569',
+    fontWeight: "700",
+    color: "#475569",
   },
   emptyContainer: {
     padding: 36,
-    alignItems: 'center',
+    alignItems: "center",
   },
   emptyIcon: {
     fontSize: 32,
@@ -1257,316 +1423,316 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 15,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   emptySubtitle: {
     fontSize: 12,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 2,
   },
   emptyResetBtn: {
     marginTop: 10,
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   emptyResetBtnText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: "700",
   },
 
   // Modal styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(15, 23, 42, 0.6)",
+    alignItems: "center",
+    justifyContent: "center",
     padding: 16,
   },
   detailModalCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 14,
-    width: '100%',
+    width: "100%",
     maxWidth: 680,
-    maxHeight: '90%',
-    overflow: 'hidden',
+    maxHeight: "90%",
+    overflow: "hidden",
   },
   modalCardMobile: {
-    maxWidth: '100%',
+    maxWidth: "100%",
   },
   detailHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     padding: 18,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: "#E2E8F0",
   },
   detailHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
   },
   eventBadge: {
-    backgroundColor: '#F0FDFA',
+    backgroundColor: "#F0FDFA",
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#99F6E4',
+    borderColor: "#99F6E4",
   },
   eventBadgeText: {
     fontSize: 12,
-    fontWeight: '800',
-    color: '#0F766E',
+    fontWeight: "800",
+    color: "#0F766E",
   },
   detailTitle: {
     fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   detailSubtitle: {
     fontSize: 11.5,
-    color: '#64748B',
+    color: "#64748B",
   },
   modalCloseBtn: {
     padding: 4,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   modalCloseText: {
     fontSize: 16,
-    color: '#94A3B8',
-    fontWeight: 'bold',
+    color: "#94A3B8",
+    fontWeight: "bold",
   },
   detailBody: {
     padding: 18,
   },
   metaSummaryGrid: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 10,
     marginBottom: 14,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
   },
   metaCard: {
     flex: 1,
     minWidth: 180,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
     borderRadius: 8,
     padding: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
   },
   metaLabel: {
     fontSize: 10.5,
-    color: '#64748B',
-    fontWeight: '700',
+    color: "#64748B",
+    fontWeight: "700",
   },
   metaVal: {
     fontSize: 12.5,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
     marginTop: 2,
   },
   metaSubVal: {
     fontSize: 10.5,
-    color: '#94A3B8',
+    color: "#94A3B8",
     marginTop: 1,
   },
   reasonCard: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: "#EFF6FF",
     borderRadius: 8,
     padding: 10,
     marginBottom: 14,
     borderLeftWidth: 3,
-    borderLeftColor: '#3B82F6',
+    borderLeftColor: "#3B82F6",
   },
   reasonTitle: {
     fontSize: 11,
-    fontWeight: '800',
-    color: '#1E40AF',
+    fontWeight: "800",
+    color: "#1E40AF",
   },
   reasonText: {
     fontSize: 12,
-    color: '#1E3A8A',
+    color: "#1E3A8A",
     marginTop: 2,
   },
   diffSection: {
     marginTop: 6,
   },
   diffHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 8,
   },
   diffSectionTitle: {
     fontSize: 13,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   diffVerifiedBadge: {
-    backgroundColor: '#F0FDF4',
+    backgroundColor: "#F0FDF4",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
   },
   diffVerifiedText: {
     fontSize: 10,
-    fontWeight: '700',
-    color: '#15803D',
+    fontWeight: "700",
+    color: "#15803D",
   },
   diffTable: {
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     borderRadius: 8,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   diffTableHeader: {
-    flexDirection: 'row',
-    backgroundColor: '#F8FAFC',
+    flexDirection: "row",
+    backgroundColor: "#F8FAFC",
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: "#E2E8F0",
   },
   diffTh: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#64748B',
+    fontWeight: "700",
+    color: "#64748B",
   },
   diffTableRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: "#F1F5F9",
   },
   diffColField: { flex: 1.5 },
   diffColOld: { flex: 1.2 },
   diffColNew: { flex: 1.2 },
   diffFieldName: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   diffFieldKey: {
     fontSize: 10,
-    color: '#94A3B8',
+    color: "#94A3B8",
   },
   oldValPill: {
-    backgroundColor: '#FEF2F2',
+    backgroundColor: "#FEF2F2",
     paddingHorizontal: 6,
     paddingVertical: 3,
     borderRadius: 4,
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
   },
   oldValText: {
     fontSize: 11,
-    color: '#DC2626',
-    fontWeight: '600',
+    color: "#DC2626",
+    fontWeight: "600",
   },
   newValPill: {
-    backgroundColor: '#F0FDF4',
+    backgroundColor: "#F0FDF4",
     paddingHorizontal: 6,
     paddingVertical: 3,
     borderRadius: 4,
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
   },
   newValText: {
     fontSize: 11,
-    color: '#16A34A',
-    fontWeight: '700',
+    color: "#16A34A",
+    fontWeight: "700",
   },
   noDiffCard: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
     borderRadius: 6,
     padding: 14,
-    alignItems: 'center',
+    alignItems: "center",
   },
   noDiffText: {
     fontSize: 12,
-    color: '#64748B',
+    color: "#64748B",
   },
   modalFooter: {
     padding: 14,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderTopColor: "#E2E8F0",
+    backgroundColor: "#F8FAFC",
   },
   modalFooterNotice: {
     paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: "#E2E8F0",
     marginBottom: 10,
   },
   modalFooterNoticeText: {
     fontSize: 11,
-    color: '#0F766E',
-    fontWeight: '700',
+    color: "#0F766E",
+    fontWeight: "700",
   },
   modalFooterActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    flexWrap: "wrap",
     gap: 10,
   },
   modalExportPdfBtn: {
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   modalExportPdfBtnText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
+    color: "#FFFFFF",
+    fontWeight: "700",
     fontSize: 12,
   },
   modalExportCsvBtn: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   modalExportCsvBtnText: {
-    color: '#334155',
-    fontWeight: '700',
+    color: "#334155",
+    fontWeight: "700",
     fontSize: 12,
   },
   openSourceBtn: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: "#F1F5F9",
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   openSourceBtnText: {
-    color: '#334155',
-    fontWeight: '700',
+    color: "#334155",
+    fontWeight: "700",
     fontSize: 12,
   },
   modalCloseBtnBottom: {
-    backgroundColor: '#E2E8F0',
+    backgroundColor: "#E2E8F0",
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   modalCloseBtnBottomText: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#334155',
+    fontWeight: "700",
+    color: "#334155",
   },
   // Mobile Audit Log Cards
   mobileAuditList: {
@@ -1574,48 +1740,48 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   mobileAuditCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     borderRadius: 12,
     padding: 14,
     ...Platform.select({
-      web: { boxShadow: '0 1px 3px rgba(0,0,0,0.04)' },
+      web: { boxShadow: "0 1px 3px rgba(0,0,0,0.04)" },
       default: { elevation: 1 },
     }),
   },
   mobileAuditTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
     marginBottom: 10,
   },
   mobileAuditActorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
     marginBottom: 12,
     paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: "#F1F5F9",
   },
   mobileAuditEntityBox: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
     borderRadius: 8,
     padding: 10,
     marginBottom: 10,
   },
   mobileAuditEntityLabel: {
     fontSize: 10,
-    fontWeight: '700',
-    color: '#64748B',
+    fontWeight: "700",
+    color: "#64748B",
     marginBottom: 3,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
   },
   mobileAuditFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     gap: 8,
   },
 });

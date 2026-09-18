@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -9,15 +9,12 @@ import {
   StyleSheet,
   useWindowDimensions,
   Platform,
-} from 'react-native';
-import InventoryStatCard from '../../components/inventory/InventoryStatCard';
-import {
-  ROLES_KPIS,
-  MOCK_ROLES_LIST,
-  MOCK_USERS_LIST,
-} from '../../data/managementMockData';
-import { SkeletonItemCard } from '../../components/common/SkeletonLoader';
-import PaginationControls from '../../components/common/PaginationControls';
+} from "react-native";
+import InventoryStatCard from "../../components/inventory/InventoryStatCard";
+import { SYSTEM_ROLES_LIST } from "../../constants/uiConstants";
+import { fetchUsers } from "../../api/userApi";
+import { SkeletonItemCard } from "../../components/common/SkeletonLoader";
+import PaginationControls from "../../components/common/PaginationControls";
 
 export default function RolesScreen({ onShowToast, onNavigate }) {
   const { width } = useWindowDimensions();
@@ -25,14 +22,52 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
   const isMobile = width < 768;
 
   // Search & Filters
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedTypeFilter, setSelectedTypeFilter] = useState('All'); // 'All' | 'System' | 'Custom'
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedTypeFilter, setSelectedTypeFilter] = useState("All"); // 'All' | 'System' | 'Custom'
 
-  // Roles State
-  const [roles, setRoles] = useState(MOCK_ROLES_LIST);
+  // Roles & Staff State
+  const [roles, setRoles] = useState(SYSTEM_ROLES_LIST);
+  const [staffList, setStaffList] = useState([]);
   const [loading, setLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadStaff() {
+      try {
+        const res = await fetchUsers();
+        if (isMounted && res && res.success) {
+          const raw = Array.isArray(res.data?.data)
+            ? res.data.data
+            : Array.isArray(res.data)
+              ? res.data
+              : [];
+          setStaffList(
+            raw.map((u) => ({
+              id: u.id,
+              name:
+                [u.first_name, u.last_name].filter(Boolean).join(" ") ||
+                u.email ||
+                "Staff",
+              email: u.email || "",
+              role: u.user_roles?.[0]?.roles?.name || "Staff",
+              roleId: u.user_roles?.[0]?.roles?.id,
+              branch:
+                u.branch_assignments?.[0]?.branches?.name || "Main Branch",
+              status: u.is_active !== false ? "Active" : "Inactive",
+            })),
+          );
+        }
+      } catch (e) {
+        if (isMounted) setStaffList([]);
+      }
+    }
+    loadStaff();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Add / Edit Role Modal State
   const [modalVisible, setModalVisible] = useState(false);
@@ -41,13 +76,13 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
 
   // Form State for Add / Edit
   const [formData, setFormData] = useState({
-    name: '',
-    code: '',
-    description: '',
+    name: "",
+    code: "",
+    description: "",
     isSystem: false,
-    badgeColor: '#0F766E',
-    clearanceLevel: 'Standard POS',
-    cloneFromRoleId: 'role-pharmacist',
+    badgeColor: "#0F766E",
+    clearanceLevel: "Standard POS",
+    cloneFromRoleId: "role-pharmacist",
   });
   const [formErrors, setFormErrors] = useState({});
 
@@ -64,9 +99,9 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
       role.description.toLowerCase().includes(q);
 
     const matchesType =
-      selectedTypeFilter === 'All' ||
-      (selectedTypeFilter === 'System' && role.isSystem) ||
-      (selectedTypeFilter === 'Custom' && !role.isSystem);
+      selectedTypeFilter === "All" ||
+      (selectedTypeFilter === "System" && role.isSystem) ||
+      (selectedTypeFilter === "Custom" && !role.isSystem);
 
     return matchesSearch && matchesType;
   });
@@ -74,20 +109,20 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
   const totalPages = Math.ceil(filteredRoles.length / itemsPerPage);
   const paginatedRoles = filteredRoles.slice(
     (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
+    currentPage * itemsPerPage,
   );
 
   const handleOpenAddModal = () => {
     setIsEditing(false);
     setActiveRoleId(null);
     setFormData({
-      name: '',
-      code: '',
-      description: '',
+      name: "",
+      code: "",
+      description: "",
       isSystem: false,
-      badgeColor: '#0F766E',
-      clearanceLevel: 'Clinical Dispensing',
-      cloneFromRoleId: 'role-pharmacist',
+      badgeColor: "#0F766E",
+      clearanceLevel: "Clinical Dispensing",
+      cloneFromRoleId: "role-pharmacist",
     });
     setFormErrors({});
     setModalVisible(true);
@@ -101,9 +136,9 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
       code: role.code,
       description: role.description,
       isSystem: role.isSystem,
-      badgeColor: role.badgeColor || '#0F766E',
-      clearanceLevel: role.clearanceLevel || 'Standard POS',
-      cloneFromRoleId: '',
+      badgeColor: role.badgeColor || "#0F766E",
+      clearanceLevel: role.clearanceLevel || "Standard POS",
+      cloneFromRoleId: "",
     });
     setFormErrors({});
     setModalVisible(true);
@@ -111,9 +146,10 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
 
   const handleSaveRole = () => {
     const errors = {};
-    if (!formData.name.trim()) errors.name = 'Role title is required';
-    if (!formData.code.trim()) errors.code = 'Role code identifier is required';
-    if (!formData.description.trim()) errors.description = 'Description is required';
+    if (!formData.name.trim()) errors.name = "Role title is required";
+    if (!formData.code.trim()) errors.code = "Role code identifier is required";
+    if (!formData.description.trim())
+      errors.description = "Description is required";
 
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
@@ -132,8 +168,8 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
                 badgeColor: formData.badgeColor,
                 clearanceLevel: formData.clearanceLevel,
               }
-            : r
-        )
+            : r,
+        ),
       );
       if (onShowToast) {
         onShowToast(`✓ Role "${formData.name}" updated successfully.`);
@@ -161,25 +197,60 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
   };
 
   const handleOpenStaffModal = (role) => {
-    // Look up staff assigned to this role from MOCK_USERS_LIST or role.assignedUsersList
-    const assignedStaff = MOCK_USERS_LIST.filter(
-      (u) => u.roleId === role.id || u.role === role.name
+    // Look up staff assigned to this role from staffList or role.assignedUsersList
+    const assignedStaff = staffList.filter(
+      (u) =>
+        u.roleId === role.id ||
+        u.role === role.name ||
+        (role.code && u.role?.toUpperCase().includes(role.code)),
     );
     setSelectedRoleForStaff({
       ...role,
-      assignedStaffList: assignedStaff.length > 0 ? assignedStaff : (role.assignedUsersList || []),
+      assignedStaffList:
+        assignedStaff.length > 0 ? assignedStaff : role.assignedUsersList || [],
     });
     setStaffModalVisible(true);
   };
 
   const handleConfigurePermissions = (roleId) => {
     if (onNavigate) {
-      onNavigate('page-permissions');
+      onNavigate("page-permissions");
     }
     if (onShowToast) {
       onShowToast(`Opening Permissions Matrix for role configuration...`);
     }
   };
+
+  const rolesKpis = [
+    {
+      id: "kpi-total-roles",
+      label: "TOTAL ROLES",
+      value: String(roles.length),
+      subtext: `${roles.filter((r) => r.isSystem).length} System • ${roles.filter((r) => !r.isSystem).length} Custom`,
+      variant: "teal",
+    },
+    {
+      id: "kpi-system-roles",
+      label: "SYSTEM TEMPLATES",
+      value: String(roles.filter((r) => r.isSystem).length),
+      subtext: "Built-in security profiles",
+      variant: "blue",
+    },
+    {
+      id: "kpi-custom-roles",
+      label: "CUSTOM PROFILES",
+      value: String(roles.filter((r) => !r.isSystem).length),
+      subtext: "Tailored access clearances",
+      variant: "amber",
+    },
+    {
+      id: "kpi-assigned-staff",
+      label: "ACTIVE STAFF ASSIGNED",
+      value: String(staffList.length),
+      subtext: "Across all branch locations",
+      variant: "purple",
+    },
+  ];
 
   return (
     <ScrollView
@@ -195,18 +266,21 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
         <View>
           <Text style={styles.pageTitle}>User Roles & Access Levels</Text>
           <Text style={styles.pageSubtitle}>
-            Define security clearance profiles, manage permissions, and assign staff roles across branches.
+            Define security clearance profiles, manage permissions, and assign
+            staff roles across branches.
           </Text>
         </View>
 
         <View style={styles.headerActionsGroup}>
           <Pressable
-            onPress={() => onNavigate && onNavigate('page-permissions')}
+            onPress={() => onNavigate && onNavigate("page-permissions")}
             style={styles.permissionsMatrixBtn}
             accessibilityRole="button"
             accessibilityLabel="Configure Permissions Matrix"
           >
-            <Text style={styles.permissionsMatrixBtnText}>🛡️ Permissions Matrix →</Text>
+            <Text style={styles.permissionsMatrixBtnText}>
+              🛡️ Permissions Matrix →
+            </Text>
           </Pressable>
 
           <Pressable
@@ -222,7 +296,7 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
 
       {/* 2. Top Summary KPI Cards */}
       <View style={[styles.kpiRow, isCompact && styles.kpiRowCompact]}>
-        {ROLES_KPIS.map((kpi) => (
+        {rolesKpis.map((kpi) => (
           <InventoryStatCard
             key={kpi.id}
             label={kpi.label}
@@ -248,7 +322,7 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
           />
           {searchQuery ? (
             <Pressable
-              onPress={() => setSearchQuery('')}
+              onPress={() => setSearchQuery("")}
               style={styles.clearSearchBtn}
             >
               <Text style={styles.clearSearchText}>✕</Text>
@@ -258,7 +332,7 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
 
         {/* Role Type Filter Tabs */}
         <View style={styles.typeFilterTabs}>
-          {['All', 'System', 'Custom'].map((type) => {
+          {["All", "System", "Custom"].map((type) => {
             const isSelected = selectedTypeFilter === type;
             return (
               <Pressable
@@ -275,7 +349,7 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
                     isSelected && styles.filterTabPillTextActive,
                   ]}
                 >
-                  {type === 'All' ? 'All Roles' : `${type} Roles`}
+                  {type === "All" ? "All Roles" : `${type} Roles`}
                 </Text>
               </Pressable>
             );
@@ -286,9 +360,7 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
       {/* 4. Roles Grid Cards */}
       <View style={styles.rolesGrid}>
         {loading ? (
-          Array.from({ length: 5 }).map((_, i) => (
-            <SkeletonItemCard key={i} />
-          ))
+          Array.from({ length: 5 }).map((_, i) => <SkeletonItemCard key={i} />)
         ) : filteredRoles.length === 0 ? (
           <View style={styles.emptyStateContainer}>
             <Text style={styles.emptyIcon}>🛡️</Text>
@@ -308,7 +380,7 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
                     <View
                       style={[
                         styles.roleColorDot,
-                        { backgroundColor: role.badgeColor || '#0F766E' },
+                        { backgroundColor: role.badgeColor || "#0F766E" },
                       ]}
                     />
                     <Text style={styles.roleNameText}>{role.name}</Text>
@@ -333,7 +405,7 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
                           : styles.typeBadgeTextCustom,
                       ]}
                     >
-                      {role.isSystem ? 'System Default' : 'Custom'}
+                      {role.isSystem ? "System Default" : "Custom"}
                     </Text>
                   </View>
                 </View>
@@ -349,7 +421,7 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
                   <View style={styles.metaPill}>
                     <Text style={styles.metaLabel}>Clearance: </Text>
                     <Text style={styles.metaValue}>
-                      {role.clearanceLevel || 'Standard'}
+                      {role.clearanceLevel || "Standard"}
                     </Text>
                   </View>
 
@@ -387,7 +459,9 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
                     onPress={() => handleConfigurePermissions(role.id)}
                     style={styles.actionBtnPrimary}
                   >
-                    <Text style={styles.actionBtnPrimaryText}>Permissions ⚙️</Text>
+                    <Text style={styles.actionBtnPrimaryText}>
+                      Permissions ⚙️
+                    </Text>
                   </Pressable>
                 </View>
               </View>
@@ -415,16 +489,19 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
           style={styles.modalOverlay}
           onPress={() => setModalVisible(false)}
         >
-          <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
+          <Pressable
+            style={styles.modalCard}
+            onPress={(e) => e.stopPropagation()}
+          >
             <View style={styles.modalHeader}>
               <View>
                 <Text style={styles.modalTitle}>
-                  {isEditing ? 'Edit User Role' : 'Create Custom Role'}
+                  {isEditing ? "Edit User Role" : "Create Custom Role"}
                 </Text>
                 <Text style={styles.modalSubtitle}>
                   {isEditing
                     ? `Update security profile settings for ${formData.name}`
-                    : 'Define a new operational role and clone baseline permissions.'}
+                    : "Define a new operational role and clone baseline permissions."}
                 </Text>
               </View>
               <Pressable
@@ -484,32 +561,35 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
                 <View style={[styles.formGroup, styles.formCol]}>
                   <Text style={styles.formLabel}>Clearance Level</Text>
                   <View style={styles.clearanceSelector}>
-                    {['Clinical Dispensing', 'Standard POS', 'Management', 'Audit'].map(
-                      (lvl) => {
-                        const isSel = formData.clearanceLevel === lvl;
-                        return (
-                          <Pressable
-                            key={lvl}
-                            onPress={() =>
-                              setFormData((p) => ({ ...p, clearanceLevel: lvl }))
-                            }
+                    {[
+                      "Clinical Dispensing",
+                      "Standard POS",
+                      "Management",
+                      "Audit",
+                    ].map((lvl) => {
+                      const isSel = formData.clearanceLevel === lvl;
+                      return (
+                        <Pressable
+                          key={lvl}
+                          onPress={() =>
+                            setFormData((p) => ({ ...p, clearanceLevel: lvl }))
+                          }
+                          style={[
+                            styles.clearanceChip,
+                            isSel && styles.clearanceChipSelected,
+                          ]}
+                        >
+                          <Text
                             style={[
-                              styles.clearanceChip,
-                              isSel && styles.clearanceChipSelected,
+                              styles.clearanceChipText,
+                              isSel && styles.clearanceChipTextSelected,
                             ]}
                           >
-                            <Text
-                              style={[
-                                styles.clearanceChipText,
-                                isSel && styles.clearanceChipTextSelected,
-                              ]}
-                            >
-                              {lvl}
-                            </Text>
-                          </Pressable>
-                        );
-                      }
-                    )}
+                            {lvl}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
                   </View>
                 </View>
               </View>
@@ -519,13 +599,13 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
                 <Text style={styles.formLabel}>Role Accent Color</Text>
                 <View style={styles.colorPaletteRow}>
                   {[
-                    '#0F766E',
-                    '#2563EB',
-                    '#7C3AED',
-                    '#D97706',
-                    '#0284C7',
-                    '#DC2626',
-                    '#475569',
+                    "#0F766E",
+                    "#2563EB",
+                    "#7C3AED",
+                    "#D97706",
+                    "#0284C7",
+                    "#DC2626",
+                    "#475569",
                   ].map((color) => {
                     const isPicked = formData.badgeColor === color;
                     return (
@@ -550,7 +630,7 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
               {/* Description */}
               <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>
-                  Role Functional Scope & Description{' '}
+                  Role Functional Scope & Description{" "}
                   <Text style={styles.reqStar}>*</Text>
                 </Text>
                 <TextInput
@@ -586,7 +666,7 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
 
               <Pressable onPress={handleSaveRole} style={styles.saveRoleBtn}>
                 <Text style={styles.saveRoleBtnText}>
-                  {isEditing ? 'Save Changes' : 'Create Role'}
+                  {isEditing ? "Save Changes" : "Create Role"}
                 </Text>
               </Pressable>
             </View>
@@ -615,7 +695,8 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
                   Assigned Staff: {selectedRoleForStaff?.name}
                 </Text>
                 <Text style={styles.modalSubtitle}>
-                  Active employees holding this clearance profile in Flora Institute.
+                  Active employees holding this clearance profile in Flora
+                  Institute.
                 </Text>
               </View>
               <Pressable
@@ -634,9 +715,9 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
                     <View style={styles.staffAvatar}>
                       <Text style={styles.staffAvatarText}>
                         {staff.name
-                          .split(' ')
+                          .split(" ")
                           .map((n) => n[0])
-                          .join('')
+                          .join("")
                           .slice(0, 2)}
                       </Text>
                     </View>
@@ -666,7 +747,7 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
               <Pressable
                 onPress={() => {
                   setStaffModalVisible(false);
-                  if (onNavigate) onNavigate('users');
+                  if (onNavigate) onNavigate("users");
                 }}
                 style={styles.manageUsersRedirectBtn}
               >
@@ -685,7 +766,7 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
   },
   contentContainer: {
     padding: 24,
@@ -696,88 +777,88 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
     marginBottom: 20,
     gap: 16,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
   },
   headerRowMobile: {
-    flexDirection: 'column',
-    alignItems: 'stretch',
+    flexDirection: "column",
+    alignItems: "stretch",
   },
   pageTitle: {
     fontSize: 22,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
     letterSpacing: -0.4,
   },
   pageSubtitle: {
     fontSize: 13,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 4,
   },
   headerActionsGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
   },
   permissionsMatrixBtn: {
-    backgroundColor: '#F0FDFA',
+    backgroundColor: "#F0FDFA",
     borderWidth: 1,
-    borderColor: '#99F6E4',
+    borderColor: "#99F6E4",
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 8,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   permissionsMatrixBtnText: {
-    color: '#0F766E',
+    color: "#0F766E",
     fontSize: 12.5,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   createRoleBtn: {
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 8,
-    cursor: 'pointer',
+    cursor: "pointer",
     ...Platform.select({
       web: {
-        boxShadow: '0 2px 4px rgba(15, 118, 110, 0.2)',
+        boxShadow: "0 2px 4px rgba(15, 118, 110, 0.2)",
       },
     }),
   },
   createRoleBtnText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   kpiRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 16,
     marginBottom: 20,
   },
   kpiRowCompact: {
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
   },
   /* Filters Bar */
   filtersBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: 20,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
     gap: 14,
   },
   searchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
     borderRadius: 8,
     paddingHorizontal: 12,
     width: 320,
@@ -790,20 +871,20 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 13,
-    color: '#0F172A',
-    outlineStyle: 'none',
+    color: "#0F172A",
+    outlineStyle: "none",
   },
   clearSearchBtn: {
     padding: 4,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   clearSearchText: {
     fontSize: 13,
-    color: '#94A3B8',
+    color: "#94A3B8",
   },
   typeFilterTabs: {
-    flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
+    flexDirection: "row",
+    backgroundColor: "#F1F5F9",
     padding: 3,
     borderRadius: 8,
     gap: 4,
@@ -812,52 +893,52 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 14,
     borderRadius: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   filterTabPillActive: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     ...Platform.select({
       web: {
-        boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
+        boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
       },
     }),
   },
   filterTabPillText: {
     fontSize: 12.5,
-    fontWeight: '600',
-    color: '#64748B',
+    fontWeight: "600",
+    color: "#64748B",
   },
   filterTabPillTextActive: {
-    color: '#0F766E',
-    fontWeight: '700',
+    color: "#0F766E",
+    fontWeight: "700",
   },
   /* Roles Grid */
   rolesGrid: {
     gap: 16,
   },
   roleCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     padding: 20,
     ...Platform.select({
       web: {
-        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+        boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
       },
     }),
   },
   roleCardTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 10,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
     gap: 10,
   },
   roleTitleGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
   },
   roleColorDot: {
@@ -867,19 +948,19 @@ const styles = StyleSheet.create({
   },
   roleNameText: {
     fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   roleCodeBadge: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: "#F1F5F9",
     paddingVertical: 2,
     paddingHorizontal: 8,
     borderRadius: 4,
   },
   roleCodeText: {
     fontSize: 11,
-    fontWeight: '800',
-    color: '#475569',
+    fontWeight: "800",
+    color: "#475569",
     letterSpacing: 0.5,
   },
   typeBadge: {
@@ -888,123 +969,123 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   typeBadgeSystem: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: "#EFF6FF",
     borderWidth: 1,
-    borderColor: '#BFDBFE',
+    borderColor: "#BFDBFE",
   },
   typeBadgeCustom: {
-    backgroundColor: '#FAF5FF',
+    backgroundColor: "#FAF5FF",
     borderWidth: 1,
-    borderColor: '#E9D5FF',
+    borderColor: "#E9D5FF",
   },
   typeBadgeText: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   typeBadgeTextSystem: {
-    color: '#2563EB',
+    color: "#2563EB",
   },
   typeBadgeTextCustom: {
-    color: '#7C3AED',
+    color: "#7C3AED",
   },
   roleDescriptionText: {
     fontSize: 13,
-    color: '#64748B',
+    color: "#64748B",
     lineHeight: 18,
     marginBottom: 14,
   },
   roleMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
     marginBottom: 16,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
   },
   metaPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     paddingVertical: 4,
     paddingHorizontal: 10,
     borderRadius: 6,
   },
   metaLabel: {
     fontSize: 11.5,
-    color: '#64748B',
-    fontWeight: '600',
+    color: "#64748B",
+    fontWeight: "600",
   },
   metaValue: {
     fontSize: 11.5,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   assignedStaffPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F0FDF4',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F0FDF4",
     borderWidth: 1,
-    borderColor: '#BBF7D0',
+    borderColor: "#BBF7D0",
     paddingVertical: 4,
     paddingHorizontal: 10,
     borderRadius: 6,
     gap: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   assignedStaffIcon: {
     fontSize: 12,
   },
   assignedStaffText: {
     fontSize: 11.5,
-    fontWeight: '700',
-    color: '#15803D',
+    fontWeight: "700",
+    color: "#15803D",
   },
   roleCardFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: "#F1F5F9",
     paddingTop: 14,
     gap: 10,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
   },
   actionBtnOutline: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
     paddingVertical: 6,
     paddingHorizontal: 14,
     borderRadius: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   actionBtnOutlineText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#334155',
+    fontWeight: "600",
+    color: "#334155",
   },
   actionBtnPrimary: {
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
     paddingVertical: 6,
     paddingHorizontal: 14,
     borderRadius: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   actionBtnPrimaryText: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
   /* Empty State */
   emptyStateContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     padding: 40,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: "#E2E8F0",
+    alignItems: "center",
+    justifyContent: "center",
   },
   emptyIcon: {
     fontSize: 36,
@@ -1012,31 +1093,31 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 15,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   emptySubtitle: {
     fontSize: 13,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 3,
   },
   /* Modals */
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.4)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(15, 23, 42, 0.4)",
+    justifyContent: "center",
+    alignItems: "center",
     padding: 16,
   },
   modalCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 12,
-    width: '100%',
+    width: "100%",
     maxWidth: 560,
-    maxHeight: '90%',
+    maxHeight: "90%",
     ...Platform.select({
       web: {
-        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.15)',
+        boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.15)",
       },
     }),
   },
@@ -1044,30 +1125,30 @@ const styles = StyleSheet.create({
     maxWidth: 620,
   },
   modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: "#E2E8F0",
   },
   modalTitle: {
     fontSize: 17,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   modalSubtitle: {
     fontSize: 12.5,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 2,
   },
   closeModalBtn: {
     padding: 4,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   closeModalText: {
     fontSize: 16,
-    color: '#64748B',
+    color: "#64748B",
   },
   modalBody: {
     padding: 20,
@@ -1076,7 +1157,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   formRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 14,
   },
   formCol: {
@@ -1084,97 +1165,97 @@ const styles = StyleSheet.create({
   },
   formLabel: {
     fontSize: 12.5,
-    fontWeight: '700',
-    color: '#334155',
+    fontWeight: "700",
+    color: "#334155",
     marginBottom: 6,
   },
   reqStar: {
-    color: '#EF4444',
+    color: "#EF4444",
   },
   formInput: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 9,
     fontSize: 13,
-    color: '#0F172A',
-    outlineStyle: 'none',
+    color: "#0F172A",
+    outlineStyle: "none",
   },
   formInputError: {
-    borderColor: '#EF4444',
-    backgroundColor: '#FEF2F2',
+    borderColor: "#EF4444",
+    backgroundColor: "#FEF2F2",
   },
   formErrorText: {
     fontSize: 11.5,
-    color: '#EF4444',
+    color: "#EF4444",
     marginTop: 4,
   },
   formTextArea: {
     height: 70,
-    textAlignVertical: 'top',
+    textAlignVertical: "top",
   },
   clearanceSelector: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 6,
   },
   clearanceChip: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: "#F1F5F9",
     paddingVertical: 5,
     paddingHorizontal: 8,
     borderRadius: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   clearanceChipSelected: {
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
   },
   clearanceChipText: {
     fontSize: 11,
-    fontWeight: '600',
-    color: '#475569',
+    fontWeight: "600",
+    color: "#475569",
   },
   clearanceChipTextSelected: {
-    color: '#FFFFFF',
-    fontWeight: '700',
+    color: "#FFFFFF",
+    fontWeight: "700",
   },
   colorPaletteRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 10,
   },
   colorSwatch: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    cursor: 'pointer',
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
   },
   colorSwatchPicked: {
     borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderColor: "#FFFFFF",
     ...Platform.select({
       web: {
-        outlineColor: '#0F766E',
-        outlineStyle: 'solid',
+        outlineColor: "#0F766E",
+        outlineStyle: "solid",
         outlineWidth: 2,
       },
     }),
   },
   colorCheck: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 12,
-    fontWeight: '900',
+    fontWeight: "900",
   },
   modalFooter: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    alignItems: "center",
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderTopColor: "#E2E8F0",
+    backgroundColor: "#F8FAFC",
     gap: 10,
     borderBottomLeftRadius: 12,
     borderBottomRightRadius: 12,
@@ -1184,82 +1265,82 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
-    cursor: 'pointer',
+    borderColor: "#CBD5E1",
+    backgroundColor: "#FFFFFF",
+    cursor: "pointer",
   },
   cancelBtnText: {
     fontSize: 12.5,
-    fontWeight: '600',
-    color: '#475569',
+    fontWeight: "600",
+    color: "#475569",
   },
   saveRoleBtn: {
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
     paddingVertical: 8,
     paddingHorizontal: 20,
     borderRadius: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   saveRoleBtnText: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
   /* Staff List in Modal */
   staffListItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: "#F1F5F9",
     gap: 12,
   },
   staffAvatar: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#F0FDFA',
+    backgroundColor: "#F0FDFA",
     borderWidth: 1,
-    borderColor: '#99F6E4',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: "#99F6E4",
+    alignItems: "center",
+    justifyContent: "center",
   },
   staffAvatarText: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#0F766E',
+    fontWeight: "700",
+    color: "#0F766E",
   },
   staffInfoCol: {
     flex: 1,
   },
   staffNameText: {
     fontSize: 13.5,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   staffBranchText: {
     fontSize: 11.5,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 2,
   },
   staffEmailText: {
     fontSize: 11,
-    color: '#94A3B8',
+    color: "#94A3B8",
   },
   staffActivePill: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: "#DCFCE7",
     paddingVertical: 3,
     paddingHorizontal: 8,
     borderRadius: 10,
   },
   staffActiveText: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#15803D',
+    fontWeight: "700",
+    color: "#15803D",
   },
   noStaffBox: {
     padding: 30,
-    alignItems: 'center',
+    alignItems: "center",
   },
   noStaffIcon: {
     fontSize: 28,
@@ -1267,18 +1348,18 @@ const styles = StyleSheet.create({
   },
   noStaffText: {
     fontSize: 13,
-    color: '#64748B',
+    color: "#64748B",
   },
   manageUsersRedirectBtn: {
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   manageUsersRedirectText: {
     fontSize: 12.5,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
 });

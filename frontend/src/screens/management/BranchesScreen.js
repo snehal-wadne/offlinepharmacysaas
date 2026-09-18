@@ -11,11 +11,7 @@ import {
   Platform,
 } from "react-native";
 import InventoryStatCard from "../../components/inventory/InventoryStatCard";
-import {
-  BRANCHES_KPIS,
-  MOCK_BRANCHES_LIST,
-  BRANCH_TYPES,
-} from "../../data/managementMockData";
+import { BRANCH_TYPES } from "../../constants/uiConstants";
 import { API_URL } from "../../config";
 import { apiGet, apiPost, apiPut, apiDelete } from "../../api/apiClient";
 import { SkeletonItemCard } from "../../components/common/SkeletonLoader";
@@ -39,7 +35,10 @@ export default function BranchesScreen({
 
   // Branches State: always start empty for zero-branch onboarding or when loading from backend
   const [branches, setBranches] = useState(() => {
-    if (isStandaloneOnboarding || (currentUser && currentUser.hasBranch === false)) {
+    if (
+      isStandaloneOnboarding ||
+      (currentUser && currentUser.hasBranch === false)
+    ) {
       return [];
     }
     return [];
@@ -97,13 +96,13 @@ export default function BranchesScreen({
             }
           }
         } else {
-          if (active && currentUser && currentUser.hasBranch === false) {
+          if (active) {
             setBranches([]);
           }
         }
       } catch (err) {
         console.warn("Failed to load branches from API:", err.message);
-        if (active && currentUser && currentUser.hasBranch === false) {
+        if (active) {
           setBranches([]);
         }
       } finally {
@@ -320,14 +319,6 @@ export default function BranchesScreen({
       prev.map((b) => (b.id === branch.id ? { ...b, status: newStatus } : b)),
     );
 
-    // Sync MOCK_BRANCHES_LIST in-memory array for fallbacks
-    const mockMatch = MOCK_BRANCHES_LIST.find(
-      (m) => m.id === branch.id || m.name === branch.name,
-    );
-    if (mockMatch) {
-      mockMatch.status = newStatus;
-    }
-
     try {
       const res = await apiPut(`/api/branches/${branch.id}`, {
         status: dbStatus,
@@ -367,7 +358,8 @@ export default function BranchesScreen({
           <Text style={styles.pageTitle}>Branch Management</Text>
           <Text style={styles.pageSubtitle}>
             Configure and manage physical pharmacies, hospital dispensaries, and
-            warehouses across {currentUser?.organisationName || "your pharmacy organization"}.
+            warehouses across{" "}
+            {currentUser?.organisationName || "your pharmacy organization"}.
           </Text>
         </View>
         <Pressable
@@ -395,14 +387,17 @@ export default function BranchesScreen({
             id: "active",
             label: "ACTIVE BRANCHES",
             value: String(branches.filter((b) => b.status === "Active").length),
-            subtext: branches.length > 0 ? "Operating normally" : "None created yet",
+            subtext:
+              branches.length > 0 ? "Operating normally" : "None created yet",
             variant: "success",
           },
           {
             id: "hub",
             label: "PRIMARY HUB",
             value: branches[0]?.name || "None",
-            subtext: branches[0] ? "Primary distribution" : "Initial branch required",
+            subtext: branches[0]
+              ? "Primary distribution"
+              : "Initial branch required",
             variant: "info",
           },
           {

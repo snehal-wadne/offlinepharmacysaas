@@ -26,7 +26,6 @@ import { LocalPersistenceService } from '../src/db/services/localPersistenceServ
 import { SyncEngine } from '../src/sync/syncEngine';
 import { ConnectivityService } from '../src/sync/connectivityService';
 import { PullWorker } from '../src/sync/pullWorker';
-import { DEFAULT_REGISTER_SESSION, MOCK_REGISTER_HISTORY } from '../src/data/cashierMockData';
 
 let passed = 0;
 let failed = 0;

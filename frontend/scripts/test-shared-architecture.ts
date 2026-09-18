@@ -34,8 +34,6 @@ import {
 import { BootstrapService } from '../src/sync/bootstrapService';
 import { SyncEngine } from '../src/sync/syncEngine';
 import { ConnectivityService } from '../src/sync/connectivityService';
-import { MOCK_POS_PRODUCTS } from '../src/data/cashierMockData';
-import { MOCK_CUSTOMERS_LIST } from '../src/data/customersMockData';
 
 let passed = 0;
 let failed = 0;

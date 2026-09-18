@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -9,18 +9,17 @@ import {
   StyleSheet,
   useWindowDimensions,
   Platform,
-} from 'react-native';
-import InventoryStatCard from '../../components/inventory/InventoryStatCard';
+} from "react-native";
+import InventoryStatCard from "../../components/inventory/InventoryStatCard";
 import {
-  MOCK_USERS_LIST,
   USER_ROLES_FILTER,
-  MOCK_BRANCHES_LIST,
-  BRANCH_FILTER_OPTIONS,
-  MOCK_ROLES_LIST,
-} from '../../data/managementMockData';
-import { SkeletonTableRow } from '../../components/common/SkeletonLoader';
-import PaginationControls from '../../components/common/PaginationControls';
-import { exportToCSV } from '../../utils/exportUtils';
+  SYSTEM_ROLES_LIST,
+} from "../../constants/uiConstants";
+import { fetchUsers } from "../../api/userApi";
+import { fetchBranches } from "../../api/branchApi";
+import { SkeletonTableRow } from "../../components/common/SkeletonLoader";
+import PaginationControls from "../../components/common/PaginationControls";
+import { exportToCSV } from "../../utils/exportUtils";
 
 export default function UsersScreen({ onShowToast, onNavigate }) {
   const { width } = useWindowDimensions();
@@ -28,16 +27,135 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
   const isMobile = width < 768;
 
   // Search & Filter State
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedRole, setSelectedRole] = useState('All Roles');
-  const [selectedBranch, setSelectedBranch] = useState('All Branches');
-  const [selectedStatus, setSelectedStatus] = useState('All'); // 'All' | 'Active' | 'Inactive'
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedRole, setSelectedRole] = useState("All Roles");
+  const [selectedBranch, setSelectedBranch] = useState("All Branches");
+  const [selectedStatus, setSelectedStatus] = useState("All"); // 'All' | 'Active' | 'Inactive'
 
-  // Users State
-  const [users, setUsers] = useState(MOCK_USERS_LIST);
-  const [loading, setLoading] = useState(false);
+  // Users & Branches State
+  const [users, setUsers] = useState([]);
+  const [branches, setBranches] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  // Fetch users and branches on mount
+  useEffect(() => {
+    let isMounted = true;
+    async function loadData() {
+      setLoading(true);
+      try {
+        const [usersRes, branchesRes] = await Promise.allSettled([
+          fetchUsers(),
+          fetchBranches(),
+        ]);
+
+        if (
+          isMounted &&
+          branchesRes.status === "fulfilled" &&
+          branchesRes.value?.success
+        ) {
+          const rawB = Array.isArray(branchesRes.value.data?.data)
+            ? branchesRes.value.data.data
+            : Array.isArray(branchesRes.value.data)
+              ? branchesRes.value.data
+              : [];
+          setBranches(
+            rawB.map((b) => ({
+              id: b.id,
+              name: b.name,
+              code: b.branch_code || b.code || "",
+              type: b.facility_type || b.type || "Dispensary",
+            })),
+          );
+        } else if (isMounted) {
+          setBranches([]);
+        }
+
+        if (
+          isMounted &&
+          usersRes.status === "fulfilled" &&
+          usersRes.value?.success
+        ) {
+          const rawU = Array.isArray(usersRes.value.data?.data)
+            ? usersRes.value.data.data
+            : Array.isArray(usersRes.value.data)
+              ? usersRes.value.data
+              : [];
+          const mapped = rawU.map((u) => {
+            const roleName = u.user_roles?.[0]?.roles?.name || "Pharmacist";
+            const assignedBranchNames = (u.branch_assignments || [])
+              .map((ba) => ba.branches?.name)
+              .filter(Boolean);
+            const primaryBranch = assignedBranchNames[0] || "Main Branch";
+            const fullName =
+              [u.first_name, u.last_name].filter(Boolean).join(" ") ||
+              u.name ||
+              u.email?.split("@")[0] ||
+              "Staff User";
+            const initials =
+              fullName
+                .split(" ")
+                .filter(Boolean)
+                .map((n) => n[0])
+                .slice(0, 2)
+                .join("")
+                .toUpperCase() || "U";
+
+            return {
+              id: u.id,
+              employeeId: u.id ? u.id.slice(0, 8).toUpperCase() : "EMP-01",
+              name: fullName,
+              email: u.email || "",
+              phone: u.phone || "",
+              role: roleName,
+              primaryBranch,
+              assignedBranches:
+                assignedBranchNames.length > 0
+                  ? assignedBranchNames
+                  : [primaryBranch],
+              status:
+                u.is_active !== false && u.status !== "Inactive"
+                  ? "Active"
+                  : "Inactive",
+              avatarInitials: initials,
+              joinedDate: u.created_at
+                ? new Date(u.created_at).toLocaleDateString("en-IN", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })
+                : "Active",
+              lastActive: "Active recently",
+              regNumber: u.reg_number || "N/A",
+              accessLevel: roleName.toLowerCase().includes("admin")
+                ? "Admin"
+                : "Standard",
+              shift: "General Shift",
+            };
+          });
+          setUsers(mapped);
+        } else if (isMounted) {
+          setUsers([]);
+        }
+      } catch (err) {
+        console.warn(
+          "[UsersScreen] Failed to load users/branches:",
+          err.message,
+        );
+        if (isMounted) {
+          setUsers([]);
+          setBranches([]);
+        }
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+    loadData();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Add / Invite / Edit Modal State
   const [modalVisible, setModalVisible] = useState(false);
@@ -50,35 +168,37 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
 
   // Form State
   const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    employeeId: '',
-    role: 'Pharmacist',
-    primaryBranch: 'FIT Main Campus Hospital Pharmacy',
-    assignedBranches: ['FIT Main Campus Hospital Pharmacy'],
-    status: 'Active',
-    regNumber: '',
-    shift: 'General Shift (09:00 - 18:00)',
-    accessPin: '',
+    name: "",
+    email: "",
+    phone: "",
+    employeeId: "",
+    role: "Pharmacist",
+    primaryBranch: "Main Branch",
+    assignedBranches: ["Main Branch"],
+    status: "Active",
+    regNumber: "",
+    shift: "General Shift (09:00 - 18:00)",
+    accessPin: "",
     sendInviteEmail: true,
   });
   const [formErrors, setFormErrors] = useState({});
 
   // Dynamic KPIs calculated from user state
   const totalUsersCount = users.length;
-  const activeUsersCount = users.filter((u) => u.status === 'Active').length;
+  const activeUsersCount = users.filter((u) => u.status === "Active").length;
   const inactiveUsersCount = totalUsersCount - activeUsersCount;
-  const licensedPharmacistsCount = users.filter(
-    (u) => u.role.toLowerCase().includes('pharmacist')
+  const licensedPharmacistsCount = users.filter((u) =>
+    u.role.toLowerCase().includes("pharmacist"),
   ).length;
-  const cashierBillingCount = users.filter((u) =>
-    u.role.toLowerCase().includes('cashier') || u.role.toLowerCase().includes('billing')
+  const cashierBillingCount = users.filter(
+    (u) =>
+      u.role.toLowerCase().includes("cashier") ||
+      u.role.toLowerCase().includes("billing"),
   ).length;
   const adminManagersCount = users.filter(
     (u) =>
-      u.role.toLowerCase().includes('admin') ||
-      u.role.toLowerCase().includes('manager')
+      u.role.toLowerCase().includes("admin") ||
+      u.role.toLowerCase().includes("manager"),
   ).length;
 
   // Filtered Users List
@@ -94,37 +214,38 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
       user.role.toLowerCase().includes(q);
 
     const matchesRole =
-      selectedRole === 'All Roles' || user.role === selectedRole;
+      selectedRole === "All Roles" || user.role === selectedRole;
 
     const matchesBranch =
-      selectedBranch === 'All Branches' ||
+      selectedBranch === "All Branches" ||
       user.primaryBranch === selectedBranch ||
-      (user.assignedBranches && user.assignedBranches.includes(selectedBranch)) ||
-      (user.assignedBranches && user.assignedBranches.includes('All Branches'));
+      (user.assignedBranches &&
+        user.assignedBranches.includes(selectedBranch)) ||
+      (user.assignedBranches && user.assignedBranches.includes("All Branches"));
 
     const matchesStatus =
-      selectedStatus === 'All' || user.status === selectedStatus;
+      selectedStatus === "All" || user.status === selectedStatus;
 
     return matchesSearch && matchesRole && matchesBranch && matchesStatus;
   });
 
   const hasActiveFilters =
-    searchQuery.trim() !== '' ||
-    selectedRole !== 'All Roles' ||
-    selectedBranch !== 'All Branches' ||
-    selectedStatus !== 'All';
+    searchQuery.trim() !== "" ||
+    selectedRole !== "All Roles" ||
+    selectedBranch !== "All Branches" ||
+    selectedStatus !== "All";
 
   const handleResetFilters = () => {
-    setSearchQuery('');
-    setSelectedRole('All Roles');
-    setSelectedBranch('All Branches');
-    setSelectedStatus('All');
+    setSearchQuery("");
+    setSelectedRole("All Roles");
+    setSelectedBranch("All Branches");
+    setSelectedStatus("All");
   };
 
   const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
   const paginatedUsers = filteredUsers.slice(
     (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
+    currentPage * itemsPerPage,
   );
 
   // Open Modal for Add / Invite
@@ -133,17 +254,17 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
     setActiveUserId(null);
     const nextEmpNum = 60 + users.length + 1;
     setFormData({
-      name: '',
-      email: '',
-      phone: '',
+      name: "",
+      email: "",
+      phone: "",
       employeeId: `FIT-EMP-0${nextEmpNum}`,
-      role: 'Pharmacist',
-      primaryBranch: 'FIT Main Campus Hospital Pharmacy',
-      assignedBranches: ['FIT Main Campus Hospital Pharmacy'],
-      status: 'Active',
-      regNumber: '',
-      shift: 'General Shift (09:00 - 18:00)',
-      accessPin: '4892',
+      role: "Pharmacist",
+      primaryBranch: "FIT Main Campus Hospital Pharmacy",
+      assignedBranches: ["FIT Main Campus Hospital Pharmacy"],
+      status: "Active",
+      regNumber: "",
+      shift: "General Shift (09:00 - 18:00)",
+      accessPin: "4892",
       sendInviteEmail: true,
     });
     setFormErrors({});
@@ -160,12 +281,14 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
       phone: user.phone,
       employeeId: user.employeeId,
       role: user.role,
-      primaryBranch: user.primaryBranch || 'FIT Main Campus Hospital Pharmacy',
-      assignedBranches: user.assignedBranches || [user.primaryBranch || 'FIT Main Campus Hospital Pharmacy'],
+      primaryBranch: user.primaryBranch || "FIT Main Campus Hospital Pharmacy",
+      assignedBranches: user.assignedBranches || [
+        user.primaryBranch || "FIT Main Campus Hospital Pharmacy",
+      ],
       status: user.status,
-      regNumber: user.regNumber || '',
-      shift: user.shift || 'General Shift (09:00 - 18:00)',
-      accessPin: '••••',
+      regNumber: user.regNumber || "",
+      shift: user.shift || "General Shift (09:00 - 18:00)",
+      accessPin: "••••",
       sendInviteEmail: false,
     });
     setFormErrors({});
@@ -181,13 +304,13 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
   // Save User (Add or Edit)
   const handleSaveUser = () => {
     const errors = {};
-    if (!formData.name.trim()) errors.name = 'Full name is required';
+    if (!formData.name.trim()) errors.name = "Full name is required";
     if (!formData.email.trim()) {
-      errors.email = 'Email address is required';
-    } else if (!formData.email.includes('@')) {
-      errors.email = 'Please enter a valid institutional email';
+      errors.email = "Email address is required";
+    } else if (!formData.email.includes("@")) {
+      errors.email = "Please enter a valid institutional email";
     }
-    if (!formData.phone.trim()) errors.phone = 'Phone number is required';
+    if (!formData.phone.trim()) errors.phone = "Phone number is required";
 
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
@@ -213,8 +336,8 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                 regNumber: formData.regNumber.trim(),
                 shift: formData.shift,
               }
-            : u
-        )
+            : u,
+        ),
       );
       if (selectedUser && selectedUser.id === activeUserId) {
         setSelectedUser((prev) => ({
@@ -234,7 +357,7 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
         onShowToast(`✓ Updated profile for "${formData.name.trim()}"`);
       }
     } else {
-      const names = formData.name.trim().split(' ');
+      const names = formData.name.trim().split(" ");
       const initials =
         names.length > 1
           ? `${names[0][0]}${names[names.length - 1][0]}`.toUpperCase()
@@ -242,7 +365,8 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
 
       const newUser = {
         id: `USR-1${15 + users.length}`,
-        employeeId: formData.employeeId.trim() || `FIT-EMP-0${60 + users.length}`,
+        employeeId:
+          formData.employeeId.trim() || `FIT-EMP-0${60 + users.length}`,
         name: formData.name.trim(),
         email: formData.email.trim(),
         phone: formData.phone.trim(),
@@ -253,25 +377,27 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
             : [formData.primaryBranch],
         primaryBranch: formData.primaryBranch,
         status: formData.status,
-        avatarInitials: initials || 'ST',
-        joinedDate: 'Just now',
-        lastActive: 'Invited (Pending Activation)',
-        regNumber: formData.regNumber.trim() || (formData.role.includes('Pharmacist') ? 'PCI-MH-PENDING' : 'N/A'),
+        avatarInitials: initials || "ST",
+        joinedDate: "Just now",
+        lastActive: "Invited (Pending Activation)",
+        regNumber:
+          formData.regNumber.trim() ||
+          (formData.role.includes("Pharmacist") ? "PCI-MH-PENDING" : "N/A"),
         accessLevel:
-          formData.role === 'Administrator'
-            ? 'Admin'
-            : formData.role === 'Chief Pharmacist'
-            ? 'High'
-            : formData.role === 'Store Manager'
-            ? 'Medium-High'
-            : 'Standard',
+          formData.role === "Administrator"
+            ? "Admin"
+            : formData.role === "Chief Pharmacist"
+              ? "High"
+              : formData.role === "Store Manager"
+                ? "Medium-High"
+                : "Standard",
         shift: formData.shift,
       };
 
       setUsers((prev) => [newUser, ...prev]);
       if (onShowToast) {
         onShowToast(
-          `✓ Invited ${newUser.name} (${newUser.role}) to Flora Institute of Technology!`
+          `✓ Invited ${newUser.name} (${newUser.role}) to Flora Institute of Technology!`,
         );
       }
     }
@@ -281,52 +407,58 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
 
   // Toggle user Active / Inactive status
   const handleToggleStatus = (user) => {
-    const nextStatus = user.status === 'Active' ? 'Inactive' : 'Active';
+    const nextStatus = user.status === "Active" ? "Inactive" : "Active";
     setUsers((prev) =>
-      prev.map((u) => (u.id === user.id ? { ...u, status: nextStatus } : u))
+      prev.map((u) => (u.id === user.id ? { ...u, status: nextStatus } : u)),
     );
     if (selectedUser && selectedUser.id === user.id) {
       setSelectedUser((prev) => ({ ...prev, status: nextStatus }));
     }
     if (onShowToast) {
-      onShowToast(
-        `Staff member "${user.name}" marked as ${nextStatus}`
-      );
+      onShowToast(`Staff member "${user.name}" marked as ${nextStatus}`);
     }
   };
 
   // Resend invitation / access PIN action
   const handleResendInvite = (user) => {
     if (onShowToast) {
-      onShowToast(`✓ Access credentials & invitation link resent to ${user.email}`);
+      onShowToast(
+        `✓ Access credentials & invitation link resent to ${user.email}`,
+      );
     }
   };
 
   // Export Staff Directory to CSV
   const handleExportRoster = () => {
     const headers = [
-      'User ID',
-      'Name',
-      'Role',
-      'Email',
-      'Phone',
-      'Branch Location',
-      'Status',
-      'Last Active / Login',
+      "User ID",
+      "Name",
+      "Role",
+      "Email",
+      "Phone",
+      "Branch Location",
+      "Status",
+      "Last Active / Login",
     ];
     const rows = filteredUsers.map((u) => [
-      u.id || '',
-      u.name || '',
-      u.role || '',
-      u.email || '',
-      u.phone || '',
-      u.branch || 'Main Branch',
-      u.status || 'Active',
-      u.lastActive || 'Today',
+      u.id || "",
+      u.name || "",
+      u.role || "",
+      u.email || "",
+      u.phone || "",
+      u.branch || "Main Branch",
+      u.status || "Active",
+      u.lastActive || "Today",
     ]);
-    exportToCSV(headers, rows, `pharmacy_staff_directory_${new Date().toISOString().slice(0, 10)}.csv`);
+    exportToCSV(
+      headers,
+      rows,
+      `pharmacy_staff_directory_${new Date().toISOString().slice(0, 10)}.csv`,
+    );
     if (onShowToast) {
-      onShowToast(`✓ Exported Staff Directory (${filteredUsers.length} users) to CSV`);
+      onShowToast(
+        `✓ Exported Staff Directory (${filteredUsers.length} users) to CSV`,
+      );
     }
   };
 
@@ -352,38 +484,43 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
   // Role Badge Color Mapper
   const getRoleBadgeStyle = (role) => {
     switch (role) {
-      case 'Administrator':
-        return { bg: '#F0FDFA', border: '#99F6E4', text: '#0F766E' };
-      case 'Chief Pharmacist':
-        return { bg: '#EFF6FF', border: '#BFDBFE', text: '#1D4ED8' };
-      case 'Pharmacist':
-        return { bg: '#F0FDF4', border: '#BBF7D0', text: '#15803D' };
-      case 'Store Manager':
-        return { bg: '#FFFBEB', border: '#FDE68A', text: '#B45309' };
-      case 'Billing / Cashier':
-        return { bg: '#FAF5FF', border: '#E9D5FF', text: '#7E22CE' };
-      case 'Inventory Clerk':
-        return { bg: '#F8FAFC', border: '#E2E8F0', text: '#475569' };
-      case 'Auditor / Compliance':
-        return { bg: '#F1F5F9', border: '#CBD5E1', text: '#334155' };
+      case "Administrator":
+        return { bg: "#F0FDFA", border: "#99F6E4", text: "#0F766E" };
+      case "Chief Pharmacist":
+        return { bg: "#EFF6FF", border: "#BFDBFE", text: "#1D4ED8" };
+      case "Pharmacist":
+        return { bg: "#F0FDF4", border: "#BBF7D0", text: "#15803D" };
+      case "Store Manager":
+        return { bg: "#FFFBEB", border: "#FDE68A", text: "#B45309" };
+      case "Billing / Cashier":
+        return { bg: "#FAF5FF", border: "#E9D5FF", text: "#7E22CE" };
+      case "Inventory Clerk":
+        return { bg: "#F8FAFC", border: "#E2E8F0", text: "#475569" };
+      case "Auditor / Compliance":
+        return { bg: "#F1F5F9", border: "#CBD5E1", text: "#334155" };
       default:
-        return { bg: '#F1F5F9', border: '#E2E8F0', text: '#475569' };
+        return { bg: "#F1F5F9", border: "#E2E8F0", text: "#475569" };
     }
   };
 
   // Lookup role permission summary
   const getRolePermissionsSummary = (roleName) => {
-    const roleObj = MOCK_ROLES_LIST.find((r) => r.name === roleName);
+    const roleObj = SYSTEM_ROLES_LIST.find(
+      (r) => r.name === roleName || r.code === roleName,
+    );
     if (!roleObj) return [];
-    return Object.entries(roleObj.permissions)
-      .filter(([_, allowed]) => allowed)
-      .map(([k]) =>
-        k
-          .replace(/^(pos_|inv_|pur_|cust_|rep_|mgmt_)/, '')
-          .replace(/_/g, ' ')
-          .replace(/\b\w/g, (c) => c.toUpperCase())
-      )
-      .slice(0, 8);
+    if (roleObj.permissions && typeof roleObj.permissions === "object") {
+      return Object.entries(roleObj.permissions)
+        .filter(([_, allowed]) => allowed)
+        .map(([k]) =>
+          k
+            .replace(/^(pos_|inv_|pur_|cust_|rep_|mgmt_)/, "")
+            .replace(/_/g, " ")
+            .replace(/\b\w/g, (c) => c.toUpperCase()),
+        )
+        .slice(0, 8);
+    }
+    return [roleObj.description];
   };
 
   return (
@@ -400,7 +537,9 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
         <View style={styles.titleWrapper}>
           <Text style={styles.pageTitle}>User & Staff Management</Text>
           <Text style={styles.pageSubtitle}>
-            Manage registered pharmacists, cashiers, store managers, role assignments, and branch authorizations across Flora Institute of Technology.
+            Manage registered pharmacists, cashiers, store managers, role
+            assignments, and branch authorizations across Flora Institute of
+            Technology.
           </Text>
         </View>
 
@@ -433,28 +572,28 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
           value={String(totalUsersCount)}
           subtext={`${activeUsersCount} Active / ${inactiveUsersCount} Inactive`}
           variant="teal"
-          onPress={() => setSelectedStatus('All')}
+          onPress={() => setSelectedStatus("All")}
         />
         <InventoryStatCard
           label="Registered Pharmacists"
           value={`${licensedPharmacistsCount} Licensed`}
           subtext="Prescription approval & dispensing"
           variant="blue"
-          onPress={() => setSelectedRole('Pharmacist')}
+          onPress={() => setSelectedRole("Pharmacist")}
         />
         <InventoryStatCard
           label="Billing & Cashiers"
           value={`${cashierBillingCount} Staff`}
           subtext="POS counter & receipt sales"
           variant="amber"
-          onPress={() => setSelectedRole('Billing / Cashier')}
+          onPress={() => setSelectedRole("Billing / Cashier")}
         />
         <InventoryStatCard
           label="Supervisory Admins"
           value={`${adminManagersCount} Admins`}
           subtext="Multi-branch management & controls"
           variant="orange"
-          onPress={() => setSelectedRole('Administrator')}
+          onPress={() => setSelectedRole("Administrator")}
         />
       </View>
 
@@ -471,7 +610,10 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
             onChangeText={setSearchQuery}
           />
           {searchQuery ? (
-            <Pressable onPress={() => setSearchQuery('')} style={styles.clearSearchBtn}>
+            <Pressable
+              onPress={() => setSearchQuery("")}
+              style={styles.clearSearchBtn}
+            >
               <Text style={styles.clearSearchText}>✕</Text>
             </Pressable>
           ) : null}
@@ -514,35 +656,39 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
         <View style={styles.filterBottomRow}>
           {/* Branch Filter Tabs */}
           <View style={styles.branchFilterSection}>
-            <Text style={styles.filterGroupLabel}>ASSIGNED FACILITY / BRANCH:</Text>
+            <Text style={styles.filterGroupLabel}>
+              ASSIGNED FACILITY / BRANCH:
+            </Text>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.filterPillsScroll}
             >
-              {BRANCH_FILTER_OPTIONS.map((branch) => {
-                const isSelected = selectedBranch === branch;
-                return (
-                  <Pressable
-                    key={branch}
-                    onPress={() => setSelectedBranch(branch)}
-                    style={[
-                      styles.branchFilterPill,
-                      isSelected && styles.branchFilterPillSelected,
-                    ]}
-                  >
-                    <Text
+              {["All Branches", ...branches.map((b) => b.name)].map(
+                (branch) => {
+                  const isSelected = selectedBranch === branch;
+                  return (
+                    <Pressable
+                      key={branch}
+                      onPress={() => setSelectedBranch(branch)}
                       style={[
-                        styles.branchFilterPillText,
-                        isSelected && styles.branchFilterPillTextSelected,
+                        styles.branchFilterPill,
+                        isSelected && styles.branchFilterPillSelected,
                       ]}
-                      numberOfLines={1}
                     >
-                      {branch}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+                      <Text
+                        style={[
+                          styles.branchFilterPillText,
+                          isSelected && styles.branchFilterPillTextSelected,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {branch}
+                      </Text>
+                    </Pressable>
+                  );
+                },
+              )}
             </ScrollView>
           </View>
 
@@ -550,7 +696,7 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
           <View style={styles.statusFilterSection}>
             <Text style={styles.filterGroupLabel}>STATUS:</Text>
             <View style={styles.statusToggleGroup}>
-              {['All', 'Active', 'Inactive'].map((status) => {
+              {["All", "Active", "Inactive"].map((status) => {
                 const isSelected = selectedStatus === status;
                 return (
                   <Pressable
@@ -580,19 +726,22 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
         {hasActiveFilters && (
           <View style={styles.activeFilterNoticeRow}>
             <Text style={styles.activeFilterNoticeText}>
-              Showing results for:{' '}
+              Showing results for:{" "}
               <Text style={styles.activeFilterHighlight}>
                 {[
                   searchQuery ? `"${searchQuery}"` : null,
-                  selectedRole !== 'All Roles' ? selectedRole : null,
-                  selectedBranch !== 'All Branches' ? selectedBranch : null,
-                  selectedStatus !== 'All' ? `${selectedStatus} status` : null,
+                  selectedRole !== "All Roles" ? selectedRole : null,
+                  selectedBranch !== "All Branches" ? selectedBranch : null,
+                  selectedStatus !== "All" ? `${selectedStatus} status` : null,
                 ]
                   .filter(Boolean)
-                  .join(' • ')}
+                  .join(" • ")}
               </Text>
             </Text>
-            <Pressable onPress={handleResetFilters} style={styles.resetFilterBtn}>
+            <Pressable
+              onPress={handleResetFilters}
+              style={styles.resetFilterBtn}
+            >
               <Text style={styles.resetFilterBtnText}>Reset Filters ✕</Text>
             </Pressable>
           </View>
@@ -606,12 +755,14 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
             <Text style={styles.tableTitle}>Staff & User Accounts</Text>
             <View style={styles.countBadge}>
               <Text style={styles.countBadgeText}>
-                {filteredUsers.length} {filteredUsers.length === 1 ? 'User' : 'Users'}
+                {filteredUsers.length}{" "}
+                {filteredUsers.length === 1 ? "User" : "Users"}
               </Text>
             </View>
           </View>
           <Text style={styles.tableSubtitle}>
-            Pharmacist licenses, branch accessibility, security permissions, and direct credential management.
+            Pharmacist licenses, branch accessibility, security permissions, and
+            direct credential management.
           </Text>
         </View>
 
@@ -633,34 +784,56 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                 onPress={handleResetFilters}
                 style={styles.emptyResetButton}
               >
-                <Text style={styles.emptyResetButtonText}>Clear All Filters</Text>
+                <Text style={styles.emptyResetButtonText}>
+                  Clear All Filters
+                </Text>
               </Pressable>
             ) : (
               <Pressable
                 onPress={handleOpenAddModal}
                 style={styles.emptyAddButton}
               >
-                <Text style={styles.emptyAddButtonText}>+ Invite First Staff Member</Text>
+                <Text style={styles.emptyAddButtonText}>
+                  + Invite First Staff Member
+                </Text>
               </Pressable>
             )}
           </View>
         ) : isMobile ? (
           <View style={styles.mobileStaffList}>
             {paginatedUsers.map((user) => {
-              const isActive = user.status === 'Active';
+              const isActive = user.status === "Active";
               const roleBadge = getRoleBadgeStyle(user.role);
 
               return (
                 <View key={user.id} style={styles.mobileStaffCard}>
                   {/* Top Row: Avatar + Name + Status Toggle */}
                   <View style={styles.mobileStaffTopRow}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-                      <View style={[styles.avatarCircle, { backgroundColor: roleBadge.text }]}>
-                        <Text style={styles.avatarText}>{user.avatarInitials}</Text>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 10,
+                        flex: 1,
+                      }}
+                    >
+                      <View
+                        style={[
+                          styles.avatarCircle,
+                          { backgroundColor: roleBadge.text },
+                        ]}
+                      >
+                        <Text style={styles.avatarText}>
+                          {user.avatarInitials}
+                        </Text>
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.userNameText} numberOfLines={1}>{user.name}</Text>
-                        <Text style={styles.userJoinedText}>{user.lastActive || `Joined: ${user.joinedDate}`}</Text>
+                        <Text style={styles.userNameText} numberOfLines={1}>
+                          {user.name}
+                        </Text>
+                        <Text style={styles.userJoinedText}>
+                          {user.lastActive || `Joined: ${user.joinedDate}`}
+                        </Text>
                       </View>
                     </View>
 
@@ -703,30 +876,53 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
 
                   {/* Badges row */}
                   <View style={styles.mobileStaffBadgesRow}>
-                    <View style={[styles.roleBadge, { backgroundColor: roleBadge.bg, borderColor: roleBadge.border }]}>
-                      <Text style={[styles.roleBadgeText, { color: roleBadge.text }]}>{user.role}</Text>
+                    <View
+                      style={[
+                        styles.roleBadge,
+                        {
+                          backgroundColor: roleBadge.bg,
+                          borderColor: roleBadge.border,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.roleBadgeText,
+                          { color: roleBadge.text },
+                        ]}
+                      >
+                        {user.role}
+                      </Text>
                     </View>
                     <View style={styles.empIdBadge}>
                       <Text style={styles.empIdText}>{user.employeeId}</Text>
                     </View>
-                    {user.regNumber && user.regNumber !== 'N/A' && (
+                    {user.regNumber && user.regNumber !== "N/A" && (
                       <View style={styles.regNoPill}>
-                        <Text style={styles.regNoText} numberOfLines={1}>{user.regNumber}</Text>
+                        <Text style={styles.regNoText} numberOfLines={1}>
+                          {user.regNumber}
+                        </Text>
                       </View>
                     )}
                   </View>
 
                   {/* Branch & Contact Info */}
                   <View style={styles.mobileStaffInfoBox}>
-                    <Text style={styles.mobileStaffInfoLabel}>BRANCH ASSIGNMENT</Text>
-                    <Text style={styles.branchNameText}>{user.primaryBranch}</Text>
-                    <Text style={[styles.contactEmail, { marginTop: 4 }]}>✉ {user.email}</Text>
+                    <Text style={styles.mobileStaffInfoLabel}>
+                      BRANCH ASSIGNMENT
+                    </Text>
+                    <Text style={styles.branchNameText}>
+                      {user.primaryBranch}
+                    </Text>
+                    <Text style={[styles.contactEmail, { marginTop: 4 }]}>
+                      ✉ {user.email}
+                    </Text>
                     <Text style={styles.contactPhone}>📞 {user.phone}</Text>
                   </View>
 
                   {/* Actions footer */}
                   <View style={styles.mobileStaffFooter}>
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <View style={{ flexDirection: "row", gap: 8 }}>
                       <Pressable
                         onPress={() => handleOpenDetailModal(user)}
                         style={styles.actionViewBtn}
@@ -746,7 +942,7 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                       </Pressable>
                     </View>
 
-                    {user.status !== 'Active' && (
+                    {user.status !== "Active" && (
                       <Pressable
                         onPress={() => handleResendInvite(user)}
                         style={styles.actionInviteBtn}
@@ -766,18 +962,28 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
             <View style={styles.tableWrapper}>
               {/* Table Header Row */}
               <View style={styles.tableHeaderRow}>
-                <Text style={[styles.thText, styles.colUser]}>Staff Member</Text>
-                <Text style={[styles.thText, styles.colEmpId]}>Staff ID & License</Text>
-                <Text style={[styles.thText, styles.colRole]}>Assigned Role</Text>
-                <Text style={[styles.thText, styles.colBranch]}>Branch Assignment</Text>
-                <Text style={[styles.thText, styles.colContact]}>Contact Details</Text>
+                <Text style={[styles.thText, styles.colUser]}>
+                  Staff Member
+                </Text>
+                <Text style={[styles.thText, styles.colEmpId]}>
+                  Staff ID & License
+                </Text>
+                <Text style={[styles.thText, styles.colRole]}>
+                  Assigned Role
+                </Text>
+                <Text style={[styles.thText, styles.colBranch]}>
+                  Branch Assignment
+                </Text>
+                <Text style={[styles.thText, styles.colContact]}>
+                  Contact Details
+                </Text>
                 <Text style={[styles.thText, styles.colStatus]}>Status</Text>
                 <Text style={[styles.thText, styles.colActions]}>Actions</Text>
               </View>
 
               {/* Table Body */}
               {paginatedUsers.map((user, index) => {
-                const isActive = user.status === 'Active';
+                const isActive = user.status === "Active";
                 const isEven = index % 2 === 0;
                 const roleBadge = getRoleBadgeStyle(user.role);
 
@@ -794,7 +1000,9 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                           { backgroundColor: roleBadge.text },
                         ]}
                       >
-                        <Text style={styles.avatarText}>{user.avatarInitials}</Text>
+                        <Text style={styles.avatarText}>
+                          {user.avatarInitials}
+                        </Text>
                       </View>
                       <View style={styles.userInfo}>
                         <Text style={styles.userNameText} numberOfLines={1}>
@@ -811,7 +1019,7 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                       <View style={styles.empIdBadge}>
                         <Text style={styles.empIdText}>{user.employeeId}</Text>
                       </View>
-                      {user.regNumber && user.regNumber !== 'N/A' && (
+                      {user.regNumber && user.regNumber !== "N/A" && (
                         <View style={styles.regNoPill}>
                           <Text style={styles.regNoText} numberOfLines={1}>
                             {user.regNumber}
@@ -841,7 +1049,7 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                         </Text>
                       </View>
                       <Text style={styles.accessLevelText}>
-                        {user.accessLevel || 'Standard'}
+                        {user.accessLevel || "Standard"}
                       </Text>
                     </View>
 
@@ -850,13 +1058,14 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                       <Text style={styles.branchNameText} numberOfLines={2}>
                         {user.primaryBranch}
                       </Text>
-                      {user.assignedBranches && user.assignedBranches.length > 1 && (
-                        <View style={styles.multiBranchBadge}>
-                          <Text style={styles.multiBranchBadgeText}>
-                            +{user.assignedBranches.length - 1} extra branch
-                          </Text>
-                        </View>
-                      )}
+                      {user.assignedBranches &&
+                        user.assignedBranches.length > 1 && (
+                          <View style={styles.multiBranchBadge}>
+                            <Text style={styles.multiBranchBadgeText}>
+                              +{user.assignedBranches.length - 1} extra branch
+                            </Text>
+                          </View>
+                        )}
                     </View>
 
                     {/* 5. Contact Details */}
@@ -927,7 +1136,7 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                       </Pressable>
 
                       {/* Invite / Resend Invite option: Only shown if user is NOT an active member yet (e.g. Inactive or Pending Activation) */}
-                      {user.status !== 'Active' && (
+                      {user.status !== "Active" && (
                         <Pressable
                           onPress={() => handleResendInvite(user)}
                           style={styles.actionInviteBtn}
@@ -967,12 +1176,12 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
             <View style={styles.modalHeader}>
               <View>
                 <Text style={styles.modalTitle}>
-                  {isEditing ? 'Edit Staff Profile' : 'Invite New Staff Member'}
+                  {isEditing ? "Edit Staff Profile" : "Invite New Staff Member"}
                 </Text>
                 <Text style={styles.modalSubtitle}>
                   {isEditing
-                    ? `Update credentials, branch assignments, and role permissions for ${formData.name || 'User'}`
-                    : 'Send onboarding email and assign POS role in Flora Institute of Technology'}
+                    ? `Update credentials, branch assignments, and role permissions for ${formData.name || "User"}`
+                    : "Send onboarding email and assign POS role in Flora Institute of Technology"}
                 </Text>
               </View>
               <Pressable
@@ -1003,7 +1212,8 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                     value={formData.name}
                     onChangeText={(text) => {
                       setFormData({ ...formData, name: text });
-                      if (formErrors.name) setFormErrors({ ...formErrors, name: null });
+                      if (formErrors.name)
+                        setFormErrors({ ...formErrors, name: null });
                     }}
                   />
                   {formErrors.name ? (
@@ -1040,7 +1250,8 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                     value={formData.email}
                     onChangeText={(text) => {
                       setFormData({ ...formData, email: text });
-                      if (formErrors.email) setFormErrors({ ...formErrors, email: null });
+                      if (formErrors.email)
+                        setFormErrors({ ...formErrors, email: null });
                     }}
                   />
                   {formErrors.email ? (
@@ -1063,7 +1274,8 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                     value={formData.phone}
                     onChangeText={(text) => {
                       setFormData({ ...formData, phone: text });
-                      if (formErrors.phone) setFormErrors({ ...formErrors, phone: null });
+                      if (formErrors.phone)
+                        setFormErrors({ ...formErrors, phone: null });
                     }}
                   />
                   {formErrors.phone ? (
@@ -1074,17 +1286,18 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                 {/* 5. Role Selector */}
                 <View style={styles.formColFull}>
                   <Text style={styles.fieldLabel}>
-                    Select Role & Access Clearance <Text style={styles.reqStar}>*</Text>
+                    Select Role & Access Clearance{" "}
+                    <Text style={styles.reqStar}>*</Text>
                   </Text>
                   <View style={styles.roleSelectionGrid}>
                     {[
-                      'Administrator',
-                      'Chief Pharmacist',
-                      'Pharmacist',
-                      'Store Manager',
-                      'Billing / Cashier',
-                      'Inventory Clerk',
-                      'Auditor / Compliance',
+                      "Administrator",
+                      "Chief Pharmacist",
+                      "Pharmacist",
+                      "Store Manager",
+                      "Billing / Cashier",
+                      "Inventory Clerk",
+                      "Auditor / Compliance",
                     ].map((r) => {
                       const isSelected = formData.role === r;
                       return (
@@ -1116,15 +1329,16 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                     Primary Branch Dispensing Facility
                   </Text>
                   <View style={styles.branchSelectGrid}>
-                    {MOCK_BRANCHES_LIST.map((b) => {
+                    {branches.map((b) => {
                       const isSelected = formData.primaryBranch === b.name;
                       return (
                         <Pressable
                           key={b.id}
                           onPress={() => {
-                            const newAssigned = formData.assignedBranches.includes(b.name)
-                              ? formData.assignedBranches
-                              : [...formData.assignedBranches, b.name];
+                            const newAssigned =
+                              formData.assignedBranches.includes(b.name)
+                                ? formData.assignedBranches
+                                : [...formData.assignedBranches, b.name];
                             setFormData({
                               ...formData,
                               primaryBranch: b.name,
@@ -1148,7 +1362,9 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                             </Text>
                             {isSelected && (
                               <View style={styles.primaryCheckDot}>
-                                <Text style={styles.primaryCheckDotText}>✓</Text>
+                                <Text style={styles.primaryCheckDotText}>
+                                  ✓
+                                </Text>
                               </View>
                             )}
                           </View>
@@ -1167,8 +1383,10 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                     Multi-Branch Access Clearance (Check all that apply)
                   </Text>
                   <View style={styles.multiBranchGrid}>
-                    {MOCK_BRANCHES_LIST.map((b) => {
-                      const isChecked = formData.assignedBranches.includes(b.name);
+                    {branches.map((b) => {
+                      const isChecked = formData.assignedBranches.includes(
+                        b.name,
+                      );
                       return (
                         <Pressable
                           key={b.id}
@@ -1179,7 +1397,7 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                           ]}
                         >
                           <Text style={styles.multiBranchCheckIcon}>
-                            {isChecked ? '☑' : '☐'}
+                            {isChecked ? "☑" : "☐"}
                           </Text>
                           <Text
                             style={[
@@ -1212,7 +1430,9 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                 </View>
 
                 <View style={styles.formColHalf}>
-                  <Text style={styles.fieldLabel}>Working Shift / Schedule</Text>
+                  <Text style={styles.fieldLabel}>
+                    Working Shift / Schedule
+                  </Text>
                   <TextInput
                     style={styles.formInput}
                     placeholder="e.g. General Shift (09:00 - 18:00)"
@@ -1230,17 +1450,20 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                     onPress={() =>
                       setFormData({
                         ...formData,
-                        status: formData.status === 'Active' ? 'Inactive' : 'Active',
+                        status:
+                          formData.status === "Active" ? "Inactive" : "Active",
                       })
                     }
                     style={styles.modalToggleCard}
                     accessibilityRole="switch"
-                    accessibilityState={{ checked: formData.status === 'Active' }}
+                    accessibilityState={{
+                      checked: formData.status === "Active",
+                    }}
                   >
                     <View
                       style={[
                         styles.toggleTrack,
-                        formData.status === 'Active'
+                        formData.status === "Active"
                           ? styles.toggleTrackActive
                           : styles.toggleTrackInactive,
                       ]}
@@ -1248,7 +1471,7 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                       <View
                         style={[
                           styles.toggleThumb,
-                          formData.status === 'Active'
+                          formData.status === "Active"
                             ? styles.toggleThumbActive
                             : styles.toggleThumbInactive,
                         ]}
@@ -1258,17 +1481,18 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                       <Text
                         style={[
                           styles.modalToggleMainText,
-                          formData.status === 'Active' && styles.statusLabelActive,
+                          formData.status === "Active" &&
+                            styles.statusLabelActive,
                         ]}
                       >
-                        {formData.status === 'Active'
-                          ? 'Active Account'
-                          : 'Inactive (Disabled)'}
+                        {formData.status === "Active"
+                          ? "Active Account"
+                          : "Inactive (Disabled)"}
                       </Text>
                       <Text style={styles.modalToggleSubText}>
-                        {formData.status === 'Active'
-                          ? 'Allowed to log in & bill'
-                          : 'Access suspended'}
+                        {formData.status === "Active"
+                          ? "Allowed to log in & bill"
+                          : "Access suspended"}
                       </Text>
                     </View>
                   </Pressable>
@@ -1324,7 +1548,8 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                           Send institutional welcome & invitation email
                         </Text>
                         <Text style={styles.inviteToggleSubtitle}>
-                          Includes single sign-on link and initial POS PIN setup instructions.
+                          Includes single sign-on link and initial POS PIN setup
+                          instructions.
                         </Text>
                       </View>
                     </Pressable>
@@ -1346,7 +1571,7 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                 style={styles.modalSaveButton}
               >
                 <Text style={styles.modalSaveText}>
-                  {isEditing ? 'Save Changes' : 'Send Invitation'}
+                  {isEditing ? "Save Changes" : "Send Invitation"}
                 </Text>
               </Pressable>
             </View>
@@ -1363,7 +1588,12 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
           onRequestClose={() => setDetailModalVisible(false)}
         >
           <View style={styles.modalOverlay}>
-            <View style={[styles.detailModalCard, isMobile && styles.modalCardMobile]}>
+            <View
+              style={[
+                styles.detailModalCard,
+                isMobile && styles.modalCardMobile,
+              ]}
+            >
               {/* Profile Header */}
               <View style={styles.detailHeader}>
                 <View style={styles.detailHeaderLeft}>
@@ -1371,7 +1601,8 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                     style={[
                       styles.detailAvatarCircle,
                       {
-                        backgroundColor: getRoleBadgeStyle(selectedUser.role).text,
+                        backgroundColor: getRoleBadgeStyle(selectedUser.role)
+                          .text,
                       },
                     ]}
                   >
@@ -1386,15 +1617,20 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                         style={[
                           styles.roleBadge,
                           {
-                            backgroundColor: getRoleBadgeStyle(selectedUser.role).bg,
-                            borderColor: getRoleBadgeStyle(selectedUser.role).border,
+                            backgroundColor: getRoleBadgeStyle(
+                              selectedUser.role,
+                            ).bg,
+                            borderColor: getRoleBadgeStyle(selectedUser.role)
+                              .border,
                           },
                         ]}
                       >
                         <Text
                           style={[
                             styles.roleBadgeText,
-                            { color: getRoleBadgeStyle(selectedUser.role).text },
+                            {
+                              color: getRoleBadgeStyle(selectedUser.role).text,
+                            },
                           ]}
                         >
                           {selectedUser.role}
@@ -1406,7 +1642,7 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                       <View
                         style={[
                           styles.statusBadge,
-                          selectedUser.status === 'Active'
+                          selectedUser.status === "Active"
                             ? styles.statusBadgeActive
                             : styles.statusBadgeInactive,
                         ]}
@@ -1414,7 +1650,7 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                         <View
                           style={[
                             styles.statusDot,
-                            selectedUser.status === 'Active'
+                            selectedUser.status === "Active"
                               ? styles.statusDotActive
                               : styles.statusDotInactive,
                           ]}
@@ -1422,7 +1658,7 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                         <Text
                           style={[
                             styles.statusText,
-                            selectedUser.status === 'Active'
+                            selectedUser.status === "Active"
                               ? styles.statusTextActive
                               : styles.statusTextInactive,
                           ]}
@@ -1446,34 +1682,46 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                 <View style={styles.detailGrid}>
                   {/* Card 1: Contact & Employment Information */}
                   <View style={styles.detailSectionCard}>
-                    <Text style={styles.detailSectionTitle}>Contact & Staff Profile</Text>
+                    <Text style={styles.detailSectionTitle}>
+                      Contact & Staff Profile
+                    </Text>
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>Email Address:</Text>
-                      <Text style={styles.detailValue}>{selectedUser.email}</Text>
+                      <Text style={styles.detailValue}>
+                        {selectedUser.email}
+                      </Text>
                     </View>
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>Phone Number:</Text>
-                      <Text style={styles.detailValue}>{selectedUser.phone}</Text>
+                      <Text style={styles.detailValue}>
+                        {selectedUser.phone}
+                      </Text>
                     </View>
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>Joined Date:</Text>
-                      <Text style={styles.detailValue}>{selectedUser.joinedDate}</Text>
+                      <Text style={styles.detailValue}>
+                        {selectedUser.joinedDate}
+                      </Text>
                     </View>
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>Last Active:</Text>
-                      <Text style={styles.detailValue}>{selectedUser.lastActive || 'Active today'}</Text>
+                      <Text style={styles.detailValue}>
+                        {selectedUser.lastActive || "Active today"}
+                      </Text>
                     </View>
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>Shift / Timings:</Text>
                       <Text style={styles.detailValue}>
-                        {selectedUser.shift || 'General Shift (09:00 - 18:00)'}
+                        {selectedUser.shift || "General Shift (09:00 - 18:00)"}
                       </Text>
                     </View>
                   </View>
 
                   {/* Card 2: Branch & Facility Assignments */}
                   <View style={styles.detailSectionCard}>
-                    <Text style={styles.detailSectionTitle}>Branch Dispensing Authorizations</Text>
+                    <Text style={styles.detailSectionTitle}>
+                      Branch Dispensing Authorizations
+                    </Text>
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>Primary Branch:</Text>
                       <Text style={styles.detailValueHighlight}>
@@ -1481,41 +1729,56 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                       </Text>
                     </View>
                     <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>All Authorized Facilities:</Text>
+                      <Text style={styles.detailLabel}>
+                        All Authorized Facilities:
+                      </Text>
                       <Text style={styles.detailValue}>
-                        {(selectedUser.assignedBranches || [selectedUser.primaryBranch]).join(', ')}
+                        {(
+                          selectedUser.assignedBranches || [
+                            selectedUser.primaryBranch,
+                          ]
+                        ).join(", ")}
                       </Text>
                     </View>
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>Clearance Scope:</Text>
                       <Text style={styles.detailValue}>
-                        {selectedUser.assignedBranches && selectedUser.assignedBranches.includes('All Branches')
-                          ? 'Campus-Wide Master Access'
-                          : 'Specific Assigned Pharmacy Outlets'}
+                        {selectedUser.assignedBranches &&
+                        selectedUser.assignedBranches.includes("All Branches")
+                          ? "Campus-Wide Master Access"
+                          : "Specific Assigned Pharmacy Outlets"}
                       </Text>
                     </View>
                   </View>
 
                   {/* Card 3: Clinical & Regulatory Credentials */}
                   <View style={styles.detailSectionCard}>
-                    <Text style={styles.detailSectionTitle}>Clinical & Regulatory Registration</Text>
+                    <Text style={styles.detailSectionTitle}>
+                      Clinical & Regulatory Registration
+                    </Text>
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>Council Reg No:</Text>
                       <Text style={styles.detailValue}>
-                        {selectedUser.regNumber || 'Not Applicable'}
+                        {selectedUser.regNumber || "Not Applicable"}
                       </Text>
                     </View>
                     <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Rx Approval Authority:</Text>
+                      <Text style={styles.detailLabel}>
+                        Rx Approval Authority:
+                      </Text>
                       <Text style={styles.detailValue}>
-                        {selectedUser.role.includes('Pharmacist')
-                          ? 'Authorized (Schedule H / H1 / X)'
-                          : 'Read-Only Dispensing'}
+                        {selectedUser.role.includes("Pharmacist")
+                          ? "Authorized (Schedule H / H1 / X)"
+                          : "Read-Only Dispensing"}
                       </Text>
                     </View>
                     <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Audit Trail Logging:</Text>
-                      <Text style={styles.detailValue}>Enabled (All Actions Logged)</Text>
+                      <Text style={styles.detailLabel}>
+                        Audit Trail Logging:
+                      </Text>
+                      <Text style={styles.detailValue}>
+                        Enabled (All Actions Logged)
+                      </Text>
                     </View>
                   </View>
 
@@ -1525,12 +1788,14 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                       Role Permissions Overview ({selectedUser.role})
                     </Text>
                     <View style={styles.permissionTagsRow}>
-                      {getRolePermissionsSummary(selectedUser.role).map((perm, idx) => (
-                        <View key={idx} style={styles.permissionTagPill}>
-                          <Text style={styles.permissionTagCheck}>✓</Text>
-                          <Text style={styles.permissionTagText}>{perm}</Text>
-                        </View>
-                      ))}
+                      {getRolePermissionsSummary(selectedUser.role).map(
+                        (perm, idx) => (
+                          <View key={idx} style={styles.permissionTagPill}>
+                            <Text style={styles.permissionTagCheck}>✓</Text>
+                            <Text style={styles.permissionTagText}>{perm}</Text>
+                          </View>
+                        ),
+                      )}
                     </View>
                   </View>
                 </View>
@@ -1542,15 +1807,15 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                   onPress={() => handleToggleStatus(selectedUser)}
                   style={[
                     styles.modalStatusToggleBtn,
-                    selectedUser.status === 'Active'
+                    selectedUser.status === "Active"
                       ? styles.modalStatusToggleBtnInactive
                       : styles.modalStatusToggleBtnActive,
                   ]}
                 >
                   <Text style={styles.modalStatusToggleBtnText}>
-                    {selectedUser.status === 'Active'
-                      ? 'Deactivate User'
-                      : 'Activate User'}
+                    {selectedUser.status === "Active"
+                      ? "Deactivate User"
+                      : "Activate User"}
                   </Text>
                 </Pressable>
 
@@ -1575,7 +1840,7 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
   },
   contentContainer: {
     padding: 24,
@@ -1586,11 +1851,11 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
     marginBottom: 20,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
     gap: 12,
   },
   titleWrapper: {
@@ -1599,84 +1864,84 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     fontSize: 22,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
     letterSpacing: -0.4,
   },
   pageSubtitle: {
     fontSize: 13,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 4,
     lineHeight: 18,
   },
   headerActionGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
   },
   exportButton: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
     paddingVertical: 9,
     paddingHorizontal: 14,
     borderRadius: 8,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   exportButtonText: {
-    color: '#334155',
+    color: "#334155",
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   addUserButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#0F766E',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#0F766E",
     paddingVertical: 10,
     paddingHorizontal: 18,
     borderRadius: 8,
     gap: 8,
-    cursor: 'pointer',
+    cursor: "pointer",
     ...Platform.select({
       web: {
-        boxShadow: '0 2px 4px rgba(15, 118, 110, 0.2)',
+        boxShadow: "0 2px 4px rgba(15, 118, 110, 0.2)",
       },
     }),
   },
   addUserButtonIcon: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   addUserButtonText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 13.5,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   kpiRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 16,
     marginBottom: 20,
   },
   kpiRowCompact: {
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
   },
   filterCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     padding: 16,
     marginBottom: 20,
     gap: 14,
   },
   searchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     borderRadius: 8,
     paddingHorizontal: 12,
     height: 42,
@@ -1688,54 +1953,54 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 13,
-    color: '#0F172A',
-    outlineStyle: 'none',
+    color: "#0F172A",
+    outlineStyle: "none",
   },
   clearSearchBtn: {
     padding: 4,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   clearSearchText: {
     fontSize: 14,
-    color: '#94A3B8',
+    color: "#94A3B8",
   },
   filterSection: {
     gap: 6,
   },
   filterGroupLabel: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#64748B',
+    fontWeight: "700",
+    color: "#64748B",
     letterSpacing: 0.5,
   },
   filterPillsScroll: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 8,
-    alignItems: 'center',
+    alignItems: "center",
   },
   filterPill: {
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 6,
-    backgroundColor: '#F1F5F9',
-    cursor: 'pointer',
+    backgroundColor: "#F1F5F9",
+    cursor: "pointer",
   },
   filterPillSelected: {
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
   },
   filterPillText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#475569',
+    fontWeight: "600",
+    color: "#475569",
   },
   filterPillTextSelected: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
   filterBottomRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    flexWrap: "wrap",
     gap: 14,
   },
   branchFilterSection: {
@@ -1747,30 +2012,30 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     paddingHorizontal: 10,
     borderRadius: 6,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    cursor: 'pointer',
+    borderColor: "#E2E8F0",
+    cursor: "pointer",
   },
   branchFilterPillSelected: {
-    backgroundColor: '#F0FDFA',
-    borderColor: '#0F766E',
+    backgroundColor: "#F0FDFA",
+    borderColor: "#0F766E",
   },
   branchFilterPillText: {
     fontSize: 11.5,
-    fontWeight: '600',
-    color: '#475569',
+    fontWeight: "600",
+    color: "#475569",
   },
   branchFilterPillTextSelected: {
-    color: '#0F766E',
-    fontWeight: '700',
+    color: "#0F766E",
+    fontWeight: "700",
   },
   statusFilterSection: {
     gap: 6,
   },
   statusToggleGroup: {
-    flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
+    flexDirection: "row",
+    backgroundColor: "#F1F5F9",
     padding: 3,
     borderRadius: 8,
   },
@@ -1778,112 +2043,112 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     paddingHorizontal: 12,
     borderRadius: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   statusTogglePillSelected: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     ...Platform.select({
       web: {
-        boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
+        boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
       },
     }),
   },
   statusTogglePillText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
+    fontWeight: "600",
+    color: "#64748B",
   },
   statusTogglePillTextSelected: {
-    color: '#0F766E',
-    fontWeight: '700',
+    color: "#0F766E",
+    fontWeight: "700",
   },
   activeFilterNoticeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    flexWrap: 'wrap',
+    borderTopColor: "#F1F5F9",
+    flexWrap: "wrap",
     gap: 8,
   },
   activeFilterNoticeText: {
     fontSize: 12,
-    color: '#64748B',
+    color: "#64748B",
   },
   activeFilterHighlight: {
-    color: '#0F766E',
-    fontWeight: '700',
+    color: "#0F766E",
+    fontWeight: "700",
   },
   resetFilterBtn: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: "#FEE2E2",
     paddingVertical: 3,
     paddingHorizontal: 8,
     borderRadius: 4,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   resetFilterBtnText: {
     fontSize: 11.5,
-    fontWeight: '700',
-    color: '#B91C1C',
+    fontWeight: "700",
+    color: "#B91C1C",
   },
   tableCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    overflow: 'hidden',
+    borderColor: "#E2E8F0",
+    overflow: "hidden",
   },
   tableHeaderSection: {
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: "#F1F5F9",
   },
   tableTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
   },
   tableTitle: {
     fontSize: 16,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   countBadge: {
-    backgroundColor: '#F0FDFA',
+    backgroundColor: "#F0FDFA",
     paddingVertical: 2,
     paddingHorizontal: 8,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#99F6E4',
+    borderColor: "#99F6E4",
   },
   countBadgeText: {
     fontSize: 11.5,
-    fontWeight: '700',
-    color: '#0F766E',
+    fontWeight: "700",
+    color: "#0F766E",
   },
   tableSubtitle: {
     fontSize: 12.5,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 2,
   },
   tableWrapper: {
     minWidth: 960,
   },
   tableHeaderRow: {
-    flexDirection: 'row',
-    backgroundColor: '#F8FAFC',
+    flexDirection: "row",
+    backgroundColor: "#F8FAFC",
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: "#E2E8F0",
     paddingVertical: 12,
     paddingHorizontal: 16,
   },
   thText: {
     fontSize: 11.5,
-    fontWeight: '700',
-    color: '#64748B',
-    textTransform: 'uppercase',
+    fontWeight: "700",
+    color: "#64748B",
+    textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   colUser: { width: 230 },
@@ -1894,119 +2159,119 @@ const styles = StyleSheet.create({
   colStatus: { width: 110 },
   colActions: { width: 150 },
   tableRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: "#F1F5F9",
   },
   tableRowEven: {
-    backgroundColor: '#FAFCFF',
+    backgroundColor: "#FAFCFF",
   },
   userCell: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
   },
   avatarCircle: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   avatarText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: "800",
   },
   userInfo: {
     flex: 1,
   },
   userNameText: {
     fontSize: 13.5,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   userJoinedText: {
     fontSize: 11,
-    color: '#94A3B8',
+    color: "#94A3B8",
     marginTop: 2,
   },
   empIdBadge: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: "#F1F5F9",
     paddingVertical: 3,
     paddingHorizontal: 7,
     borderRadius: 4,
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
   },
   empIdText: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#334155',
+    fontWeight: "700",
+    color: "#334155",
   },
   regNoPill: {
     marginTop: 3,
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
   },
   regNoText: {
     fontSize: 11,
-    color: '#0F766E',
-    fontWeight: '600',
+    color: "#0F766E",
+    fontWeight: "600",
   },
   roleBadge: {
     paddingVertical: 3,
     paddingHorizontal: 8,
     borderRadius: 6,
     borderWidth: 1,
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
   },
   roleBadgeText: {
     fontSize: 11.5,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   accessLevelText: {
     fontSize: 11,
-    color: '#94A3B8',
+    color: "#94A3B8",
     marginTop: 2,
   },
   branchNameText: {
     fontSize: 12.5,
-    fontWeight: '600',
-    color: '#0F172A',
+    fontWeight: "600",
+    color: "#0F172A",
     lineHeight: 16,
   },
   multiBranchBadge: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: "#EFF6FF",
     paddingVertical: 1,
     paddingHorizontal: 6,
     borderRadius: 4,
     marginTop: 3,
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
   },
   multiBranchBadgeText: {
     fontSize: 10.5,
-    color: '#2563EB',
-    fontWeight: '600',
+    color: "#2563EB",
+    fontWeight: "600",
   },
   contactEmail: {
     fontSize: 12.5,
-    color: '#334155',
-    fontWeight: '500',
+    color: "#334155",
+    fontWeight: "500",
   },
   contactPhone: {
     fontSize: 11.5,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 2,
   },
   /* Full-Fledged Interactive Toggle Switch Styles */
   toggleSwitchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
-    cursor: 'pointer',
-    alignSelf: 'flex-start',
+    cursor: "pointer",
+    alignSelf: "flex-start",
     paddingVertical: 2,
   },
   toggleTrack: {
@@ -2014,30 +2279,30 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     padding: 2,
-    justifyContent: 'center',
-    position: 'relative',
+    justifyContent: "center",
+    position: "relative",
     ...Platform.select({
       web: {
-        transition: 'background-color 0.2s ease',
+        transition: "background-color 0.2s ease",
       },
     }),
   },
   toggleTrackActive: {
-    backgroundColor: '#10B981',
+    backgroundColor: "#10B981",
   },
   toggleTrackInactive: {
-    backgroundColor: '#CBD5E1',
+    backgroundColor: "#CBD5E1",
   },
   toggleThumb: {
     width: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: '#FFFFFF',
-    position: 'absolute',
+    backgroundColor: "#FFFFFF",
+    position: "absolute",
     ...Platform.select({
       web: {
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.25)',
-        transition: 'left 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+        boxShadow: "0 1px 3px rgba(0, 0, 0, 0.25)",
+        transition: "left 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
       },
     }),
   },
@@ -2049,56 +2314,56 @@ const styles = StyleSheet.create({
   },
   toggleLabelText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   toggleLabelActive: {
-    color: '#059669',
+    color: "#059669",
   },
   toggleLabelInactive: {
-    color: '#64748B',
+    color: "#64748B",
   },
   modalToggleCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
     borderRadius: 8,
     padding: 10,
     gap: 12,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   modalToggleTextCol: {
     flex: 1,
   },
   modalToggleMainText: {
     fontSize: 12.5,
-    fontWeight: '700',
-    color: '#334155',
+    fontWeight: "700",
+    color: "#334155",
   },
   modalToggleSubText: {
     fontSize: 11,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 1,
   },
   statusLabelActive: {
-    color: '#059669',
+    color: "#059669",
   },
   statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 4,
     paddingHorizontal: 10,
     borderRadius: 20,
     gap: 6,
-    cursor: 'pointer',
-    alignSelf: 'flex-start',
+    cursor: "pointer",
+    alignSelf: "flex-start",
   },
   statusBadgeActive: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: "#DCFCE7",
   },
   statusBadgeInactive: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: "#F1F5F9",
   },
   statusDot: {
     width: 6,
@@ -2106,69 +2371,69 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   statusDotActive: {
-    backgroundColor: '#16A34A',
+    backgroundColor: "#16A34A",
   },
   statusDotInactive: {
-    backgroundColor: '#94A3B8',
+    backgroundColor: "#94A3B8",
   },
   statusText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   statusTextActive: {
-    color: '#15803D',
+    color: "#15803D",
   },
   statusTextInactive: {
-    color: '#64748B',
+    color: "#64748B",
   },
   actionsRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 6,
   },
   actionViewBtn: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: "#F1F5F9",
     paddingVertical: 5,
     paddingHorizontal: 8,
     borderRadius: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   actionViewBtnText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#334155',
+    fontWeight: "600",
+    color: "#334155",
   },
   actionEditBtn: {
-    backgroundColor: '#F0FDFA',
+    backgroundColor: "#F0FDFA",
     borderWidth: 1,
-    borderColor: '#99F6E4',
+    borderColor: "#99F6E4",
     paddingVertical: 5,
     paddingHorizontal: 8,
     borderRadius: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   actionEditBtnText: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#0F766E',
+    fontWeight: "700",
+    color: "#0F766E",
   },
   actionInviteBtn: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     paddingVertical: 5,
     paddingHorizontal: 8,
     borderRadius: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   actionInviteBtnText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#475569',
+    fontWeight: "600",
+    color: "#475569",
   },
   emptyContainer: {
     padding: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   emptyIcon: {
     fontSize: 40,
@@ -2176,329 +2441,329 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 16,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   emptySubtitle: {
     fontSize: 13,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 4,
-    textAlign: 'center',
+    textAlign: "center",
     maxWidth: 400,
   },
   emptyResetButton: {
     marginTop: 16,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: "#F1F5F9",
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 8,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   emptyResetButtonText: {
-    color: '#0F766E',
-    fontWeight: '700',
+    color: "#0F766E",
+    fontWeight: "700",
     fontSize: 13,
   },
   emptyAddButton: {
     marginTop: 16,
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
     paddingVertical: 8,
     paddingHorizontal: 18,
     borderRadius: 8,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   emptyAddButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
+    color: "#FFFFFF",
+    fontWeight: "700",
     fontSize: 13,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(15, 23, 42, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
     padding: 16,
   },
   modalCard: {
-    width: '100%',
+    width: "100%",
     maxWidth: 720,
-    maxHeight: '90%',
-    backgroundColor: '#FFFFFF',
+    maxHeight: "90%",
+    backgroundColor: "#FFFFFF",
     borderRadius: 14,
-    overflow: 'hidden',
-    flexDirection: 'column',
+    overflow: "hidden",
+    flexDirection: "column",
     ...Platform.select({
       web: {
-        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
+        boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)",
       },
     }),
   },
   modalCardMobile: {
-    maxWidth: '96%',
-    maxHeight: '94%',
+    maxWidth: "96%",
+    maxHeight: "94%",
   },
   modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
     paddingHorizontal: 22,
     paddingVertical: 18,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    backgroundColor: '#FAFCFF',
+    borderBottomColor: "#E2E8F0",
+    backgroundColor: "#FAFCFF",
   },
   modalTitle: {
     fontSize: 17,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   modalSubtitle: {
     fontSize: 12.5,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 2,
   },
   modalCloseButton: {
     padding: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   modalCloseText: {
     fontSize: 18,
-    color: '#64748B',
-    fontWeight: '700',
+    color: "#64748B",
+    fontWeight: "700",
   },
   modalBodyScroll: {
     paddingHorizontal: 22,
     paddingVertical: 16,
   },
   formGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 14,
   },
   formColFull: {
-    width: '100%',
+    width: "100%",
   },
   formColHalf: {
-    width: '48%',
+    width: "48%",
     minWidth: 260,
     flex: 1,
   },
   fieldLabel: {
     fontSize: 12.5,
-    fontWeight: '600',
-    color: '#334155',
+    fontWeight: "600",
+    color: "#334155",
     marginBottom: 6,
   },
   reqStar: {
-    color: '#DC2626',
+    color: "#DC2626",
   },
   formInput: {
     height: 40,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
     borderRadius: 8,
     paddingHorizontal: 12,
     fontSize: 13,
-    color: '#0F172A',
-    backgroundColor: '#FFFFFF',
-    outlineStyle: 'none',
+    color: "#0F172A",
+    backgroundColor: "#FFFFFF",
+    outlineStyle: "none",
   },
   formInputError: {
-    borderColor: '#DC2626',
-    backgroundColor: '#FEF2F2',
+    borderColor: "#DC2626",
+    backgroundColor: "#FEF2F2",
   },
   errorMsg: {
     fontSize: 11,
-    color: '#DC2626',
+    color: "#DC2626",
     marginTop: 3,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   roleSelectionGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
   },
   roleChip: {
     paddingVertical: 7,
     paddingHorizontal: 12,
     borderRadius: 6,
-    backgroundColor: '#F1F5F9',
-    cursor: 'pointer',
+    backgroundColor: "#F1F5F9",
+    cursor: "pointer",
   },
   roleChipSelected: {
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
   },
   roleChipText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#475569',
+    fontWeight: "600",
+    color: "#475569",
   },
   roleChipTextSelected: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
   branchSelectGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
   },
   branchSelectCard: {
     padding: 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
-    width: '48%',
+    borderColor: "#E2E8F0",
+    backgroundColor: "#F8FAFC",
+    width: "48%",
     minWidth: 220,
     flex: 1,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   branchSelectCardSelected: {
-    borderColor: '#0F766E',
-    backgroundColor: '#F0FDFA',
+    borderColor: "#0F766E",
+    backgroundColor: "#F0FDFA",
   },
   branchCardHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   branchSelectName: {
     fontSize: 12.5,
-    fontWeight: '700',
-    color: '#334155',
+    fontWeight: "700",
+    color: "#334155",
     flex: 1,
   },
   branchSelectNameSelected: {
-    color: '#0F766E',
+    color: "#0F766E",
   },
   primaryCheckDot: {
     width: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: '#0F766E',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#0F766E",
+    alignItems: "center",
+    justifyContent: "center",
     marginLeft: 6,
   },
   primaryCheckDotText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 10,
-    fontWeight: '800',
+    fontWeight: "800",
   },
   branchSelectCode: {
     fontSize: 11,
-    color: '#94A3B8',
+    color: "#94A3B8",
     marginTop: 2,
   },
   multiBranchGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
   },
   multiBranchCheckChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 6,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    cursor: 'pointer',
-    maxWidth: '48%',
+    borderColor: "#E2E8F0",
+    cursor: "pointer",
+    maxWidth: "48%",
     minWidth: 200,
   },
   multiBranchCheckChipSelected: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#93C5FD',
+    backgroundColor: "#EFF6FF",
+    borderColor: "#93C5FD",
   },
   multiBranchCheckIcon: {
     fontSize: 13,
-    color: '#2563EB',
+    color: "#2563EB",
   },
   multiBranchCheckText: {
     fontSize: 11.5,
-    color: '#475569',
-    fontWeight: '500',
+    color: "#475569",
+    fontWeight: "500",
     flex: 1,
   },
   multiBranchCheckTextSelected: {
-    color: '#1D4ED8',
-    fontWeight: '600',
+    color: "#1D4ED8",
+    fontWeight: "600",
   },
   statusToggleRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 8,
   },
   statusSelectPill: {
     flex: 1,
     height: 38,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     borderRadius: 6,
-    backgroundColor: '#F1F5F9',
-    cursor: 'pointer',
+    backgroundColor: "#F1F5F9",
+    cursor: "pointer",
   },
   statusSelectPillActive: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: "#DCFCE7",
     borderWidth: 1,
-    borderColor: '#86EFAC',
+    borderColor: "#86EFAC",
   },
   statusSelectPillInactive: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: "#FEE2E2",
     borderWidth: 1,
-    borderColor: '#FCA5A5',
+    borderColor: "#FCA5A5",
   },
   statusSelectText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
+    fontWeight: "600",
+    color: "#64748B",
   },
   statusSelectTextActive: {
-    color: '#15803D',
-    fontWeight: '700',
+    color: "#15803D",
+    fontWeight: "700",
   },
   statusSelectTextInactive: {
-    color: '#B91C1C',
-    fontWeight: '700',
+    color: "#B91C1C",
+    fontWeight: "700",
   },
   inviteToggleBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: '#F0FDFA',
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: "#F0FDFA",
     borderWidth: 1,
-    borderColor: '#99F6E4',
+    borderColor: "#99F6E4",
     padding: 12,
     borderRadius: 8,
     gap: 10,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   inviteToggleCheckbox: {
     fontSize: 16,
-    color: '#0F766E',
+    color: "#0F766E",
   },
   inviteToggleTextWrapper: {
     flex: 1,
   },
   inviteToggleTitle: {
     fontSize: 12.5,
-    fontWeight: '700',
-    color: '#0F766E',
+    fontWeight: "700",
+    color: "#0F766E",
   },
   inviteToggleSubtitle: {
     fontSize: 11.5,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 2,
   },
   modalFooter: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    alignItems: "center",
     paddingHorizontal: 22,
     paddingVertical: 14,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderTopColor: "#E2E8F0",
+    backgroundColor: "#F8FAFC",
     gap: 12,
   },
   modalCancelButton: {
@@ -2506,48 +2771,48 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
-    cursor: 'pointer',
+    borderColor: "#CBD5E1",
+    backgroundColor: "#FFFFFF",
+    cursor: "pointer",
   },
   modalCancelText: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#475569',
+    fontWeight: "600",
+    color: "#475569",
   },
   modalSaveButton: {
     paddingVertical: 9,
     paddingHorizontal: 22,
     borderRadius: 8,
-    backgroundColor: '#0F766E',
-    cursor: 'pointer',
+    backgroundColor: "#0F766E",
+    cursor: "pointer",
   },
   modalSaveText: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
   detailModalCard: {
-    width: '100%',
+    width: "100%",
     maxWidth: 680,
-    maxHeight: '85%',
-    backgroundColor: '#FFFFFF',
+    maxHeight: "85%",
+    backgroundColor: "#FFFFFF",
     borderRadius: 14,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   detailHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: 22,
     paddingVertical: 18,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    backgroundColor: '#FAFCFF',
+    borderBottomColor: "#E2E8F0",
+    backgroundColor: "#FAFCFF",
   },
   detailHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
     flex: 1,
   },
@@ -2555,30 +2820,30 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 23,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   detailAvatarText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 16,
-    fontWeight: '800',
+    fontWeight: "800",
   },
   detailTitle: {
     fontSize: 17,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   detailSubtitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     marginTop: 4,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
   },
   detailEmpIdText: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#64748B',
+    fontWeight: "700",
+    color: "#64748B",
   },
   detailBodyScroll: {
     paddingHorizontal: 22,
@@ -2588,60 +2853,60 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   detailSectionCard: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     borderRadius: 10,
     padding: 14,
     gap: 8,
   },
   detailSectionTitle: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
     marginBottom: 4,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: "#E2E8F0",
     paddingBottom: 6,
   },
   detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
     gap: 10,
   },
   detailLabel: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
+    fontWeight: "600",
+    color: "#64748B",
     minWidth: 140,
   },
   detailValue: {
     fontSize: 12.5,
-    fontWeight: '600',
-    color: '#0F172A',
+    fontWeight: "600",
+    color: "#0F172A",
     flex: 1,
-    textAlign: 'right',
+    textAlign: "right",
   },
   detailValueHighlight: {
     fontSize: 12.5,
-    fontWeight: '700',
-    color: '#0F766E',
+    fontWeight: "700",
+    color: "#0F766E",
     flex: 1,
-    textAlign: 'right',
+    textAlign: "right",
   },
   permissionTagsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 6,
     marginTop: 4,
   },
   permissionTagPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
     paddingVertical: 4,
     paddingHorizontal: 8,
     borderRadius: 6,
@@ -2649,33 +2914,33 @@ const styles = StyleSheet.create({
   },
   permissionTagCheck: {
     fontSize: 10,
-    color: '#16A34A',
-    fontWeight: '800',
+    color: "#16A34A",
+    fontWeight: "800",
   },
   permissionTagText: {
     fontSize: 11.5,
-    color: '#334155',
-    fontWeight: '600',
+    color: "#334155",
+    fontWeight: "600",
   },
   modalStatusToggleBtn: {
     paddingVertical: 9,
     paddingHorizontal: 16,
     borderRadius: 8,
     borderWidth: 1,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   modalStatusToggleBtnInactive: {
-    backgroundColor: '#FEF2F2',
-    borderColor: '#FCA5A5',
+    backgroundColor: "#FEF2F2",
+    borderColor: "#FCA5A5",
   },
   modalStatusToggleBtnActive: {
-    backgroundColor: '#F0FDF4',
-    borderColor: '#86EFAC',
+    backgroundColor: "#F0FDF4",
+    borderColor: "#86EFAC",
   },
   modalStatusToggleBtnText: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#334155',
+    fontWeight: "700",
+    color: "#334155",
   },
   // Mobile Staff Member KPI Cards
   mobileStaffList: {
@@ -2683,48 +2948,48 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   mobileStaffCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     borderRadius: 12,
     padding: 14,
     ...Platform.select({
-      web: { boxShadow: '0 1px 3px rgba(0,0,0,0.04)' },
+      web: { boxShadow: "0 1px 3px rgba(0,0,0,0.04)" },
       default: { elevation: 1 },
     }),
   },
   mobileStaffTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 10,
   },
   mobileStaffBadgesRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
     gap: 6,
     marginBottom: 10,
   },
   mobileStaffInfoBox: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
     borderRadius: 8,
     padding: 10,
     marginBottom: 10,
   },
   mobileStaffInfoLabel: {
     fontSize: 10,
-    fontWeight: '700',
-    color: '#64748B',
+    fontWeight: "700",
+    color: "#64748B",
     marginBottom: 2,
     letterSpacing: 0.3,
   },
   mobileStaffFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: "#F1F5F9",
     paddingTop: 10,
   },
 });
