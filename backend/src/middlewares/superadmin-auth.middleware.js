@@ -119,7 +119,7 @@ const requirePlatformSuperadmin = async (req, res, next) => {
   const token = authHeader.split(" ")[1].trim();
 
   // 1. Check Supabase Auth JWT
-  const supabaseDecoded = verifySupabaseToken(token);
+  const supabaseDecoded = await verifySupabaseToken(token);
   if (supabaseDecoded && supabaseDecoded.sub) {
     try {
       const isUuid = (str) =>
@@ -141,7 +141,7 @@ const requirePlatformSuperadmin = async (req, res, next) => {
       const userRes = await pool.query(
         `SELECT id, name, email, status, is_platform_superadmin, supabase_auth_id
          FROM users
-         WHERE (supabase_auth_id = $1 OR (supabase_auth_id IS NULL AND LOWER(email) = LOWER($2)))
+         WHERE (supabase_auth_id = $1 OR LOWER(email) = LOWER($2))
            AND status = 'ACTIVE'
          LIMIT 1;`,
         [subUuid, supabaseDecoded.email || ""],
@@ -156,7 +156,7 @@ const requirePlatformSuperadmin = async (req, res, next) => {
       }
 
       // JIT link if needed
-      if (!user.supabase_auth_id && subUuid) {
+      if (user.supabase_auth_id !== subUuid) {
         await pool
           .query("UPDATE users SET supabase_auth_id = $1 WHERE id = $2;", [
             subUuid,

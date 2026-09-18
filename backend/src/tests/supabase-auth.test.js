@@ -100,6 +100,26 @@ async function runSupabaseAuthSuite() {
     }
 
     // 3. Create Tenant B (Target for Cross-Tenant Negative Tests)
+    try {
+      const oldVictim = await pool.query(
+        "SELECT id FROM users WHERE email = 'victim_org_b@pharmaflow.test';",
+      );
+      if (oldVictim.rows.length > 0) {
+        const victimId = oldVictim.rows[0].id;
+        await pool.query(
+          "DELETE FROM branches WHERE organisation_id IN (SELECT id FROM organisations WHERE owner_id = $1);",
+          [victimId],
+        );
+        await pool.query("DELETE FROM organisations WHERE owner_id = $1;", [
+          victimId,
+        ]);
+        await pool.query("DELETE FROM users WHERE id = $1;", [victimId]);
+      }
+      await pool.query(
+        "DELETE FROM users WHERE email = 'inactive_test@pharmaflow.test';",
+      );
+    } catch (_) {}
+
     const victimUser = await pool.query(
       `INSERT INTO users (name, email, password_hash, supabase_auth_id, status)
        VALUES ('Tenant B Victim', 'victim_org_b@pharmaflow.test', 'dummy_hash', $1, 'ACTIVE')
@@ -393,6 +413,7 @@ async function runSupabaseAuthSuite() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        pharmacyName: "Supabase Test Pharmacy",
         email: newTestEmail,
         password: "TestPassword123!",
         name: "Supabase Test User",
@@ -411,6 +432,7 @@ async function runSupabaseAuthSuite() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        pharmacyName: "Duplicate Pharmacy",
         email: newTestEmail,
         password: "TestPassword123!",
         name: "Duplicate User",
@@ -485,7 +507,46 @@ async function runSupabaseAuthSuite() {
     // Cleanup Fixtures
     // -------------------------------------------------------------------------
     console.log("\n[Cleanup] Removing temporary test fixtures...");
+    const testUserRows = await pool.query(
+      "SELECT id FROM users WHERE email = $1;",
+      [newTestEmail],
+    );
+    if (testUserRows.rows.length > 0) {
+      const newUserId = testUserRows.rows[0].id;
+      const testOrgs = await pool.query(
+        "SELECT id FROM organisations WHERE owner_id = $1;",
+        [newUserId],
+      );
+      for (const org of testOrgs.rows) {
+        await pool.query(
+          "DELETE FROM role_permissions WHERE role_id IN (SELECT id FROM roles WHERE organisation_id = $1);",
+          [org.id],
+        );
+        await pool.query(
+          "DELETE FROM branch_assignments WHERE membership_id IN (SELECT id FROM organisation_memberships WHERE organisation_id = $1);",
+          [org.id],
+        );
+        await pool.query(
+          "DELETE FROM organisation_memberships WHERE organisation_id = $1;",
+          [org.id],
+        );
+        await pool.query("DELETE FROM branches WHERE organisation_id = $1;", [
+          org.id,
+        ]);
+        await pool.query("DELETE FROM roles WHERE organisation_id = $1;", [
+          org.id,
+        ]);
+        await pool.query(
+          "DELETE FROM subscriptions WHERE organisation_id = $1;",
+          [org.id],
+        );
+        await pool.query("DELETE FROM organisations WHERE id = $1;", [org.id]);
+      }
+    }
     await pool.query("DELETE FROM branches WHERE id = $1;", [tenantBBranchId]);
+    await pool.query("DELETE FROM subscriptions WHERE organisation_id = $1;", [
+      tenantBOrgId,
+    ]);
     await pool.query("DELETE FROM organisations WHERE id = $1;", [
       tenantBOrgId,
     ]);

@@ -29,7 +29,7 @@ const DEMO_USERS = [
     password: "SuperAdmin@2026",
   },
   {
-    email: "dev@falah.local",
+    email: "dev@pharmaflow.com",
     name: "Development User",
     password: "dev123456",
   },

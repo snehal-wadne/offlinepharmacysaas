@@ -38,8 +38,8 @@ app.use(
       ? {
           origin: corsOrigins,
         }
-      : {}
-  )
+      : {},
+  ),
 );
 app.use(
   express.json({
@@ -47,7 +47,7 @@ app.use(
     verify: (req, res, buf) => {
       req.rawBody = buf;
     },
-  })
+  }),
 );
 
 /**
@@ -60,7 +60,6 @@ app.get("/", (req, res) => {
       <html lang="en">
         <head>
           <meta charset="UTF-8" />
-          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
           <title>Falah Pharmacy Billing SaaS — API Portal</title>
           <style>
             body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #f8fafc; padding: 40px 20px; margin: 0; }
@@ -158,10 +157,13 @@ const superadminRoutes = require("./routes/superadmin.routes");
 const auditRoutes = require("./routes/audit.routes");
 
 app.use("/api/purchases", purchaseRoutes);
+app.use("/purchases", purchaseRoutes);
 app.use("/api/goods-receipts", goodsReceiptRoutes);
 app.use("/api/suppliers", supplierRoutes);
 app.use("/api/inventory", inventoryRoutes);
+app.use("/inventory", inventoryRoutes);
 app.use("/api/cashier", cashierRoutes);
+app.use("/cashier", cashierRoutes);
 app.use("/api/sync", syncRoutes);
 app.use("/sync", syncRoutes);
 app.use("/api/auth", authRoutes);
@@ -174,12 +176,14 @@ app.use("/api/stock-transfers", stockTransferRoutes);
 app.use("/api/taxes", taxRoutes);
 app.use("/taxes", taxRoutes);
 app.use("/api/reports", reportRoutes);
+app.use("/reports", reportRoutes);
 app.use("/api/superadmin", superadminRoutes);
 app.use("/api/audit-logs", auditRoutes);
+app.use("/audit-logs", auditRoutes);
 app.post("/api/login", authController.login);
 app.post("/api/login/google", authController.googleLogin);
 app.post("/api/auth/google", authController.googleLogin);
-
+app.post("/api/auth/google-onboard", authController.googleOnboard);
 
 /**
  * Server Startup
@@ -202,7 +206,7 @@ const startServer = () => {
     if (err.code === "EADDRINUSE") {
       console.error(`❌ Port ${PORT} is already in use by another process.`);
       console.error(
-        `Close the existing process on port ${PORT} or change PORT in .env`
+        `Close the existing process on port ${PORT} or change PORT in .env`,
       );
     } else {
       console.error(`❌ Server error:`, err.message);
@@ -214,15 +218,30 @@ const startServer = () => {
     .then((connected) => {
       if (connected) {
         console.log(
-          `✅ PostgreSQL connected: ${process.env.DB_DATABASE || "falah_pharmacy"}`
+          `✅ PostgreSQL connected: ${process.env.DB_DATABASE || "falah_pharmacy"}`,
         );
       } else {
         console.log(
-          "ℹ️  PostgreSQL offline: Running seamlessly in offline mode."
+          "ℹ️  PostgreSQL offline: Running seamlessly in offline mode.",
         );
       }
     })
     .catch(() => {});
+
+  // Pre-load and verify Supabase Auth JWKS
+  const { fetchJwksKeys } = require("./utils/supabase");
+  fetchJwksKeys()
+    .then((keys) => {
+      console.log(
+        `✅ Supabase Auth verified: JWKS public keys active (${keys.size} key(s))`,
+      );
+    })
+    .catch((err) => {
+      console.warn(
+        "⚠️  Supabase Auth JWKS initialization warning:",
+        err.message,
+      );
+    });
 };
 
 startServer();

@@ -17,6 +17,12 @@ const {
   verifySupabaseToken,
   createSupabaseTestToken,
 } = require("../utils/supabase");
+const {
+  getNextBusinessNumber,
+} = require("../repositories/number-sequence.repository");
+const {
+  seedOrganisationSystemRoles,
+} = require("../repositories/role.repository");
 
 class AuthService {
   /**
@@ -191,116 +197,355 @@ class AuthService {
   }
 
   /**
-   * Register a new user in Supabase Auth & PostgreSQL
+   * Public Pharmacy Owner Signup & Onboarding
+   *
+   * Orchestrates:
+   * 1. Supabase Auth identity creation
+   * 2. Transactional creation in PostgreSQL:
+   *    - public.users (Owner user)
+   *    - public.organisations (Pharmacy entity, owner_id = user.id)
+   *    - public.branches ('Main Branch' / initial branch)
+   *    - System roles seeding (roles & role_permissions)
+   *    - organisation_memberships (Owner membership)
+   *    - branch_assignments (Administrator primary assignment)
+   * 3. Rollback & Supabase user cleanup on failure
    */
   async register(userData) {
-    const { email, password, name, phone, roleId, organisationId } = userData;
+    const {
+      ownerName,
+      adminName,
+      name,
+      email,
+      password,
+      pharmacyName,
+      organisationName,
+      branches,
+      branchName,
+      phone,
+      address,
+      city,
+      state,
+      pincode,
+      gstNumber,
+      gstin,
+      businessType,
+    } = userData || {};
 
-    if (!email || !name) {
-      throw new Error("Email and name are required.");
+    const cleanName = (adminName || ownerName || name || "").trim();
+    const cleanEmail = (email || "").trim().toLowerCase();
+    const cleanPharmacyName = (pharmacyName || organisationName || "").trim();
+    const cleanBranchName = (
+      branchName ||
+      (isNaN(branches) ? branches : null) ||
+      "Main Branch"
+    ).trim();
+    const cleanGstNumber = (gstNumber || gstin || "").trim() || null;
+    const cleanBusinessType = (businessType || "Private Limited").trim();
+
+    if (!cleanName || !cleanEmail || !password || !cleanPharmacyName) {
+      throw new Error(
+        "Owner name, email, password, and pharmacy name are required for pharmacy onboarding.",
+      );
     }
 
-    const cleanEmail = email.trim().toLowerCase();
+    if (password.length < 6) {
+      throw new Error("Password must be at least 6 characters long.");
+    }
 
-    const existingRes = await pool.query(
+    // Security hardening: Explicitly ignore / prevent client-supplied overrides
+    // Do NOT accept organisationId, roleId, role, branchId, permissions, is_platform_superadmin, ownerId from client
+
+    // Check if user already exists in PostgreSQL
+    const existingUser = await pool.query(
       "SELECT id FROM users WHERE LOWER(email) = $1 LIMIT 1;",
       [cleanEmail],
     );
-    if (existingRes.rows.length > 0) {
-      throw new Error("User with this email already exists.");
+    if (existingUser.rows.length > 0) {
+      throw new Error("An account with this email address already exists.");
     }
 
-    // 1. Provision user in Supabase Auth
+    // 1. Provision user identity in Supabase Auth
     let supabaseAuthId = null;
-    if (supabaseAdmin?.auth?.admin?.createUser) {
-      try {
-        const { data: supaUser, error: supaErr } =
-          await supabaseAdmin.auth.admin.createUser({
-            email: cleanEmail,
-            password: password || undefined,
-            email_confirm: true,
-            user_metadata: { name: name.trim() },
-          });
-        if (!supaErr && supaUser?.user?.id) {
-          supabaseAuthId = supaUser.user.id;
-        }
-      } catch (err) {
-        console.warn("Supabase Auth admin create notice:", err.message);
+    let createdInSupabase = false;
+
+    if (!supabaseAdmin?.auth?.admin?.createUser) {
+      throw new Error(
+        "Authentication service initialization error: Supabase Admin client is not available.",
+      );
+    }
+
+    const { data: supaUser, error: supaErr } =
+      await supabaseAdmin.auth.admin.createUser({
+        email: cleanEmail,
+        password,
+        email_confirm: true,
+        user_metadata: { name: cleanName },
+      });
+
+    if (supaErr) {
+      throw new Error(supaErr.message || "Failed to create Supabase identity.");
+    } else if (supaUser?.user?.id) {
+      supabaseAuthId = supaUser.user.id;
+      createdInSupabase = true;
+    } else {
+      throw new Error(
+        "Supabase identity creation failed to return a valid user identity.",
+      );
+    }
+
+    // 2. Execute transactional onboarding in PostgreSQL
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      // A. Hash password for local backup
+      const passwordHash = await bcrypt.hash(password, 10);
+
+      // B. Insert Owner User
+      const insertUserRes = await client.query(
+        `INSERT INTO users (name, email, password_hash, phone, supabase_auth_id, status)
+         VALUES ($1, $2, $3, $4, $5, 'ACTIVE')
+         RETURNING id, name, email, phone, supabase_auth_id, status, created_at;`,
+        [cleanName, cleanEmail, passwordHash, phone || null, supabaseAuthId],
+      );
+      const user = insertUserRes.rows[0];
+
+      // C. Generate sequential Pharmacy Code (e.g. PHARM-1001)
+      const pharmacyCode = await getNextBusinessNumber({
+        sequenceType: "PHARMACY_CODE",
+        client,
+      });
+
+      // D. Insert Organisation
+      const insertOrgRes = await client.query(
+        `INSERT INTO organisations (
+           owner_id, name, pharmacy_code, admin_name, email, phone,
+           address, city, state, pincode, gst_number, business_type, status
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'ACTIVE')
+         RETURNING *;`,
+        [
+          user.id,
+          cleanPharmacyName,
+          pharmacyCode,
+          cleanName,
+          cleanEmail,
+          phone || null,
+          address || "Registered Address",
+          city || "City",
+          state || "Maharashtra",
+          pincode || "400001",
+          cleanGstNumber,
+          cleanBusinessType,
+        ],
+      );
+      const organisation = insertOrgRes.rows[0];
+
+      // Free Plan Subscription Assignment
+      const freePlanRes = await client.query(
+        `SELECT id FROM subscription_plans 
+         WHERE tier_code = 'FREE' 
+         LIMIT 1;`,
+      );
+      let freePlanId = freePlanRes.rows[0]?.id;
+      if (!freePlanId) {
+        const createPlanRes = await client.query(
+          `INSERT INTO subscription_plans (
+             name, tier_code, description, price, currency, billing_interval,
+             max_branches, max_users, color_hex, module_summary, is_popular, is_active, features
+           ) VALUES (
+             'Free', 'FREE', 'Free tier for new pharmacy onboardings', 0.0, 'INR', 'YEAR',
+             1, 2, '#10B981', 'Core POS & Inventory', FALSE, TRUE, '["Basic POS", "Inventory Management", "Single Branch"]'
+           ) RETURNING id;`,
+        );
+        freePlanId = createPlanRes.rows[0].id;
       }
-    }
 
-    if (!supabaseAuthId) {
-      supabaseAuthId = crypto.randomUUID();
-    }
+      await client.query(
+        `INSERT INTO subscriptions (
+           organisation_id, plan_id, status, billing_cycle, auto_renew, started_at, current_period_start
+         ) VALUES ($1, $2, 'ACTIVE', 'YEARLY', TRUE, NOW(), NOW());`,
+        [organisation.id, freePlanId],
+      );
 
-    // 2. Hash password for local store backup if password provided
-    let passwordHash = null;
-    if (password) {
-      passwordHash = await bcrypt.hash(password, 10);
-    }
+      // E. Generate sequential Branch Code & Insert Initial Branch (if requested)
+      let branch = null;
+      const shouldCreateBranch =
+        userData?.createInitialBranch === true && Boolean(cleanBranchName);
 
-    // 3. Insert into public.users
-    const insertUserRes = await pool.query(
-      `
-      INSERT INTO users (name, email, password_hash, phone, supabase_auth_id, status)
-      VALUES ($1, $2, $3, $4, $5, 'ACTIVE')
-      RETURNING id, name, email, phone, supabase_auth_id, status, created_at;
-    `,
-      [name.trim(), cleanEmail, passwordHash, phone || null, supabaseAuthId],
-    );
-
-    const newUser = insertUserRes.rows[0];
-
-    // 4. If organisationId provided, add legitimate membership
-    if (organisationId) {
-      await pool
-        .query(
-          `
-        INSERT INTO organisation_memberships (organisation_id, user_id, role_id)
-        VALUES ($1, $2, $3);
-      `,
-          [organisationId, newUser.id, roleId || null],
-        )
-        .catch((err) => {
-          console.warn("Membership assignment notice:", err.message);
+      if (shouldCreateBranch) {
+        const branchCode = await getNextBusinessNumber({
+          organisationId: organisation.id,
+          sequenceType: "BRANCH",
+          client,
         });
-    }
 
-    return {
-      success: true,
-      message: "User registered successfully",
-      user: {
-        id: newUser.id,
-        supabaseAuthId: newUser.supabase_auth_id,
-        name: newUser.name,
-        email: newUser.email,
-        role: "STAFF",
-      },
-    };
+        const insertBranchRes = await client.query(
+          `INSERT INTO branches (
+             organisation_id, branch_code, name, facility_type,
+             address, city, state, postal_code, phone, status
+           )
+           VALUES ($1, $2, $3, 'RETAIL_DISPENSARY', $4, $5, $6, $7, $8, 'ACTIVE')
+           RETURNING id, name, branch_code;`,
+          [
+            organisation.id,
+            branchCode,
+            cleanBranchName,
+            address || "Registered Address",
+            city || "City",
+            state || "Maharashtra",
+            pincode || "400001",
+            phone || null,
+          ],
+        );
+        branch = insertBranchRes.rows[0];
+      }
+
+      // F. Seed Organisation System Roles (Administrator, Manager, Pharmacist, Cashier, etc.)
+      await seedOrganisationSystemRoles(organisation.id, client);
+
+      const adminRoleRes = await client.query(
+        `SELECT id FROM roles 
+         WHERE organisation_id = $1 AND (role_identifier = 'ADMIN' OR name = 'Administrator')
+         LIMIT 1;`,
+        [organisation.id],
+      );
+      if (adminRoleRes.rows.length === 0) {
+        throw new Error(
+          "Failed to configure administrator role for new organisation.",
+        );
+      }
+      const adminRoleId = adminRoleRes.rows[0].id;
+
+      // G. Create Organisation Membership
+      const insertMemRes = await client.query(
+        `INSERT INTO organisation_memberships (organisation_id, user_id, status)
+         VALUES ($1, $2, 'ACTIVE')
+         RETURNING id;`,
+        [organisation.id, user.id],
+      );
+      const membershipId = insertMemRes.rows[0].id;
+
+      // H. Create Branch Assignment with Administrator Role as Primary (if branch created)
+      if (branch) {
+        await client.query(
+          `INSERT INTO branch_assignments (membership_id, branch_id, role_id, is_primary)
+           VALUES ($1, $2, $3, TRUE);`,
+          [membershipId, branch.id, adminRoleId],
+        );
+      }
+
+      await client.query("COMMIT");
+
+      return {
+        success: true,
+        message:
+          "Pharmacy organisation and owner account created successfully.",
+        user: {
+          id: user.id,
+          supabaseAuthId: user.supabase_auth_id,
+          name: user.name,
+          email: user.email,
+          role: "OWNER",
+          roleName: "Pharmacy Owner",
+          organisationId: organisation.id,
+          organisationName: organisation.name,
+          pharmacyCode: organisation.pharmacy_code,
+          branchId: branch?.id || null,
+          branchName: branch?.name || null,
+          hasBranch: Boolean(branch),
+        },
+        organisation: {
+          id: organisation.id,
+          name: organisation.name,
+          pharmacyCode: organisation.pharmacy_code,
+        },
+        branch: branch
+          ? {
+              id: branch.id,
+              name: branch.name,
+            }
+          : null,
+      };
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => {});
+
+      // Cleanup Supabase Auth identity if created to prevent orphaned identity
+      if (
+        createdInSupabase &&
+        supabaseAuthId &&
+        supabaseAdmin?.auth?.admin?.deleteUser
+      ) {
+        await supabaseAdmin.auth.admin
+          .deleteUser(supabaseAuthId)
+          .catch((cleanupErr) => {
+            console.warn("Supabase cleanup notice:", cleanupErr.message);
+          });
+      }
+
+      console.error("Owner onboarding transaction error:", err);
+      throw new Error(
+        `Failed to complete pharmacy registration: ${err.message}`,
+      );
+    } finally {
+      client.release();
+    }
   }
 
   /**
-   * Google OAuth Login / Verification via Supabase Auth
+   * Google OAuth Pharmacy Owner Onboarding
+   *
+   * Called when a new user signs up with Google and fills out their pharmacy details.
+   * Supabase Auth identity is already verified via the OAuth token.
+   * This method atomically creates the PostgreSQL tenant entities:
+   * - public.users (Owner user linked to Supabase Auth ID)
+   * - public.organisations (Pharmacy entity, owner_id = user.id)
+   * - subscriptions (FREE tier subscription)
+   * - public.branches (Initial branch if requested)
+   * - System roles seeding
+   * - organisation_memberships (Owner membership)
+   * - branch_assignments (Administrator primary assignment if branch exists)
    */
-  async googleLogin({ token, email, name, googleSub, branchId }) {
-    let verifiedEmail = null;
-    let verifiedSub = null;
+  async googleOnboard(onboardData) {
+    const {
+      token,
+      ownerName,
+      adminName,
+      name,
+      pharmacyName,
+      organisationName,
+      branches,
+      branchName,
+      phone,
+      address,
+      city,
+      state,
+      pincode,
+      gstNumber,
+      gstin,
+      businessType,
+      createInitialBranch,
+    } = onboardData || {};
 
-    // 1. Verify Supabase Google session token
-    if (token) {
-      const decoded = verifySupabaseToken(token);
-      if (!decoded || !decoded.sub) {
-        throw new Error("Invalid or unverified Supabase Google session token.");
-      }
-      verifiedSub = decoded.sub;
-      verifiedEmail = decoded.email ? decoded.email.trim().toLowerCase() : null;
-    } else if (email) {
-      verifiedEmail = email.trim().toLowerCase();
-      verifiedSub = googleSub || crypto.randomUUID();
-    } else {
+    if (!token) {
       throw new Error(
-        "Supabase authentication token or verified email is required for Google login.",
+        "Supabase authentication token is required for Google onboarding.",
       );
+    }
+
+    // Verify Supabase Google session token
+    const decoded = await verifySupabaseToken(token);
+    if (!decoded || !decoded.sub) {
+      throw new Error("Invalid or unverified Supabase Google session token.");
+    }
+
+    const verifiedSub = decoded.sub;
+    const verifiedEmail = decoded.email
+      ? decoded.email.trim().toLowerCase()
+      : null;
+
+    if (!verifiedEmail) {
+      throw new Error("Verified email is missing from Supabase Google token.");
     }
 
     const isUuid = (str) =>
@@ -319,57 +564,293 @@ class AuthService {
           return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-a${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
         })();
 
-    // 2. Query user from PostgreSQL by supabase_auth_id, google_sub, or verified email
+    const cleanName = (
+      ownerName ||
+      adminName ||
+      name ||
+      decoded.user_metadata?.full_name ||
+      decoded.user_metadata?.name ||
+      "Pharmacy Owner"
+    ).trim();
+    const cleanPharmacyName = (pharmacyName || organisationName || "").trim();
+    const cleanBranchName = (
+      branchName ||
+      (isNaN(branches) ? branches : null) ||
+      "Main Branch"
+    ).trim();
+    const cleanGstNumber = (gstNumber || gstin || "").trim() || null;
+    const cleanBusinessType = (businessType || "Private Limited").trim();
+
+    if (!cleanPharmacyName) {
+      throw new Error("Pharmacy name is required for pharmacy onboarding.");
+    }
+
+    // Check if user already exists in PostgreSQL
+    const existingUser = await pool.query(
+      "SELECT id FROM users WHERE (supabase_auth_id = $1 OR LOWER(email) = LOWER($2)) AND status = 'ACTIVE' LIMIT 1;",
+      [uuidSub, verifiedEmail],
+    );
+    if (existingUser.rows.length > 0) {
+      throw new Error(
+        "An account with this email address already exists. Please sign in instead.",
+      );
+    }
+
+    // Execute transactional onboarding in PostgreSQL
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      // A. Insert Owner User
+      const insertUserRes = await client.query(
+        `INSERT INTO users (name, email, phone, supabase_auth_id, status)
+         VALUES ($1, $2, $3, $4, 'ACTIVE')
+         RETURNING id, name, email, phone, supabase_auth_id, status, created_at;`,
+        [cleanName, verifiedEmail, phone || null, uuidSub],
+      );
+      const user = insertUserRes.rows[0];
+
+      // B. Generate sequential Pharmacy Code (e.g. PHARM-1001)
+      const pharmacyCode = await getNextBusinessNumber({
+        sequenceType: "PHARMACY_CODE",
+        client,
+      });
+
+      // C. Insert Organisation
+      const insertOrgRes = await client.query(
+        `INSERT INTO organisations (
+           owner_id, name, pharmacy_code, admin_name, email, phone,
+           address, city, state, pincode, gst_number, business_type, status
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'ACTIVE')
+         RETURNING *;`,
+        [
+          user.id,
+          cleanPharmacyName,
+          pharmacyCode,
+          cleanName,
+          verifiedEmail,
+          phone || null,
+          address || "Registered Address",
+          city || "City",
+          state || "Maharashtra",
+          pincode || "400001",
+          cleanGstNumber,
+          cleanBusinessType,
+        ],
+      );
+      const organisation = insertOrgRes.rows[0];
+
+      // D. Free Plan Subscription Assignment
+      const freePlanRes = await client.query(
+        `SELECT id FROM subscription_plans 
+         WHERE tier_code = 'FREE' 
+         LIMIT 1;`,
+      );
+      let freePlanId = freePlanRes.rows[0]?.id;
+      if (!freePlanId) {
+        const createPlanRes = await client.query(
+          `INSERT INTO subscription_plans (
+             name, tier_code, description, price, currency, billing_interval,
+             max_branches, max_users, color_hex, module_summary, is_popular, is_active, features
+           ) VALUES (
+             'Free', 'FREE', 'Free tier for new pharmacy onboardings', 0.0, 'INR', 'YEAR',
+             1, 2, '#10B981', 'Core POS & Inventory', FALSE, TRUE, '["Basic POS", "Inventory Management", "Single Branch"]'
+           ) RETURNING id;`,
+        );
+        freePlanId = createPlanRes.rows[0].id;
+      }
+
+      await client.query(
+        `INSERT INTO subscriptions (
+           organisation_id, plan_id, status, billing_cycle, auto_renew, started_at, current_period_start
+         ) VALUES ($1, $2, 'ACTIVE', 'YEARLY', TRUE, NOW(), NOW());`,
+        [organisation.id, freePlanId],
+      );
+
+      // E. Generate sequential Branch Code & Insert Initial Branch (if requested)
+      let branch = null;
+      const shouldCreateBranch =
+        createInitialBranch === true && Boolean(cleanBranchName);
+
+      if (shouldCreateBranch) {
+        const branchCode = await getNextBusinessNumber({
+          organisationId: organisation.id,
+          sequenceType: "BRANCH",
+          client,
+        });
+
+        const insertBranchRes = await client.query(
+          `INSERT INTO branches (
+             organisation_id, branch_code, name, facility_type,
+             address, city, state, postal_code, phone, status
+           )
+           VALUES ($1, $2, $3, 'RETAIL_DISPENSARY', $4, $5, $6, $7, $8, 'ACTIVE')
+           RETURNING id, name, branch_code;`,
+          [
+            organisation.id,
+            branchCode,
+            cleanBranchName,
+            address || "Registered Address",
+            city || "City",
+            state || "Maharashtra",
+            pincode || "400001",
+            phone || null,
+          ],
+        );
+        branch = insertBranchRes.rows[0];
+      }
+
+      // F. Seed Organisation System Roles
+      await seedOrganisationSystemRoles(organisation.id, client);
+
+      const adminRoleRes = await client.query(
+        `SELECT id FROM roles 
+         WHERE organisation_id = $1 AND (role_identifier = 'ADMIN' OR name = 'Administrator')
+         LIMIT 1;`,
+        [organisation.id],
+      );
+      if (adminRoleRes.rows.length === 0) {
+        throw new Error(
+          "Failed to configure administrator role for new organisation.",
+        );
+      }
+      const adminRoleId = adminRoleRes.rows[0].id;
+
+      // G. Create Organisation Membership
+      const insertMemRes = await client.query(
+        `INSERT INTO organisation_memberships (organisation_id, user_id, status)
+         VALUES ($1, $2, 'ACTIVE')
+         RETURNING id;`,
+        [organisation.id, user.id],
+      );
+      const membershipId = insertMemRes.rows[0].id;
+
+      // H. Create Branch Assignment with Administrator Role as Primary (if branch created)
+      if (branch) {
+        await client.query(
+          `INSERT INTO branch_assignments (membership_id, branch_id, role_id, is_primary)
+           VALUES ($1, $2, $3, TRUE);`,
+          [membershipId, branch.id, adminRoleId],
+        );
+      }
+
+      await client.query("COMMIT");
+
+      return {
+        success: true,
+        message:
+          "Pharmacy organisation and owner account onboarded successfully via Google.",
+        token,
+        user: {
+          id: user.id,
+          supabaseAuthId: user.supabase_auth_id,
+          name: user.name,
+          email: user.email,
+          role: "OWNER",
+          roleName: "Pharmacy Owner",
+          organisationId: organisation.id,
+          organisationName: organisation.name,
+          pharmacyCode: organisation.pharmacy_code,
+          branchId: branch?.id || null,
+          branchName: branch?.name || null,
+          hasBranch: Boolean(branch),
+        },
+        organisation: {
+          id: organisation.id,
+          name: organisation.name,
+          pharmacyCode: organisation.pharmacy_code,
+        },
+        branch: branch
+          ? {
+              id: branch.id,
+              name: branch.name,
+            }
+          : null,
+      };
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => {});
+      console.error("Google onboarding transaction error:", err);
+      throw new Error(`Failed to complete pharmacy onboarding: ${err.message}`);
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Google OAuth Login / Verification via Supabase Auth
+   * Strictly requires verified Supabase JWT token.
+   */
+  async googleLogin({ token, branchId }) {
+    if (!token) {
+      throw new Error(
+        "Supabase authentication token is required for Google login verification.",
+      );
+    }
+
+    // Verify Supabase Google session token
+    const decoded = await verifySupabaseToken(token);
+    if (!decoded || !decoded.sub) {
+      throw new Error("Invalid or unverified Supabase Google session token.");
+    }
+
+    const verifiedSub = decoded.sub;
+    const verifiedEmail = decoded.email
+      ? decoded.email.trim().toLowerCase()
+      : null;
+
+    if (!verifiedEmail) {
+      throw new Error("Verified email is missing from Supabase Google token.");
+    }
+
+    const isUuid = (str) =>
+      typeof str === "string" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        str,
+      );
+
+    const uuidSub = isUuid(verifiedSub)
+      ? verifiedSub
+      : (() => {
+          const hash = crypto
+            .createHash("md5")
+            .update(verifiedSub)
+            .digest("hex");
+          return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-a${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
+        })();
+
+    // Query user from PostgreSQL by supabase_auth_id, or email
     const userRes = await pool.query(
       `SELECT id, name, email, phone, staff_id AS "staffId", status, supabase_auth_id, google_sub
        FROM users
-       WHERE (supabase_auth_id = $1 OR google_sub = $2 OR (supabase_auth_id IS NULL AND LOWER(email) = $3))
+       WHERE (supabase_auth_id = $1 OR LOWER(email) = LOWER($2))
          AND status = 'ACTIVE'
        LIMIT 1;`,
-      [uuidSub, verifiedSub, verifiedEmail || ""],
+      [uuidSub, verifiedEmail],
     );
+
     let user = userRes.rows[0];
 
     if (!user) {
-      // Create new user in PostgreSQL without automatic organisation assignment
-      const displayName =
-        name ||
-        verifiedEmail?.split("@")[0].replace(".", " ").toUpperCase() ||
-        "Google User";
-      const insertRes = await pool.query(
-        `INSERT INTO users (name, email, supabase_auth_id, google_sub, status)
-         VALUES ($1, $2, $3, $4, 'ACTIVE')
-         RETURNING id, name, email, supabase_auth_id, google_sub, status;`,
-        [
-          displayName,
-          verifiedEmail || `${uuidSub}@auth.supabase.local`,
-          uuidSub,
-          verifiedSub,
-        ],
+      const notFoundErr = new Error(
+        "Google account is not registered. A pharmacy owner must register their pharmacy using Sign Up, or an administrator must provision an employee account.",
       );
-      user = insertRes.rows[0];
-    } else {
-      if (!user.supabase_auth_id) {
-        await pool
-          .query("UPDATE users SET supabase_auth_id = $1 WHERE id = $2;", [
-            uuidSub,
-            user.id,
-          ])
-          .catch(() => {});
-        user.supabase_auth_id = uuidSub;
-      }
-      if (!user.google_sub) {
-        await pool
-          .query("UPDATE users SET google_sub = $1 WHERE id = $2;", [
-            verifiedSub,
-            user.id,
-          ])
-          .catch(() => {});
-        user.google_sub = verifiedSub;
-      }
+      notFoundErr.code = "ACCOUNT_NOT_FOUND";
+      throw notFoundErr;
     }
 
-    // 3. Resolve organisation context legitimately from PostgreSQL
+    // JIT link supabase_auth_id if needed
+    if (user.supabase_auth_id !== uuidSub) {
+      await pool
+        .query("UPDATE users SET supabase_auth_id = $1 WHERE id = $2;", [
+          uuidSub,
+          user.id,
+        ])
+        .catch(() => {});
+      user.supabase_auth_id = uuidSub;
+    }
+
+    // Resolve organisation context legitimately from PostgreSQL
     let organisationId = null;
     let organisationName = null;
     let isOwner = false;
@@ -415,7 +896,7 @@ class AuthService {
       }
     }
 
-    // 4. Resolve branch strictly within resolved organisation
+    // Resolve branch strictly within resolved organisation
     let branch = null;
     if (organisationId) {
       if (branchId) {
@@ -436,46 +917,108 @@ class AuthService {
       }
     }
 
-    const sessionToken =
-      token ||
-      createSupabaseTestToken({
-        sub: user.supabase_auth_id || verifiedSub,
-        email: user.email,
-      });
-
-    const displayName =
-      name ||
-      user.name ||
-      (verifiedEmail ? verifiedEmail.split("@")[0].toUpperCase() : "User");
-
     return {
       success: true,
       message: isOwner
         ? "Welcome Pharmacy Owner! Google Login successful."
         : "Google Login successful",
-      token: sessionToken,
+      token,
       user: {
         id: user.id,
-        supabaseAuthId: user.supabase_auth_id || verifiedSub,
-        name: displayName,
-        display_name: displayName,
+        supabaseAuthId: user.supabase_auth_id || uuidSub,
+        name: user.name,
         email: user.email,
         phone: user.phone || null,
         staffId: user.staffId || null,
         role: isOwner ? "OWNER" : roleIdentifier,
         roleName,
-        accessLevel: isOwner
-          ? "Owner"
-          : roleIdentifier === "ADMIN"
-            ? "Admin"
-            : "Staff",
         isOwner: Boolean(isOwner),
         organisationId: organisationId || null,
         organisationName: organisationName || null,
         branchId: branch?.id || null,
-        branch: branch?.name || null,
-        isOffline: false,
-        isGoogleAuth: true,
+        branchName: branch?.name || null,
+        hasBranch: Boolean(branch),
+        branch: branch
+          ? {
+              id: branch.id,
+              name: branch.name,
+              branchCode: branch.branchCode,
+            }
+          : null,
+      },
+    };
+  }
+
+  /**
+   * Retrieve current user context from authenticated request
+   */
+  async getMe(user) {
+    if (!user || !user.id) {
+      throw new Error("Invalid user context.");
+    }
+
+    // Query fresh user & organisation details
+    const orgRes = user.organisationId
+      ? await pool.query(
+          "SELECT id, name, pharmacy_code FROM organisations WHERE id = $1 LIMIT 1;",
+          [user.organisationId],
+        )
+      : { rows: [] };
+
+    let branchRecord = null;
+    let hasBranch = false;
+
+    if (user.organisationId) {
+      const countRes = await pool.query(
+        "SELECT COUNT(*)::int AS count FROM branches WHERE organisation_id = $1 AND status = 'ACTIVE';",
+        [user.organisationId],
+      );
+      const branchCount = countRes.rows[0]?.count || 0;
+
+      if (user.branchId) {
+        const branchRes = await pool.query(
+          "SELECT id, name, branch_code FROM branches WHERE id = $1 AND organisation_id = $2 AND status = 'ACTIVE' LIMIT 1;",
+          [user.branchId, user.organisationId],
+        );
+        branchRecord = branchRes.rows[0] || null;
+      }
+
+      if (!branchRecord && branchCount > 0) {
+        const defaultBranchRes = await pool.query(
+          "SELECT id, name, branch_code FROM branches WHERE organisation_id = $1 AND status = 'ACTIVE' ORDER BY created_at ASC LIMIT 1;",
+          [user.organisationId],
+        );
+        branchRecord = defaultBranchRes.rows[0] || null;
+      }
+
+      hasBranch = branchCount > 0 && Boolean(branchRecord);
+    }
+
+    return {
+      success: true,
+      user: {
+        id: user.id,
+        supabaseAuthId: user.supabaseAuthId || null,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        staffId: user.staffId,
+        role: user.role,
+        roleId: user.roleId,
+        isPlatformSuperadmin: Boolean(user.isPlatformSuperadmin),
+        organisationId: user.organisationId,
+        organisationName: orgRes.rows[0]?.name || null,
+        pharmacyCode: orgRes.rows[0]?.pharmacy_code || null,
+        branchId: branchRecord?.id || user.branchId || null,
+        branchName: branchRecord?.name || null,
+        hasBranch,
+        branch: branchRecord
+          ? {
+              id: branchRecord.id,
+              name: branchRecord.name,
+              branchCode: branchRecord.branch_code,
+            }
+          : null,
       },
     };
   }
@@ -514,7 +1057,7 @@ class AuthService {
     }
 
     if (token) {
-      const decoded = verifySupabaseToken(token);
+      const decoded = await verifySupabaseToken(token);
       if (decoded && decoded.sub) {
         const hash = await bcrypt.hash(newPassword, 10);
         await pool.query(

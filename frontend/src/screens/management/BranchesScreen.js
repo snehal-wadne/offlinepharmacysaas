@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -9,72 +9,105 @@ import {
   StyleSheet,
   useWindowDimensions,
   Platform,
-} from 'react-native';
-import InventoryStatCard from '../../components/inventory/InventoryStatCard';
+} from "react-native";
+import InventoryStatCard from "../../components/inventory/InventoryStatCard";
 import {
   BRANCHES_KPIS,
   MOCK_BRANCHES_LIST,
   BRANCH_TYPES,
-} from '../../data/managementMockData';
-import { API_URL } from '../../config';
-import { SkeletonItemCard } from '../../components/common/SkeletonLoader';
-import PaginationControls from '../../components/common/PaginationControls';
+} from "../../data/managementMockData";
+import { API_URL } from "../../config";
+import { apiGet, apiPost, apiPut, apiDelete } from "../../api/apiClient";
+import { SkeletonItemCard } from "../../components/common/SkeletonLoader";
+import PaginationControls from "../../components/common/PaginationControls";
 
-export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpdated }) {
+export default function BranchesScreen({
+  onShowToast,
+  onNavigate,
+  onBranchesUpdated,
+  currentUser,
+  isStandaloneOnboarding = false,
+}) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
   const isMobile = width < 768;
 
   // Search & Filter State
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedType, setSelectedType] = useState('All Types');
-  const [selectedStatus, setSelectedStatus] = useState('All'); // 'All' | 'Active' | 'Inactive'
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedType, setSelectedType] = useState("All Types");
+  const [selectedStatus, setSelectedStatus] = useState("All"); // 'All' | 'Active' | 'Inactive'
 
-  // Branches State
-  const [branches, setBranches] = useState(MOCK_BRANCHES_LIST);
+  // Branches State: always start empty for zero-branch onboarding or when loading from backend
+  const [branches, setBranches] = useState(() => {
+    if (isStandaloneOnboarding || (currentUser && currentUser.hasBranch === false)) {
+      return [];
+    }
+    return [];
+  });
   const [loading, setLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // Load branches from database
+  // Load branches from database via authenticated apiClient
   useEffect(() => {
     let active = true;
     const fetchBranches = async () => {
+      setLoading(true);
       try {
-        const response = await fetch(`${API_URL}/branches`);
-        if (response.ok) {
-          const json = await response.json();
-          if (json.success && Array.isArray(json.data) && json.data.length > 0) {
-            const mapped = json.data.map((dbB, idx) => ({
+        const res = await apiGet("/api/branches");
+        if (res.success && res.data) {
+          const rawList = Array.isArray(res.data.data)
+            ? res.data.data
+            : Array.isArray(res.data)
+              ? res.data
+              : [];
+          if (rawList.length > 0) {
+            const mapped = rawList.map((dbB, idx) => ({
               id: dbB.id || `BR-0${idx + 1}`,
               name: dbB.name,
-              type: 'Hospital Pharmacy',
-              code: `FIT-PUN-0${idx + 1}`,
-              contactPerson: 'Pharmacist',
-              phone: dbB.phone || '+91 98220 00000',
-              email: 'info@flora.edu.in',
-              address: dbB.address || 'Pune, Maharashtra',
-              city: dbB.city || 'Pune',
-              state: dbB.state || 'Maharashtra',
-              pincode: dbB.postal_code || '412205',
-              gstin: '27AAAAF1234F1Z5',
-              drugLicenseNo: 'MH-PZ2-20B-184920',
-              invoicePrefix: `FIT-B0${idx + 1}-`,
-              currency: 'INR (₹)',
-              defaultTaxRate: '12%',
-              staffCount: 5,
-              monthlyRevenue: '₹4,50,000',
-              status: dbB.status === 'INACTIVE' || dbB.status === 'Inactive' ? 'Inactive' : 'Active',
+              type: dbB.facility_type || "Retail Dispensary",
+              code: dbB.branch_code || `BR-0${idx + 1}`,
+              contactPerson: dbB.contact_person || "Pharmacist",
+              phone: dbB.phone || "",
+              email: dbB.email || "",
+              address: dbB.address || "",
+              city: dbB.city || "",
+              state: dbB.state || "",
+              pincode: dbB.postal_code || "",
+              gstin: dbB.gst_number || "",
+              drugLicenseNo: dbB.drug_license_no || "",
+              invoicePrefix: dbB.invoice_prefix || `BR-0${idx + 1}-`,
+              currency: "INR (₹)",
+              defaultTaxRate: "12%",
+              staffCount: 1,
+              monthlyRevenue: "₹0.00",
+              status:
+                dbB.status === "INACTIVE" || dbB.status === "Inactive"
+                  ? "Inactive"
+                  : "Active",
               isMainHub: idx === 0,
-              openingHours: '08:00 AM - 10:00 PM',
+              openingHours: "08:00 AM - 10:00 PM",
             }));
             if (active) {
               setBranches(mapped);
             }
+          } else {
+            if (active) {
+              setBranches([]);
+            }
+          }
+        } else {
+          if (active && currentUser && currentUser.hasBranch === false) {
+            setBranches([]);
           }
         }
       } catch (err) {
-        console.warn('Failed to load branches from API:', err.message);
+        console.warn("Failed to load branches from API:", err.message);
+        if (active && currentUser && currentUser.hasBranch === false) {
+          setBranches([]);
+        }
+      } finally {
+        if (active) setLoading(false);
       }
     };
     fetchBranches();
@@ -90,22 +123,22 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
 
   // Form State
   const [formData, setFormData] = useState({
-    name: '',
-    code: '',
-    type: 'Hospital Pharmacy',
-    contactPerson: '',
-    phone: '',
-    email: '',
-    address: '',
-    city: 'Pune',
-    state: 'Maharashtra',
-    pincode: '412205',
-    gstin: '27AAAAF1234F1Z5',
-    drugLicenseNo: '',
-    invoicePrefix: 'FIT-',
-    defaultTaxRate: '12%',
-    status: 'Active',
-    openingHours: '08:00 AM - 10:00 PM',
+    name: "",
+    code: "",
+    type: "Hospital Pharmacy",
+    contactPerson: "",
+    phone: "",
+    email: "",
+    address: "",
+    city: "Pune",
+    state: "Maharashtra",
+    pincode: "412205",
+    gstin: "27AAAAF1234F1Z5",
+    drugLicenseNo: "",
+    invoicePrefix: "FIT-",
+    defaultTaxRate: "12%",
+    status: "Active",
+    openingHours: "08:00 AM - 10:00 PM",
   });
   const [formErrors, setFormErrors] = useState({});
 
@@ -125,10 +158,10 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
       branch.drugLicenseNo.toLowerCase().includes(q);
 
     const matchesType =
-      selectedType === 'All Types' || branch.type === selectedType;
+      selectedType === "All Types" || branch.type === selectedType;
 
     const matchesStatus =
-      selectedStatus === 'All' || branch.status === selectedStatus;
+      selectedStatus === "All" || branch.status === selectedStatus;
 
     return matchesSearch && matchesType && matchesStatus;
   });
@@ -136,29 +169,29 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
   const totalPages = Math.ceil(filteredBranches.length / itemsPerPage);
   const paginatedBranches = filteredBranches.slice(
     (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
+    currentPage * itemsPerPage,
   );
 
   const handleOpenAddModal = () => {
     setIsEditing(false);
     setActiveBranchId(null);
     setFormData({
-      name: '',
+      name: "",
       code: `FIT-BR-0${branches.length + 1}`,
-      type: 'Retail Dispensary',
-      contactPerson: '',
-      phone: '',
-      email: '',
-      address: '',
-      city: 'Pune',
-      state: 'Maharashtra',
-      pincode: '411001',
-      gstin: '27AAAAF1234F1Z5',
-      drugLicenseNo: '',
+      type: "Retail Dispensary",
+      contactPerson: "",
+      phone: "",
+      email: "",
+      address: "",
+      city: "Pune",
+      state: "Maharashtra",
+      pincode: "411001",
+      gstin: "27AAAAF1234F1Z5",
+      drugLicenseNo: "",
       invoicePrefix: `FIT-B0${branches.length + 1}-`,
-      defaultTaxRate: '12%',
-      status: 'Active',
-      openingHours: '08:00 AM - 10:00 PM',
+      defaultTaxRate: "12%",
+      status: "Active",
+      openingHours: "08:00 AM - 10:00 PM",
     });
     setFormErrors({});
     setModalVisible(true);
@@ -183,7 +216,7 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
       invoicePrefix: branch.invoicePrefix,
       defaultTaxRate: branch.defaultTaxRate,
       status: branch.status,
-      openingHours: branch.openingHours || '08:00 AM - 10:00 PM',
+      openingHours: branch.openingHours || "08:00 AM - 10:00 PM",
     });
     setFormErrors({});
     setModalVisible(true);
@@ -191,10 +224,10 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
 
   const handleSaveBranch = async () => {
     const errors = {};
-    if (!formData.name.trim()) errors.name = 'Branch name is required';
-    if (!formData.code.trim()) errors.code = 'Branch Code is required';
-    if (!formData.phone.trim()) errors.phone = 'Contact phone is required';
-    if (!formData.address.trim()) errors.address = 'Branch address is required';
+    if (!formData.name.trim()) errors.name = "Branch name is required";
+    if (!formData.code.trim()) errors.code = "Branch Code is required";
+    if (!formData.phone.trim()) errors.phone = "Contact phone is required";
+    if (!formData.address.trim()) errors.address = "Branch address is required";
 
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
@@ -211,25 +244,22 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
                   ...b,
                   ...formData,
                 }
-              : b
-          )
+              : b,
+          ),
         );
 
-        if (String(activeBranchId).includes('-')) {
-          const response = await fetch(`${API_URL}/branches/${activeBranchId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              name: formData.name,
-              address: formData.address,
-              city: formData.city,
-              state: formData.state,
-              postalCode: formData.pincode,
-              phone: formData.phone,
-              status: formData.status === 'Active' ? 'ACTIVE' : 'INACTIVE',
-            }),
+        if (String(activeBranchId).includes("-")) {
+          const res = await apiPut(`/api/branches/${activeBranchId}`, {
+            name: formData.name,
+            address: formData.address,
+            city: formData.city,
+            state: formData.state,
+            postalCode: formData.pincode,
+            phone: formData.phone,
+            status: formData.status === "Active" ? "ACTIVE" : "INACTIVE",
           });
-          if (!response.ok) throw new Error('Failed to update branch');
+          if (!res.success)
+            throw new Error(res.error || "Failed to update branch");
         }
 
         if (onShowToast) {
@@ -239,33 +269,31 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
         const payload = {
           name: formData.name,
           address: formData.address,
-          city: formData.city || 'Pune',
-          state: formData.state || 'Maharashtra',
-          postalCode: formData.pincode || '412205',
+          city: formData.city || "Pune",
+          state: formData.state || "Maharashtra",
+          postalCode: formData.pincode || "412205",
           phone: formData.phone,
-          status: formData.status === 'Active' ? 'ACTIVE' : 'INACTIVE',
+          status: formData.status === "Active" ? "ACTIVE" : "INACTIVE",
         };
 
-        const res = await fetch(`${API_URL}/branches`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
+        const res = await apiPost("/api/branches", payload);
 
         let newId = `BR-0${branches.length + 1}`;
-        if (res.ok) {
-          const json = await res.json();
-          if (json.success && json.data?.id) {
-            newId = json.data.id;
+        if (res.success && res.data) {
+          const created = res.data.data || res.data;
+          if (created?.id) {
+            newId = created.id;
           }
+        } else if (!res.success) {
+          throw new Error(res.error || "Failed to create branch");
         }
 
         const newBranch = {
           id: newId,
           ...formData,
-          staffCount: 2,
-          monthlyRevenue: '₹0.00',
-          currency: 'INR (₹)',
+          staffCount: 1,
+          monthlyRevenue: "₹0.00",
+          currency: "INR (₹)",
           isMainHub: false,
         };
         setBranches((prev) => [newBranch, ...prev]);
@@ -277,7 +305,7 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
         onBranchesUpdated();
       }
     } catch (err) {
-      console.warn('Error saving branch to database:', err.message);
+      console.warn("Error saving branch to database:", err.message);
       if (onShowToast) onShowToast(`⚠️ Error saving branch: ${err.message}`);
     }
 
@@ -285,28 +313,28 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
   };
 
   const handleToggleStatus = async (branch) => {
-    const newStatus = branch.status === 'Active' ? 'Inactive' : 'Active';
-    const dbStatus = newStatus === 'Active' ? 'ACTIVE' : 'INACTIVE';
+    const newStatus = branch.status === "Active" ? "Inactive" : "Active";
+    const dbStatus = newStatus === "Active" ? "ACTIVE" : "INACTIVE";
 
     setBranches((prev) =>
-      prev.map((b) => (b.id === branch.id ? { ...b, status: newStatus } : b))
+      prev.map((b) => (b.id === branch.id ? { ...b, status: newStatus } : b)),
     );
 
     // Sync MOCK_BRANCHES_LIST in-memory array for fallbacks
-    const mockMatch = MOCK_BRANCHES_LIST.find((m) => m.id === branch.id || m.name === branch.name);
+    const mockMatch = MOCK_BRANCHES_LIST.find(
+      (m) => m.id === branch.id || m.name === branch.name,
+    );
     if (mockMatch) {
       mockMatch.status = newStatus;
     }
 
     try {
-      const response = await fetch(`${API_URL}/branches/${branch.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: dbStatus }),
+      const res = await apiPut(`/api/branches/${branch.id}`, {
+        status: dbStatus,
       });
-      if (!response.ok) throw new Error('Status toggle failed');
+      if (!res.success) throw new Error(res.error || "Status toggle failed");
     } catch (err) {
-      console.warn('Error updating branch status in database:', err.message);
+      console.warn("Error updating branch status in database:", err.message);
       if (onShowToast) onShowToast(`⚠️ Failed to toggle branch status`);
     }
 
@@ -315,9 +343,7 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
     }
 
     if (onShowToast) {
-      onShowToast(
-        `Branch "${branch.name}" marked as ${newStatus}`
-      );
+      onShowToast(`Branch "${branch.name}" marked as ${newStatus}`);
     }
   };
 
@@ -340,7 +366,8 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
         <View style={styles.titleWrapper}>
           <Text style={styles.pageTitle}>Branch Management</Text>
           <Text style={styles.pageSubtitle}>
-            Configure and manage physical pharmacies, hospital dispensaries, and warehouses across Flora Institute of Technology.
+            Configure and manage physical pharmacies, hospital dispensaries, and
+            warehouses across {currentUser?.organisationName || "your pharmacy organization"}.
           </Text>
         </View>
         <Pressable
@@ -354,9 +381,38 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
         </Pressable>
       </View>
 
-      {/* 2. Top KPI Cards */}
+      {/* 2. Top KPI Cards (Dynamically computed from actual branches) */}
       <View style={[styles.kpiRow, isCompact && styles.kpiRowCompact]}>
-        {BRANCHES_KPIS.map((kpi) => (
+        {[
+          {
+            id: "total",
+            label: "TOTAL BRANCHES",
+            value: String(branches.length),
+            subtext: `${branches.filter((b) => b.status === "Active").length} active / ${branches.filter((b) => b.status !== "Active").length} inactive`,
+            variant: "neutral",
+          },
+          {
+            id: "active",
+            label: "ACTIVE BRANCHES",
+            value: String(branches.filter((b) => b.status === "Active").length),
+            subtext: branches.length > 0 ? "Operating normally" : "None created yet",
+            variant: "success",
+          },
+          {
+            id: "hub",
+            label: "PRIMARY HUB",
+            value: branches[0]?.name || "None",
+            subtext: branches[0] ? "Primary distribution" : "Initial branch required",
+            variant: "info",
+          },
+          {
+            id: "staff",
+            label: "ASSIGNED STAFF",
+            value: `${branches.length > 0 ? branches.length : 0} Staff`,
+            subtext: "Across facilities",
+            variant: "warning",
+          },
+        ].map((kpi) => (
           <InventoryStatCard
             key={kpi.id}
             label={kpi.label}
@@ -379,7 +435,10 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
             onChangeText={setSearchQuery}
           />
           {searchQuery ? (
-            <Pressable onPress={() => setSearchQuery('')} style={styles.clearSearchBtn}>
+            <Pressable
+              onPress={() => setSearchQuery("")}
+              style={styles.clearSearchBtn}
+            >
               <Text style={styles.clearSearchText}>✕</Text>
             </Pressable>
           ) : null}
@@ -398,10 +457,7 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
                 <Pressable
                   key={type}
                   onPress={() => setSelectedType(type)}
-                  style={[
-                    styles.typeTab,
-                    isSelected && styles.typeTabSelected,
-                  ]}
+                  style={[styles.typeTab, isSelected && styles.typeTabSelected]}
                 >
                   <Text
                     style={[
@@ -418,7 +474,7 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
 
           {/* Status Quick Toggle */}
           <View style={styles.statusToggleGroup}>
-            {['All', 'Active', 'Inactive'].map((status) => {
+            {["All", "Active", "Inactive"].map((status) => {
               const isSelected = selectedStatus === status;
               return (
                 <Pressable
@@ -451,12 +507,14 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
             <Text style={styles.tableTitle}>Registered Pharmacy Branches</Text>
             <View style={styles.countBadge}>
               <Text style={styles.countBadgeText}>
-                {filteredBranches.length} {filteredBranches.length === 1 ? 'Branch' : 'Branches'}
+                {filteredBranches.length}{" "}
+                {filteredBranches.length === 1 ? "Branch" : "Branches"}
               </Text>
             </View>
           </View>
           <Text style={styles.tableSubtitle}>
-            Physical retail dispensaries, clinical hospital stores, and centralized distribution hubs.
+            Physical retail dispensaries, clinical hospital stores, and
+            centralized distribution hubs.
           </Text>
         </View>
 
@@ -471,7 +529,8 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
             <Text style={styles.emptyIcon}>🏢</Text>
             <Text style={styles.emptyTitle}>No Branches Found</Text>
             <Text style={styles.emptySubtitle}>
-              Try adjusting your search criteria or add a new branch to the network.
+              Try adjusting your search criteria or add a new branch to the
+              network.
             </Text>
             <Pressable
               onPress={handleOpenAddModal}
@@ -483,13 +542,19 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
         ) : isMobile ? (
           <View style={styles.mobileBranchList}>
             {paginatedBranches.map((branch) => {
-              const isActive = branch.status === 'Active';
+              const isActive = branch.status === "Active";
 
               return (
                 <View key={branch.id} style={styles.mobileBranchCard}>
                   {/* Top Row: Code + Hub badge + Status Switch */}
                   <View style={styles.mobileBranchTopRow}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 6,
+                      }}
+                    >
                       <View style={styles.codeBadge}>
                         <Text style={styles.codeBadgeText}>{branch.code}</Text>
                       </View>
@@ -539,29 +604,47 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
 
                   {/* Branch Name */}
                   <Text style={styles.mobileBranchName}>{branch.name}</Text>
-                  <Text style={styles.mobileBranchType}>{branch.type} • {branch.staffCount} Staff Members</Text>
+                  <Text style={styles.mobileBranchType}>
+                    {branch.type} • {branch.staffCount} Staff Members
+                  </Text>
 
                   {/* Details Grid */}
                   <View style={styles.mobileBranchDetailsGrid}>
                     <View style={styles.mobileBranchDetailItem}>
-                      <Text style={styles.mobileBranchDetailLabel}>CONTACT PERSON</Text>
-                      <Text style={styles.mobileBranchDetailVal}>{branch.contactPerson}</Text>
-                      <Text style={styles.mobileBranchDetailSub}>{branch.phone}</Text>
+                      <Text style={styles.mobileBranchDetailLabel}>
+                        CONTACT PERSON
+                      </Text>
+                      <Text style={styles.mobileBranchDetailVal}>
+                        {branch.contactPerson}
+                      </Text>
+                      <Text style={styles.mobileBranchDetailSub}>
+                        {branch.phone}
+                      </Text>
                     </View>
                     <View style={styles.mobileBranchDetailItem}>
-                      <Text style={styles.mobileBranchDetailLabel}>LOCATION</Text>
-                      <Text style={styles.mobileBranchDetailVal}>{branch.city}, {branch.state}</Text>
-                      <Text style={styles.mobileBranchDetailSub}>Pin: {branch.pincode}</Text>
+                      <Text style={styles.mobileBranchDetailLabel}>
+                        LOCATION
+                      </Text>
+                      <Text style={styles.mobileBranchDetailVal}>
+                        {branch.city}, {branch.state}
+                      </Text>
+                      <Text style={styles.mobileBranchDetailSub}>
+                        Pin: {branch.pincode}
+                      </Text>
                     </View>
                   </View>
 
                   {/* Footer: Tax/Prefix & Action Buttons */}
                   <View style={styles.mobileBranchFooter}>
                     <View>
-                      <Text style={styles.invoicePrefixText}>Prefix: {branch.invoicePrefix}</Text>
-                      <Text style={styles.taxRateText}>Tax: {branch.defaultTaxRate}</Text>
+                      <Text style={styles.invoicePrefixText}>
+                        Prefix: {branch.invoicePrefix}
+                      </Text>
+                      <Text style={styles.taxRateText}>
+                        Tax: {branch.defaultTaxRate}
+                      </Text>
                     </View>
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <View style={{ flexDirection: "row", gap: 8 }}>
                       <Pressable
                         onPress={() => handleViewDetails(branch)}
                         style={styles.actionViewBtn}
@@ -590,17 +673,25 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
               {/* Table Header */}
               <View style={styles.tableHeaderRow}>
                 <Text style={[styles.thText, styles.colCode]}>Branch Code</Text>
-                <Text style={[styles.thText, styles.colName]}>Branch Name & Type</Text>
-                <Text style={[styles.thText, styles.colContact]}>Contact Details</Text>
-                <Text style={[styles.thText, styles.colAddress]}>Location / City</Text>
-                <Text style={[styles.thText, styles.colInvoice]}>Invoice Prefix</Text>
+                <Text style={[styles.thText, styles.colName]}>
+                  Branch Name & Type
+                </Text>
+                <Text style={[styles.thText, styles.colContact]}>
+                  Contact Details
+                </Text>
+                <Text style={[styles.thText, styles.colAddress]}>
+                  Location / City
+                </Text>
+                <Text style={[styles.thText, styles.colInvoice]}>
+                  Invoice Prefix
+                </Text>
                 <Text style={[styles.thText, styles.colStatus]}>Status</Text>
                 <Text style={[styles.thText, styles.colActions]}>Actions</Text>
               </View>
 
               {/* Table Body */}
               {paginatedBranches.map((branch, index) => {
-                const isActive = branch.status === 'Active';
+                const isActive = branch.status === "Active";
                 const isEven = index % 2 === 0;
 
                 return (
@@ -639,7 +730,9 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
                       <Text style={styles.contactPersonText} numberOfLines={1}>
                         {branch.contactPerson}
                       </Text>
-                      <Text style={styles.contactPhoneText}>{branch.phone}</Text>
+                      <Text style={styles.contactPhoneText}>
+                        {branch.phone}
+                      </Text>
                       <Text style={styles.contactEmailText} numberOfLines={1}>
                         {branch.email}
                       </Text>
@@ -657,8 +750,12 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
 
                     {/* Invoice Prefix & Tax */}
                     <View style={styles.colInvoice}>
-                      <Text style={styles.invoicePrefixText}>{branch.invoicePrefix}</Text>
-                      <Text style={styles.taxRateText}>Tax: {branch.defaultTaxRate}</Text>
+                      <Text style={styles.invoicePrefixText}>
+                        {branch.invoicePrefix}
+                      </Text>
+                      <Text style={styles.taxRateText}>
+                        Tax: {branch.defaultTaxRate}
+                      </Text>
                     </View>
 
                     {/* Status Toggle Switch */}
@@ -749,12 +846,14 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
             <View style={styles.modalHeader}>
               <View>
                 <Text style={styles.modalTitle}>
-                  {isEditing ? 'Edit Branch Profile' : 'Add New Pharmacy Branch'}
+                  {isEditing
+                    ? "Edit Branch Profile"
+                    : "Add New Pharmacy Branch"}
                 </Text>
                 <Text style={styles.modalSubtitle}>
                   {isEditing
                     ? `Updating parameters for ${formData.code}`
-                    : 'Register a new physical dispensing center in Flora Institute of Technology'}
+                    : "Register a new physical dispensing center in Flora Institute of Technology"}
                 </Text>
               </View>
               <Pressable
@@ -785,7 +884,8 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
                     value={formData.name}
                     onChangeText={(text) => {
                       setFormData({ ...formData, name: text });
-                      if (formErrors.name) setFormErrors({ ...formErrors, name: null });
+                      if (formErrors.name)
+                        setFormErrors({ ...formErrors, name: null });
                     }}
                   />
                   {formErrors.name ? (
@@ -796,7 +896,8 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
                 {/* Code & Type */}
                 <View style={styles.formColHalf}>
                   <Text style={styles.fieldLabel}>
-                    Branch Code / Identifier <Text style={styles.reqStar}>*</Text>
+                    Branch Code / Identifier{" "}
+                    <Text style={styles.reqStar}>*</Text>
                   </Text>
                   <TextInput
                     style={[
@@ -807,7 +908,8 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
                     value={formData.code}
                     onChangeText={(text) => {
                       setFormData({ ...formData, code: text });
-                      if (formErrors.code) setFormErrors({ ...formErrors, code: null });
+                      if (formErrors.code)
+                        setFormErrors({ ...formErrors, code: null });
                     }}
                   />
                   {formErrors.code ? (
@@ -818,33 +920,37 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
                 <View style={styles.formColHalf}>
                   <Text style={styles.fieldLabel}>Facility Type</Text>
                   <View style={styles.typeSelectorRow}>
-                    {['Hospital Pharmacy', 'Retail Dispensary', 'Central Warehouse'].map(
-                      (t) => (
-                        <Pressable
-                          key={t}
-                          onPress={() => setFormData({ ...formData, type: t })}
+                    {[
+                      "Hospital Pharmacy",
+                      "Retail Dispensary",
+                      "Central Warehouse",
+                    ].map((t) => (
+                      <Pressable
+                        key={t}
+                        onPress={() => setFormData({ ...formData, type: t })}
+                        style={[
+                          styles.typeChip,
+                          formData.type === t && styles.typeChipSelected,
+                        ]}
+                      >
+                        <Text
                           style={[
-                            styles.typeChip,
-                            formData.type === t && styles.typeChipSelected,
+                            styles.typeChipText,
+                            formData.type === t && styles.typeChipTextSelected,
                           ]}
                         >
-                          <Text
-                            style={[
-                              styles.typeChipText,
-                              formData.type === t && styles.typeChipTextSelected,
-                            ]}
-                          >
-                            {t}
-                          </Text>
-                        </Pressable>
-                      )
-                    )}
+                          {t}
+                        </Text>
+                      </Pressable>
+                    ))}
                   </View>
                 </View>
 
                 {/* Contact Person & Phone */}
                 <View style={styles.formColHalf}>
-                  <Text style={styles.fieldLabel}>Contact Person / Pharmacist in Charge</Text>
+                  <Text style={styles.fieldLabel}>
+                    Contact Person / Pharmacist in Charge
+                  </Text>
                   <TextInput
                     style={styles.formInput}
                     placeholder="e.g. Dr. Suresh Patil"
@@ -964,7 +1070,9 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
 
                 {/* License & Tax Settings */}
                 <View style={styles.formColHalf}>
-                  <Text style={styles.fieldLabel}>Drug License No. (Form 20B/21B)</Text>
+                  <Text style={styles.fieldLabel}>
+                    Drug License No. (Form 20B/21B)
+                  </Text>
                   <TextInput
                     style={styles.formInput}
                     placeholder="MH-PZ2-20B-XXXXXX"
@@ -1015,17 +1123,19 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
                   <Text style={styles.fieldLabel}>Status</Text>
                   <View style={styles.statusToggleRow}>
                     <Pressable
-                      onPress={() => setFormData({ ...formData, status: 'Active' })}
+                      onPress={() =>
+                        setFormData({ ...formData, status: "Active" })
+                      }
                       style={[
                         styles.statusSelectPill,
-                        formData.status === 'Active' &&
+                        formData.status === "Active" &&
                           styles.statusSelectPillActive,
                       ]}
                     >
                       <Text
                         style={[
                           styles.statusSelectText,
-                          formData.status === 'Active' &&
+                          formData.status === "Active" &&
                             styles.statusSelectTextActive,
                         ]}
                       >
@@ -1034,18 +1144,18 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
                     </Pressable>
                     <Pressable
                       onPress={() =>
-                        setFormData({ ...formData, status: 'Inactive' })
+                        setFormData({ ...formData, status: "Inactive" })
                       }
                       style={[
                         styles.statusSelectPill,
-                        formData.status === 'Inactive' &&
+                        formData.status === "Inactive" &&
                           styles.statusSelectPillInactive,
                       ]}
                     >
                       <Text
                         style={[
                           styles.statusSelectText,
-                          formData.status === 'Inactive' &&
+                          formData.status === "Inactive" &&
                             styles.statusSelectTextInactive,
                         ]}
                       >
@@ -1070,7 +1180,7 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
                 style={styles.modalSaveButton}
               >
                 <Text style={styles.modalSaveText}>
-                  {isEditing ? 'Save Changes' : 'Create Branch'}
+                  {isEditing ? "Save Changes" : "Create Branch"}
                 </Text>
               </Pressable>
             </View>
@@ -1087,16 +1197,26 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
           onRequestClose={() => setDetailModalVisible(false)}
         >
           <View style={styles.modalOverlay}>
-            <View style={[styles.detailModalCard, isMobile && styles.modalCardMobile]}>
+            <View
+              style={[
+                styles.detailModalCard,
+                isMobile && styles.modalCardMobile,
+              ]}
+            >
               <View style={styles.detailHeader}>
                 <View style={styles.detailHeaderLeft}>
                   <View style={styles.detailCodeBadge}>
-                    <Text style={styles.detailCodeText}>{selectedBranch.code}</Text>
+                    <Text style={styles.detailCodeText}>
+                      {selectedBranch.code}
+                    </Text>
                   </View>
                   <View>
-                    <Text style={styles.detailTitle}>{selectedBranch.name}</Text>
+                    <Text style={styles.detailTitle}>
+                      {selectedBranch.name}
+                    </Text>
                     <Text style={styles.detailSubtitle}>
-                      {selectedBranch.type} • {selectedBranch.city}, {selectedBranch.state}
+                      {selectedBranch.type} • {selectedBranch.city},{" "}
+                      {selectedBranch.state}
                     </Text>
                   </View>
                 </View>
@@ -1112,66 +1232,98 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
                 <View style={styles.detailGrid}>
                   {/* Card: Operations */}
                   <View style={styles.detailSectionCard}>
-                    <Text style={styles.detailSectionTitle}>Operations & Contacts</Text>
+                    <Text style={styles.detailSectionTitle}>
+                      Operations & Contacts
+                    </Text>
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>In-Charge:</Text>
-                      <Text style={styles.detailValue}>{selectedBranch.contactPerson}</Text>
+                      <Text style={styles.detailValue}>
+                        {selectedBranch.contactPerson}
+                      </Text>
                     </View>
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>Phone:</Text>
-                      <Text style={styles.detailValue}>{selectedBranch.phone}</Text>
+                      <Text style={styles.detailValue}>
+                        {selectedBranch.phone}
+                      </Text>
                     </View>
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>Email:</Text>
-                      <Text style={styles.detailValue}>{selectedBranch.email}</Text>
+                      <Text style={styles.detailValue}>
+                        {selectedBranch.email}
+                      </Text>
                     </View>
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>Hours:</Text>
-                      <Text style={styles.detailValue}>{selectedBranch.openingHours || 'N/A'}</Text>
+                      <Text style={styles.detailValue}>
+                        {selectedBranch.openingHours || "N/A"}
+                      </Text>
                     </View>
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>Staff Assigned:</Text>
-                      <Text style={styles.detailValue}>{selectedBranch.staffCount} Active Members</Text>
+                      <Text style={styles.detailValue}>
+                        {selectedBranch.staffCount} Active Members
+                      </Text>
                     </View>
                   </View>
 
                   {/* Card: Address & Location */}
                   <View style={styles.detailSectionCard}>
-                    <Text style={styles.detailSectionTitle}>Address & Facility</Text>
+                    <Text style={styles.detailSectionTitle}>
+                      Address & Facility
+                    </Text>
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>Address:</Text>
-                      <Text style={styles.detailValue}>{selectedBranch.address}</Text>
+                      <Text style={styles.detailValue}>
+                        {selectedBranch.address}
+                      </Text>
                     </View>
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>Pincode:</Text>
-                      <Text style={styles.detailValue}>{selectedBranch.pincode}</Text>
+                      <Text style={styles.detailValue}>
+                        {selectedBranch.pincode}
+                      </Text>
                     </View>
                     <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Hub Classification:</Text>
+                      <Text style={styles.detailLabel}>
+                        Hub Classification:
+                      </Text>
                       <Text style={styles.detailValue}>
-                        {selectedBranch.isMainHub ? 'Central Distribution Hub' : 'Regional Outlet'}
+                        {selectedBranch.isMainHub
+                          ? "Central Distribution Hub"
+                          : "Regional Outlet"}
                       </Text>
                     </View>
                   </View>
 
                   {/* Card: Legal, Tax & Invoice */}
                   <View style={styles.detailSectionCard}>
-                    <Text style={styles.detailSectionTitle}>Billing & Regulatory Compliance</Text>
+                    <Text style={styles.detailSectionTitle}>
+                      Billing & Regulatory Compliance
+                    </Text>
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>Drug License No:</Text>
-                      <Text style={styles.detailValue}>{selectedBranch.drugLicenseNo || 'Pending'}</Text>
+                      <Text style={styles.detailValue}>
+                        {selectedBranch.drugLicenseNo || "Pending"}
+                      </Text>
                     </View>
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>GSTIN:</Text>
-                      <Text style={styles.detailValue}>{selectedBranch.gstin}</Text>
+                      <Text style={styles.detailValue}>
+                        {selectedBranch.gstin}
+                      </Text>
                     </View>
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>Invoice Series:</Text>
-                      <Text style={styles.detailValue}>{selectedBranch.invoicePrefix}XXXX</Text>
+                      <Text style={styles.detailValue}>
+                        {selectedBranch.invoicePrefix}XXXX
+                      </Text>
                     </View>
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>Default GST:</Text>
-                      <Text style={styles.detailValue}>{selectedBranch.defaultTaxRate}</Text>
+                      <Text style={styles.detailValue}>
+                        {selectedBranch.defaultTaxRate}
+                      </Text>
                     </View>
                   </View>
                 </View>
@@ -1199,7 +1351,7 @@ export default function BranchesScreen({ onShowToast, onNavigate, onBranchesUpda
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
   },
   contentContainer: {
     padding: 24,
@@ -1210,11 +1362,11 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
     marginBottom: 20,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
     gap: 12,
   },
   titleWrapper: {
@@ -1223,64 +1375,64 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     fontSize: 22,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
     letterSpacing: -0.4,
   },
   pageSubtitle: {
     fontSize: 13,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 4,
     lineHeight: 18,
   },
   addBranchButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#0F766E',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#0F766E",
     paddingVertical: 10,
     paddingHorizontal: 18,
     borderRadius: 8,
     gap: 8,
-    cursor: 'pointer',
+    cursor: "pointer",
     ...Platform.select({
       web: {
-        boxShadow: '0 2px 4px rgba(15, 118, 110, 0.2)',
+        boxShadow: "0 2px 4px rgba(15, 118, 110, 0.2)",
       },
     }),
   },
   addBranchButtonIcon: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   addBranchButtonText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 13.5,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   kpiRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 16,
     marginBottom: 20,
   },
   kpiRowCompact: {
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
   },
   filterCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     padding: 16,
     marginBottom: 20,
     gap: 14,
   },
   searchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     borderRadius: 8,
     paddingHorizontal: 12,
     height: 42,
@@ -1292,48 +1444,48 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 13,
-    color: '#0F172A',
-    outlineStyle: 'none',
+    color: "#0F172A",
+    outlineStyle: "none",
   },
   clearSearchBtn: {
     padding: 4,
   },
   clearSearchText: {
     fontSize: 14,
-    color: '#94A3B8',
+    color: "#94A3B8",
   },
   filterControls: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    flexWrap: "wrap",
     gap: 12,
   },
   typeTabsContainer: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 8,
   },
   typeTab: {
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 6,
-    backgroundColor: '#F1F5F9',
-    cursor: 'pointer',
+    backgroundColor: "#F1F5F9",
+    cursor: "pointer",
   },
   typeTabSelected: {
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
   },
   typeTabText: {
     fontSize: 12.5,
-    fontWeight: '600',
-    color: '#475569',
+    fontWeight: "600",
+    color: "#475569",
   },
   typeTabTextSelected: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
   statusToggleGroup: {
-    flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
+    flexDirection: "row",
+    backgroundColor: "#F1F5F9",
     padding: 3,
     borderRadius: 8,
   },
@@ -1341,81 +1493,81 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     paddingHorizontal: 12,
     borderRadius: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   statusPillSelected: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     ...Platform.select({
       web: {
-        boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
+        boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
       },
     }),
   },
   statusPillText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
+    fontWeight: "600",
+    color: "#64748B",
   },
   statusPillTextSelected: {
-    color: '#0F766E',
+    color: "#0F766E",
   },
   tableCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    overflow: 'hidden',
+    borderColor: "#E2E8F0",
+    overflow: "hidden",
   },
   tableHeaderSection: {
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: "#F1F5F9",
   },
   tableTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
   },
   tableTitle: {
     fontSize: 16,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   countBadge: {
-    backgroundColor: '#F0FDFA',
+    backgroundColor: "#F0FDFA",
     paddingVertical: 2,
     paddingHorizontal: 8,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#99F6E4',
+    borderColor: "#99F6E4",
   },
   countBadgeText: {
     fontSize: 11.5,
-    fontWeight: '700',
-    color: '#0F766E',
+    fontWeight: "700",
+    color: "#0F766E",
   },
   tableSubtitle: {
     fontSize: 12.5,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 2,
   },
   tableWrapper: {
     minWidth: 900,
   },
   tableHeaderRow: {
-    flexDirection: 'row',
-    backgroundColor: '#F8FAFC',
+    flexDirection: "row",
+    backgroundColor: "#F8FAFC",
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: "#E2E8F0",
     paddingVertical: 12,
     paddingHorizontal: 16,
   },
   thText: {
     fontSize: 11.5,
-    fontWeight: '700',
-    color: '#64748B',
-    textTransform: 'uppercase',
+    fontWeight: "700",
+    color: "#64748B",
+    textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   colCode: { width: 130 },
@@ -1426,112 +1578,112 @@ const styles = StyleSheet.create({
   colStatus: { width: 110 },
   colActions: { width: 140 },
   tableRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: "#F1F5F9",
   },
   tableRowEven: {
-    backgroundColor: '#FAFCFF',
+    backgroundColor: "#FAFCFF",
   },
   codeBadge: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: "#F1F5F9",
     paddingVertical: 4,
     paddingHorizontal: 8,
     borderRadius: 6,
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
   },
   codeBadgeText: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#334155',
+    fontWeight: "700",
+    color: "#334155",
   },
   mainHubPill: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: "#EFF6FF",
     paddingVertical: 2,
     paddingHorizontal: 6,
     borderRadius: 4,
     marginTop: 4,
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
   },
   mainHubText: {
     fontSize: 10,
-    fontWeight: '700',
-    color: '#2563EB',
+    fontWeight: "700",
+    color: "#2563EB",
   },
   branchNameText: {
     fontSize: 13.5,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   branchTypeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
     marginTop: 4,
   },
   branchTypeTag: {
     fontSize: 11,
-    color: '#0F766E',
-    fontWeight: '600',
-    backgroundColor: '#F0FDFA',
+    color: "#0F766E",
+    fontWeight: "600",
+    backgroundColor: "#F0FDFA",
     paddingHorizontal: 6,
     paddingVertical: 1,
     borderRadius: 4,
   },
   staffCountDot: {
-    color: '#CBD5E1',
+    color: "#CBD5E1",
   },
   staffCountText: {
     fontSize: 11.5,
-    color: '#64748B',
+    color: "#64748B",
   },
   contactPersonText: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#0F172A',
+    fontWeight: "600",
+    color: "#0F172A",
   },
   contactPhoneText: {
     fontSize: 12,
-    color: '#334155',
+    color: "#334155",
     marginTop: 2,
   },
   contactEmailText: {
     fontSize: 11.5,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 1,
   },
   addressText: {
     fontSize: 12.5,
-    color: '#334155',
+    color: "#334155",
     lineHeight: 16,
   },
   cityStateText: {
     fontSize: 11.5,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 2,
   },
   invoicePrefixText: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#0F766E',
+    fontWeight: "700",
+    color: "#0F766E",
   },
   taxRateText: {
     fontSize: 11.5,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 2,
   },
   /* Full-Fledged Interactive Toggle Switch Styles */
   toggleSwitchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
-    cursor: 'pointer',
-    alignSelf: 'flex-start',
+    cursor: "pointer",
+    alignSelf: "flex-start",
     paddingVertical: 2,
   },
   toggleTrack: {
@@ -1539,30 +1691,30 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     padding: 2,
-    justifyContent: 'center',
-    position: 'relative',
+    justifyContent: "center",
+    position: "relative",
     ...Platform.select({
       web: {
-        transition: 'background-color 0.2s ease',
+        transition: "background-color 0.2s ease",
       },
     }),
   },
   toggleTrackActive: {
-    backgroundColor: '#10B981',
+    backgroundColor: "#10B981",
   },
   toggleTrackInactive: {
-    backgroundColor: '#CBD5E1',
+    backgroundColor: "#CBD5E1",
   },
   toggleThumb: {
     width: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: '#FFFFFF',
-    position: 'absolute',
+    backgroundColor: "#FFFFFF",
+    position: "absolute",
     ...Platform.select({
       web: {
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.25)',
-        transition: 'left 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+        boxShadow: "0 1px 3px rgba(0, 0, 0, 0.25)",
+        transition: "left 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
       },
     }),
   },
@@ -1574,29 +1726,29 @@ const styles = StyleSheet.create({
   },
   toggleLabelText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   toggleLabelActive: {
-    color: '#059669',
+    color: "#059669",
   },
   toggleLabelInactive: {
-    color: '#64748B',
+    color: "#64748B",
   },
   statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 4,
     paddingHorizontal: 10,
     borderRadius: 20,
     gap: 6,
-    cursor: 'pointer',
-    alignSelf: 'flex-start',
+    cursor: "pointer",
+    alignSelf: "flex-start",
   },
   statusBadgeActive: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: "#DCFCE7",
   },
   statusBadgeInactive: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: "#F1F5F9",
   },
   statusDot: {
     width: 6,
@@ -1604,55 +1756,55 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   statusDotActive: {
-    backgroundColor: '#16A34A',
+    backgroundColor: "#16A34A",
   },
   statusDotInactive: {
-    backgroundColor: '#94A3B8',
+    backgroundColor: "#94A3B8",
   },
   statusText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   statusTextActive: {
-    color: '#15803D',
+    color: "#15803D",
   },
   statusTextInactive: {
-    color: '#64748B',
+    color: "#64748B",
   },
   actionsRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 8,
   },
   actionViewBtn: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: "#F1F5F9",
     paddingVertical: 5,
     paddingHorizontal: 10,
     borderRadius: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   actionViewBtnText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#334155',
+    fontWeight: "600",
+    color: "#334155",
   },
   actionEditBtn: {
-    backgroundColor: '#F0FDFA',
+    backgroundColor: "#F0FDFA",
     borderWidth: 1,
-    borderColor: '#99F6E4',
+    borderColor: "#99F6E4",
     paddingVertical: 5,
     paddingHorizontal: 10,
     borderRadius: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   actionEditBtnText: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#0F766E',
+    fontWeight: "700",
+    color: "#0F766E",
   },
   emptyContainer: {
     padding: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   emptyIcon: {
     fontSize: 40,
@@ -1660,71 +1812,71 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 16,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   emptySubtitle: {
     fontSize: 13,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 4,
-    textAlign: 'center',
+    textAlign: "center",
     maxWidth: 400,
   },
   emptyAddButton: {
     marginTop: 16,
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
     paddingVertical: 8,
     paddingHorizontal: 18,
     borderRadius: 8,
   },
   emptyAddButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
+    color: "#FFFFFF",
+    fontWeight: "700",
     fontSize: 13,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(15, 23, 42, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
     padding: 16,
   },
   modalCard: {
-    width: '100%',
+    width: "100%",
     maxWidth: 720,
-    maxHeight: '90%',
-    backgroundColor: '#FFFFFF',
+    maxHeight: "90%",
+    backgroundColor: "#FFFFFF",
     borderRadius: 14,
-    overflow: 'hidden',
-    flexDirection: 'column',
+    overflow: "hidden",
+    flexDirection: "column",
     ...Platform.select({
       web: {
-        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
+        boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)",
       },
     }),
   },
   modalCardMobile: {
-    maxWidth: '96%',
-    maxHeight: '94%',
+    maxWidth: "96%",
+    maxHeight: "94%",
   },
   modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
     paddingHorizontal: 22,
     paddingVertical: 18,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    backgroundColor: '#FAFCFF',
+    borderBottomColor: "#E2E8F0",
+    backgroundColor: "#FAFCFF",
   },
   modalTitle: {
     fontSize: 17,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   modalSubtitle: {
     fontSize: 12.5,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 2,
   },
   modalCloseButton: {
@@ -1732,129 +1884,129 @@ const styles = StyleSheet.create({
   },
   modalCloseText: {
     fontSize: 18,
-    color: '#64748B',
-    fontWeight: '700',
+    color: "#64748B",
+    fontWeight: "700",
   },
   modalBodyScroll: {
     paddingHorizontal: 22,
     paddingVertical: 16,
   },
   formGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 14,
   },
   formColFull: {
-    width: '100%',
+    width: "100%",
   },
   formColHalf: {
-    width: '48%',
+    width: "48%",
     minWidth: 260,
     flex: 1,
   },
   formColThird: {
-    width: '31%',
+    width: "31%",
     minWidth: 180,
     flex: 1,
   },
   fieldLabel: {
     fontSize: 12.5,
-    fontWeight: '600',
-    color: '#334155',
+    fontWeight: "600",
+    color: "#334155",
     marginBottom: 6,
   },
   reqStar: {
-    color: '#DC2626',
+    color: "#DC2626",
   },
   formInput: {
     height: 40,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
     borderRadius: 8,
     paddingHorizontal: 12,
     fontSize: 13,
-    color: '#0F172A',
-    backgroundColor: '#FFFFFF',
-    outlineStyle: 'none',
+    color: "#0F172A",
+    backgroundColor: "#FFFFFF",
+    outlineStyle: "none",
   },
   formInputError: {
-    borderColor: '#DC2626',
-    backgroundColor: '#FEF2F2',
+    borderColor: "#DC2626",
+    backgroundColor: "#FEF2F2",
   },
   errorMsg: {
     fontSize: 11,
-    color: '#DC2626',
+    color: "#DC2626",
     marginTop: 3,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   typeSelectorRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 6,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
   },
   typeChip: {
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 6,
-    backgroundColor: '#F1F5F9',
-    cursor: 'pointer',
+    backgroundColor: "#F1F5F9",
+    cursor: "pointer",
   },
   typeChipSelected: {
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
   },
   typeChipText: {
     fontSize: 11.5,
-    fontWeight: '600',
-    color: '#475569',
+    fontWeight: "600",
+    color: "#475569",
   },
   typeChipTextSelected: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
   statusToggleRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 8,
   },
   statusSelectPill: {
     flex: 1,
     height: 38,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     borderRadius: 6,
-    backgroundColor: '#F1F5F9',
-    cursor: 'pointer',
+    backgroundColor: "#F1F5F9",
+    cursor: "pointer",
   },
   statusSelectPillActive: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: "#DCFCE7",
     borderWidth: 1,
-    borderColor: '#86EFAC',
+    borderColor: "#86EFAC",
   },
   statusSelectPillInactive: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: "#FEE2E2",
     borderWidth: 1,
-    borderColor: '#FCA5A5',
+    borderColor: "#FCA5A5",
   },
   statusSelectText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
+    fontWeight: "600",
+    color: "#64748B",
   },
   statusSelectTextActive: {
-    color: '#15803D',
-    fontWeight: '700',
+    color: "#15803D",
+    fontWeight: "700",
   },
   statusSelectTextInactive: {
-    color: '#B91C1C',
-    fontWeight: '700',
+    color: "#B91C1C",
+    fontWeight: "700",
   },
   modalFooter: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    alignItems: "center",
     paddingHorizontal: 22,
     paddingVertical: 14,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderTopColor: "#E2E8F0",
+    backgroundColor: "#F8FAFC",
     gap: 12,
   },
   modalCancelButton: {
@@ -1862,69 +2014,69 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
-    cursor: 'pointer',
+    borderColor: "#CBD5E1",
+    backgroundColor: "#FFFFFF",
+    cursor: "pointer",
   },
   modalCancelText: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#475569',
+    fontWeight: "600",
+    color: "#475569",
   },
   modalSaveButton: {
     paddingVertical: 9,
     paddingHorizontal: 22,
     borderRadius: 8,
-    backgroundColor: '#0F766E',
-    cursor: 'pointer',
+    backgroundColor: "#0F766E",
+    cursor: "pointer",
   },
   modalSaveText: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
   detailModalCard: {
-    width: '100%',
+    width: "100%",
     maxWidth: 680,
-    maxHeight: '85%',
-    backgroundColor: '#FFFFFF',
+    maxHeight: "85%",
+    backgroundColor: "#FFFFFF",
     borderRadius: 14,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   detailHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: 22,
     paddingVertical: 18,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    backgroundColor: '#FAFCFF',
+    borderBottomColor: "#E2E8F0",
+    backgroundColor: "#FAFCFF",
   },
   detailHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
   },
   detailCodeBadge: {
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 8,
   },
   detailCodeText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
+    color: "#FFFFFF",
+    fontWeight: "800",
     fontSize: 13,
   },
   detailTitle: {
     fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   detailSubtitle: {
     fontSize: 12,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 2,
   },
   detailBody: {
@@ -1934,38 +2086,38 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   detailSectionCard: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     borderRadius: 10,
     padding: 16,
   },
   detailSectionTitle: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#0F766E',
-    textTransform: 'uppercase',
+    fontWeight: "700",
+    color: "#0F766E",
+    textTransform: "uppercase",
     letterSpacing: 0.5,
     marginBottom: 10,
   },
   detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     paddingVertical: 5,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: "#F1F5F9",
   },
   detailLabel: {
     fontSize: 12.5,
-    color: '#64748B',
-    fontWeight: '500',
+    color: "#64748B",
+    fontWeight: "500",
   },
   detailValue: {
     fontSize: 12.5,
-    fontWeight: '600',
-    color: '#0F172A',
-    maxWidth: '65%',
-    textAlign: 'right',
+    fontWeight: "600",
+    color: "#0F172A",
+    maxWidth: "65%",
+    textAlign: "right",
   },
   // Mobile Branch KPI Cards
   mobileBranchList: {
@@ -1973,36 +2125,36 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   mobileBranchCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     borderRadius: 12,
     padding: 14,
     ...Platform.select({
-      web: { boxShadow: '0 1px 3px rgba(0,0,0,0.04)' },
+      web: { boxShadow: "0 1px 3px rgba(0,0,0,0.04)" },
       default: { elevation: 1 },
     }),
   },
   mobileBranchTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 8,
   },
   mobileBranchName: {
     fontSize: 15,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
     marginBottom: 2,
   },
   mobileBranchType: {
     fontSize: 12,
-    color: '#64748B',
+    color: "#64748B",
     marginBottom: 10,
   },
   mobileBranchDetailsGrid: {
-    flexDirection: 'row',
-    backgroundColor: '#F8FAFC',
+    flexDirection: "row",
+    backgroundColor: "#F8FAFC",
     borderRadius: 8,
     padding: 10,
     gap: 10,
@@ -2013,27 +2165,27 @@ const styles = StyleSheet.create({
   },
   mobileBranchDetailLabel: {
     fontSize: 10,
-    fontWeight: '700',
-    color: '#64748B',
+    fontWeight: "700",
+    color: "#64748B",
     marginBottom: 2,
     letterSpacing: 0.3,
   },
   mobileBranchDetailVal: {
     fontSize: 12.5,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   mobileBranchDetailSub: {
     fontSize: 11,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 1,
   },
   mobileBranchFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: "#F1F5F9",
     paddingTop: 10,
   },
 });

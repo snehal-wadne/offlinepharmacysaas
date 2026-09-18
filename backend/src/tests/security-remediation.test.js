@@ -14,6 +14,7 @@ const assert = require("assert");
 const { pool } = require("../db/connection");
 const authService = require("../services/auth.service");
 const cashierService = require("../services/cashier.service");
+const { createSupabaseTestToken } = require("../utils/supabase");
 
 const BASE_URL = process.env.API_URL || "http://localhost:5000";
 
@@ -100,10 +101,12 @@ async function runSecuritySuite() {
     tenantBBranchId = tenantBBranch.rows[0].id;
 
     // Authenticate legitimate Tenant A Owner
-    const legitimateLogin = await authService.googleLogin({
+    const legitimateToken = createSupabaseTestToken({
       email: "surajmore303@gmail.com",
-      name: "Suraj More",
-      googleSub: "google_owner_test_123",
+      sub: "google_owner_test_123",
+    });
+    const legitimateLogin = await authService.googleLogin({
+      token: legitimateToken,
     });
     const tenantAOwnerToken = legitimateLogin.token;
     assert.ok(tenantAOwnerToken, "Legitimate owner token must be generated");
@@ -316,15 +319,25 @@ async function runSecuritySuite() {
 
     // Attempt Google login as an uninvited stranger requesting OWNER role
     const attackerEmail = `attacker_${Date.now()}@untrusted-domain.com`;
-    const attackerLogin = await authService.googleLogin({
+    const attackerSub = `google_attacker_${Date.now()}`;
+    const attackerToken = createSupabaseTestToken({
       email: attackerEmail,
-      name: "Malicious Actor",
-      role: "OWNER",
-      googleSub: `google_attacker_${Date.now()}`,
+      sub: attackerSub,
     });
-
-    attackerUserId = attackerLogin.user?.id;
-    assert.ok(attackerUserId, "Attacker user record created");
+    try {
+      await authService.googleLogin({
+        token: attackerToken,
+      });
+      assert.fail("Stranger Google login must be rejected");
+    } catch (err) {
+      assert.ok(
+        err.message.includes("not registered"),
+        "Stranger Google login must be rejected as not registered",
+      );
+      testPass(
+        "Stranger Google login safely rejected without access (no account created or attached)",
+      );
+    }
 
     // 1. Must NOT displace existing owner of Tenant A
     const postAttackOrg = await pool.query(
@@ -338,36 +351,17 @@ async function runSecuritySuite() {
     );
     testPass("Tenant A owner_id intact (no owner displacement)");
 
-    // 2. Stranger must NOT be auto-assigned to Tenant A
-    assert.strictEqual(
-      attackerLogin.user.organisationId,
-      null,
-      "Stranger user must have organisationId === null",
+    // 2. Verify no user or memberships created for stranger
+    const attackerUsers = await pool.query(
+      "SELECT id FROM users WHERE email = $1;",
+      [attackerEmail],
     );
     assert.strictEqual(
-      attackerLogin.user.isOwner,
-      false,
-      "Stranger user must have isOwner === false",
-    );
-    assert.notStrictEqual(
-      attackerLogin.user.role,
-      "OWNER",
-      "Stranger user must not receive OWNER role",
-    );
-
-    // 3. Verify no memberships created in organisation_memberships for Tenant A
-    const attackerMems = await pool.query(
-      "SELECT * FROM organisation_memberships WHERE user_id = $1;",
-      [attackerUserId],
-    );
-    assert.strictEqual(
-      attackerMems.rows.length,
+      attackerUsers.rows.length,
       0,
-      "Stranger must have 0 automatic organisation memberships",
+      "Stranger must not have a database user record created",
     );
-    testPass(
-      "Stranger Google login receives null organisation context and isOwner=false",
-    );
+    testPass("No rogue user or membership created for stranger");
 
     // =========================================================================
     // TEST 6: Legitimate Tenant Flow

@@ -20,7 +20,7 @@ const authenticate = async (req, res, next) => {
       const token = authHeader.split(" ")[1].trim();
 
       // 1. Primary: Verify Supabase Auth JWT
-      const supabaseDecoded = verifySupabaseToken(token);
+      const supabaseDecoded = await verifySupabaseToken(token);
       if (supabaseDecoded && supabaseDecoded.sub) {
         const isUuid = (str) =>
           typeof str === "string" &&
@@ -43,7 +43,7 @@ const authenticate = async (req, res, next) => {
           `SELECT id, name, email, phone, staff_id AS "staffId", status, 
                   is_platform_superadmin, supabase_auth_id
            FROM users
-           WHERE (supabase_auth_id = $1 OR (supabase_auth_id IS NULL AND LOWER(email) = LOWER($2)))
+           WHERE (supabase_auth_id = $1 OR LOWER(email) = LOWER($2))
              AND status = 'ACTIVE'
            LIMIT 1;`,
           [subUuid, supabaseDecoded.email || ""],
@@ -51,8 +51,8 @@ const authenticate = async (req, res, next) => {
 
         if (userRes.rows.length > 0) {
           user = userRes.rows[0];
-          // JIT link if supabase_auth_id was not yet set on existing matching user
-          if (!user.supabase_auth_id && subUuid) {
+          // JIT link if supabase_auth_id differs
+          if (user.supabase_auth_id !== subUuid) {
             await pool
               .query("UPDATE users SET supabase_auth_id = $1 WHERE id = $2;", [
                 subUuid,

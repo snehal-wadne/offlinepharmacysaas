@@ -97,7 +97,6 @@ async function setupDatabase() {
     await migrateSuperadminPlatform();
     await migrateSupabaseAuth();
     console.log(
-      "  ✓ Platform tables, sequences, and subscription tiers verified.\n",
       "  ✓ Platform tables, sequences, subscription tiers, and Supabase identity mapping verified.\n",
     );
 

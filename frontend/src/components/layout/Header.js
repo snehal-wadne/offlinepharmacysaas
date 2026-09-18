@@ -43,6 +43,11 @@ export default function Header({
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [branchOptions, setBranchOptions] = useState(DEFAULT_BRANCH_OPTIONS);
 
+  const displayBranch =
+    typeof currentBranch === "object" && currentBranch !== null
+      ? currentBranch.name || currentBranch.branchCode || "Main Branch"
+      : String(currentBranch || "All Branches");
+
   const fetchBranchesFromDb = async () => {
     try {
       const result = await apiGet("/api/branches");
@@ -185,7 +190,12 @@ export default function Header({
         )}
 
         {/* Active Branch Switcher Dropdown */}
-        <View style={[styles.branchSelectorRow, isMobile && styles.branchSelectorRowMobile]}>
+        <View
+          style={[
+            styles.branchSelectorRow,
+            isMobile && styles.branchSelectorRowMobile,
+          ]}
+        >
           {!isMobile && <Text style={styles.branchLabel}>Store / Branch</Text>}
           <View style={styles.branchAnchorContainer}>
             <Pressable
@@ -193,13 +203,22 @@ export default function Header({
                 if (!dropdownOpen) fetchBranchesFromDb();
                 setDropdownOpen(!dropdownOpen);
               }}
-              style={[styles.branchButton, isMobile && styles.branchButtonMobile]}
+              style={[
+                styles.branchButton,
+                isMobile && styles.branchButtonMobile,
+              ]}
               accessibilityRole="button"
               accessibilityLabel="Select Branch"
             >
               <Text style={styles.branchStoreIcon}>📍</Text>
-              <Text style={[styles.branchButtonText, isMobile && styles.branchButtonTextMobile]} numberOfLines={1}>
-                {currentBranch}
+              <Text
+                style={[
+                  styles.branchButtonText,
+                  isMobile && styles.branchButtonTextMobile,
+                ]}
+                numberOfLines={1}
+              >
+                {displayBranch}
               </Text>
               <Text style={styles.chevron}>▾</Text>
             </Pressable>
@@ -216,11 +235,15 @@ export default function Header({
                     Select Active Store Branch
                   </Text>
                   {branchOptions.map((branch) => {
-                    const isSelected = branch === currentBranch;
+                    const branchName =
+                      typeof branch === "object" && branch !== null
+                        ? branch.name || branch.branchCode || "Branch"
+                        : String(branch);
+                    const isSelected = branchName === displayBranch;
                     return (
                       <Pressable
-                        key={branch}
-                        onPress={() => handleSelectBranch(branch)}
+                        key={branchName}
+                        onPress={() => handleSelectBranch(branchName)}
                         style={[
                           styles.dropdownItem,
                           isSelected && styles.dropdownItemSelected,
@@ -232,7 +255,7 @@ export default function Header({
                             isSelected && styles.dropdownItemTextSelected,
                           ]}
                         >
-                          📍 {branch}
+                          📍 {branchName}
                         </Text>
                         {isSelected && <Text style={styles.checkmark}>✓</Text>}
                       </Pressable>
@@ -422,7 +445,9 @@ export default function Header({
       )}
 
       {/* Right: Sync Status & User Profile */}
-      <View style={[styles.rightSection, isMobile && styles.rightSectionMobile]}>
+      <View
+        style={[styles.rightSection, isMobile && styles.rightSectionMobile]}
+      >
         {/* Subscription Plan Quick Badge */}
         {!isMobile && (
           <Pressable
@@ -499,15 +524,27 @@ export default function Header({
         {/* Quick Settings Icon */}
         <Pressable
           onPress={() => onNavigate && onNavigate("tax-settings")}
-          style={[styles.quickSettingsButton, isMobile && styles.quickSettingsButtonMobile]}
+          style={[
+            styles.quickSettingsButton,
+            isMobile && styles.quickSettingsButtonMobile,
+          ]}
           accessibilityRole="button"
           accessibilityLabel="Settings"
         >
-          <Text style={[styles.quickSettingsIcon, isMobile && { fontSize: 13 }]}>⚙️</Text>
+          <Text
+            style={[styles.quickSettingsIcon, isMobile && { fontSize: 13 }]}
+          >
+            ⚙️
+          </Text>
         </Pressable>
 
         {/* User Profile */}
-        <View style={[styles.profileContainer, isMobile && styles.profileContainerMobile]}>
+        <View
+          style={[
+            styles.profileContainer,
+            isMobile && styles.profileContainerMobile,
+          ]}
+        >
           <View
             style={[
               styles.avatar,
@@ -518,7 +555,9 @@ export default function Header({
               },
             ]}
           >
-            <Text style={[styles.avatarText, isMobile && styles.avatarTextMobile]}>
+            <Text
+              style={[styles.avatarText, isMobile && styles.avatarTextMobile]}
+            >
               {currentUser?.isOwner ||
               (currentUser?.role || "").toUpperCase() === "OWNER"
                 ? "👑"
@@ -551,11 +590,19 @@ export default function Header({
           {onSignOut && (
             <Pressable
               onPress={onSignOut}
-              style={[styles.signOutButton, isMobile && styles.signOutButtonMobile]}
+              style={[
+                styles.signOutButton,
+                isMobile && styles.signOutButtonMobile,
+              ]}
               accessibilityRole="button"
               accessibilityLabel="Sign Out"
             >
-              <Text style={[styles.signOutText, isMobile && styles.signOutTextMobile]}>
+              <Text
+                style={[
+                  styles.signOutText,
+                  isMobile && styles.signOutTextMobile,
+                ]}
+              >
                 {isMobile ? "🚪" : "Sign Out"}
               </Text>
             </Pressable>

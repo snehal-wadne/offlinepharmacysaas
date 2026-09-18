@@ -13,7 +13,7 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- handled through organisation_memberships.
 
 CREATE TABLE IF NOT EXISTS users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
 -- Primary account identity used by the application.
 email VARCHAR(255) UNIQUE NOT NULL,

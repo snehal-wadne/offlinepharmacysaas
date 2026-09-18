@@ -43,7 +43,7 @@ const authenticateUser = async (req) => {
 
   // 1. Platform Superadmin Tokens (pf_platform_... or dev superadmin)
   // 1. Supabase Auth JWT (Primary)
-  const supabaseDecoded = verifySupabaseToken(token);
+  const supabaseDecoded = await verifySupabaseToken(token);
   if (supabaseDecoded && supabaseDecoded.sub) {
     const crypto = require("crypto");
     const subUuid = isUuid(supabaseDecoded.sub)

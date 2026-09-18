@@ -1,27 +1,29 @@
 import { Platform } from 'react-native';
+import { getAccessToken } from './supabaseClient';
 
 const API_BASE_URL =
   Platform.OS === 'android'
     ? 'http://10.0.2.2:5000/api/superadmin'
     : 'http://localhost:5000/api/superadmin';
 
-// Default platform token for superadmin clearance
-let superadminToken = 'pf_platform_default_dev';
+let customSuperadminToken: string | null = null;
 
 export function setSuperadminToken(token: string) {
-  superadminToken = token;
+  customSuperadminToken = token;
 }
 
-export function getSuperadminToken(): string {
-  return superadminToken;
+export function getSuperadminToken(): string | null {
+  return customSuperadminToken;
 }
 
 async function apiRequest<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 
+  const token = customSuperadminToken || (await getAccessToken());
+
   const defaultHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
-    'Authorization': `Bearer ${superadminToken}`,
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
   };
 
   const config: RequestInit = {
@@ -50,6 +52,14 @@ async function apiRequest<T = any>(endpoint: string, options: RequestInit = {}):
     console.error(`Superadmin API Error (${endpoint}):`, error.message);
     throw error;
   }
+}
+
+// ------------------------------------------------------------
+// AUTH / PROFILE
+// ------------------------------------------------------------
+
+export async function fetchSuperadminMe() {
+  return apiRequest('/auth/me', { method: 'GET' });
 }
 
 // ------------------------------------------------------------

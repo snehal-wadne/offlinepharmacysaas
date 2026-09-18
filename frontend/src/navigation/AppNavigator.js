@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   StyleSheet,
   useWindowDimensions,
   Platform,
+  ActivityIndicator,
 } from "react-native";
 import Sidebar from "../components/layout/Sidebar";
 import Header from "../components/layout/Header";
@@ -14,6 +15,8 @@ import LoginScreen from "../screens/auth/LoginScreen";
 import { PosProvider } from "../context/PosContext";
 import { OfflineSyncProvider } from "../offline/OfflineSyncContext";
 import { setAuthSession, clearAuthSession } from "../api/apiClient";
+import { supabase } from "../api/supabaseClient";
+import { API_URL } from "../config";
 import { syncEngine } from "../sync";
 
 // 0. Sales & Cashier Screens (Sales / POS Billing, Cash Register)
@@ -63,9 +66,10 @@ export default function AppNavigator() {
 
   // Active Route State (Default: 'dashboard')
   const [currentRoute, setCurrentRoute] = useState("dashboard");
-  const [selectedBranch, setSelectedBranch] = useState("Main Branch");
-  const [selectedCustomerId, setSelectedCustomerId] = useState("CUST-1040");
+  const [selectedBranch, setSelectedBranch] = useState(null);
+  const [selectedCustomerId, setSelectedCustomerId] = useState(null);
   const [toastMessage, setToastMessage] = useState("");
+  const [authError, setAuthError] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [branchRefreshKey, setBranchRefreshKey] = useState(0);
 
@@ -73,8 +77,153 @@ export default function AppNavigator() {
     setBranchRefreshKey((prev) => prev + 1);
   };
 
-  // Authenticated User State (Null by default to show Login & Sign-up screen)
+  // 3-state Auth Lifecycle: 'INITIALIZING' | 'AUTHENTICATED' | 'UNAUTHENTICATED' | 'AUTHENTICATED_INCOMPLETE_ONBOARDING'
+  const [authStatus, setAuthStatus] = useState("INITIALIZING");
   const [currentUser, setCurrentUser] = useState(null);
+  const [googleOnboardingData, setGoogleOnboardingData] = useState(null);
+
+  const resolveBranchName = (user) => {
+    if (!user || user.hasBranch === false) return null;
+    if (typeof user.branch === "string" && user.branch.trim())
+      return user.branch;
+    if (user.branch && typeof user.branch === "object" && user.branch.name)
+      return user.branch.name;
+    if (
+      user.branchName &&
+      typeof user.branchName === "string" &&
+      user.branchName.trim()
+    )
+      return user.branchName;
+    return null;
+  };
+
+  const restoreAuthSession = async (session) => {
+    if (!session?.access_token) {
+      setCurrentUser(null);
+      setGoogleOnboardingData(null);
+      setAuthStatus("UNAUTHENTICATED");
+      return;
+    }
+
+    let authIntent = null;
+    if (typeof window !== "undefined") {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        authIntent =
+          urlParams.get("auth_intent") ||
+          window.sessionStorage?.getItem("pharmaflow_auth_intent");
+      } catch (e) {}
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/api/auth/me`, {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (response.ok) {
+        const resData = await response.json();
+        const user = resData.data?.user || resData.user;
+        setCurrentUser(user);
+        setGoogleOnboardingData(null);
+        setAuthError("");
+        setAuthSession({ organisationId: user?.organisationId });
+
+        if (user && user.hasBranch === false) {
+          setCurrentRoute("branches");
+          setSelectedBranch(null);
+        } else if (user) {
+          setSelectedBranch(resolveBranchName(user));
+        }
+
+        setAuthStatus("AUTHENTICATED");
+
+        // Clean up auth_intent
+        if (typeof window !== "undefined") {
+          try {
+            window.sessionStorage?.removeItem("pharmaflow_auth_intent");
+            if (window.history && window.location.search) {
+              window.history.replaceState(
+                {},
+                document.title,
+                window.location.pathname,
+              );
+            }
+          } catch (e) {}
+        }
+        return;
+      }
+
+      // If user not found in PostgreSQL (401 / 404)
+      if (authIntent === "signup") {
+        // User authenticated via Supabase Google OAuth, but needs to complete pharmacy onboarding form
+        setGoogleOnboardingData({
+          token: session.access_token,
+          email: session.user?.email || "",
+          name:
+            session.user?.user_metadata?.full_name ||
+            session.user?.user_metadata?.name ||
+            "",
+        });
+        setAuthStatus("AUTHENTICATED_INCOMPLETE_ONBOARDING");
+        return;
+      }
+
+      // User attempted Google login, but no PostgreSQL account exists
+      await supabase.auth.signOut();
+      await clearAuthSession();
+      setCurrentUser(null);
+      setGoogleOnboardingData(null);
+      setAuthStatus("UNAUTHENTICATED");
+
+      if (authIntent === "login") {
+        setAuthError(
+          "No PharmaFlow account found for this Google ID. Please register your pharmacy using Sign Up.",
+        );
+      }
+
+      if (typeof window !== "undefined") {
+        try {
+          window.sessionStorage?.removeItem("pharmaflow_auth_intent");
+          if (window.history && window.location.search) {
+            window.history.replaceState(
+              {},
+              document.title,
+              window.location.pathname,
+            );
+          }
+        } catch (e) {}
+      }
+    } catch (e) {
+      console.warn("Session restore error:", e.message);
+      setAuthStatus("UNAUTHENTICATED");
+    }
+  };
+
+  useEffect(() => {
+    // 1. Initial check on mount
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      restoreAuthSession(session);
+    });
+
+    // 2. Real-time auth state changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+        restoreAuthSession(session);
+      } else if (event === "SIGNED_OUT") {
+        setCurrentUser(null);
+        setAuthStatus("UNAUTHENTICATED");
+      }
+    });
+
+    return () => {
+      subscription?.unsubscribe();
+    };
+  }, []);
 
   // Pharmacy Architecture Mode: Multi-Branch (true) vs Single-Shop (false)
   const [isMultiBranch, setIsMultiBranch] = useState(true);
@@ -87,6 +236,14 @@ export default function AppNavigator() {
   };
 
   const handleNavigate = (routeKey, payload) => {
+    if (
+      currentUser &&
+      currentUser.hasBranch === false &&
+      routeKey !== "branches"
+    ) {
+      showToast("Please create your initial pharmacy branch first.");
+      return;
+    }
     if (payload) {
       setSelectedCustomerId(payload);
     }
@@ -111,14 +268,36 @@ export default function AppNavigator() {
     );
   };
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
     setCurrentUser(null);
-    clearAuthSession();
+    setAuthStatus("UNAUTHENTICATED");
+    await clearAuthSession();
     showToast("Signed out successfully.");
   };
 
   // Render Active Screen Component
   const renderScreen = () => {
+    if (currentUser && currentUser.hasBranch === false) {
+      return (
+        <BranchesScreen
+          onNavigate={handleNavigate}
+          onShowToast={showToast}
+          isMultiBranch={isMultiBranch}
+          currentUser={currentUser}
+          isStandaloneOnboarding={true}
+          onBranchesUpdated={async () => {
+            handleBranchesUpdated();
+            const {
+              data: { session },
+            } = await supabase.auth.getSession();
+            if (session) {
+              await restoreAuthSession(session);
+            }
+          }}
+        />
+      );
+    }
+
     switch (currentRoute) {
       case "dashboard":
         return (
@@ -271,7 +450,15 @@ export default function AppNavigator() {
             onNavigate={handleNavigate}
             onShowToast={showToast}
             isMultiBranch={isMultiBranch}
-            onBranchesUpdated={handleBranchesUpdated}
+            onBranchesUpdated={async () => {
+              handleBranchesUpdated();
+              const {
+                data: { session },
+              } = await supabase.auth.getSession();
+              if (session) {
+                await restoreAuthSession(session);
+              }
+            }}
           />
         );
       case "users":
@@ -365,21 +552,135 @@ export default function AppNavigator() {
     }
   };
 
-  // Auth Guard: If no user is logged in, present the Login Screen
-  if (!currentUser) {
+  // Auth Guard: Render loading screen during initialization
+  if (authStatus === "INITIALIZING") {
+    return (
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: "#F4FAF8",
+        }}
+      >
+        <ActivityIndicator size="large" color="#0F766E" />
+        <Text
+          style={{
+            marginTop: 14,
+            color: "#64748B",
+            fontSize: 14,
+            fontWeight: "600",
+          }}
+        >
+          Loading workspace...
+        </Text>
+      </View>
+    );
+  }
+
+  // Auth Guard: If incomplete onboarding or unauthenticated
+  if (
+    authStatus === "AUTHENTICATED_INCOMPLETE_ONBOARDING" ||
+    authStatus === "UNAUTHENTICATED" ||
+    !currentUser
+  ) {
     return (
       <LoginScreen
+        googleOnboardingData={
+          authStatus === "AUTHENTICATED_INCOMPLETE_ONBOARDING"
+            ? googleOnboardingData
+            : null
+        }
+        authError={authError}
+        onClearAuthError={() => setAuthError("")}
+        onCancelGoogleOnboarding={async () => {
+          await supabase.auth.signOut();
+          await clearAuthSession();
+          setGoogleOnboardingData(null);
+          setCurrentUser(null);
+          setAuthStatus("UNAUTHENTICATED");
+          setAuthError("");
+        }}
         onLoginSuccess={(user, token) => {
-          setAuthSession({ token, organisationId: user?.organisationId });
+          setAuthSession({ organisationId: user?.organisationId });
           setCurrentUser(user);
-          if (user?.branch) {
-            setSelectedBranch(user.branch);
+          setGoogleOnboardingData(null);
+          setAuthError("");
+          setAuthStatus("AUTHENTICATED");
+          if (user && user.hasBranch === false) {
+            setCurrentRoute("branches");
+            setSelectedBranch(null);
+          } else {
+            const branchName = resolveBranchName(user);
+            setSelectedBranch(branchName);
           }
-          showToast(
-            `Welcome back, ${user.display_name || user.name}! (Branch: ${user.branch || "Main Branch"})`,
-          );
+          showToast(`Welcome back, ${user.display_name || user.name}!`);
         }}
       />
+    );
+  }
+
+  // Auth Guard: ZERO-BRANCH ONBOARDING GUARD (Part 2 & Part 3)
+  // When currentUser.hasBranch === false, DO NOT MOUNT PosProvider, OfflineSyncProvider, Sidebar, Header, or workspace!
+  // Render Branch Management ONLY.
+  if (currentUser && currentUser.hasBranch === false) {
+    return (
+      <View style={styles.appContainer}>
+        <View style={styles.mainWrapper}>
+          {/* Dedicated Onboarding Header */}
+          <View style={styles.onboardingHeader}>
+            <View style={styles.onboardingBrandRow}>
+              <View style={styles.onboardingIconCircle}>
+                <Text style={styles.onboardingIconText}>Rx</Text>
+              </View>
+              <View>
+                <Text style={styles.onboardingTitle}>
+                  {currentUser.organisationName ||
+                    currentUser.name ||
+                    "PharmaFlow ERP"}
+                </Text>
+                <Text style={styles.onboardingSubtitle}>
+                  Initial Setup — Create Your Pharmacy's First Branch
+                </Text>
+              </View>
+            </View>
+            <Pressable
+              onPress={handleSignOut}
+              style={styles.onboardingSignOutBtn}
+            >
+              <Text style={styles.onboardingSignOutText}>Sign Out</Text>
+            </Pressable>
+          </View>
+
+          {/* Toast Notification */}
+          {toastMessage ? (
+            <View style={styles.toastBanner}>
+              <View style={styles.toastDot} />
+              <Text style={styles.toastText}>{toastMessage}</Text>
+            </View>
+          ) : null}
+
+          {/* Standalone Branch Management */}
+          <View style={styles.screenContainer}>
+            <BranchesScreen
+              onNavigate={handleNavigate}
+              onShowToast={showToast}
+              isMultiBranch={isMultiBranch}
+              currentUser={currentUser}
+              isStandaloneOnboarding={true}
+              onBranchesUpdated={async () => {
+                handleBranchesUpdated();
+                const {
+                  data: { session },
+                } = await supabase.auth.getSession();
+                if (session) {
+                  await restoreAuthSession(session);
+                }
+              }}
+            />
+          </View>
+        </View>
+      </View>
     );
   }
 
@@ -594,5 +895,57 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 18,
     fontWeight: "700",
+  },
+  onboardingHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    backgroundColor: "#0F766E",
+    borderBottomWidth: 1,
+    borderBottomColor: "#0D9488",
+  },
+  onboardingBrandRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  onboardingIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: "#14B8A6",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  onboardingIconText: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    fontWeight: "800",
+  },
+  onboardingTitle: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  onboardingSubtitle: {
+    color: "#CCFBF1",
+    fontSize: 12,
+    fontWeight: "500",
+    marginTop: 2,
+  },
+  onboardingSignOutBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 6,
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.3)",
+  },
+  onboardingSignOutText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "600",
   },
 });

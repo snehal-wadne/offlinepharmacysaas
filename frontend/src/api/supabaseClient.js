@@ -21,13 +21,20 @@ export const SUPABASE_URL =
 export const SUPABASE_ANON_KEY =
   process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ||
   process.env.SUPABASE_ANON_KEY ||
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.dummy_anon_key_for_client_initialization";
+  process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+  process.env.SUPABASE_PUBLISHABLE_KEY;
+
+if (!SUPABASE_ANON_KEY) {
+  throw new Error(
+    "Configuration Error: EXPO_PUBLIC_SUPABASE_ANON_KEY is required for client Supabase authentication.",
+  );
+}
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: false,
+    detectSessionInUrl: true,
   },
 });
 
@@ -59,14 +66,42 @@ export async function signUp({ email, password, name }) {
 }
 
 /**
- * Sign in with Google OAuth
+ * Sign in / Sign up with Google OAuth
+ * @param {Object} options
+ * @param {'login'|'signup'} [options.mode='login']
  */
-export async function signInWithGoogle() {
+export async function signInWithGoogle({ mode = "login" } = {}) {
+  const frontendUrl =
+    process.env.EXPO_PUBLIC_APP_URL ||
+    (typeof window !== "undefined" && window.location?.origin
+      ? window.location.origin
+      : "http://localhost:8081");
+
+  if (typeof window !== "undefined" && window.sessionStorage) {
+    try {
+      window.sessionStorage.setItem("pharmaflow_auth_intent", mode);
+    } catch (e) {}
+  }
+
+  const redirectTo = `${frontendUrl}/?auth_intent=${encodeURIComponent(mode)}`;
+
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
+    options: {
+      redirectTo,
+    },
   });
   if (error) throw error;
   return data;
+}
+
+/**
+ * Explicitly refresh the current session
+ */
+export async function refreshSession() {
+  const { data, error } = await supabase.auth.refreshSession();
+  if (error) throw error;
+  return data?.session || null;
 }
 
 /**

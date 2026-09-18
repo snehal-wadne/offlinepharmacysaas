@@ -1,5 +1,5 @@
-import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Redirect, Slot, router, usePathname, RouterProvider } from 'expo-router';
 
 import { SuperAdminProvider } from './store';
@@ -12,18 +12,83 @@ import PharmacyPaymentPage from './payment';
 import ConfirmationPage from './confirmation';
 import SubscriptionPlansPage from './subscription-plans';
 import RazorPayPaymentsPage from './razorpay-payment';
+import SuperAdminLogin from './login';
+import { fetchSuperadminMe } from '../../api/superadminApi';
+import { supabase } from '../../api/supabaseClient';
 
 export default function SuperAdminLayout() {
+  const [loading, setLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [adminUser, setAdminUser] = useState<any>(null);
+
+  const checkAuth = async () => {
+    setLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setIsAuthenticated(false);
+        setAdminUser(null);
+        setLoading(false);
+        return;
+      }
+
+      const res = await fetchSuperadminMe();
+      if (res.success && (res.user?.isPlatformSuperadmin || res.user?.role === 'SUPERADMIN')) {
+        setIsAuthenticated(true);
+        setAdminUser(res.user);
+      } else {
+        setIsAuthenticated(false);
+        setAdminUser(null);
+      }
+    } catch (e) {
+      setIsAuthenticated(false);
+      setAdminUser(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    checkAuth();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      checkAuth();
+    });
+    return () => {
+      subscription?.unsubscribe();
+    };
+  }, []);
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    setIsAuthenticated(false);
+    setAdminUser(null);
+  };
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0F172A' }}>
+        <ActivityIndicator size="large" color="#38BDF8" />
+        <Text style={{ marginTop: 12, color: '#94A3B8', fontSize: 13, fontWeight: '600' }}>
+          Verifying Superadmin Clearance...
+        </Text>
+      </View>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <SuperAdminLogin onLoginSuccess={() => checkAuth()} />;
+  }
+
   return (
     <RouterProvider>
       <SuperAdminProvider>
-        <SuperAdminShell />
+        <SuperAdminShell adminUser={adminUser} onSignOut={handleSignOut} />
       </SuperAdminProvider>
     </RouterProvider>
   );
 }
 
-function SuperAdminShell() {
+function SuperAdminShell({ adminUser, onSignOut }: { adminUser?: any; onSignOut: () => void }) {
   const pathname = usePathname();
 
   if (pathname === '/superadmin') {
@@ -73,8 +138,11 @@ function SuperAdminShell() {
         </View>
 
         <View style={styles.sidebarFooter}>
+          <Pressable onPress={onSignOut}>
+            <Text style={styles.logout}>⎋ Sign Out</Text>
+          </Pressable>
           <Pressable onPress={() => { if (typeof window !== 'undefined') window.location.href = '/'; }}>
-            <Text style={styles.logout}>↪ Back to ERP</Text>
+            <Text style={[styles.logout, { color: '#627D98' }]}>↪ Back to ERP</Text>
           </Pressable>
           <Text style={styles.date}>▣ 01 Sep - 30 Sep</Text>
         </View>
@@ -85,10 +153,17 @@ function SuperAdminShell() {
           <Text style={styles.menuIcon}>☰</Text>
           <View style={styles.admin}>
             <View>
-              <Text style={styles.adminName}>Super Admin</Text>
-              <Text style={styles.adminRole}>Super Administrator</Text>
+              <Text style={styles.adminName}>{adminUser?.name || 'Super Admin'}</Text>
+              <Text style={styles.adminRole}>{adminUser?.email || 'Super Administrator'}</Text>
             </View>
-            <Text style={styles.avatar}>SA</Text>
+            <Text style={styles.avatar}>
+              {(adminUser?.name || 'SA')
+                .split(' ')
+                .map((n: string) => n[0])
+                .join('')
+                .slice(0, 2)
+                .toUpperCase()}
+            </Text>
           </View>
         </View>
         {renderSuperAdminContent(pathname)}

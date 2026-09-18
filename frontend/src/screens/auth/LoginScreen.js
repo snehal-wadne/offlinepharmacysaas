@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Image,
   Pressable,
@@ -9,33 +9,66 @@ import {
   useWindowDimensions,
   View,
   ActivityIndicator,
-  Modal,
 } from "react-native";
 import { API_URL } from "../../config";
+import { supabase, signInWithGoogle } from "../../api/supabaseClient";
 
-export default function LoginScreen({ onLoginSuccess }) {
+export default function LoginScreen({
+  onLoginSuccess,
+  googleOnboardingData,
+  onCancelGoogleOnboarding,
+  authError,
+  onClearAuthError,
+}) {
   // Mode: 'signin' | 'signup'
-  const [authMode, setAuthMode] = useState("signin");
+  const [authMode, setAuthMode] = useState(
+    googleOnboardingData ? "signup" : "signin",
+  );
 
-  const [signInEmail, setSignInEmail] = useState("admin@flora.edu.in");
-  const [signInPassword, setSignInPassword] = useState("admin123");
+  useEffect(() => {
+    if (authError) {
+      setErrorMessage(authError);
+    }
+  }, [authError]);
+
+  // Sign In States
+  const [signInEmail, setSignInEmail] = useState("");
+  const [signInPassword, setSignInPassword] = useState("");
   const [showSignInPassword, setShowSignInPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
-  // Sign Up States
-  const [signUpName, setSignUpName] = useState("");
-  const [signUpEmail, setSignUpEmail] = useState("");
-  const [signUpBranch, setSignUpBranch] = useState(
-    "FIT Main Campus Hospital Pharmacy",
+  // Pharmacy Owner Onboarding (Sign Up) States
+  const [signUpPharmacyName, setSignUpPharmacyName] = useState("");
+  const [signUpAdminName, setSignUpAdminName] = useState(
+    googleOnboardingData?.name || "",
   );
-  const [signUpRole, setSignUpRole] = useState("Pharmacist");
+  const [signUpEmail, setSignUpEmail] = useState(
+    googleOnboardingData?.email || "",
+  );
+  const [signUpPhone, setSignUpPhone] = useState("");
+  const [signUpAddress, setSignUpAddress] = useState("");
+  const [signUpCity, setSignUpCity] = useState("");
+  const [signUpState, setSignUpState] = useState("");
+  const [signUpPincode, setSignUpPincode] = useState("");
+  const [signUpGstNumber, setSignUpGstNumber] = useState("");
+  const [signUpBusinessType, setSignUpBusinessType] =
+    useState("Private Limited");
   const [signUpPassword, setSignUpPassword] = useState("");
   const [signUpConfirmPassword, setSignUpConfirmPassword] = useState("");
   const [showSignUpPassword, setShowSignUpPassword] = useState(false);
 
-  // Google OAuth Modal & Custom Account States
-  const [googleModalVisible, setGoogleModalVisible] = useState(false);
-  const [customGoogleEmail, setCustomGoogleEmail] = useState("");
+  // Sync Google Onboarding details if passed as prop
+  useEffect(() => {
+    if (googleOnboardingData) {
+      setAuthMode("signup");
+      if (googleOnboardingData.name) {
+        setSignUpAdminName(googleOnboardingData.name);
+      }
+      if (googleOnboardingData.email) {
+        setSignUpEmail(googleOnboardingData.email);
+      }
+    }
+  }, [googleOnboardingData]);
 
   // UI Feedback States
   const [isLoading, setIsLoading] = useState(false);
@@ -68,34 +101,43 @@ export default function LoginScreen({ onLoginSuccess }) {
     },
   ];
 
-  // Validate Gmail or institutional Google Workspace ID
-  const isValidGoogleEmail = (email) => {
+  const isValidEmail = (email) => {
     if (!email) return false;
     const trimmed = email.trim().toLowerCase();
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(trimmed);
   };
 
-  const loadDemoCredentials = () => {
-    setSignInEmail("admin@flora.edu.in");
-    setSignInPassword("admin123");
+  // Google OAuth Initiator via Supabase
+  const handleGoogleAuth = async (overrideMode) => {
+    setErrorMessage("");
+    setIsLoading(true);
+    try {
+      const mode = overrideMode || (authMode === "signin" ? "login" : "signup");
+      const { error } = await signInWithGoogle({ mode });
+      if (error) {
+        setErrorMessage(error.message || "Failed to initiate Google sign-in.");
+        setIsLoading(false);
+      }
+    } catch (err) {
+      setIsLoading(false);
+      setErrorMessage(err.message || "Google sign-in failed.");
+    }
   };
 
-  // Sign In Handler
+  // Sign In Handler (Authentic Supabase Auth + Authoritative Backend /api/auth/me)
   const handleSignIn = async () => {
     setErrorMessage("");
     setSuccessMessage("");
 
-    const email = signInEmail.trim();
+    const email = signInEmail.trim().toLowerCase();
     if (!email) {
-      setErrorMessage("Please enter your Google / Gmail ID.");
+      setErrorMessage("Please enter your email address.");
       return;
     }
 
-    if (!isValidGoogleEmail(email)) {
-      setErrorMessage(
-        "Please enter a valid Google / Gmail address (e.g. yourname@gmail.com).",
-      );
+    if (!isValidEmail(email)) {
+      setErrorMessage("Please enter a valid email address.");
       return;
     }
 
@@ -104,112 +146,167 @@ export default function LoginScreen({ onLoginSuccess }) {
       return;
     }
 
-    if (signInPassword.length < 6) {
-      setErrorMessage("Password must be at least 6 characters long.");
-      return;
-    }
-
     setIsLoading(true);
 
     try {
-      // 1. Attempt authentication with backend API
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000);
-
-      const response = await fetch(`${API_URL}/api/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          emailOrPhone: email,
+      // 1. Authenticate with Supabase Auth directly
+      const { data: authData, error: authError } =
+        await supabase.auth.signInWithPassword({
+          email,
           password: signInPassword,
-        }),
-        signal: controller.signal,
+        });
+
+      if (authError || !authData.session) {
+        setIsLoading(false);
+        setErrorMessage(authError?.message || "Invalid email or password.");
+        return;
+      }
+
+      const token = authData.session.access_token;
+
+      // 2. Fetch authoritative user context from backend
+      const response = await fetch(`${API_URL}/api/auth/me`, {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
       });
 
-      clearTimeout(timeoutId);
       setIsLoading(false);
 
       if (response.ok) {
-        const data = await response.json();
+        const resData = await response.json();
+        const user = resData.data?.user || resData.user;
         if (onLoginSuccess) {
-          onLoginSuccess(data.user, data.token);
+          onLoginSuccess(user, token);
         }
         return;
       }
 
       const errorData = await response.json().catch(() => ({}));
-      setErrorMessage(errorData.error || "Invalid email/phone or password.");
-    } catch (err) {
-      console.warn("Auth request failed or offline:", err.message);
-    }
-
-    // 2. Validate against authorized demo / local Google users
-    const validDemoCredentials =
-      (email === "root@falah.com" && signInPassword === "more#78548") ||
-      (email === "admin@flora.edu.in" && signInPassword === "admin123") ||
-      (email.endsWith("@gmail.com") && signInPassword.length >= 6);
-
-    setIsLoading(false);
-
-    if (validDemoCredentials) {
-      if (onLoginSuccess) {
-        onLoginSuccess({
-          id: `USR-${Date.now().toString().slice(-4)}`,
-          display_name: email.split("@")[0].replace(".", " ").toUpperCase(),
-          name: email.split("@")[0].replace(".", " ").toUpperCase(),
-          email: email,
-          role: "Administrator",
-          accessLevel: "Admin",
-          organisationId: "ORG-DEMO",
-          organisationName: "Demo Pharmacy",
-          branchId: "BRANCH-DEMO",
-          branch: "Main Branch",
-        });
-      }
-    } else {
+      await supabase.auth.signOut();
       setErrorMessage(
-        "Invalid credentials. Please verify your Gmail ID and password or use Demo Credentials.",
+        errorData.error ||
+          "Failed to load user workspace. Please ensure your account is active.",
       );
+    } catch (err) {
+      setIsLoading(false);
+      setErrorMessage("Authentication error: " + err.message);
     }
   };
 
-  // Sign Up Handler
+  // Sign Up Handler (Pharmacy Owner Onboarding)
   const handleSignUp = async () => {
     setErrorMessage("");
     setSuccessMessage("");
 
-    const name = signUpName.trim();
-    const email = signUpEmail.trim();
-    const branch = signUpBranch.trim();
+    const pharmacyName = signUpPharmacyName.trim();
+    const adminName = (googleOnboardingData?.name || signUpAdminName).trim();
+    const email = (googleOnboardingData?.email || signUpEmail)
+      .trim()
+      .toLowerCase();
+    const phone = signUpPhone.trim();
+    const address = signUpAddress.trim();
+    const city = signUpCity.trim();
+    const state = signUpState.trim();
+    const pincode = signUpPincode.trim();
+    const gstNumber = signUpGstNumber.trim();
+    const businessType = signUpBusinessType.trim() || "Private Limited";
 
-    if (!name || name.length < 2) {
-      setErrorMessage("Please enter your full name.");
+    if (!pharmacyName || pharmacyName.length < 2) {
+      setErrorMessage("Please enter pharmacy name.");
       return;
     }
 
-    if (!email) {
-      setErrorMessage("Please enter your Gmail / Google ID.");
+    if (!adminName || adminName.length < 2) {
+      setErrorMessage("Please enter owner / contact person.");
       return;
     }
 
-    if (!isValidGoogleEmail(email)) {
-      setErrorMessage(
-        "Please enter a valid Gmail / Google address (e.g. yourname@gmail.com).",
-      );
+    if (!email || !isValidEmail(email)) {
+      setErrorMessage("Please enter a valid email address.");
       return;
     }
 
-    if (!branch) {
-      setErrorMessage("Please select or enter the pharmacy branch name.");
+    if (!phone) {
+      setErrorMessage("Please enter phone / mobile number.");
       return;
     }
 
-    if (!signUpPassword) {
-      setErrorMessage("Please enter a secure password.");
+    if (!address) {
+      setErrorMessage("Please enter business address.");
       return;
     }
 
-    if (signUpPassword.length < 6) {
+    if (!city) {
+      setErrorMessage("Please enter city.");
+      return;
+    }
+
+    if (!state) {
+      setErrorMessage("Please enter state.");
+      return;
+    }
+
+    if (!pincode) {
+      setErrorMessage("Please enter pincode.");
+      return;
+    }
+
+    // Google OAuth Onboarding Branch
+    if (googleOnboardingData) {
+      setIsLoading(true);
+      try {
+        const response = await fetch(`${API_URL}/api/auth/google-onboard`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${googleOnboardingData.token}`,
+          },
+          body: JSON.stringify({
+            token: googleOnboardingData.token,
+            pharmacyName,
+            adminName,
+            name: adminName,
+            ownerName: adminName,
+            email,
+            phone,
+            address,
+            city,
+            state,
+            pincode,
+            gstNumber,
+            businessType,
+            createInitialBranch: false,
+          }),
+        });
+
+        const data = await response.json().catch(() => ({}));
+        setIsLoading(false);
+
+        if (!response.ok || !data.success) {
+          setErrorMessage(
+            data.error ||
+              "Failed to complete pharmacy onboarding. Please try again.",
+          );
+          return;
+        }
+
+        setSuccessMessage(
+          "Pharmacy registered successfully! Entering workspace...",
+        );
+        if (onLoginSuccess) {
+          onLoginSuccess(data.user, data.token || googleOnboardingData.token);
+        }
+      } catch (err) {
+        setIsLoading(false);
+        setErrorMessage("Onboarding error: " + err.message);
+      }
+      return;
+    }
+
+    // Email/Password Registration Branch
+    if (!signUpPassword || signUpPassword.length < 6) {
       setErrorMessage("Password must be at least 6 characters long.");
       return;
     }
@@ -219,100 +316,88 @@ export default function LoginScreen({ onLoginSuccess }) {
       return;
     }
 
+    setIsLoading(true);
+
     try {
+      // 1. Call Backend Pharmacy Owner Onboarding endpoint
       const response = await fetch(`${API_URL}/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name,
+          pharmacyName,
+          adminName,
+          name: adminName,
+          ownerName: adminName,
           email,
+          phone,
+          address,
+          city,
+          state,
+          pincode,
+          gstNumber,
+          businessType,
+          createInitialBranch: false,
           password: signUpPassword,
         }),
       });
 
       const data = await response.json().catch(() => ({}));
-      if (response.ok && data.success) {
-        setSuccessMessage("Account created successfully! Logging you in...");
 
-        // Auto-login with new credentials
-        const loginRes = await fetch(`${API_URL}/api/auth/login`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            emailOrPhone: email,
-            password: signUpPassword,
-          }),
+      if (!response.ok || !data.success) {
+        setIsLoading(false);
+        setErrorMessage(
+          data.error || "Failed to register pharmacy. Please try again.",
+        );
+        return;
+      }
+
+      setSuccessMessage("Pharmacy registered successfully! Signing in...");
+
+      // 2. Authenticate directly via Supabase Auth
+      const { data: authData, error: authError } =
+        await supabase.auth.signInWithPassword({
+          email,
+          password: signUpPassword,
         });
 
-        const loginData = await loginRes.json().catch(() => ({}));
+      if (authError || !authData.session) {
         setIsLoading(false);
-        if (loginRes.ok && loginData.user && onLoginSuccess) {
-          onLoginSuccess(loginData.user, loginData.token);
-          return;
-        }
-
         setAuthMode("signin");
         setSignInEmail(email);
         setSignInPassword(signUpPassword);
-      } else {
-        setIsLoading(false);
-        setErrorMessage(
-          data.error || "Failed to create account. Please try again.",
+        setSuccessMessage(
+          "Pharmacy registered! Please sign in with your credentials.",
         );
+        return;
       }
-    } catch (err) {
-      setIsLoading(false);
-      setErrorMessage("Network error during registration: " + err.message);
-    }
-  };
 
-  // Handle Google OAuth Sign-In (Owner & Staff)
-  const handleGoogleSignInSelect = async (googleUser) => {
-    setGoogleModalVisible(false);
-    setIsLoading(true);
-    setErrorMessage("");
+      const token = authData.session.access_token;
 
-    // Owner/role is decided entirely server-side (server-side email allowlist or
-    // existing organisation ownership) - the client only ever supplies the email.
-    // Never fabricate a signed-in session locally if the backend is unreachable;
-    // that would let anyone claim any identity (including Owner) with zero
-    // verification whenever the network happens to be down.
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000);
-
-      const response = await fetch(`${API_URL}/api/auth/google`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: googleUser.email,
-          name: googleUser.name,
-          googleSub:
-            googleUser.googleSub ||
-            `google_${googleUser.email.replace(/[^a-zA-Z0-9]/g, "_")}`,
-        }),
-        signal: controller.signal,
+      // 3. Fetch authoritative profile
+      const meRes = await fetch(`${API_URL}/api/auth/me`, {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
       });
 
-      clearTimeout(timeoutId);
       setIsLoading(false);
 
-      const data = await response.json().catch(() => ({}));
-
-      if (response.ok && data.user) {
+      if (meRes.ok) {
+        const meData = await meRes.json();
+        const user = meData.data?.user || meData.user;
         if (onLoginSuccess) {
-          onLoginSuccess(data.user, data.token);
+          onLoginSuccess(user, token);
         }
         return;
       }
 
-      setErrorMessage(data.error || "Google sign-in failed. Please try again.");
-    } catch (e) {
-      console.error("Google login request failed:", e.message);
+      setAuthMode("signin");
+      setSignInEmail(email);
+      setSignInPassword(signUpPassword);
+    } catch (err) {
       setIsLoading(false);
-      setErrorMessage(
-        "Unable to reach the server for Google sign-in. Please check your connection and try again.",
-      );
+      setErrorMessage("Registration error: " + err.message);
     }
   };
 
@@ -420,59 +505,134 @@ export default function LoginScreen({ onLoginSuccess }) {
               {/* HEADING & TAB TOGGLE */}
               <View style={styles.headingContainer}>
                 <Text style={styles.welcomeText}>
-                  {authMode === "signin" ? "Welcome Back!" : "Create Account"}
+                  {googleOnboardingData
+                    ? "Complete Pharmacy Registration"
+                    : authMode === "signin"
+                      ? "Welcome Back!"
+                      : "Create Account"}
                 </Text>
                 <Text style={styles.welcomeSubtext}>
-                  {authMode === "signin"
-                    ? "Sign in with your Google or verified pharmacy credentials"
-                    : "Register your Gmail ID to access the pharmacy workspace"}
+                  {googleOnboardingData
+                    ? `Complete your pharmacy setup for ${googleOnboardingData.email}`
+                    : authMode === "signin"
+                      ? "Sign in with your Google or verified pharmacy credentials"
+                      : "Register your Gmail ID to access the pharmacy workspace"}
                 </Text>
               </View>
 
-              {/* AUTH MODE TABS */}
-              <View style={styles.tabContainer}>
-                <Pressable
-                  style={[
-                    styles.tabButton,
-                    authMode === "signin" && styles.tabButtonActive,
-                  ]}
-                  onPress={() => {
-                    setAuthMode("signin");
-                    setErrorMessage("");
-                    setSuccessMessage("");
+              {/* GOOGLE ONBOARDING VERIFIED BANNER vs AUTH MODE TABS */}
+              {googleOnboardingData ? (
+                <View
+                  style={{
+                    backgroundColor: "#ecfdf5",
+                    borderWidth: 1,
+                    borderColor: "#a7f3d0",
+                    borderRadius: 10,
+                    padding: 12,
+                    marginBottom: 16,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
                   }}
                 >
-                  <Text
-                    style={[
-                      styles.tabText,
-                      authMode === "signin" && styles.tabTextActive,
-                    ]}
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 8,
+                      flex: 1,
+                    }}
                   >
-                    Sign In
-                  </Text>
-                </Pressable>
+                    <Text style={{ fontSize: 18 }}>✓</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={{
+                          color: "#065f46",
+                          fontWeight: "700",
+                          fontSize: 13,
+                        }}
+                      >
+                        Google ID Verified
+                      </Text>
+                      <Text
+                        style={{ color: "#047857", fontSize: 12 }}
+                        numberOfLines={1}
+                      >
+                        {googleOnboardingData.email}
+                      </Text>
+                    </View>
+                  </View>
+                  {onCancelGoogleOnboarding && (
+                    <Pressable
+                      onPress={onCancelGoogleOnboarding}
+                      style={{
+                        paddingVertical: 4,
+                        paddingHorizontal: 10,
+                        borderRadius: 6,
+                        backgroundColor: "#ffffff",
+                        borderWidth: 1,
+                        borderColor: "#cbd5e1",
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: "#475569",
+                          fontSize: 12,
+                          fontWeight: "600",
+                        }}
+                      >
+                        Cancel
+                      </Text>
+                    </Pressable>
+                  )}
+                </View>
+              ) : (
+                <View style={styles.tabContainer}>
+                  <Pressable
+                    style={[
+                      styles.tabButton,
+                      authMode === "signin" && styles.tabButtonActive,
+                    ]}
+                    onPress={() => {
+                      setAuthMode("signin");
+                      setErrorMessage("");
+                      setSuccessMessage("");
+                      if (onClearAuthError) onClearAuthError();
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.tabText,
+                        authMode === "signin" && styles.tabTextActive,
+                      ]}
+                    >
+                      Sign In
+                    </Text>
+                  </Pressable>
 
-                <Pressable
-                  style={[
-                    styles.tabButton,
-                    authMode === "signup" && styles.tabButtonActive,
-                  ]}
-                  onPress={() => {
-                    setAuthMode("signup");
-                    setErrorMessage("");
-                    setSuccessMessage("");
-                  }}
-                >
-                  <Text
+                  <Pressable
                     style={[
-                      styles.tabText,
-                      authMode === "signup" && styles.tabTextActive,
+                      styles.tabButton,
+                      authMode === "signup" && styles.tabButtonActive,
                     ]}
+                    onPress={() => {
+                      setAuthMode("signup");
+                      setErrorMessage("");
+                      setSuccessMessage("");
+                      if (onClearAuthError) onClearAuthError();
+                    }}
                   >
-                    Sign Up
-                  </Text>
-                </Pressable>
-              </View>
+                    <Text
+                      style={[
+                        styles.tabText,
+                        authMode === "signup" && styles.tabTextActive,
+                      ]}
+                    >
+                      Sign Up
+                    </Text>
+                  </Pressable>
+                </View>
+              )}
 
               {/* MESSAGES */}
               {errorMessage ? (
@@ -489,43 +649,51 @@ export default function LoginScreen({ onLoginSuccess }) {
                 </View>
               ) : null}
 
-              {/* GOOGLE SIGN IN BUTTON */}
-              <Pressable
-                style={styles.googleButton}
-                onPress={() => setGoogleModalVisible(true)}
-                disabled={isLoading}
-              >
-                <View style={styles.googleIconCircle}>
-                  <Text style={styles.googleGText}>G</Text>
-                </View>
-                <Text style={styles.googleButtonText}>
-                  {authMode === "signin"
-                    ? "Continue with Google ID"
-                    : "Sign up with Google ID"}
-                </Text>
-              </Pressable>
+              {/* GOOGLE SIGN IN BUTTON (Hidden during Google Onboarding) */}
+              {!googleOnboardingData && (
+                <>
+                  <Pressable
+                    style={styles.googleButton}
+                    onPress={() =>
+                      handleGoogleAuth(
+                        authMode === "signin" ? "login" : "signup",
+                      )
+                    }
+                    disabled={isLoading}
+                  >
+                    <View style={styles.googleIconCircle}>
+                      <Text style={styles.googleGText}>G</Text>
+                    </View>
+                    <Text style={styles.googleButtonText}>
+                      {authMode === "signin"
+                        ? "Continue with Google ID"
+                        : "Sign up with Google ID"}
+                    </Text>
+                  </Pressable>
 
-              <View style={styles.dividerRow}>
-                <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>
-                  or continue with email & password
-                </Text>
-                <View style={styles.dividerLine} />
-              </View>
+                  <View style={styles.dividerRow}>
+                    <View style={styles.dividerLine} />
+                    <Text style={styles.dividerText}>
+                      or continue with email & password
+                    </Text>
+                    <View style={styles.dividerLine} />
+                  </View>
+                </>
+              )}
 
               {/* ========================================= */}
               {/* FORM: SIGN IN MODE */}
               {/* ========================================= */}
               {authMode === "signin" && (
                 <View>
-                  {/* Gmail ID Field */}
+                  {/* Email Field */}
                   <View style={styles.fieldContainer}>
-                    <Text style={styles.label}>Gmail / Google Email ID</Text>
+                    <Text style={styles.label}>Email Address</Text>
                     <View style={styles.inputWrapper}>
                       <Text style={styles.inputPrefixIcon}>📧</Text>
                       <TextInput
                         style={styles.input}
-                        placeholder="e.g. you@gmail.com"
+                        placeholder="e.g. owner@pharmacy.com"
                         placeholderTextColor="#94a3b8"
                         value={signInEmail}
                         onChangeText={(text) => {
@@ -547,7 +715,7 @@ export default function LoginScreen({ onLoginSuccess }) {
                       <Text style={styles.inputPrefixIcon}>🔒</Text>
                       <TextInput
                         style={styles.input}
-                        placeholder="Enter your password (min 6 chars)"
+                        placeholder="Enter your password"
                         placeholderTextColor="#94a3b8"
                         secureTextEntry={!showSignInPassword}
                         value={signInPassword}
@@ -574,7 +742,7 @@ export default function LoginScreen({ onLoginSuccess }) {
                     </View>
                   </View>
 
-                  {/* Remember Me & Demo credentials button */}
+                  {/* Remember Me */}
                   <View style={styles.rememberRow}>
                     <Pressable
                       style={styles.rememberButton}
@@ -590,13 +758,6 @@ export default function LoginScreen({ onLoginSuccess }) {
                         {rememberMe && <Text style={styles.checkMark}>✓</Text>}
                       </View>
                       <Text style={styles.rememberText}>Remember me</Text>
-                    </Pressable>
-
-                    <Pressable
-                      onPress={loadDemoCredentials}
-                      disabled={isLoading}
-                    >
-                      <Text style={styles.forgotText}>Use Demo Login</Text>
                     </Pressable>
                   </View>
 
@@ -629,9 +790,9 @@ export default function LoginScreen({ onLoginSuccess }) {
                     accessibilityRole="button"
                   >
                     <Text style={styles.switchModeText}>
-                      Don't have an account?{" "}
+                      New Pharmacy Owner?{" "}
                       <Text style={styles.switchModeHighlight}>
-                        Sign Up here
+                        Register Your Pharmacy Here
                       </Text>
                     </Text>
                   </Pressable>
@@ -639,22 +800,29 @@ export default function LoginScreen({ onLoginSuccess }) {
               )}
 
               {/* ========================================= */}
-              {/* FORM: SIGN UP MODE */}
+              {/* FORM: SIGN UP MODE (Owner Onboarding) */}
               {/* ========================================= */}
               {authMode === "signup" && (
                 <View>
-                  {/* Full Name */}
+                  {/* Section 1: Pharmacy / Business Information */}
+                  <View style={styles.sectionHeaderRow}>
+                    <Text style={styles.sectionHeaderTitle}>
+                      Pharmacy / Business Information
+                    </Text>
+                  </View>
+
+                  {/* Pharmacy Name */}
                   <View style={styles.fieldContainer}>
-                    <Text style={styles.label}>Full Name</Text>
+                    <Text style={styles.label}>Pharmacy Name *</Text>
                     <View style={styles.inputWrapper}>
-                      <Text style={styles.inputPrefixIcon}>👤</Text>
+                      <Text style={styles.inputPrefixIcon}>🏥</Text>
                       <TextInput
                         style={styles.input}
-                        placeholder="e.g. Dr. Harshal Deshmukh"
+                        placeholder="Al Noor Pharmacy"
                         placeholderTextColor="#94a3b8"
-                        value={signUpName}
+                        value={signUpPharmacyName}
                         onChangeText={(text) => {
-                          setSignUpName(text);
+                          setSignUpPharmacyName(text);
                           if (errorMessage) setErrorMessage("");
                         }}
                         autoCapitalize="words"
@@ -663,199 +831,300 @@ export default function LoginScreen({ onLoginSuccess }) {
                     </View>
                   </View>
 
-                  {/* Gmail / Google ID */}
+                  {/* Owner / Contact Person */}
                   <View style={styles.fieldContainer}>
-                    <Text style={styles.label}>Gmail / Google ID</Text>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <Text style={styles.label}>Owner / Contact Person *</Text>
+                      {googleOnboardingData?.name ? (
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            color: "#059669",
+                            fontWeight: "600",
+                          }}
+                        >
+                          Prefilled from Google
+                        </Text>
+                      ) : null}
+                    </View>
                     <View style={styles.inputWrapper}>
-                      <Text style={styles.inputPrefixIcon}>📧</Text>
+                      <Text style={styles.inputPrefixIcon}>👤</Text>
                       <TextInput
                         style={styles.input}
-                        placeholder="e.g. name@gmail.com"
+                        placeholder="Mohammed Ali"
+                        placeholderTextColor="#94a3b8"
+                        value={signUpAdminName}
+                        onChangeText={(text) => {
+                          setSignUpAdminName(text);
+                          if (errorMessage) setErrorMessage("");
+                        }}
+                        autoCapitalize="words"
+                        editable={!isLoading}
+                      />
+                    </View>
+                  </View>
+
+                  {/* Email (Login ID) */}
+                  <View style={styles.fieldContainer}>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <Text style={styles.label}>Email (Login ID) *</Text>
+                      {googleOnboardingData ? (
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            color: "#059669",
+                            fontWeight: "600",
+                          }}
+                        >
+                          Google Verified
+                        </Text>
+                      ) : null}
+                    </View>
+                    <View
+                      style={[
+                        styles.inputWrapper,
+                        googleOnboardingData && { backgroundColor: "#f1f5f9" },
+                      ]}
+                    >
+                      <Text style={styles.inputPrefixIcon}>📧</Text>
+                      <TextInput
+                        style={[
+                          styles.input,
+                          googleOnboardingData && { color: "#64748B" },
+                        ]}
+                        placeholder="admin@pharmacy.com"
                         placeholderTextColor="#94a3b8"
                         value={signUpEmail}
                         onChangeText={(text) => {
-                          setSignUpEmail(text);
-                          if (errorMessage) setErrorMessage("");
+                          if (!googleOnboardingData) {
+                            setSignUpEmail(text);
+                            if (errorMessage) setErrorMessage("");
+                          }
                         }}
                         autoCapitalize="none"
                         keyboardType="email-address"
+                        editable={!isLoading && !googleOnboardingData}
+                      />
+                    </View>
+                    <Text style={styles.helperText}>
+                      {googleOnboardingData
+                        ? "This verified Google email will be your account login ID."
+                        : "This email will be used as Login ID for the admin."}
+                    </Text>
+                  </View>
+
+                  {/* Phone / Mobile */}
+                  <View style={styles.fieldContainer}>
+                    <Text style={styles.label}>Phone / Mobile *</Text>
+                    <View style={styles.inputWrapper}>
+                      <Text style={styles.inputPrefixIcon}>📞</Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="+91 98765 43210"
+                        placeholderTextColor="#94a3b8"
+                        value={signUpPhone}
+                        onChangeText={(text) => {
+                          setSignUpPhone(text);
+                          if (errorMessage) setErrorMessage("");
+                        }}
+                        keyboardType="phone-pad"
                         editable={!isLoading}
                       />
                     </View>
                   </View>
 
-                  {/* Role Selector */}
+                  {/* Business Address */}
                   <View style={styles.fieldContainer}>
-                    <Text style={styles.label}>Assigned Role</Text>
-                    <View style={styles.roleChipsRow}>
-                      {[
-                        "Pharmacist",
-                        "Cashier",
-                        "Inventory Manager",
-                        "Administrator",
-                      ].map((r) => (
-                        <Pressable
-                          key={r}
-                          onPress={() => setSignUpRole(r)}
-                          style={[
-                            styles.roleChip,
-                            signUpRole === r && styles.roleChipActive,
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.roleChipText,
-                              signUpRole === r && styles.roleChipTextActive,
-                            ]}
-                          >
-                            {r}
-                          </Text>
-                        </Pressable>
-                      ))}
+                    <Text style={styles.label}>Business Address *</Text>
+                    <View
+                      style={[styles.inputWrapper, styles.addressInputWrapper]}
+                    >
+                      <TextInput
+                        style={[styles.input, styles.addressInput]}
+                        placeholder="No. 12, Residency Road, Shanthala Nagar"
+                        placeholderTextColor="#94a3b8"
+                        value={signUpAddress}
+                        onChangeText={(text) => {
+                          setSignUpAddress(text);
+                          if (errorMessage) setErrorMessage("");
+                        }}
+                        multiline
+                        editable={!isLoading}
+                      />
                     </View>
                   </View>
 
-                  {/* Assigned Branch Name */}
-                  <View style={styles.fieldContainer}>
-                    <View style={styles.branchHeaderRow}>
-                      <Text style={styles.label}>Assigned Branch Name</Text>
-                      <Text style={styles.branchSubLabel}>
-                        Branch / Location
-                      </Text>
-                    </View>
-
-                    {/* Quick Branch Preset Chips */}
-                    <View style={styles.roleChipsRow}>
-                      {[
-                        {
-                          label: "Main Campus (HQ)",
-                          value: "FIT Main Campus Hospital Pharmacy",
-                          icon: "🏥",
-                        },
-                        {
-                          label: "Pune City OPD",
-                          value: "FIT Pune City OPD Pharmacy",
-                          icon: "🏥",
-                        },
-                        {
-                          label: "Central Warehouse",
-                          value: "FIT Central Medical Warehouse",
-                          icon: "📦",
-                        },
-                        {
-                          label: "Student Health",
-                          value: "FIT Student Health Center Dispensary",
-                          icon: "🩺",
-                        },
-                      ].map((b) => (
-                        <Pressable
-                          key={b.value}
-                          onPress={() => {
-                            setSignUpBranch(b.value);
+                  {/* City, State, Pincode in 3 columns */}
+                  <View
+                    style={{ flexDirection: "row", gap: 8, marginBottom: 14 }}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.label}>City *</Text>
+                      <View style={styles.inputWrapper}>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="Bangalore"
+                          placeholderTextColor="#94a3b8"
+                          value={signUpCity}
+                          onChangeText={(text) => {
+                            setSignUpCity(text);
                             if (errorMessage) setErrorMessage("");
                           }}
-                          style={[
-                            styles.branchChip,
-                            signUpBranch === b.value && styles.branchChipActive,
-                          ]}
-                        >
-                          <Text style={styles.branchChipIcon}>{b.icon}</Text>
-                          <Text
-                            style={[
-                              styles.branchChipText,
-                              signUpBranch === b.value &&
-                                styles.branchChipTextActive,
-                            ]}
-                          >
-                            {b.label}
-                          </Text>
-                        </Pressable>
-                      ))}
+                          editable={!isLoading}
+                        />
+                      </View>
                     </View>
-
-                    {/* Branch Name Input Field (allows custom input or editing) */}
-                    <View style={[styles.inputWrapper, { marginTop: 8 }]}>
-                      <Text style={styles.inputPrefixIcon}>🏢</Text>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="Enter branch name (e.g. Main Campus or City OPD)"
-                        placeholderTextColor="#94a3b8"
-                        value={signUpBranch}
-                        onChangeText={(text) => {
-                          setSignUpBranch(text);
-                          if (errorMessage) setErrorMessage("");
-                        }}
-                        editable={!isLoading}
-                      />
-                      {signUpBranch.length > 0 && (
-                        <Pressable
-                          onPress={() => setSignUpBranch("")}
-                          style={{ padding: 6 }}
-                          hitSlop={8}
-                        >
-                          <Text style={{ fontSize: 13, color: "#94A3B8" }}>
-                            ✕
-                          </Text>
-                        </Pressable>
-                      )}
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.label}>State *</Text>
+                      <View style={styles.inputWrapper}>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="Karnataka"
+                          placeholderTextColor="#94a3b8"
+                          value={signUpState}
+                          onChangeText={(text) => {
+                            setSignUpState(text);
+                            if (errorMessage) setErrorMessage("");
+                          }}
+                          editable={!isLoading}
+                        />
+                      </View>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.label}>Pincode *</Text>
+                      <View style={styles.inputWrapper}>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="560001"
+                          placeholderTextColor="#94a3b8"
+                          value={signUpPincode}
+                          onChangeText={(text) => {
+                            setSignUpPincode(text);
+                            if (errorMessage) setErrorMessage("");
+                          }}
+                          keyboardType="number-pad"
+                          editable={!isLoading}
+                        />
+                      </View>
                     </View>
                   </View>
 
-                  {/* Password */}
-                  <View style={styles.fieldContainer}>
-                    <Text style={styles.label}>
-                      Password (Min 6 characters)
+                  {/* Section 2: Additional Information */}
+                  <View style={styles.sectionHeaderRow}>
+                    <Text style={styles.sectionHeaderTitle}>
+                      Additional Information
                     </Text>
+                  </View>
+
+                  {/* GST Number */}
+                  <View style={styles.fieldContainer}>
+                    <Text style={styles.label}>GST Number</Text>
                     <View style={styles.inputWrapper}>
-                      <Text style={styles.inputPrefixIcon}>🔒</Text>
                       <TextInput
                         style={styles.input}
-                        placeholder="Create a password"
+                        placeholder="29ABCDE1234F1Z5"
                         placeholderTextColor="#94a3b8"
-                        secureTextEntry={!showSignUpPassword}
-                        value={signUpPassword}
-                        onChangeText={(text) => {
-                          setSignUpPassword(text);
-                          if (errorMessage) setErrorMessage("");
-                        }}
-                        autoCapitalize="none"
+                        value={signUpGstNumber}
+                        onChangeText={setSignUpGstNumber}
+                        autoCapitalize="characters"
                         editable={!isLoading}
                       />
-                      <Pressable
-                        style={styles.eyeButton}
-                        onPress={() =>
-                          setShowSignUpPassword(!showSignUpPassword)
-                        }
-                        disabled={isLoading}
-                      >
-                        <Text style={styles.eyeIcon}>
-                          {showSignUpPassword ? "🙈" : "👁️"}
-                        </Text>
-                      </Pressable>
                     </View>
                   </View>
 
-                  {/* Confirm Password */}
+                  {/* Business Type */}
                   <View style={styles.fieldContainer}>
-                    <Text style={styles.label}>Confirm Password</Text>
+                    <Text style={styles.label}>Business Type</Text>
                     <View style={styles.inputWrapper}>
-                      <Text style={styles.inputPrefixIcon}>🔐</Text>
                       <TextInput
                         style={styles.input}
-                        placeholder="Confirm password"
+                        placeholder="Private Limited"
                         placeholderTextColor="#94a3b8"
-                        secureTextEntry={!showSignUpPassword}
-                        value={signUpConfirmPassword}
-                        onChangeText={(text) => {
-                          setSignUpConfirmPassword(text);
-                          if (errorMessage) setErrorMessage("");
-                        }}
-                        autoCapitalize="none"
+                        value={signUpBusinessType}
+                        onChangeText={setSignUpBusinessType}
                         editable={!isLoading}
-                        onSubmitEditing={handleSignUp}
                       />
                     </View>
                   </View>
+
+                  {/* Section 3: Credentials (Hidden during Google Onboarding) */}
+                  {!googleOnboardingData && (
+                    <>
+                      <View style={styles.sectionHeaderRow}>
+                        <Text style={styles.sectionHeaderTitle}>
+                          Account Credentials
+                        </Text>
+                      </View>
+
+                      {/* Password */}
+                      <View style={styles.fieldContainer}>
+                        <Text style={styles.label}>
+                          Password (Min 6 characters) *
+                        </Text>
+                        <View style={styles.inputWrapper}>
+                          <Text style={styles.inputPrefixIcon}>🔒</Text>
+                          <TextInput
+                            style={styles.input}
+                            placeholder="Create a secure password"
+                            placeholderTextColor="#94a3b8"
+                            secureTextEntry={!showSignUpPassword}
+                            value={signUpPassword}
+                            onChangeText={(text) => {
+                              setSignUpPassword(text);
+                              if (errorMessage) setErrorMessage("");
+                            }}
+                            autoCapitalize="none"
+                            editable={!isLoading}
+                          />
+                          <Pressable
+                            style={styles.eyeButton}
+                            onPress={() =>
+                              setShowSignUpPassword(!showSignUpPassword)
+                            }
+                            disabled={isLoading}
+                          >
+                            <Text style={styles.eyeIcon}>
+                              {showSignUpPassword ? "🙈" : "👁️"}
+                            </Text>
+                          </Pressable>
+                        </View>
+                      </View>
+
+                      {/* Confirm Password */}
+                      <View style={styles.fieldContainer}>
+                        <Text style={styles.label}>Confirm Password *</Text>
+                        <View style={styles.inputWrapper}>
+                          <Text style={styles.inputPrefixIcon}>🔐</Text>
+                          <TextInput
+                            style={styles.input}
+                            placeholder="Confirm password"
+                            placeholderTextColor="#94a3b8"
+                            secureTextEntry={!showSignUpPassword}
+                            value={signUpConfirmPassword}
+                            onChangeText={(text) => {
+                              setSignUpConfirmPassword(text);
+                              if (errorMessage) setErrorMessage("");
+                            }}
+                            autoCapitalize="none"
+                            editable={!isLoading}
+                            onSubmitEditing={handleSignUp}
+                          />
+                        </View>
+                      </View>
+                    </>
+                  )}
 
                   {/* SUBMIT SIGN UP */}
                   <Pressable
@@ -870,214 +1139,38 @@ export default function LoginScreen({ onLoginSuccess }) {
                       <ActivityIndicator size="small" color="#ffffff" />
                     ) : (
                       <Text style={styles.signInText}>
-                        Create Account & Sign In →
+                        {googleOnboardingData
+                          ? "Complete Pharmacy Registration →"
+                          : "Register Pharmacy & Sign In →"}
                       </Text>
                     )}
                   </Pressable>
 
-                  {/* Switch to Sign In mode link */}
-                  <Pressable
-                    onPress={() => {
-                      setAuthMode("signin");
-                      setErrorMessage("");
-                      setSuccessMessage("");
-                    }}
-                    style={styles.switchModeRow}
-                    accessibilityRole="button"
-                  >
-                    <Text style={styles.switchModeText}>
-                      Already have an account?{" "}
-                      <Text style={styles.switchModeHighlight}>
-                        Sign In to Login here
+                  {/* Switch to Sign In mode link (Hidden during Google Onboarding) */}
+                  {!googleOnboardingData && (
+                    <Pressable
+                      onPress={() => {
+                        setAuthMode("signin");
+                        setErrorMessage("");
+                        setSuccessMessage("");
+                      }}
+                      style={styles.switchModeRow}
+                      accessibilityRole="button"
+                    >
+                      <Text style={styles.switchModeText}>
+                        Already have an account?{" "}
+                        <Text style={styles.switchModeHighlight}>
+                          Sign In here
+                        </Text>
                       </Text>
-                    </Text>
-                  </Pressable>
+                    </Pressable>
+                  )}
                 </View>
               )}
-              {/* DEMO NOTICE BADGE */}
-              <View style={styles.demoNotice}>
-                <Text style={styles.demoNoticeText}>
-                  💡 <Text style={{ fontWeight: "700" }}>Admin Account:</Text>{" "}
-                  root@falah.com / more#78548
-                </Text>
-              </View>
             </View>
           </ScrollView>
         </View>
       </View>
-
-      {/* ================================================= */}
-      {/* GOOGLE ACCOUNT CHOOSER MODAL (Simulated Google OAuth) */}
-      {/* ================================================= */}
-      <Modal
-        visible={googleModalVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setGoogleModalVisible(false)}
-      >
-        <View style={styles.googleModalOverlay}>
-          <View style={styles.googleModalBox}>
-            <View style={styles.googleModalHeader}>
-              <View style={styles.googleModalLogoRow}>
-                <View style={styles.googleGSmall}>
-                  <Text
-                    style={{
-                      fontSize: 18,
-                      fontWeight: "800",
-                      color: "#4285F4",
-                    }}
-                  >
-                    G
-                  </Text>
-                </View>
-                <Text style={styles.googleModalTitle}>Sign in with Google</Text>
-              </View>
-              <Pressable
-                onPress={() => setGoogleModalVisible(false)}
-                style={styles.googleModalClose}
-              >
-                <Text style={{ fontSize: 16, color: "#64748B" }}>✕</Text>
-              </Pressable>
-            </View>
-
-            <Text style={styles.googleModalSubtitle}>
-              Sign in with your Google Workspace or Gmail account:
-            </Text>
-
-            <View style={styles.googleAccountsList}>
-              {[
-                {
-                  name: "Suraj More (Pharmacy Owner)",
-                  email: "surajmore303@gmail.com",
-                  badge: "👑 Verified Owner",
-                  role: "OWNER",
-                  roleName: "Pharmacy Owner",
-                  isOwner: true,
-                },
-                {
-                  name: "Falah Pharmacy Owner",
-                  email: "owner@falah.com",
-                  badge: "👑 Store Owner",
-                  role: "OWNER",
-                  roleName: "Pharmacy Owner",
-                  isOwner: true,
-                },
-                {
-                  name: "Central Admin",
-                  email: "admin.fit.pharmacy@gmail.com",
-                  badge: "🛡️ Admin",
-                  role: "ADMIN",
-                  roleName: "Administrator",
-                  isOwner: false,
-                },
-                {
-                  name: "Staff Pharmacist",
-                  email: "pharmacist@falah.local",
-                  badge: "💊 Pharmacist",
-                  role: "PHARMACIST",
-                  roleName: "Pharmacist",
-                  isOwner: false,
-                },
-              ].map((acc) => (
-                <Pressable
-                  key={acc.email}
-                  style={[
-                    styles.googleAccountItem,
-                    acc.isOwner && styles.googleOwnerAccountItem,
-                  ]}
-                  onPress={() => handleGoogleSignInSelect(acc)}
-                >
-                  <View
-                    style={[
-                      styles.googleAvatarCircle,
-                      acc.isOwner && styles.googleOwnerAvatarCircle,
-                    ]}
-                  >
-                    <Text style={styles.googleAvatarInitial}>
-                      {acc.isOwner ? "👑" : acc.name.charAt(0)}
-                    </Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={[
-                        styles.googleAccName,
-                        acc.isOwner && { color: "#0F766E" },
-                      ]}
-                    >
-                      {acc.name}
-                    </Text>
-                    <Text style={styles.googleAccEmail}>{acc.email}</Text>
-                  </View>
-                  <View
-                    style={[
-                      styles.googleAccBadge,
-                      acc.isOwner && styles.googleOwnerBadge,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.googleAccBadgeText,
-                        acc.isOwner && styles.googleOwnerBadgeText,
-                      ]}
-                    >
-                      {acc.badge}
-                    </Text>
-                  </View>
-                </Pressable>
-              ))}
-            </View>
-
-            {/* Custom Google Account Input */}
-            <View style={styles.customGoogleBox}>
-              <Text style={styles.customGoogleTitle}>
-                Use another Google Account
-              </Text>
-              <View style={styles.customGoogleInputRow}>
-                <Text style={{ fontSize: 14, marginRight: 6 }}>📧</Text>
-                <TextInput
-                  style={styles.customGoogleInput}
-                  placeholder="Enter your Gmail address (e.g. you@gmail.com)"
-                  placeholderTextColor="#94a3b8"
-                  value={customGoogleEmail}
-                  onChangeText={setCustomGoogleEmail}
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                />
-              </View>
-              <Text style={styles.ownerCheckboxText}>
-                Your access level (Owner, Admin, or Staff) is assigned by the
-                pharmacy's account records, not chosen here.
-              </Text>
-              <Pressable
-                style={[
-                  styles.customGoogleSubmitBtn,
-                  !customGoogleEmail.trim() && { opacity: 0.5 },
-                ]}
-                disabled={!customGoogleEmail.trim()}
-                onPress={() => {
-                  const em = customGoogleEmail.trim();
-                  if (!em) return;
-                  handleGoogleSignInSelect({
-                    name: em.split("@")[0].replace(".", " ").toUpperCase(),
-                    email: em,
-                  });
-                }}
-              >
-                <Text style={styles.customGoogleSubmitText}>
-                  Continue with Google →
-                </Text>
-              </Pressable>
-            </View>
-
-            <Pressable
-              onPress={() => setGoogleModalVisible(false)}
-              style={styles.googleCancelBtn}
-            >
-              <Text style={styles.googleCancelBtnText}>Cancel</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -1625,6 +1718,36 @@ const styles = StyleSheet.create({
     color: "#0F766E",
     fontWeight: "750",
     textDecorationLine: "underline",
+  },
+  sectionHeaderRow: {
+    borderBottomWidth: 1,
+    borderBottomColor: "#E2E8F0",
+    paddingBottom: 6,
+    marginTop: 10,
+    marginBottom: 12,
+  },
+  sectionHeaderTitle: {
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: "#0F766E",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  helperText: {
+    fontSize: 11,
+    color: "#64748B",
+    marginTop: 4,
+    marginLeft: 2,
+    marginBottom: 6,
+  },
+  addressInputWrapper: {
+    height: 68,
+    alignItems: "flex-start",
+    paddingVertical: 6,
+  },
+  addressInput: {
+    height: 56,
+    textAlignVertical: "top",
   },
 
   demoNotice: {

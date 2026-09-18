@@ -21,18 +21,16 @@ function setStorageItem(key, value) {
   } catch (e) {}
 }
 
-import { signOut } from "./supabaseClient";
+import { signOut, getAccessToken, refreshSession } from "./supabaseClient";
 
-export function setAuthSession({ token, organisationId } = {}) {
-  setStorageItem("authToken", token || "");
+export function setAuthSession({ organisationId } = {}) {
   setStorageItem("organisationId", organisationId || "");
 }
 
-export function clearAuthSession() {
-  setStorageItem("authToken", "");
+export async function clearAuthSession() {
   setStorageItem("organisationId", "");
   try {
-    signOut().catch(() => {});
+    await signOut();
   } catch (e) {}
 }
 
@@ -40,7 +38,7 @@ const DEFAULT_TIMEOUT = 15000; // 15 seconds
 
 export async function getAuthHeaders() {
   try {
-    const token = getStorageItem("authToken") || getStorageItem("token");
+    const token = await getAccessToken();
     const orgId = getStorageItem("organisationId");
     return {
       "Content-Type": "application/json",
@@ -52,7 +50,7 @@ export async function getAuthHeaders() {
   }
 }
 
-export async function apiRequest(endpoint, options = {}) {
+export async function apiRequest(endpoint, options = {}, isRetry = false) {
   const controller = new AbortController();
   const timeoutId = setTimeout(
     () => controller.abort(),
@@ -68,6 +66,15 @@ export async function apiRequest(endpoint, options = {}) {
     });
 
     clearTimeout(timeoutId);
+
+    if (response.status === 401 && !isRetry) {
+      const refreshedToken = await refreshSession();
+      if (refreshedToken) {
+        return apiRequest(endpoint, options, true);
+      } else {
+        await clearAuthSession();
+      }
+    }
 
     if (!response.ok) {
       const errorText = await response.text();

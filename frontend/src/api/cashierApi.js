@@ -15,7 +15,7 @@ import {
   MOCK_RECENT_INVOICES,
 } from "../data/cashierMockData";
 
-import { apiGet, apiPost, apiDelete } from './apiClient';
+import { apiGet, apiPost, apiDelete } from "./apiClient";
 
 // ==========================================
 // 1. REGISTER SESSIONS
@@ -73,14 +73,14 @@ export async function fetchRegisterHistory() {
 }
 
 export async function recordCashMovement(data) {
-  const res = await apiPost('/cashier/register/movement', data);
+  const res = await apiPost("/cashier/register/movement", data);
   if (!res.success) {
     if (res.isOffline) {
       return {
         id: `PC-${Date.now().toString().slice(-4)}`,
-        type: data.movementType || 'OUT',
+        type: data.movementType || "OUT",
         amount: data.amount || 0,
-        reason: data.reason || 'Petty cash',
+        reason: data.reason || "Petty cash",
         time: new Date().toLocaleString(),
       };
     }
@@ -90,7 +90,9 @@ export async function recordCashMovement(data) {
 }
 
 export async function fetchCashMovements(sessionId) {
-  const queryString = sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : '';
+  const queryString = sessionId
+    ? `?sessionId=${encodeURIComponent(sessionId)}`
+    : "";
   const res = await apiGet(`/cashier/register/movements${queryString}`);
   if (!res.success) {
     if (res.isOffline) return [];
@@ -103,11 +105,20 @@ export async function fetchCashMovements(sessionId) {
 // 2. PRODUCTS & BARCODE LOOKUP
 // ==========================================
 
-export async function fetchCashierProducts(search = "", barcode = "", branchId = "") {
+export async function fetchCashierProducts(
+  search = "",
+  barcode = "",
+  branchId = "",
+) {
   const query = new URLSearchParams();
   if (search) query.append("search", search);
   if (barcode) query.append("barcode", barcode);
-  if (branchId && branchId !== "All Branches" && branchId !== "all") {
+  if (
+    branchId &&
+    branchId !== "All Branches" &&
+    branchId !== "all" &&
+    branchId !== "No Active Branch"
+  ) {
     query.append("branchId", branchId);
   }
   const queryString = query.toString() ? `?${query.toString()}` : "";
@@ -129,7 +140,8 @@ export async function fetchCashierProducts(search = "", barcode = "", branchId =
       }
       if (branchId && branchId !== "All Branches") {
         list = list.filter(
-          (p) => !p.branchId || p.branchId === branchId || p.branch === branchId
+          (p) =>
+            !p.branchId || p.branchId === branchId || p.branch === branchId,
         );
       }
       return list;
@@ -215,10 +227,14 @@ export async function resumeHeldBill(holdId) {
 // ==========================================
 
 export async function searchReturnInvoice(invoiceNo) {
-  const res = await apiGet(`/cashier/returns/search?invoiceNo=${encodeURIComponent(invoiceNo)}`);
+  const res = await apiGet(
+    `/cashier/returns/search?invoiceNo=${encodeURIComponent(invoiceNo)}`,
+  );
   if (!res.success) {
     if (res.isOffline) {
-      return MOCK_RECENT_INVOICES.find((inv) => inv.invoiceNo === invoiceNo) || null;
+      return (
+        MOCK_RECENT_INVOICES.find((inv) => inv.invoiceNo === invoiceNo) || null
+      );
     }
     throw new Error(res.error);
   }

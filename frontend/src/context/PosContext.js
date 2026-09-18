@@ -16,7 +16,11 @@ import { syncEngine, bootstrapService } from "../sync";
 
 const PosContext = createContext(null);
 
-export function PosProvider({ children, currentUser, selectedBranch = "All Branches" }) {
+export function PosProvider({
+  children,
+  currentUser,
+  selectedBranch = "All Branches",
+}) {
   const effectiveOrgId = currentUser?.organisationId || null;
   const effectiveBranchId = currentUser?.branchId || null;
   const effectiveUserId = currentUser?.id || null;
@@ -26,7 +30,7 @@ export function PosProvider({ children, currentUser, selectedBranch = "All Branc
   const [customers, setCustomers] = useState([]);
   const [isOfflineReady, setIsOfflineReady] = useState(false);
   const [activeBranch, setActiveBranch] = useState(
-    selectedBranch && selectedBranch !== "All Branches" ? selectedBranch : null
+    selectedBranch && selectedBranch !== "All Branches" ? selectedBranch : null,
   );
   const [taxConfig, setTaxConfig] = useState(null);
   const [heldBills, setHeldBills] = useState(MOCK_HELD_BILLS);
@@ -50,10 +54,27 @@ export function PosProvider({ children, currentUser, selectedBranch = "All Branc
 
   // Hydrate live products, held bills, and recent invoices from PostgreSQL backend
   useEffect(() => {
+    // Zero-branch guard: do NOT make cashier API calls if user has no branch or branch is not active
+    if (
+      !currentUser ||
+      currentUser.hasBranch === false ||
+      !currentUser.branchId
+    ) {
+      return;
+    }
+    if (selectedBranch === "No Active Branch") {
+      return;
+    }
+
     let isMounted = true;
     async function hydratePosData() {
       try {
-        const branchParam = selectedBranch && selectedBranch !== "All Branches" ? selectedBranch : "";
+        const branchParam =
+          selectedBranch &&
+          selectedBranch !== "All Branches" &&
+          selectedBranch !== "No Active Branch"
+            ? selectedBranch
+            : "";
         const [liveProds, liveHeld, liveInvs, liveReturns] = await Promise.all([
           fetchCashierProducts("", "", branchParam),
           fetchHeldBills(),
@@ -110,7 +131,11 @@ export function PosProvider({ children, currentUser, selectedBranch = "All Branc
               })),
             );
           }
-          if (liveReturns && Array.isArray(liveReturns) && liveReturns.length > 0) {
+          if (
+            liveReturns &&
+            Array.isArray(liveReturns) &&
+            liveReturns.length > 0
+          ) {
             setReturnHistory(liveReturns);
           }
         }
@@ -492,7 +517,9 @@ export function PosProvider({ children, currentUser, selectedBranch = "All Branc
     });
 
     // Opportunistically push to server if online (non-blocking)
-    syncEngine?.sync?.().catch((err) => { console.error('Sync failed:', err); });
+    syncEngine?.sync?.().catch((err) => {
+      console.error("Sync failed:", err);
+    });
 
     // 3. Update React UI state (stock, drafts, invoices) ONLY after local DB succeeds
     setProducts((prev) => {
@@ -590,7 +617,9 @@ export function PosProvider({ children, currentUser, selectedBranch = "All Branc
     });
 
     // Opportunistically push to server if online (non-blocking)
-    syncEngine?.sync?.().catch((err) => { console.error('Sync failed:', err); });
+    syncEngine?.sync?.().catch((err) => {
+      console.error("Sync failed:", err);
+    });
 
     // 2. Update React UI state (stock, return history) ONLY after local DB succeeds
     if (returnData.stockDisposition === "Sellable") {
