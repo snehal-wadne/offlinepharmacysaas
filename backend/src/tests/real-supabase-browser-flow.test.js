@@ -127,7 +127,10 @@ async function runRealSupabaseAuthVerification() {
         meBody.user?.organisationId,
         "Must resolve organisation context",
       );
-      assert.ok(meBody.user?.branch?.id, "Must resolve primary branch context");
+      assert.ok(
+        meBody.user?.branch?.id || meBody.user?.hasBranch === false,
+        "Must resolve primary branch context or flag zero-branch onboarding",
+      );
       testPass(
         "Backend verified real Supabase ES256 JWT and returned workspace context",
       );
