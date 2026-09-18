@@ -1,4 +1,11 @@
 import React, { useState, useEffect } from "react";
+import { setAuthSession, clearAuthSession } from "../api/apiClient";
+import {
+  supabase,
+  getSession,
+  signOut as supabaseSignOut,
+} from "../api/supabaseClient";
+import { API_URL } from "../config";
 import {
   View,
   Text,
@@ -14,9 +21,6 @@ import Header from "../components/layout/Header";
 import LoginScreen from "../screens/auth/LoginScreen";
 import { PosProvider } from "../context/PosContext";
 import { OfflineSyncProvider } from "../offline/OfflineSyncContext";
-import { setAuthSession, clearAuthSession } from "../api/apiClient";
-import { supabase } from "../api/supabaseClient";
-import { API_URL } from "../config";
 import { syncEngine } from "../sync";
 
 // 0. Sales & Cashier Screens (Sales / POS Billing, Cash Register)
@@ -59,6 +63,40 @@ import ExpiryReportsScreen from "../screens/reports/ExpiryReportsScreen";
 // 7. Settings & Compliance Screens (Tax / GST & SaaS Subscriptions with 18% GST)
 import TaxGstSettingsScreen from "../screens/settings/TaxGstSettingsScreen";
 import SubscriptionPlansScreen from "../screens/settings/SubscriptionPlansScreen";
+
+const ROUTE_PERMISSIONS = {
+  "tax-settings": "tax-settings:view",
+  "subscription-plans": "subscription:view",
+  "roles": "roles:manage",
+  "roles-permissions": "permissions:manage",
+  "page-permissions": "permissions:manage",
+  "users": "users:manage",
+  "audit-log": "audit:view",
+};
+
+const hasPermission = (user, permission) => {
+  if (!permission) return true;
+  if (!user) return false;
+  const roleName = (user.role || "").toLowerCase();
+  const accessLevel = (user.accessLevel || "").toLowerCase();
+  if (
+    user.isOwner ||
+    user.is_platform_superadmin ||
+    roleName.includes("owner") ||
+    roleName.includes("admin") ||
+    accessLevel.includes("owner") ||
+    accessLevel.includes("admin")
+  ) {
+    return true;
+  }
+  if (Array.isArray(user.permissions)) {
+    return user.permissions.includes(permission);
+  }
+  if (user.permissions && typeof user.permissions === "object") {
+    return Boolean(user.permissions[permission]);
+  }
+  return true;
+};
 
 export default function AppNavigator() {
   const { width } = useWindowDimensions();
@@ -236,20 +274,56 @@ export default function AppNavigator() {
   };
 
   const handleNavigate = (routeKey, payload) => {
-    if (
-      currentUser &&
-      currentUser.hasBranch === false &&
-      routeKey !== "branches"
-    ) {
-      showToast("Please create your initial pharmacy branch first.");
+    // Check permission before allowing navigation
+    const requiredPermission = ROUTE_PERMISSIONS[routeKey];
+    if (requiredPermission && !hasPermission(currentUser, requiredPermission)) {
+      showToast("Access denied: You do not have permission to view this page.");
       return;
     }
-    if (payload) {
-      setSelectedCustomerId(payload);
+
+    // Users without a branch must stay on Branch Management
+    const branchRequiredRoutes = [
+      "new-sale",
+      "sales",
+      "pos-billing",
+      "cash-register",
+      "held-bills",
+      "sales-returns",
+      "returns",
+      "inventory",
+      "stock-status",
+      "stock-adjustments",
+      "stock-transfer",
+      "purchases",
+      "goods-receiving",
+      "suppliers",
+      "customers",
+      "customers-patients",
+      "customer-details",
+      "customer-ledger",
+      "customer-payments",
+      "inventory-reports",
+      "purchase-reports",
+      "expiry-reports",
+    ];
+
+    if (
+      currentUser?.hasBranch === false &&
+      (branchRequiredRoutes.includes(routeKey) || routeKey !== "branches")
+    ) {
+      showToast("Please create your initial pharmacy branch first.");
+      setCurrentRoute("branches");
+      setMobileMenuOpen(false);
+      return;
     }
-    setCurrentRoute(routeKey);
-    setMobileMenuOpen(false);
-  };
+
+  if (payload) {
+    setSelectedCustomerId(payload);
+  }
+
+  setCurrentRoute(routeKey);
+  setMobileMenuOpen(false);
+};
 
   const handleTogglePharmacyMode = () => {
     handleSetPharmacyMode(!isMultiBranch);
@@ -269,6 +343,12 @@ export default function AppNavigator() {
   };
 
   const handleSignOut = async () => {
+    try {
+      await supabaseSignOut();
+    } catch (error) {
+      console.warn("Supabase sign out warning:", error);
+    }
+
     setCurrentUser(null);
     setAuthStatus("UNAUTHENTICATED");
     await clearAuthSession();
