@@ -67,10 +67,10 @@ import SubscriptionPlansScreen from "../screens/settings/SubscriptionPlansScreen
 const ROUTE_PERMISSIONS = {
   "tax-settings": "tax-settings:view",
   "subscription-plans": "subscription:view",
-  "roles": "roles:manage",
+  roles: "roles:manage",
   "roles-permissions": "permissions:manage",
   "page-permissions": "permissions:manage",
-  "users": "users:manage",
+  users: "users:manage",
   "audit-log": "audit:view",
 };
 
@@ -317,13 +317,13 @@ export default function AppNavigator() {
       return;
     }
 
-  if (payload) {
-    setSelectedCustomerId(payload);
-  }
+    if (payload) {
+      setSelectedCustomerId(payload);
+    }
 
-  setCurrentRoute(routeKey);
-  setMobileMenuOpen(false);
-};
+    setCurrentRoute(routeKey);
+    setMobileMenuOpen(false);
+  };
 
   const handleTogglePharmacyMode = () => {
     handleSetPharmacyMode(!isMultiBranch);
