@@ -498,7 +498,10 @@ export default function Header({
 
         {/* Quick Settings Icon */}
         <Pressable
-          onPress={() => onNavigate && onNavigate("tax-settings")}
+          onPress={() => {
+  console.log("SETTINGS BUTTON CLICKED");
+  if (onNavigate) onNavigate("tax-settings");
+}}
           style={[styles.quickSettingsButton, isMobile && styles.quickSettingsButtonMobile]}
           accessibilityRole="button"
           accessibilityLabel="Settings"

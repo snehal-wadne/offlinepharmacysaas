@@ -1,4 +1,10 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { setAuthSession, clearAuthSession } from "../api/apiClient";
+import {
+  getSession,
+  signOut as supabaseSignOut,
+} from "../api/supabaseClient";
+
 import {
   View,
   Text,
@@ -13,7 +19,6 @@ import Header from "../components/layout/Header";
 import LoginScreen from "../screens/auth/LoginScreen";
 import { PosProvider } from "../context/PosContext";
 import { OfflineSyncProvider } from "../offline/OfflineSyncContext";
-import { setAuthSession, clearAuthSession } from "../api/apiClient";
 import { syncEngine } from "../sync";
 
 // 0. Sales & Cashier Screens (Sales / POS Billing, Cash Register)
@@ -75,6 +80,51 @@ export default function AppNavigator() {
 
   // Authenticated User State (Null by default to show Login & Sign-up screen)
   const [currentUser, setCurrentUser] = useState(null);
+  const [isRestoringSession, setIsRestoringSession] = useState(true);
+  useEffect(() => {
+  let mounted = true;
+
+  const restoreSession = async () => {
+    try {
+      const session = await getSession();
+
+      if (!session?.access_token) {
+        return;
+      }
+
+      setAuthSession({
+        token: session.access_token,
+      });
+
+      const user = await apiGet("/api/auth/me");
+
+      if (!mounted) return;
+
+      setCurrentUser(user);
+
+      if (user?.branch) {
+        setSelectedBranch(user.branch);
+      }
+    } catch (error) {
+      console.warn("Session restore failed:", error);
+
+      if (mounted) {
+        clearAuthSession();
+        setCurrentUser(null);
+      }
+    } finally {
+      if (mounted) {
+        setIsRestoringSession(false);
+      }
+    }
+  };
+
+  restoreSession();
+
+  return () => {
+    mounted = false;
+  };
+}, []);
 
   // Pharmacy Architecture Mode: Multi-Branch (true) vs Single-Shop (false)
   const [isMultiBranch, setIsMultiBranch] = useState(true);
@@ -87,12 +137,57 @@ export default function AppNavigator() {
   };
 
   const handleNavigate = (routeKey, payload) => {
-    if (payload) {
-      setSelectedCustomerId(payload);
-    }
-    setCurrentRoute(routeKey);
+  // Check permission before allowing navigation
+  const requiredPermission = ROUTE_PERMISSIONS[routeKey];
+
+  if (!hasPermission(currentUser, requiredPermission)) {
+    showToast("Access denied: You do not have permission to view this page.");
+    return;
+  }
+
+  // Users without a branch must stay on Branch Management
+  const branchRequiredRoutes = [
+    "new-sale",
+    "sales",
+    "pos-billing",
+    "cash-register",
+    "held-bills",
+    "sales-returns",
+    "returns",
+    "inventory",
+    "stock-status",
+    "stock-adjustments",
+    "stock-transfer",
+    "purchases",
+    "goods-receiving",
+    "suppliers",
+    "customers",
+    "customers-patients",
+    "customer-details",
+    "customer-ledger",
+    "customer-payments",
+    "inventory-reports",
+    "purchase-reports",
+    "expiry-reports",
+  ];
+
+  if (
+    currentUser?.hasBranch === false &&
+    branchRequiredRoutes.includes(routeKey)
+  ) {
+    showToast("Please create/select a branch before accessing this module.");
+    setCurrentRoute("branches");
     setMobileMenuOpen(false);
-  };
+    return;
+  }
+
+  if (payload) {
+    setSelectedCustomerId(payload);
+  }
+
+  setCurrentRoute(routeKey);
+  setMobileMenuOpen(false);
+};
 
   const handleTogglePharmacyMode = () => {
     handleSetPharmacyMode(!isMultiBranch);
@@ -111,11 +206,17 @@ export default function AppNavigator() {
     );
   };
 
-  const handleSignOut = () => {
-    setCurrentUser(null);
-    clearAuthSession();
-    showToast("Signed out successfully.");
-  };
+  const handleSignOut = async () => {
+  try {
+    await supabaseSignOut();
+  } catch (error) {
+    console.warn("Supabase sign out warning:", error);
+  }
+
+  setCurrentUser(null);
+  clearAuthSession();
+  showToast("Signed out successfully.");
+};
 
   // Render Active Screen Component
   const renderScreen = () => {
@@ -364,7 +465,28 @@ export default function AppNavigator() {
         );
     }
   };
-
+if (isRestoringSession) {
+  return (
+    <View
+      style={{
+        flex: 1,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "#F8FAFC",
+      }}
+    >
+      <Text
+        style={{
+          fontSize: 16,
+          fontWeight: "600",
+          color: "#0F766E",
+        }}
+      >
+        Restoring session...
+      </Text>
+    </View>
+  );
+}
   // Auth Guard: If no user is logged in, present the Login Screen
   if (!currentUser) {
     return (
