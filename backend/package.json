@@ -11,6 +11,7 @@
     "db:seed:branches": "node src/db/seed-branches.js",
     "db:seed:canonical": "node src/db/seed-canonical-demo.js",
     "db:setup": "node src/db/setup-database.js",
+    "seed:demo": "node src/db/seed-demo-pharmacy.js",
     "test": "node src/tests/e2e-verification.test.js",
     "test:e2e": "node src/tests/e2e-verification.test.js"
   },
