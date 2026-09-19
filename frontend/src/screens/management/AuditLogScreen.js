@@ -43,9 +43,16 @@ export default function AuditLogScreen({
     async function loadLiveLogs() {
       try {
         setLoading(true);
+        const rawBranch =
+          typeof selectedBranch === "object" && selectedBranch !== null
+            ? selectedBranch.id || selectedBranch.name
+            : selectedBranch;
         const branchParam =
-          selectedBranch && selectedBranch !== "All Branches"
-            ? selectedBranch
+          rawBranch &&
+          rawBranch !== "All Branches" &&
+          rawBranch !== "all" &&
+          rawBranch !== "No Active Branch"
+            ? rawBranch
             : undefined;
         const res = await fetchAuditLogs({ branchId: branchParam, limit: 100 });
         if (isMounted && res && res.data && Array.isArray(res.data)) {

@@ -4,17 +4,32 @@
  * Communicates with backend REST API for sales, inventory, profit-loss, and expiry analytics.
  */
 
-import { apiGet } from './apiClient';
+import { apiGet } from "./apiClient";
+
+const cleanBranchId = (branchId) => {
+  const bid =
+    typeof branchId === "object" && branchId !== null ? branchId.id : branchId;
+  if (
+    !bid ||
+    bid === "All Branches" ||
+    bid === "all" ||
+    bid === "No Active Branch"
+  ) {
+    return null;
+  }
+  return bid;
+};
 
 /**
  * GET /api/reports/sales
  */
 export async function fetchSalesReport(params = {}) {
   const query = new URLSearchParams();
-  if (params.branchId && params.branchId !== 'All Branches') query.append('branchId', params.branchId);
-  if (params.startDate) query.append('startDate', params.startDate);
-  if (params.endDate) query.append('endDate', params.endDate);
-  const queryString = query.toString() ? `?${query.toString()}` : '';
+  const bid = cleanBranchId(params.branchId);
+  if (bid) query.append("branchId", bid);
+  if (params.startDate) query.append("startDate", params.startDate);
+  if (params.endDate) query.append("endDate", params.endDate);
+  const queryString = query.toString() ? `?${query.toString()}` : "";
   return apiGet(`/reports/sales${queryString}`);
 }
 
@@ -23,8 +38,9 @@ export async function fetchSalesReport(params = {}) {
  */
 export async function fetchInventoryReport(params = {}) {
   const query = new URLSearchParams();
-  if (params.branchId && params.branchId !== 'All Branches') query.append('branchId', params.branchId);
-  const queryString = query.toString() ? `?${query.toString()}` : '';
+  const bid = cleanBranchId(params.branchId);
+  if (bid) query.append("branchId", bid);
+  const queryString = query.toString() ? `?${query.toString()}` : "";
   return apiGet(`/reports/inventory${queryString}`);
 }
 
@@ -33,10 +49,11 @@ export async function fetchInventoryReport(params = {}) {
  */
 export async function fetchProfitLossReport(params = {}) {
   const query = new URLSearchParams();
-  if (params.branchId && params.branchId !== 'All Branches') query.append('branchId', params.branchId);
-  if (params.startDate) query.append('startDate', params.startDate);
-  if (params.endDate) query.append('endDate', params.endDate);
-  const queryString = query.toString() ? `?${query.toString()}` : '';
+  const bid = cleanBranchId(params.branchId);
+  if (bid) query.append("branchId", bid);
+  if (params.startDate) query.append("startDate", params.startDate);
+  if (params.endDate) query.append("endDate", params.endDate);
+  const queryString = query.toString() ? `?${query.toString()}` : "";
   return apiGet(`/reports/profit-loss${queryString}`);
 }
 
@@ -45,9 +62,10 @@ export async function fetchProfitLossReport(params = {}) {
  */
 export async function fetchExpiryReport(params = {}) {
   const query = new URLSearchParams();
-  if (params.branchId && params.branchId !== 'All Branches') query.append('branchId', params.branchId);
-  if (params.days) query.append('days', params.days);
-  const queryString = query.toString() ? `?${query.toString()}` : '';
+  const bid = cleanBranchId(params.branchId);
+  if (bid) query.append("branchId", bid);
+  if (params.days) query.append("days", params.days);
+  const queryString = query.toString() ? `?${query.toString()}` : "";
   return apiGet(`/reports/expiry${queryString}`);
 }
 
@@ -56,9 +74,10 @@ export async function fetchExpiryReport(params = {}) {
  */
 export async function fetchGstReport(params = {}) {
   const query = new URLSearchParams();
-  if (params.branchId && params.branchId !== 'All Branches') query.append('branchId', params.branchId);
-  if (params.startDate) query.append('startDate', params.startDate);
-  if (params.endDate) query.append('endDate', params.endDate);
-  const queryString = query.toString() ? `?${query.toString()}` : '';
+  const bid = cleanBranchId(params.branchId);
+  if (bid) query.append("branchId", bid);
+  if (params.startDate) query.append("startDate", params.startDate);
+  if (params.endDate) query.append("endDate", params.endDate);
+  const queryString = query.toString() ? `?${query.toString()}` : "";
   return apiGet(`/reports/gst${queryString}`);
 }

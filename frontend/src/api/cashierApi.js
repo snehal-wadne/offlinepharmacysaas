@@ -11,11 +11,24 @@ import { apiGet, apiPost, apiDelete } from "./apiClient";
 // 1. REGISTER SESSIONS
 // ==========================================
 
-export async function fetchCurrentRegisterSession() {
-  const res = await apiGet("/cashier/register/current");
+export async function fetchCurrentRegisterSession(branchId) {
+  const query = new URLSearchParams();
+  const bid =
+    typeof branchId === "object" && branchId !== null ? branchId.id : branchId;
+  if (
+    bid &&
+    bid !== "All Branches" &&
+    bid !== "all" &&
+    bid !== "No Active Branch"
+  ) {
+    query.append("branchId", bid);
+  }
+  const qs = query.toString() ? `?${query.toString()}` : "";
+  const res = await apiGet(`/cashier/register/current${qs}`);
   if (!res.success) {
     return null;
   }
+
   return res.data?.data || res.data || null;
 }
 
@@ -35,11 +48,24 @@ export async function closeRegisterShift(data) {
   return res.data?.data || res.data;
 }
 
-export async function fetchRegisterHistory() {
-  const res = await apiGet("/cashier/register/history");
+export async function fetchRegisterHistory(branchId) {
+  const query = new URLSearchParams();
+  const bid =
+    typeof branchId === "object" && branchId !== null ? branchId.id : branchId;
+  if (
+    bid &&
+    bid !== "All Branches" &&
+    bid !== "all" &&
+    bid !== "No Active Branch"
+  ) {
+    query.append("branchId", bid);
+  }
+  const qs = query.toString() ? `?${query.toString()}` : "";
+  const res = await apiGet(`/cashier/register/history${qs}`);
   if (!res.success) {
     return [];
   }
+
   return res.data?.data || res.data || [];
 }
 
@@ -51,14 +77,25 @@ export async function recordCashMovement(data) {
   return res.data?.data || res.data;
 }
 
-export async function fetchCashMovements(sessionId) {
-  const queryString = sessionId
-    ? `?sessionId=${encodeURIComponent(sessionId)}`
-    : "";
+export async function fetchCashMovements(sessionId, branchId) {
+  const query = new URLSearchParams();
+  if (sessionId) query.append("sessionId", sessionId);
+  const bid =
+    typeof branchId === "object" && branchId !== null ? branchId.id : branchId;
+  if (
+    bid &&
+    bid !== "All Branches" &&
+    bid !== "all" &&
+    bid !== "No Active Branch"
+  ) {
+    query.append("branchId", bid);
+  }
+  const queryString = query.toString() ? `?${query.toString()}` : "";
   const res = await apiGet(`/cashier/register/movements${queryString}`);
   if (!res.success) {
     return [];
   }
+
   return res.data?.data || res.data || [];
 }
 
@@ -74,13 +111,15 @@ export async function fetchCashierProducts(
   const query = new URLSearchParams();
   if (search) query.append("search", search);
   if (barcode) query.append("barcode", barcode);
+  const bid =
+    typeof branchId === "object" && branchId !== null ? branchId.id : branchId;
   if (
-    branchId &&
-    branchId !== "All Branches" &&
-    branchId !== "all" &&
-    branchId !== "No Active Branch"
+    bid &&
+    bid !== "All Branches" &&
+    bid !== "all" &&
+    bid !== "No Active Branch"
   ) {
-    query.append("branchId", branchId);
+    query.append("branchId", bid);
   }
   const queryString = query.toString() ? `?${query.toString()}` : "";
 
@@ -89,6 +128,7 @@ export async function fetchCashierProducts(
     return [];
   }
   const list = res.data?.data || res.data?.products || res.data || [];
+  console.log("Products List: ", list);
   return Array.isArray(list) ? list : [];
 }
 
@@ -123,6 +163,7 @@ export async function fetchHeldBills() {
     return [];
   }
   const list = res.data?.data || res.data || [];
+  console.log("Held bills: ", list);
   return Array.isArray(list) ? list : [];
 }
 

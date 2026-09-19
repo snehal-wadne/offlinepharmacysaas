@@ -216,7 +216,7 @@ const requireSyncAuth = async (req, res, next) => {
       body.organisationId ||
       (Array.isArray(body.mutations) && body.mutations[0]?.organisationId);
 
-    const rawBranchId =
+    let rawBranchId =
       req.headers["x-branch-id"] ||
       req.query?.branchId ||
       body.branchId ||
@@ -294,6 +294,20 @@ const requireSyncAuth = async (req, res, next) => {
       }
 
       // Branch validation (if specified)
+      const isSentinelBranch =
+        rawBranchId === "All Branches" ||
+        rawBranchId === "all" ||
+        rawBranchId === "No Active Branch" ||
+        rawBranchId === "null" ||
+        rawBranchId === "undefined";
+
+      if (isSentinelBranch) {
+        rawBranchId = null;
+        if (req.query && req.query.branchId) delete req.query.branchId;
+        if (req.headers && req.headers["x-branch-id"])
+          delete req.headers["x-branch-id"];
+      }
+
       if (rawBranchId) {
         let branchIdToVerify = rawBranchId;
         if (!isUuid(rawBranchId)) {
@@ -346,21 +360,37 @@ const requireSyncAuth = async (req, res, next) => {
         if (req.user.is_platform_superadmin || org.owner_id === req.user.id) {
           isBranchAuthorized = true;
         } else {
-          // Check branch_assignments
-          const baRes = await pool.query(
-            `SELECT ba.branch_id FROM branch_assignments ba
+          // Check if user has an ADMIN or OWNER role in this organisation
+          const adminCheck = await pool.query(
+            `SELECT r.role_identifier, r.name
+             FROM branch_assignments ba
              JOIN organisation_memberships om ON om.id = ba.membership_id
-             WHERE om.organisation_id = $1 AND om.user_id = $2 AND om.status = 'ACTIVE'`,
+             JOIN roles r ON r.id = ba.role_id
+             WHERE om.organisation_id = $1 AND om.user_id = $2 AND om.status = 'ACTIVE'
+               AND (r.role_identifier IN ('ADMIN', 'OWNER', 'SUPERADMIN') OR r.name ILIKE '%admin%' OR r.name ILIKE '%owner%')
+             LIMIT 1;`,
             [rawOrgId, req.user.id],
           );
 
-          if (baRes.rows.length === 0) {
-            // User is member without specific branch restrictions -> allow
+          if (adminCheck.rows.length > 0) {
             isBranchAuthorized = true;
           } else {
-            const allowedBranchIds = baRes.rows.map((r) => r.branch_id);
-            if (allowedBranchIds.includes(branchIdToVerify)) {
+            // Check branch_assignments
+            const baRes = await pool.query(
+              `SELECT ba.branch_id FROM branch_assignments ba
+               JOIN organisation_memberships om ON om.id = ba.membership_id
+               WHERE om.organisation_id = $1 AND om.user_id = $2 AND om.status = 'ACTIVE'`,
+              [rawOrgId, req.user.id],
+            );
+
+            if (baRes.rows.length === 0) {
+              // User is member without specific branch restrictions -> allow
               isBranchAuthorized = true;
+            } else {
+              const allowedBranchIds = baRes.rows.map((r) => r.branch_id);
+              if (allowedBranchIds.includes(branchIdToVerify)) {
+                isBranchAuthorized = true;
+              }
             }
           }
         }

@@ -60,7 +60,17 @@ export default function StockStatusScreen({
   const loadInventoryData = async () => {
     try {
       setLoading(true);
-      const branchParam = selectedBranch && selectedBranch !== "All Branches" ? selectedBranch : undefined;
+      const rawBranch =
+        typeof selectedBranch === "object" && selectedBranch !== null
+          ? selectedBranch.id || selectedBranch.name
+          : selectedBranch;
+      const branchParam =
+        rawBranch &&
+        rawBranch !== "All Branches" &&
+        rawBranch !== "all" &&
+        rawBranch !== "No Active Branch"
+          ? rawBranch
+          : undefined;
       const res = await fetchInventory({ branchId: branchParam });
       if (res && res.data && Array.isArray(res.data)) {
         setRawInventory(res.data);
@@ -113,9 +123,15 @@ export default function StockStatusScreen({
     });
 
   const baseLowStockList = dbLowStockItems;
-  const lowStockItemsList = selectedBranch && selectedBranch !== "All Branches"
-    ? baseLowStockList.filter((i) => !i.branch || i.branch === selectedBranch || i.branchId === selectedBranch)
-    : baseLowStockList;
+  const lowStockItemsList =
+    selectedBranch && selectedBranch !== "All Branches"
+      ? baseLowStockList.filter(
+          (i) =>
+            !i.branch ||
+            i.branch === selectedBranch ||
+            i.branchId === selectedBranch,
+        )
+      : baseLowStockList;
 
   // Live DB Batch Expiry Timeline Mapping
   const dbExpiryItems = rawInventory.map((item) => {
@@ -146,9 +162,15 @@ export default function StockStatusScreen({
   });
 
   const baseExpiryList = dbExpiryItems;
-  const expiryItemsList = selectedBranch && selectedBranch !== "All Branches"
-    ? baseExpiryList.filter((i) => !i.branch || i.branch === selectedBranch || i.branchId === selectedBranch)
-    : baseExpiryList;
+  const expiryItemsList =
+    selectedBranch && selectedBranch !== "All Branches"
+      ? baseExpiryList.filter(
+          (i) =>
+            !i.branch ||
+            i.branch === selectedBranch ||
+            i.branchId === selectedBranch,
+        )
+      : baseExpiryList;
 
   // Dynamic 4 KPI Stat Cards Calculations
   const lowStockAlertsCount = lowStockItemsList.length;
@@ -488,13 +510,23 @@ export default function StockStatusScreen({
               onPress={() => setBulkImportModalOpen(true)}
               style={[
                 styles.filterTogglePill,
-                { backgroundColor: "#0F766E", borderColor: "#0F766E", flexDirection: "row", alignItems: "center" },
+                {
+                  backgroundColor: "#0F766E",
+                  borderColor: "#0F766E",
+                  flexDirection: "row",
+                  alignItems: "center",
+                },
               ]}
               accessibilityRole="button"
               accessibilityLabel="Bulk import medicines from CSV"
             >
               <Text style={{ fontSize: 13, marginRight: 5 }}>📥</Text>
-              <Text style={[styles.filterToggleText, { color: "#FFFFFF", fontWeight: "700" }]}>
+              <Text
+                style={[
+                  styles.filterToggleText,
+                  { color: "#FFFFFF", fontWeight: "700" },
+                ]}
+              >
                 Import CSV
               </Text>
             </Pressable>

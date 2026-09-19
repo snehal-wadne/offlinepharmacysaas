@@ -739,11 +739,16 @@ const getPurchasesWithFilters = async (
     params.push(status);
   }
 
-  if (branchId) {
+  const isAllBranches =
+    !branchId ||
+    branchId === "All Branches" ||
+    branchId === "all" ||
+    branchId === "No Active Branch";
+  if (!isAllBranches) {
     paramCount++;
 
     query += `
-      AND p.branch_id = $${paramCount}
+      AND (p.branch_id::text = $${paramCount} OR b.name ILIKE $${paramCount})
     `;
 
     params.push(branchId);

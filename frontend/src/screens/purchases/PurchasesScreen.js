@@ -70,9 +70,16 @@ export default function PurchasesScreen({
   const loadPurchasesData = async () => {
     try {
       setLoading(true);
+      const rawBranch =
+        typeof selectedBranch === "object" && selectedBranch !== null
+          ? selectedBranch.id || selectedBranch.name
+          : selectedBranch;
       const branchParam =
-        selectedBranch && selectedBranch !== "All Branches"
-          ? selectedBranch
+        rawBranch &&
+        rawBranch !== "All Branches" &&
+        rawBranch !== "all" &&
+        rawBranch !== "No Active Branch"
+          ? rawBranch
           : undefined;
       const res = await fetchPurchases({ branchId: branchParam });
       if (res && res.data && Array.isArray(res.data)) {

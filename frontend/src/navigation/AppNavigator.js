@@ -120,18 +120,33 @@ export default function AppNavigator() {
   const [currentUser, setCurrentUser] = useState(null);
   const [googleOnboardingData, setGoogleOnboardingData] = useState(null);
 
-  const resolveBranchName = (user) => {
+  const resolveBranchContext = (user) => {
     if (!user || user.hasBranch === false) return null;
-    if (typeof user.branch === "string" && user.branch.trim())
-      return user.branch;
-    if (user.branch && typeof user.branch === "object" && user.branch.name)
-      return user.branch.name;
+    if (user.branch && typeof user.branch === "object" && user.branch.id) {
+      return {
+        id: user.branch.id,
+        name: user.branch.name || user.branch.branchCode || "Main Branch",
+      };
+    }
+    if (user.branchId) {
+      return {
+        id: user.branchId,
+        name: user.branchName || user.branch || "Main Branch",
+      };
+    }
+    if (user.branch && typeof user.branch === "object" && user.branch.name) {
+      return { id: null, name: user.branch.name };
+    }
+    if (typeof user.branch === "string" && user.branch.trim()) {
+      return { id: null, name: user.branch.trim() };
+    }
     if (
       user.branchName &&
       typeof user.branchName === "string" &&
       user.branchName.trim()
-    )
-      return user.branchName;
+    ) {
+      return { id: null, name: user.branchName.trim() };
+    }
     return null;
   };
 
@@ -173,7 +188,7 @@ export default function AppNavigator() {
           setCurrentRoute("branches");
           setSelectedBranch(null);
         } else if (user) {
-          setSelectedBranch(resolveBranchName(user));
+          setSelectedBranch(resolveBranchContext(user));
         }
 
         setAuthStatus("AUTHENTICATED");
@@ -407,6 +422,7 @@ export default function AppNavigator() {
             onShowToast={showToast}
             isMultiBranch={isMultiBranch}
             selectedBranch={selectedBranch}
+            currentUser={currentUser}
           />
         );
       case "held-bills":
@@ -691,8 +707,7 @@ export default function AppNavigator() {
             setCurrentRoute("branches");
             setSelectedBranch(null);
           } else {
-            const branchName = resolveBranchName(user);
-            setSelectedBranch(branchName);
+            setSelectedBranch(resolveBranchContext(user));
           }
           showToast(`Welcome back, ${user.display_name || user.name}!`);
         }}
@@ -829,11 +844,13 @@ export default function AppNavigator() {
             <Header
               currentBranch={selectedBranch}
               onBranchChange={(b) => {
-                setSelectedBranch(b);
+                const branchObj =
+                  typeof b === "string" ? { id: null, name: b } : b;
+                setSelectedBranch(branchObj);
                 if (typeof syncEngine?.setActiveBranch === "function") {
-                  syncEngine.setActiveBranch(b);
+                  syncEngine.setActiveBranch(branchObj?.id || branchObj?.name);
                 }
-                showToast(`Switched active branch to ${b}`);
+                showToast(`Switched active branch to ${branchObj?.name || b}`);
               }}
               isMultiBranch={isMultiBranch}
               onTogglePharmacyMode={handleTogglePharmacyMode}

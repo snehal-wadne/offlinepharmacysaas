@@ -431,7 +431,20 @@ const getGoodsReceiptsByOrganisation = async (
   organisationId,
   limit = 50,
   offset = 0,
+  branchId = null,
 ) => {
+  let branchClause = "";
+  const params = [organisationId, limit, offset];
+  if (
+    branchId &&
+    branchId !== "All Branches" &&
+    branchId !== "all" &&
+    branchId !== "No Active Branch"
+  ) {
+    params.push(branchId);
+    branchClause = `AND (p.branch_id::text = $4 OR b.name ILIKE $4)`;
+  }
+
   const query = `
     SELECT
         gr.id,
@@ -462,12 +475,13 @@ const getGoodsReceiptsByOrganisation = async (
     LEFT JOIN users u
         ON u.id = gr.received_by
     WHERE gr.organisation_id = $1
+      ${branchClause}
     ORDER BY gr.received_date DESC, gr.created_at DESC
     LIMIT $2
     OFFSET $3;
   `;
 
-  const result = await pool.query(query, [organisationId, limit, offset]);
+  const result = await pool.query(query, params);
 
   return result.rows;
 };

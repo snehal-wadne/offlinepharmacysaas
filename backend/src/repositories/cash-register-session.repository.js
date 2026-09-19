@@ -44,6 +44,29 @@ const CASH_REGISTER_SESSION_COLUMNS = `
   updated_at
 `;
 
+const ENRICHED_SESSION_COLUMNS = `
+  crs.id,
+  crs.organisation_id,
+  crs.branch_id,
+  crs.cash_register_id,
+  crs.cashier_id,
+  crs.session_number,
+  crs.shift_name,
+  crs.opened_at,
+  crs.closed_at,
+  crs.opening_balance,
+  crs.counted_cash,
+  crs.expected_cash,
+  crs.variance,
+  crs.status,
+  crs.variance_status,
+  crs.opening_notes,
+  crs.closing_notes,
+  crs.created_at,
+  crs.updated_at,
+  u.name AS cashier_name
+`;
+
 /**
  * Cache key helpers.
  */
@@ -215,6 +238,17 @@ const openSession = async ({
     const result = await dbClient.query(insertQuery, values);
     const session = result.rows[0];
 
+    const enrichedRes = await dbClient.query(
+      `
+      SELECT ${ENRICHED_SESSION_COLUMNS}
+      FROM cash_register_sessions crs
+      LEFT JOIN users u ON u.id = crs.cashier_id
+      WHERE crs.id = $1 AND crs.organisation_id = $2;
+    `,
+      [session.id, organisationId],
+    );
+    const enrichedSession = enrichedRes.rows[0] || session;
+
     if (ownsTransaction) {
       await dbClient.query("COMMIT");
     }
@@ -226,7 +260,7 @@ const openSession = async ({
       session.id,
     );
 
-    return session;
+    return enrichedSession;
   } catch (error) {
     if (ownsTransaction) {
       await dbClient.query("ROLLBACK").catch(() => {});
@@ -275,7 +309,7 @@ const getCurrentSession = async (
   if (useCache) {
     try {
       const cached = await getCache(cacheKey);
-      if (cached !== null) {
+      if (cached !== null && cached.cashier_name) {
         return cached;
       }
     } catch (error) {
@@ -284,20 +318,21 @@ const getCurrentSession = async (
   }
 
   let query = `
-    SELECT ${CASH_REGISTER_SESSION_COLUMNS}
-    FROM cash_register_sessions
-    WHERE organisation_id = $1
-      AND branch_id = $2
-      AND status = 'OPEN'
+    SELECT ${ENRICHED_SESSION_COLUMNS}
+    FROM cash_register_sessions crs
+    LEFT JOIN users u ON u.id = crs.cashier_id
+    WHERE crs.organisation_id = $1
+      AND crs.branch_id = $2
+      AND crs.status = 'OPEN'
   `;
   const params = [organisationId, branchId];
 
   if (cashRegisterId) {
     params.push(cashRegisterId);
-    query += ` AND cash_register_id = $3`;
+    query += ` AND crs.cash_register_id = $3`;
   }
 
-  query += ` ORDER BY opened_at DESC LIMIT 1;`;
+  query += ` ORDER BY crs.opened_at DESC LIMIT 1;`;
 
   const result = await client.query(query, params);
   const session = result.rows[0] || null;
@@ -332,7 +367,7 @@ const getSessionById = async (organisationId, sessionId, client = pool) => {
   if (useCache) {
     try {
       const cached = await getCache(cacheKey);
-      if (cached !== null) {
+      if (cached !== null && cached.cashier_name) {
         return cached;
       }
     } catch (error) {
@@ -341,9 +376,10 @@ const getSessionById = async (organisationId, sessionId, client = pool) => {
   }
 
   const query = `
-    SELECT ${CASH_REGISTER_SESSION_COLUMNS}
-    FROM cash_register_sessions
-    WHERE id = $1 AND organisation_id = $2;
+    SELECT ${ENRICHED_SESSION_COLUMNS}
+    FROM cash_register_sessions crs
+    LEFT JOIN users u ON u.id = crs.cashier_id
+    WHERE crs.id = $1 AND crs.organisation_id = $2;
   `;
 
   const result = await client.query(query, [sessionId, organisationId]);
@@ -526,7 +562,16 @@ const closeSession = async (
       throw new Error("Session is already closed.");
     }
 
-    const closedSession = result.rows[0];
+    const enrichedRes = await dbClient.query(
+      `
+      SELECT ${ENRICHED_SESSION_COLUMNS}
+      FROM cash_register_sessions crs
+      LEFT JOIN users u ON u.id = crs.cashier_id
+      WHERE crs.id = $1 AND crs.organisation_id = $2;
+    `,
+      [sessionId, organisationId],
+    );
+    const closedSession = enrichedRes.rows[0] || result.rows[0];
 
     if (ownsTransaction) {
       await dbClient.query("COMMIT");
@@ -621,34 +666,35 @@ const listSessionHistory = async (
   } = filters;
 
   let query = `
-    SELECT ${CASH_REGISTER_SESSION_COLUMNS}
-    FROM cash_register_sessions
-    WHERE organisation_id = $1 AND branch_id = $2
+    SELECT ${ENRICHED_SESSION_COLUMNS}
+    FROM cash_register_sessions crs
+    LEFT JOIN users u ON u.id = crs.cashier_id
+    WHERE crs.organisation_id = $1 AND crs.branch_id = $2
   `;
   const params = [organisationId, branchId];
   let paramIdx = 3;
 
   if (cashRegisterId) {
-    query += ` AND cash_register_id = $${paramIdx++}`;
+    query += ` AND crs.cash_register_id = $${paramIdx++}`;
     params.push(cashRegisterId);
   }
 
   if (cashierId) {
-    query += ` AND cashier_id = $${paramIdx++}`;
+    query += ` AND crs.cashier_id = $${paramIdx++}`;
     params.push(cashierId);
   }
 
   if (dateFrom) {
-    query += ` AND opened_at >= $${paramIdx++}`;
+    query += ` AND crs.opened_at >= $${paramIdx++}`;
     params.push(dateFrom);
   }
 
   if (dateTo) {
-    query += ` AND opened_at <= $${paramIdx++}`;
+    query += ` AND crs.opened_at <= $${paramIdx++}`;
     params.push(dateTo);
   }
 
-  query += ` ORDER BY opened_at DESC LIMIT $${paramIdx++} OFFSET $${paramIdx++};`;
+  query += ` ORDER BY crs.opened_at DESC LIMIT $${paramIdx++} OFFSET $${paramIdx++};`;
   params.push(Math.max(1, Number(limit) || 20));
   params.push(Math.max(0, Number(offset) || 0));
 

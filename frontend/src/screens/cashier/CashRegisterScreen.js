@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
   StyleSheet,
   useWindowDimensions,
   Platform,
-} from 'react-native';
+} from "react-native";
 import {
   fetchCurrentRegisterSession,
   openRegisterShift,
@@ -17,19 +17,22 @@ import {
   fetchRegisterHistory,
   recordCashMovement,
   fetchCashMovements,
-} from '../../api/cashierApi';
-import { SkeletonKpiCard, SkeletonTableRow } from '../../components/common/SkeletonLoader';
-import PaginationControls from '../../components/common/PaginationControls';
-import { localPersistenceService } from '../../db';
-import { syncEngine } from '../../sync';
+} from "../../api/cashierApi";
+import {
+  SkeletonKpiCard,
+  SkeletonTableRow,
+} from "../../components/common/SkeletonLoader";
+import PaginationControls from "../../components/common/PaginationControls";
+import { localPersistenceService } from "../../db";
+import { syncEngine } from "../../sync";
 
 const EMPTY_REGISTER_SESSION = {
   id: null,
   sessionId: null,
   isOpen: false,
-  openedBy: '',
+  openedBy: "",
   openedAt: null,
-  branch: '',
+  branch: "",
   openingBalance: 0,
   cashSales: 0,
   upiSales: 0,
@@ -38,26 +41,190 @@ const EMPTY_REGISTER_SESSION = {
   cashRefunds: 0,
   totalDiscounts: 0,
   expectedCash: 0,
-  notes: '',
+  notes: "",
   isPendingClose: false,
 };
 
-export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBranch = true }) {
+const normalizeCashMovement = (m) => {
+  const rawDate =
+    m?.occurredAt || m?.occurred_at || m?.createdAt || m?.created_at;
+  let formattedTime = "—";
+  if (rawDate) {
+    try {
+      const d = new Date(rawDate);
+      if (!isNaN(d.getTime())) {
+        formattedTime = `${d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}, ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+      }
+    } catch (e) {}
+  } else if (m?.time) {
+    formattedTime = m.time;
+  }
+
+  return {
+    id: m?.movementNumber || m?.movement_number || m?.id,
+    type: (
+      m?.movementType ||
+      m?.movement_type ||
+      m?.type ||
+      "OUT"
+    ).toUpperCase(),
+    amount: Number(m?.amount || 0),
+    reason: m?.reason || "Cash Movement",
+    time: formattedTime,
+    cashier: m?.cashier_name || m?.cashierName || m?.cashier || "Cashier",
+  };
+};
+
+const normalizeRegisterSession = (raw) => {
+  if (!raw || (!raw.id && raw.status !== "OPEN")) return EMPTY_REGISTER_SESSION;
+
+  const isOpen = raw.status === "OPEN";
+  const openBal = parseFloat(raw.opening_balance ?? raw.openingBalance ?? 0);
+  const expCash = parseFloat(
+    raw.expected_cash ??
+      raw.expectedCash ??
+      raw.opening_balance ??
+      raw.openingBalance ??
+      0,
+  );
+  const rawOpenedAt = raw.opened_at || raw.openedAt;
+  let formattedOpenedAt = "—";
+  let sessionTimeStr = "—";
+  if (rawOpenedAt) {
+    try {
+      const d = new Date(rawOpenedAt);
+      if (!isNaN(d.getTime())) {
+        formattedOpenedAt = `${d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}, ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+        sessionTimeStr = d.toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      }
+    } catch (e) {}
+  }
+
+  return {
+    id: raw.id,
+    sessionId:
+      raw.session_number || raw.sessionNumber || raw.sessionCode || raw.id,
+    isOpen,
+    isPendingClose: raw.status === "CLOSE_PENDING",
+    openedBy: raw.cashier_name || raw.cashierName || raw.openedBy || "Cashier",
+    openedAt: formattedOpenedAt,
+    sessionTime: sessionTimeStr,
+    branch: raw.branch_name || raw.branchName || "Main Branch",
+    openingBalance: openBal,
+    cashSales: parseFloat(
+      raw.total_sales ?? raw.totalSales ?? raw.cash_sales ?? raw.cashSales ?? 0,
+    ),
+    upiSales: parseFloat(raw.upi_sales ?? raw.upiSales ?? 0),
+    cardSales: parseFloat(raw.card_sales ?? raw.cardSales ?? 0),
+    creditSales: parseFloat(raw.credit_sales ?? raw.creditSales ?? 0),
+    cashRefunds: parseFloat(raw.cash_refunds ?? raw.cashRefunds ?? 0),
+    totalDiscounts: parseFloat(raw.total_discounts ?? raw.totalDiscounts ?? 0),
+    expectedCash: expCash > 0 ? expCash : openBal,
+    countedCash: parseFloat(raw.counted_cash ?? raw.countedCash ?? 0),
+    variance: parseFloat(raw.variance ?? 0),
+    varianceStatus: raw.variance_status || raw.varianceStatus || "BALANCED",
+    notes: raw.opening_notes || raw.openingNotes || raw.notes || "",
+  };
+};
+
+const normalizeHistoryItem = (h, i) => {
+  const rawOpened = h.opened_at || h.openedAt;
+  const rawClosed = h.closed_at || h.closedAt;
+
+  let formattedDate = "Today";
+  let formattedOpenedAt = "09:00 AM";
+  let formattedClosedAt = "10:00 PM";
+
+  if (rawOpened) {
+    try {
+      const d = new Date(rawOpened);
+      if (!isNaN(d.getTime())) {
+        formattedDate = d.toLocaleDateString("en-GB", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+        });
+        formattedOpenedAt = d.toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      }
+    } catch (e) {}
+  }
+
+  if (rawClosed) {
+    try {
+      const d = new Date(rawClosed);
+      if (!isNaN(d.getTime())) {
+        formattedClosedAt = d.toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      }
+    } catch (e) {}
+  }
+
+  return {
+    id:
+      h.session_number ||
+      h.sessionNumber ||
+      h.sessionCode ||
+      h.id ||
+      `REG-${i}`,
+    date: formattedDate,
+    shift: h.shift_name || h.shiftName || "Day Shift",
+    cashier: h.cashier_name || h.cashierName || h.cashier || "Cashier",
+    openedAt: formattedOpenedAt,
+    closedAt: formattedClosedAt,
+    branch: h.branch_name || h.branchName || "Main Branch",
+    openingBalance: parseFloat(h.opening_balance ?? h.openingBalance ?? 0),
+    cashSales: parseFloat(
+      h.total_sales ?? h.totalSales ?? h.cash_sales ?? h.cashSales ?? 0,
+    ),
+    cashRefunds: parseFloat(h.cash_refunds ?? h.cashRefunds ?? 0),
+    pettyCashIn: 0,
+    pettyCashOut: 0,
+    expectedCash: parseFloat(h.expected_cash ?? h.expectedCash ?? 0),
+    countedCash: parseFloat(h.counted_cash ?? h.countedCash ?? 0),
+    variance: parseFloat(h.variance ?? 0),
+    status: h.variance_status || h.varianceStatus || h.status || "Balanced",
+    notes: h.closing_notes || h.opening_notes || h.notes || "Shift completed.",
+  };
+};
+
+export default function CashRegisterScreen({
+  onNavigate,
+  onShowToast,
+  isMultiBranch = true,
+  selectedBranch,
+  currentUser,
+}) {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const isCompact = width < 1024;
+
+  const effectiveBranchId =
+    typeof selectedBranch === "object" && selectedBranch !== null
+      ? selectedBranch.id
+      : currentUser?.branchId ||
+        (selectedBranch && selectedBranch !== "All Branches"
+          ? selectedBranch
+          : null);
 
   // Active Session State
   const [session, setSession] = useState(EMPTY_REGISTER_SESSION);
 
   // Form State for "Open Register"
-  const [openingBalanceInput, setOpeningBalanceInput] = useState('2000.00');
-  const [openingNote, setOpeningNote] = useState('');
+  const [openingBalanceInput, setOpeningBalanceInput] = useState("2000.00");
+  const [openingNote, setOpeningNote] = useState("");
 
   // Modal 1: Close Register Modal
   const [closeModalVisible, setCloseModalVisible] = useState(false);
-  const [countedCashInput, setCountedCashInput] = useState('0.00');
-  const [closingNotes, setClosingNotes] = useState('');
+  const [countedCashInput, setCountedCashInput] = useState("0.00");
+  const [closingNotes, setClosingNotes] = useState("");
 
   // Modal 2: View Register History Modal
   const [historyModalVisible, setHistoryModalVisible] = useState(false);
@@ -65,11 +232,12 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
   const [selectedHistoryItem, setSelectedHistoryItem] = useState(null);
 
   // Modal 3: Petty Cash / Cash Movement Modal
-  const [cashMovementModalVisible, setCashMovementModalVisible] = useState(false);
-  const [movementType, setMovementType] = useState('OUT'); // 'IN' | 'OUT'
-  const [movementAmount, setMovementAmount] = useState('');
-  const [movementReason, setMovementReason] = useState('');
-  const [movementError, setMovementError] = useState('');
+  const [cashMovementModalVisible, setCashMovementModalVisible] =
+    useState(false);
+  const [movementType, setMovementType] = useState("OUT"); // 'IN' | 'OUT'
+  const [movementAmount, setMovementAmount] = useState("");
+  const [movementReason, setMovementReason] = useState("");
+  const [movementError, setMovementError] = useState("");
   const [lastAddedMovementId, setLastAddedMovementId] = useState(null);
 
   // Persistent Petty Cash Movements Log for current session
@@ -84,105 +252,81 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
     let isMounted = true;
     async function loadRegisterData() {
       try {
-        // 1. Check offline Dexie stores first
-        let localOpenSession = null;
-        let localMovements = [];
-        if (typeof localPersistenceService?.getLocalOpenRegisterSession === 'function') {
-          try {
-            localOpenSession = await localPersistenceService.getLocalOpenRegisterSession();
-            if (localOpenSession) {
-              localMovements = await localPersistenceService.getLocalCashMovements(localOpenSession.id);
-            }
-          } catch (e) {
-            console.warn('[CashRegister] Error reading local Dexie session:', e);
-          }
-        }
+        let backendSucceeded = false;
 
-        if (localOpenSession && isMounted) {
-          const isOpen = localOpenSession.status === 'OPEN' || localOpenSession.status === 'CLOSE_PENDING';
-          const openBal = parseFloat(localOpenSession.openingBalance || 2000.0);
-          const expCash = parseFloat(localOpenSession.expectedCash || openBal);
-          setSession((prev) => ({
-            ...prev,
-            id: localOpenSession.id,
-            sessionId: localOpenSession.sessionNumber || localOpenSession.id || prev.sessionId,
-            isOpen,
-            isPendingClose: localOpenSession.status === 'CLOSE_PENDING',
-            openingBalance: openBal,
-            expectedCash: expCash > 0 ? expCash : openBal,
-            openedBy: localOpenSession.cashierId || prev.openedBy,
-            notes: localOpenSession.openingNotes || prev.notes,
-          }));
+        // 1. Fetch live data from backend first (PostgreSQL is authoritative)
+        try {
+          const [currentSession, historyData, movementsData] =
+            await Promise.all([
+              fetchCurrentRegisterSession(effectiveBranchId),
+              fetchRegisterHistory(effectiveBranchId),
+              fetchCashMovements(null, effectiveBranchId),
+            ]);
 
-          if (localMovements && localMovements.length > 0) {
-            setPettyCashMovements(localMovements.map((m) => ({
-              id: m.movementNumber || m.id,
-              type: m.movementType,
-              amount: parseFloat(m.amount),
-              reason: m.reason,
-              time: m.occurredAt ? new Date(m.occurredAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Now',
-              cashier: m.cashierId || 'Cashier 01',
-            })));
-          }
-        }
+          if (isMounted) {
+            backendSucceeded = true;
 
-        // 2. Fetch live data from backend (with existing mock fallbacks)
-        const [currentSession, historyData, movementsData] = await Promise.all([
-          fetchCurrentRegisterSession(),
-          fetchRegisterHistory(),
-          fetchCashMovements(),
-        ]);
-
-        if (isMounted) {
-          if (!localOpenSession) {
-            if (currentSession && (currentSession.id || currentSession.status === 'OPEN')) {
-              const isOpen = currentSession.status === 'OPEN';
-              const openBal = parseFloat(currentSession.openingBalance || 0);
-              const expCash = parseFloat(currentSession.expectedCash || currentSession.openingBalance || 0);
-              setSession({
-                ...EMPTY_REGISTER_SESSION,
-                ...currentSession,
-                isOpen,
-                sessionId: currentSession.sessionCode || currentSession.sessionNumber || currentSession.id,
-                openedBy: currentSession.openedBy || currentSession.cashierName || 'Cashier',
-                openingBalance: openBal,
-                expectedCash: expCash > 0 ? expCash : openBal,
-              });
+            if (
+              currentSession &&
+              (currentSession.id || currentSession.status === "OPEN")
+            ) {
+              setSession(normalizeRegisterSession(currentSession));
             } else {
               setSession(EMPTY_REGISTER_SESSION);
             }
+
+            setHistoryList(
+              Array.isArray(historyData)
+                ? historyData.map(normalizeHistoryItem)
+                : [],
+            );
+
+            // Backend PostgreSQL is authoritative whenever the request succeeds.
+            // Normalize backend cash movements into the exact shape expected by the UI.
+            const backendMovements = Array.isArray(movementsData)
+              ? movementsData.map(normalizeCashMovement)
+              : [];
+
+            setPettyCashMovements(backendMovements);
           }
-
-          setHistoryList(
-            Array.isArray(historyData)
-              ? historyData.map((h, i) => ({
-                  id: h.sessionCode || h.sessionNumber || h.id || `REG-${i}`,
-                  date: h.openedAt ? new Date(h.openedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Today',
-                  shift: h.shiftName || 'Day Shift',
-                  cashier: h.cashierName || 'Cashier',
-                  openedAt: h.openedAt ? new Date(h.openedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '09:00 AM',
-                  closedAt: h.closedAt ? new Date(h.closedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '10:00 PM',
-                  branch: h.branchName || 'Main Branch',
-                  openingBalance: parseFloat(h.openingBalance) || 0,
-                  cashSales: parseFloat(h.totalSales || h.cashSales) || 0,
-                  cashRefunds: parseFloat(h.cashRefunds) || 0,
-                  pettyCashIn: 0,
-                  pettyCashOut: 0,
-                  expectedCash: parseFloat(h.expectedCash) || 0,
-                  countedCash: parseFloat(h.countedCash) || 0,
-                  variance: parseFloat(h.variance) || 0,
-                  status: h.varianceStatus || h.status || 'Balanced',
-                  notes: h.notes || 'Shift completed.',
-                }))
-              : []
+        } catch (apiErr) {
+          console.warn(
+            "[CashRegister] API fetch failed, checking offline fallback:",
+            apiErr.message,
           );
+        }
 
-          if (!localMovements?.length) {
-            setPettyCashMovements(Array.isArray(movementsData) ? movementsData : []);
+        // 2. Fallback to Dexie ONLY if live backend request did NOT succeed
+        if (!backendSucceeded && isMounted) {
+          if (
+            typeof localPersistenceService?.getLocalOpenRegisterSession ===
+            "function"
+          ) {
+            try {
+              const localOpenSession =
+                await localPersistenceService.getLocalOpenRegisterSession();
+              if (localOpenSession) {
+                setSession(normalizeRegisterSession(localOpenSession));
+                const localMovements =
+                  await localPersistenceService.getLocalCashMovements(
+                    localOpenSession.id,
+                  );
+                if (localMovements && localMovements.length > 0) {
+                  setPettyCashMovements(
+                    localMovements.map(normalizeCashMovement),
+                  );
+                }
+              }
+            } catch (dexieErr) {
+              console.warn(
+                "[CashRegister] Error reading local Dexie session:",
+                dexieErr.message,
+              );
+            }
           }
         }
       } catch (err) {
-        console.warn('Failed to load register session from API:', err.message);
+        console.warn("Failed to load register session:", err.message);
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -190,9 +334,9 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
     loadRegisterData();
 
     const subscribeFn =
-      typeof syncEngine?.onStateChange === 'function'
+      typeof syncEngine?.onStateChange === "function"
         ? syncEngine.onStateChange.bind(syncEngine)
-        : typeof syncEngine?.subscribe === 'function'
+        : typeof syncEngine?.subscribe === "function"
           ? syncEngine.subscribe.bind(syncEngine)
           : null;
 
@@ -206,15 +350,15 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
       isMounted = false;
       unsubscribe();
     };
-  }, []);
+  }, [selectedBranch, currentUser]);
 
   // Calculate totals
   const totalPettyCashIn = pettyCashMovements
-    .filter((m) => m.type === 'IN')
+    .filter((m) => m.type === "IN")
     .reduce((sum, m) => sum + m.amount, 0);
 
   const totalPettyCashOut = pettyCashMovements
-    .filter((m) => m.type === 'OUT')
+    .filter((m) => m.type === "OUT")
     .reduce((sum, m) => sum + m.amount, 0);
 
   // Calculate live variance in Close Modal
@@ -226,31 +370,40 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
   const handleOpenRegister = async () => {
     const balanceNum = parseFloat(openingBalanceInput);
     if (isNaN(balanceNum)) {
-      if (onShowToast) onShowToast('⚠️ Please enter a valid number for opening balance.');
+      if (onShowToast)
+        onShowToast("⚠️ Please enter a valid number for opening balance.");
       return;
     }
     if (balanceNum < 0) {
-      if (onShowToast) onShowToast('⚠️ Opening balance cannot be negative.');
+      if (onShowToast) onShowToast("⚠️ Opening balance cannot be negative.");
       return;
     }
 
-    const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const dateStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-    const initialExpected = balanceNum + 8750.0 - 350.0 + totalPettyCashIn - totalPettyCashOut;
-
+    const nowStr = new Date().toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    const dateStr = new Date().toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+    const initialExpected = balanceNum;
     // 1. Offline Dexie persistence & outbox queue
     let localResult = null;
-    if (typeof localPersistenceService?.openLocalRegisterSession === 'function') {
+    if (
+      typeof localPersistenceService?.openLocalRegisterSession === "function"
+    ) {
       try {
         localResult = await localPersistenceService.openLocalRegisterSession({
           openingBalance: balanceNum,
-          notes: openingNote || 'Opening shift float recorded.',
+          notes: openingNote || "Opening shift float recorded.",
         });
-        if (typeof syncEngine?.sync === 'function') {
+        if (typeof syncEngine?.sync === "function") {
           syncEngine.sync().catch(() => {});
         }
       } catch (e) {
-        console.warn('[CashRegister] local open error (fallback):', e.message);
+        console.warn("[CashRegister] local open error (fallback):", e.message);
       }
     }
 
@@ -258,26 +411,45 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
     try {
       const res = await openRegisterShift({
         openingBalance: balanceNum,
-        notes: openingNote || 'Opening shift float recorded.',
+        notes: openingNote || "Opening shift float recorded.",
       });
 
       setSession((prev) => ({
         ...prev,
         isOpen: true,
-        id: localResult?.session?.id || prev.id,
-        sessionId: res?.sessionCode || res?.sessionNumber || localResult?.session?.sessionNumber || prev.sessionId,
+        id: res?.id || localResult?.session?.id || prev.id,
+        sessionId:
+          res?.sessionCode ||
+          res?.sessionNumber ||
+          res?.id ||
+          localResult?.session?.sessionNumber ||
+          prev.sessionId,
         openingBalance: balanceNum,
-        cashSales: 8750.0,
-        upiSales: 4250.0,
-        cardSales: 2800.0,
-        creditSales: 1500.0,
-        cashRefunds: 350.0,
-        totalDiscounts: 420.0,
-        expectedCash: initialExpected,
-        openedAt: `${dateStr}, ${nowStr}`,
-        sessionTime: 'Just started',
-        notes: openingNote || 'Opening shift float recorded.',
+        cashSales: Number(res?.cashSales || 0),
+        upiSales: Number(res?.upiSales || 0),
+        cardSales: Number(res?.cardSales || 0),
+        creditSales: Number(res?.creditSales || 0),
+        cashRefunds: Number(res?.cashRefunds || 0),
+        totalDiscounts: Number(res?.totalDiscounts || 0),
+        expectedCash: Number(res?.expectedCash ?? initialExpected),
+        openedAt: res?.openedAt || `${dateStr}, ${nowStr}`,
+        sessionTime: "Just started",
+        notes: res?.notes || openingNote || "Opening shift float recorded.",
       }));
+
+      try {
+        const refreshedSession =
+          await fetchCurrentRegisterSession(effectiveBranchId);
+
+        if (refreshedSession) {
+          setSession(normalizeRegisterSession(refreshedSession));
+        }
+      } catch (refreshError) {
+        console.warn(
+          "[CashRegister] Failed to refresh register after opening:",
+          refreshError.message,
+        );
+      }
     } catch {
       setSession((prev) => ({
         ...prev,
@@ -287,14 +459,16 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
         openingBalance: balanceNum,
         expectedCash: initialExpected,
         openedAt: `${dateStr}, ${nowStr}`,
-        sessionTime: 'Just started',
-        notes: openingNote || 'Opening shift float recorded.',
+        sessionTime: "Just started",
+        notes: openingNote || "Opening shift float recorded.",
       }));
     }
 
     setCountedCashInput(initialExpected.toFixed(2));
     if (onShowToast) {
-      onShowToast(`✓ Cash Register opened with float ₹${balanceNum.toFixed(2)} (CASH-01)`);
+      onShowToast(
+        `✓ Cash Register opened with float ₹${balanceNum.toFixed(2)} (CASH-01)`,
+      );
     }
   };
 
@@ -302,42 +476,55 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
   const handleCloseRegister = async () => {
     const countedVal = parseFloat(countedCashInput) || 0;
     const varVal = countedVal - session.expectedCash;
-    let varStatus = 'Balanced';
-    if (varVal < -1) varStatus = 'Shortage';
-    else if (varVal > 1) varStatus = 'Overage';
+    let varStatus = "Balanced";
+    if (varVal < -1) varStatus = "Shortage";
+    else if (varVal > 1) varStatus = "Overage";
 
     // 1. Offline Dexie persistence & outbox queue (marks CLOSE_PENDING locally)
-    if (typeof localPersistenceService?.prepareLocalDayClose === 'function') {
+    if (typeof localPersistenceService?.prepareLocalDayClose === "function") {
       try {
         await localPersistenceService.prepareLocalDayClose({
           sessionId: session.id,
           countedCash: countedVal,
-          notes: closingNotes || 'Shift closed and drawer reconciled.',
+          notes: closingNotes || "Shift closed and drawer reconciled.",
         });
-        if (typeof syncEngine?.sync === 'function') {
+        if (typeof syncEngine?.sync === "function") {
           syncEngine.sync().catch(() => {});
         }
       } catch (e) {
-        console.warn('[CashRegister] local close error (fallback):', e.message);
+        console.warn("[CashRegister] local close error (fallback):", e.message);
       }
     }
 
     try {
       await closeRegisterShift({
         countedCash: countedVal,
-        notes: closingNotes || 'Shift closed and drawer reconciled.',
+        notes: closingNotes || "Shift closed and drawer reconciled.",
       });
     } catch (e) {
-      console.warn('Error closing register shift on backend:', e.message);
+      console.warn("Error closing register shift on backend:", e.message);
     }
 
     const closedRecord = {
-      id: `REG-2026-${Math.floor(1000 + Math.random() * 9000)}`,
-      date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-      shift: 'Day Shift',
-      cashier: session.openedBy,
-      openedAt: session.openedAt.split(', ')[1] || '09:00 AM',
-      closedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      id:
+        session.sessionId ||
+        session.id ||
+        `REG-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+      date: new Date().toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      }),
+      shift: session.shift || "Day Shift",
+      cashier: session.openedBy || "Cashier",
+      openedAt:
+        typeof session.openedAt === "string" && session.openedAt.includes(",")
+          ? session.openedAt.split(", ")[1]
+          : session.openedAt || "09:00 AM",
+      closedAt: new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
       branch: session.branch,
       openingBalance: session.openingBalance,
       cashSales: session.cashSales,
@@ -348,7 +535,7 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
       countedCash: countedVal,
       variance: varVal,
       status: varStatus,
-      notes: closingNotes || 'Shift closed and drawer reconciled.',
+      notes: closingNotes || "Shift closed and drawer reconciled.",
       movements: [...pettyCashMovements],
     };
 
@@ -361,7 +548,7 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
 
     if (onShowToast) {
       onShowToast(
-        `✓ Cash Register closed successfully! Variance: ${varVal >= 0 ? '+' : ''}₹${varVal.toFixed(2)} (${varStatus})`
+        `✓ Cash Register closed successfully! Variance: ${varVal >= 0 ? "+" : ""}₹${varVal.toFixed(2)} (${varStatus})`,
       );
     }
   };
@@ -370,21 +557,33 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
   const handleAddMovement = async () => {
     const amt = parseFloat(movementAmount);
     if (!amt || amt <= 0 || isNaN(amt)) {
-      setMovementError('⚠️ Please enter a valid movement amount greater than ₹0.');
+      setMovementError(
+        "⚠️ Please enter a valid movement amount greater than ₹0.",
+      );
       return;
     }
 
     // Default reason if cashier leaves it blank so it never fails to record!
-    const defaultReason = movementType === 'IN' ? 'Cash Float Addition' : 'General Store Expense';
+    const defaultReason =
+      movementType === "IN" ? "Cash Float Addition" : "General Store Expense";
     const finalReason = movementReason.trim() || defaultReason;
 
-    const nowTimeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const nowDateStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    const nowTimeStr = new Date().toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    const nowDateStr = new Date().toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
 
     let newId = `PC-${Math.floor(1000 + Math.random() * 9000)}`;
 
     // 1. Offline Dexie persistence & outbox queue
-    if (typeof localPersistenceService?.recordLocalCashMovement === 'function') {
+    if (
+      typeof localPersistenceService?.recordLocalCashMovement === "function"
+    ) {
       try {
         const localRes = await localPersistenceService.recordLocalCashMovement({
           sessionId: session.id,
@@ -395,11 +594,14 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
         if (localRes?.movement?.movementNumber) {
           newId = localRes.movement.movementNumber;
         }
-        if (typeof syncEngine?.sync === 'function') {
+        if (typeof syncEngine?.sync === "function") {
           syncEngine.sync().catch(() => {});
         }
       } catch (e) {
-        console.warn('[CashRegister] local movement error (fallback):', e.message);
+        console.warn(
+          "[CashRegister] local movement error (fallback):",
+          e.message,
+        );
       }
     }
 
@@ -413,12 +615,16 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
         newId = res.movementNumber;
       }
     } catch (e) {
-      console.warn('Error saving cash movement to backend:', e.message);
+      console.warn("Error saving cash movement to backend:", e.message);
       try {
-        const { enqueueMutation } = require('../../offline/syncQueue');
-        enqueueMutation('RECORD_CASH_MOVEMENT', { movementType, amount: amt, reason: finalReason });
+        const { enqueueMutation } = require("../../offline/syncQueue");
+        enqueueMutation("RECORD_CASH_MOVEMENT", {
+          movementType,
+          amount: amt,
+          reason: finalReason,
+        });
       } catch (err) {
-        console.warn('Could not queue offline movement', err);
+        console.warn("Could not queue offline movement", err);
       }
     }
 
@@ -428,14 +634,14 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
       amount: amt,
       reason: finalReason,
       time: `${nowDateStr}, ${nowTimeStr}`,
-      cashier: session.openedBy || 'Cashier 01',
+      cashier: session.openedBy || "Cashier 01",
       isNew: true,
     };
 
     setPettyCashMovements((prev) => [newMovement, ...prev]);
     setLastAddedMovementId(newId);
 
-    if (movementType === 'IN') {
+    if (movementType === "IN") {
       setSession((prev) => ({
         ...prev,
         expectedCash: prev.expectedCash + amt,
@@ -449,13 +655,15 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
         expectedCash: prev.expectedCash - amt,
       }));
       if (onShowToast) {
-        onShowToast(`✓ Recorded Expense Payout: -₹${amt.toFixed(2)} (${finalReason})`);
+        onShowToast(
+          `✓ Recorded Expense Payout: -₹${amt.toFixed(2)} (${finalReason})`,
+        );
       }
     }
 
-    setMovementAmount('');
-    setMovementReason('');
-    setMovementError('');
+    setMovementAmount("");
+    setMovementReason("");
+    setMovementError("");
     setCashMovementModalVisible(false);
   };
 
@@ -467,7 +675,10 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
     setPettyCashMovements((prev) => prev.filter((m) => m.id !== id));
     setSession((prev) => ({
       ...prev,
-      expectedCash: item.type === 'IN' ? prev.expectedCash - item.amount : prev.expectedCash + item.amount,
+      expectedCash:
+        item.type === "IN"
+          ? prev.expectedCash - item.amount
+          : prev.expectedCash + item.amount,
     }));
 
     if (onShowToast) {
@@ -475,12 +686,15 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
     }
   };
 
-  const paginatedData = historyList.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const paginatedData = historyList.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage,
+  );
 
   if (loading) {
     return (
       <View style={{ flex: 1, padding: 24, gap: 16 }}>
-        <View style={{ flexDirection: 'row', gap: 16 }}>
+        <View style={{ flexDirection: "row", gap: 16 }}>
           <SkeletonKpiCard />
           <SkeletonKpiCard />
         </View>
@@ -506,8 +720,8 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
           <Text style={styles.pageTitle}>Cash Register</Text>
           <Text style={styles.pageSubtitle}>
             {session.isOpen
-              ? 'Your register is open. You can start taking sales.'
-              : 'Open your register to start taking sales.'}
+              ? "Your register is open. You can start taking sales."
+              : "Open your register to start taking sales."}
           </Text>
         </View>
 
@@ -530,7 +744,9 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
       {/* ========================================================================= */}
       {!session.isOpen && (
         <View style={styles.closedStateWrapper}>
-          <View style={[styles.closedCard, isMobile && styles.closedCardMobile]}>
+          <View
+            style={[styles.closedCard, isMobile && styles.closedCardMobile]}
+          >
             {/* Center Calculator Icon */}
             <View style={styles.calculatorCircle}>
               <Text style={styles.calculatorIcon}>🧮</Text>
@@ -539,7 +755,8 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
             {/* Headline & Subtext */}
             <Text style={styles.closedHeadline}>Register is Closed</Text>
             <Text style={styles.closedSubtext}>
-              Open your cash register with an opening balance to begin your shift.
+              Open your cash register with an opening balance to begin your
+              shift.
             </Text>
 
             {/* Field 1: Opening Balance */}
@@ -576,7 +793,8 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
             <View style={styles.infoBanner}>
               <Text style={styles.infoBannerIcon}>ⓘ</Text>
               <Text style={styles.infoBannerText}>
-                This amount should be the actual cash in your drawer at the start of your shift.
+                This amount should be the actual cash in your drawer at the
+                start of your shift.
               </Text>
             </View>
 
@@ -603,9 +821,16 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
       {session.isOpen && (
         <View style={styles.openStateContainer}>
           {/* Top 2 Status Cards */}
-          <View style={[styles.statusCardsRow, isMobile && styles.statusCardsRowMobile]}>
+          <View
+            style={[
+              styles.statusCardsRow,
+              isMobile && styles.statusCardsRowMobile,
+            ]}
+          >
             {/* Card 1: Register Status */}
-            <View style={[styles.statusCard, isMobile && styles.statusCardMobile]}>
+            <View
+              style={[styles.statusCard, isMobile && styles.statusCardMobile]}
+            >
               <View style={styles.statusCardIconBox}>
                 <Text style={styles.statusCardEmoji}>🧺</Text>
               </View>
@@ -615,7 +840,10 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
                   <Text style={styles.openBadgeText}>Open</Text>
                 </View>
                 <Text style={styles.statusMetaText}>
-                  Opened By: <Text style={styles.statusMetaHighlight}>{session.openedBy}</Text>
+                  Opened By:{" "}
+                  <Text style={styles.statusMetaHighlight}>
+                    {session.openedBy}
+                  </Text>
                 </Text>
                 <Text style={styles.statusMetaText}>
                   Opened At: {session.openedAt}
@@ -624,15 +852,21 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
             </View>
 
             {/* Card 2: Current Session Time */}
-            <View style={[styles.statusCard, isMobile && styles.statusCardMobile]}>
+            <View
+              style={[styles.statusCard, isMobile && styles.statusCardMobile]}
+            >
               <View style={[styles.statusCardIconBox, styles.timeIconBox]}>
                 <Text style={styles.statusCardEmoji}>⏱️</Text>
               </View>
               <View style={styles.statusCardInfo}>
                 <Text style={styles.statusCardLabel}>Current Session Time</Text>
-                <Text style={styles.sessionTimeValue}>{session.sessionTime}</Text>
+                <Text style={styles.sessionTimeValue}>
+                  {session.sessionTime}
+                </Text>
                 <View style={styles.lastActivityRow}>
-                  <Text style={styles.statusMetaText}>Last Activity: Just now</Text>
+                  <Text style={styles.statusMetaText}>
+                    Last Activity: Just now
+                  </Text>
                   <View style={styles.liveGreenDot} />
                 </View>
                 <Text style={styles.statusMetaText}>Session: Active Shift</Text>
@@ -646,22 +880,34 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
               <Text style={styles.sectionTitle}>Sales & Payment Summary</Text>
               <View style={styles.quickHeaderActions}>
                 <Pressable
-                  onPress={() => onNavigate && onNavigate('sales')}
+                  onPress={() => onNavigate && onNavigate("sales")}
                   style={styles.newSaleSmallBtn}
                 >
-                  <Text style={styles.newSaleSmallBtnText}>+ Start New Sale</Text>
+                  <Text style={styles.newSaleSmallBtnText}>
+                    + Start New Sale
+                  </Text>
                 </Pressable>
               </View>
             </View>
 
-            <View style={[styles.summaryPillsRow, isMobile && styles.summaryPillsRowMobile]}>
+            <View
+              style={[
+                styles.summaryPillsRow,
+                isMobile && styles.summaryPillsRowMobile,
+              ]}
+            >
               {/* Cash Sales Card */}
               <View style={styles.summaryItemCard}>
                 <View style={styles.summaryItemHeader}>
                   <Text style={styles.summaryItemIcon}>💵</Text>
                   <Text style={styles.summaryItemLabel}>Cash Sales</Text>
                 </View>
-                <Text style={styles.summaryItemValue}>₹{session.cashSales.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
+                <Text style={styles.summaryItemValue}>
+                  ₹
+                  {session.cashSales.toLocaleString("en-IN", {
+                    minimumFractionDigits: 2,
+                  })}
+                </Text>
               </View>
 
               {/* UPI / Digital Sales */}
@@ -670,7 +916,12 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
                   <Text style={styles.summaryItemIcon}>📱</Text>
                   <Text style={styles.summaryItemLabel}>UPI / QR Sales</Text>
                 </View>
-                <Text style={styles.summaryItemValue}>₹{session.upiSales.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
+                <Text style={styles.summaryItemValue}>
+                  ₹
+                  {session.upiSales.toLocaleString("en-IN", {
+                    minimumFractionDigits: 2,
+                  })}
+                </Text>
               </View>
 
               {/* Card Sales */}
@@ -679,71 +930,118 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
                   <Text style={styles.summaryItemIcon}>💳</Text>
                   <Text style={styles.summaryItemLabel}>Card Sales</Text>
                 </View>
-                <Text style={styles.summaryItemValue}>₹{session.cardSales.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
+                <Text style={styles.summaryItemValue}>
+                  ₹
+                  {session.cardSales.toLocaleString("en-IN", {
+                    minimumFractionDigits: 2,
+                  })}
+                </Text>
               </View>
 
               {/* Refunds Badge */}
               <View style={[styles.badgeSummaryCard, styles.refundsCard]}>
                 <View style={styles.summaryItemHeader}>
                   <Text style={styles.summaryItemIcon}>🔄</Text>
-                  <Text style={[styles.summaryItemLabel, styles.refundsLabel]}>Refunds</Text>
+                  <Text style={[styles.summaryItemLabel, styles.refundsLabel]}>
+                    Refunds
+                  </Text>
                 </View>
-                <Text style={styles.refundsValue}>-₹{session.cashRefunds.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
+                <Text style={styles.refundsValue}>
+                  -₹
+                  {session.cashRefunds.toLocaleString("en-IN", {
+                    minimumFractionDigits: 2,
+                  })}
+                </Text>
               </View>
 
               {/* Discounts Badge */}
               <View style={[styles.badgeSummaryCard, styles.discountsCard]}>
                 <View style={styles.summaryItemHeader}>
                   <Text style={styles.summaryItemIcon}>🏷️</Text>
-                  <Text style={[styles.summaryItemLabel, styles.discountsLabel]}>Discounts</Text>
+                  <Text
+                    style={[styles.summaryItemLabel, styles.discountsLabel]}
+                  >
+                    Discounts
+                  </Text>
                 </View>
-                <Text style={styles.discountsValue}>-₹{session.totalDiscounts.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
+                <Text style={styles.discountsValue}>
+                  -₹
+                  {session.totalDiscounts.toLocaleString("en-IN", {
+                    minimumFractionDigits: 2,
+                  })}
+                </Text>
               </View>
             </View>
           </View>
 
           {/* Section: Cash Reconciliation & Close Action */}
-          <View style={[styles.reconciliationGrid, isCompact && styles.reconciliationGridCompact]}>
+          <View
+            style={[
+              styles.reconciliationGrid,
+              isCompact && styles.reconciliationGridCompact,
+            ]}
+          >
             {/* Left Box: Reconciliation Rows */}
             <View style={styles.reconciliationCard}>
-              <Text style={styles.reconciliationTitle}>Cash Reconciliation (For Session)</Text>
+              <Text style={styles.reconciliationTitle}>
+                Cash Reconciliation (For Session)
+              </Text>
 
               <View style={styles.reconciliationTable}>
                 <View style={styles.reconRow}>
                   <Text style={styles.reconLabel}>Opening Balance</Text>
                   <Text style={styles.reconValue}>
-                    ₹{session.openingBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    ₹
+                    {session.openingBalance.toLocaleString("en-IN", {
+                      minimumFractionDigits: 2,
+                    })}
                   </Text>
                 </View>
 
                 <View style={styles.reconRow}>
                   <Text style={styles.reconLabel}>Cash Sales</Text>
                   <Text style={[styles.reconValue, styles.reconPositive]}>
-                    +₹{session.cashSales.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    +₹
+                    {session.cashSales.toLocaleString("en-IN", {
+                      minimumFractionDigits: 2,
+                    })}
                   </Text>
                 </View>
 
                 <View style={styles.reconRow}>
                   <Text style={styles.reconLabel}>Cash Refunds</Text>
                   <Text style={[styles.reconValue, styles.reconNegative]}>
-                    -₹{session.cashRefunds.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    -₹
+                    {session.cashRefunds.toLocaleString("en-IN", {
+                      minimumFractionDigits: 2,
+                    })}
                   </Text>
                 </View>
 
                 {totalPettyCashIn > 0 && (
                   <View style={styles.reconRow}>
-                    <Text style={styles.reconLabel}>Petty Cash In (Float Added)</Text>
+                    <Text style={styles.reconLabel}>
+                      Petty Cash In (Float Added)
+                    </Text>
                     <Text style={[styles.reconValue, styles.reconPositive]}>
-                      +₹{totalPettyCashIn.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      +₹
+                      {totalPettyCashIn.toLocaleString("en-IN", {
+                        minimumFractionDigits: 2,
+                      })}
                     </Text>
                   </View>
                 )}
 
                 {totalPettyCashOut > 0 && (
                   <View style={styles.reconRow}>
-                    <Text style={styles.reconLabel}>Petty Cash Out (Expenses/Payouts)</Text>
+                    <Text style={styles.reconLabel}>
+                      Petty Cash Out (Expenses/Payouts)
+                    </Text>
                     <Text style={[styles.reconValue, styles.reconNegative]}>
-                      -₹{totalPettyCashOut.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      -₹
+                      {totalPettyCashOut.toLocaleString("en-IN", {
+                        minimumFractionDigits: 2,
+                      })}
                     </Text>
                   </View>
                 )}
@@ -751,9 +1049,14 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
                 <View style={styles.reconDivider} />
 
                 <View style={styles.reconTotalRow}>
-                  <Text style={styles.reconTotalLabel}>Expected Cash in Drawer</Text>
+                  <Text style={styles.reconTotalLabel}>
+                    Expected Cash in Drawer
+                  </Text>
                   <Text style={styles.reconTotalValue}>
-                    ₹{session.expectedCash.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    ₹
+                    {session.expectedCash.toLocaleString("en-IN", {
+                      minimumFractionDigits: 2,
+                    })}
                   </Text>
                 </View>
               </View>
@@ -765,12 +1068,13 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
                 <Text style={styles.closeDrawerIcon}>🗄️</Text>
               </View>
               <Text style={styles.closeActionHint}>
-                Count the cash in drawer at the end of your shift and close the register.
+                Count the cash in drawer at the end of your shift and close the
+                register.
               </Text>
               <Pressable
                 onPress={() => {
                   setCountedCashInput(session.expectedCash.toFixed(2));
-                  setClosingNotes('');
+                  setClosingNotes("");
                   setCloseModalVisible(true);
                 }}
                 style={({ hovered }) => [
@@ -788,29 +1092,52 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
 
           {/* Section: Petty Cash & Expense Movements Log (CASH-03) */}
           <View style={styles.pettyCashSectionCard}>
-            <View style={[styles.pettyCashSectionHeader, isMobile && styles.pettyCashSectionHeaderMobile]}>
+            <View
+              style={[
+                styles.pettyCashSectionHeader,
+                isMobile && styles.pettyCashSectionHeaderMobile,
+              ]}
+            >
               <View style={{ flex: 1 }}>
                 <View style={styles.pettyCashTitleBadgeRow}>
-                  <Text style={styles.pettyCashSectionTitle}>Petty Cash & Expense Movements Log</Text>
+                  <Text style={styles.pettyCashSectionTitle}>
+                    Petty Cash & Expense Movements Log
+                  </Text>
                   <View style={styles.cashBadge}>
                     <Text style={styles.cashBadgeText}>CASH-03</Text>
                   </View>
                 </View>
                 <Text style={styles.pettyCashSectionSubtitle}>
-                  Real-time audit log of cash float additions and expense payouts for this shift
+                  Real-time audit log of cash float additions and expense
+                  payouts for this shift
                 </Text>
               </View>
 
-              <View style={[styles.pettyCashHeaderRight, isMobile && styles.pettyCashHeaderRightMobile]}>
+              <View
+                style={[
+                  styles.pettyCashHeaderRight,
+                  isMobile && styles.pettyCashHeaderRightMobile,
+                ]}
+              >
                 {/* Live Movement Stat Badges */}
                 <View style={styles.pettyCashSummaryChipRow}>
-                  <View style={[styles.pettySummaryChip, styles.pettySummaryIn]}>
+                  <View
+                    style={[styles.pettySummaryChip, styles.pettySummaryIn]}
+                  >
                     <Text style={styles.pettySummaryChipLabel}>Cash In:</Text>
-                    <Text style={styles.pettySummaryChipValueIn}>+₹{totalPettyCashIn.toFixed(2)}</Text>
+                    <Text style={styles.pettySummaryChipValueIn}>
+                      +₹{totalPettyCashIn.toFixed(2)}
+                    </Text>
                   </View>
-                  <View style={[styles.pettySummaryChip, styles.pettySummaryOut]}>
-                    <Text style={styles.pettySummaryChipLabel}>Expenses Out:</Text>
-                    <Text style={styles.pettySummaryChipValueOut}>-₹{totalPettyCashOut.toFixed(2)}</Text>
+                  <View
+                    style={[styles.pettySummaryChip, styles.pettySummaryOut]}
+                  >
+                    <Text style={styles.pettySummaryChipLabel}>
+                      Expenses Out:
+                    </Text>
+                    <Text style={styles.pettySummaryChipValueOut}>
+                      -₹{totalPettyCashOut.toFixed(2)}
+                    </Text>
                   </View>
                 </View>
 
@@ -824,7 +1151,9 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
                   accessibilityLabel="Record Movement"
                 >
                   <Text style={styles.recordMovementBtnIcon}>±</Text>
-                  <Text style={styles.recordMovementBtnText}>+ Record Movement</Text>
+                  <Text style={styles.recordMovementBtnText}>
+                    + Record Movement
+                  </Text>
                 </Pressable>
               </View>
             </View>
@@ -832,14 +1161,37 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
             {/* Recent Addition Banner */}
             {lastAddedMovementId && (
               <View style={styles.justAddedBanner}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 8,
+                    flex: 1,
+                  }}
+                >
                   <Text style={{ fontSize: 16 }}>🎉</Text>
                   <Text style={styles.justAddedBannerText}>
-                    Movement <Text style={{ fontWeight: '800' }}>{lastAddedMovementId}</Text> successfully recorded! Added as the top row below & drawer balance updated.
+                    Movement{" "}
+                    <Text style={{ fontWeight: "800" }}>
+                      {lastAddedMovementId}
+                    </Text>{" "}
+                    successfully recorded! Added as the top row below & drawer
+                    balance updated.
                   </Text>
                 </View>
-                <Pressable onPress={() => setLastAddedMovementId(null)} style={{ padding: 4, cursor: 'pointer' }}>
-                  <Text style={{ fontSize: 12, color: '#0F766E', fontWeight: '700' }}>✕ Dismiss</Text>
+                <Pressable
+                  onPress={() => setLastAddedMovementId(null)}
+                  style={{ padding: 4, cursor: "pointer" }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      color: "#0F766E",
+                      fontWeight: "700",
+                    }}
+                  >
+                    ✕ Dismiss
+                  </Text>
                 </Pressable>
               </View>
             )}
@@ -847,22 +1199,28 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
             {pettyCashMovements.length === 0 ? (
               <View style={styles.emptyMovementsBox}>
                 <Text style={styles.emptyMovementsIcon}>🧾</Text>
-                <Text style={styles.emptyMovementsTitle}>No Cash Movements Recorded Yet</Text>
+                <Text style={styles.emptyMovementsTitle}>
+                  No Cash Movements Recorded Yet
+                </Text>
                 <Text style={styles.emptyMovementsSubtitle}>
-                  All cash float additions (cash in) and expense payouts (cash out) will be stored and logged here.
+                  All cash float additions (cash in) and expense payouts (cash
+                  out) will be stored and logged here.
                 </Text>
                 <Pressable
                   onPress={() => setCashMovementModalVisible(true)}
                   style={styles.emptyRecordBtn}
                 >
-                  <Text style={styles.emptyRecordBtnText}>+ Record First Movement</Text>
+                  <Text style={styles.emptyRecordBtnText}>
+                    + Record First Movement
+                  </Text>
                 </Pressable>
               </View>
             ) : isMobile ? (
               <View style={styles.mobileMovementsList}>
                 {pettyCashMovements.map((mov, idx) => {
-                  const isIn = mov.type === 'IN';
-                  const isHighlighted = mov.id === lastAddedMovementId || mov.isNew;
+                  const isIn = mov.type === "IN";
+                  const isHighlighted =
+                    mov.id === lastAddedMovementId || mov.isNew;
                   return (
                     <View
                       key={mov.id || idx}
@@ -872,7 +1230,13 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
                       ]}
                     >
                       <View style={styles.mobileMovementHeader}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 6,
+                          }}
+                        >
                           <Text style={styles.movIdText}>{mov.id}</Text>
                           {isHighlighted && (
                             <View style={styles.justAddedBadge}>
@@ -888,10 +1252,12 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
                             <Text
                               style={[
                                 styles.movementTypeBadgeText,
-                                isIn ? styles.badgeTextCashIn : styles.badgeTextCashOut,
+                                isIn
+                                  ? styles.badgeTextCashIn
+                                  : styles.badgeTextCashOut,
                               ]}
                             >
-                              {isIn ? '+ Cash In' : '− Cash Out'}
+                              {isIn ? "+ Cash In" : "− Cash Out"}
                             </Text>
                           </View>
                         </View>
@@ -905,20 +1271,26 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
                         </Pressable>
                       </View>
 
-                      <Text style={styles.mobileMovementReason}>{mov.reason}</Text>
+                      <Text style={styles.mobileMovementReason}>
+                        {mov.reason}
+                      </Text>
 
                       <View style={styles.mobileMovementFooter}>
                         <View>
-                          <Text style={styles.mobileMovementTime}>{mov.time}</Text>
-                          <Text style={styles.mobileMovementCashier}>👤 {mov.cashier}</Text>
+                          <Text style={styles.mobileMovementTime}>
+                            {mov.time}
+                          </Text>
+                          <Text style={styles.mobileMovementCashier}>
+                            👤 {mov.cashier}
+                          </Text>
                         </View>
                         <Text
                           style={[
                             styles.mobileMovementAmount,
-                            { color: isIn ? '#059669' : '#DC2626' },
+                            { color: isIn ? "#059669" : "#DC2626" },
                           ]}
                         >
-                          {isIn ? '+' : '-'}₹{mov.amount.toFixed(2)}
+                          {isIn ? "+" : "-"}₹{mov.amount.toFixed(2)}
                         </Text>
                       </View>
                     </View>
@@ -926,31 +1298,70 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
                 })}
               </View>
             ) : (
-              <ScrollView horizontal={true} showsHorizontalScrollIndicator={false} style={{ width: '100%' }}>
+              <ScrollView
+                horizontal={true}
+                showsHorizontalScrollIndicator={false}
+                style={{ width: "100%" }}
+              >
                 <View style={styles.movementsTable}>
                   <View style={styles.movementsTableHeader}>
-                    <Text style={[styles.movementsTh, { width: 120 }]}>MOVEMENT ID</Text>
-                    <Text style={[styles.movementsTh, { width: 180 }]}>DATE & TIME</Text>
-                    <Text style={[styles.movementsTh, { width: 170 }]}>TYPE</Text>
-                    <Text style={[styles.movementsTh, { minWidth: 220, flex: 1 }]}>REASON / CATEGORY</Text>
-                    <Text style={[styles.movementsTh, { width: 120 }]}>CASHIER</Text>
-                    <Text style={[styles.movementsTh, { width: 130, textAlign: 'right' }]}>AMOUNT (₹)</Text>
-                    <Text style={[styles.movementsTh, { width: 70, textAlign: 'center' }]}>ACTION</Text>
+                    <Text style={[styles.movementsTh, { width: 120 }]}>
+                      MOVEMENT ID
+                    </Text>
+                    <Text style={[styles.movementsTh, { width: 180 }]}>
+                      DATE & TIME
+                    </Text>
+                    <Text style={[styles.movementsTh, { width: 170 }]}>
+                      TYPE
+                    </Text>
+                    <Text
+                      style={[styles.movementsTh, { minWidth: 220, flex: 1 }]}
+                    >
+                      REASON / CATEGORY
+                    </Text>
+                    <Text style={[styles.movementsTh, { width: 120 }]}>
+                      CASHIER
+                    </Text>
+                    <Text
+                      style={[
+                        styles.movementsTh,
+                        { width: 130, textAlign: "right" },
+                      ]}
+                    >
+                      AMOUNT (₹)
+                    </Text>
+                    <Text
+                      style={[
+                        styles.movementsTh,
+                        { width: 70, textAlign: "center" },
+                      ]}
+                    >
+                      ACTION
+                    </Text>
                   </View>
 
                   {pettyCashMovements.map((mov, idx) => {
-                    const isIn = mov.type === 'IN';
-                    const isHighlighted = mov.id === lastAddedMovementId || mov.isNew;
+                    const isIn = mov.type === "IN";
+                    const isHighlighted =
+                      mov.id === lastAddedMovementId || mov.isNew;
                     return (
                       <View
                         key={mov.id || idx}
                         style={[
                           styles.movementsTableRow,
-                          idx === pettyCashMovements.length - 1 && styles.movementsTableRowLast,
+                          idx === pettyCashMovements.length - 1 &&
+                            styles.movementsTableRowLast,
                           isHighlighted && styles.movementsTableRowHighlight,
                         ]}
                       >
-                        <View style={{ width: 120, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <View
+                          style={{
+                            width: 120,
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 6,
+                          }}
+                        >
                           <Text style={styles.movIdText}>{mov.id}</Text>
                           {isHighlighted && (
                             <View style={styles.justAddedBadge}>
@@ -958,7 +1369,12 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
                             </View>
                           )}
                         </View>
-                        <Text style={[styles.movementsTd, { width: 180, color: '#64748B' }]}>
+                        <Text
+                          style={[
+                            styles.movementsTd,
+                            { width: 180, color: "#64748B" },
+                          ]}
+                        >
                           {mov.time}
                         </Text>
                         <View style={{ width: 170 }}>
@@ -971,17 +1387,36 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
                             <Text
                               style={[
                                 styles.movementTypeBadgeText,
-                                isIn ? styles.badgeTextCashIn : styles.badgeTextCashOut,
+                                isIn
+                                  ? styles.badgeTextCashIn
+                                  : styles.badgeTextCashOut,
                               ]}
                             >
-                              {isIn ? '+ Cash In (Float)' : '− Cash Out (Expense)'}
+                              {isIn
+                                ? "+ Cash In (Float)"
+                                : "− Cash Out (Expense)"}
                             </Text>
                           </View>
                         </View>
-                        <Text style={[styles.movementsTd, { minWidth: 220, flex: 1, color: '#0F172A', fontWeight: '500' }]}>
+                        <Text
+                          style={[
+                            styles.movementsTd,
+                            {
+                              minWidth: 220,
+                              flex: 1,
+                              color: "#0F172A",
+                              fontWeight: "500",
+                            },
+                          ]}
+                        >
                           {mov.reason}
                         </Text>
-                        <Text style={[styles.movementsTd, { width: 120, color: '#475569' }]}>
+                        <Text
+                          style={[
+                            styles.movementsTd,
+                            { width: 120, color: "#475569" },
+                          ]}
+                        >
                           {mov.cashier}
                         </Text>
                         <Text
@@ -989,15 +1424,15 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
                             styles.movementsTd,
                             {
                               width: 130,
-                              textAlign: 'right',
-                              fontWeight: '700',
-                              color: isIn ? '#059669' : '#DC2626',
+                              textAlign: "right",
+                              fontWeight: "700",
+                              color: isIn ? "#059669" : "#DC2626",
                             },
                           ]}
                         >
-                          {isIn ? '+' : '-'}₹{mov.amount.toFixed(2)}
+                          {isIn ? "+" : "-"}₹{mov.amount.toFixed(2)}
                         </Text>
-                        <View style={{ width: 70, alignItems: 'center' }}>
+                        <View style={{ width: 70, alignItems: "center" }}>
                           <Pressable
                             onPress={() => handleDeleteMovement(mov.id)}
                             style={styles.deleteMovBtn}
@@ -1027,12 +1462,19 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
         onRequestClose={() => setCloseModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.closeModalCard, isMobile && styles.closeModalCardMobile]}>
+          <View
+            style={[
+              styles.closeModalCard,
+              isMobile && styles.closeModalCardMobile,
+            ]}
+          >
             {/* Modal Header */}
             <View style={styles.modalHeader}>
               <View>
                 <Text style={styles.modalTitle}>Close Register</Text>
-                <Text style={styles.modalSubtitle}>Reconcile cash drawer and end session</Text>
+                <Text style={styles.modalSubtitle}>
+                  Reconcile cash drawer and end session
+                </Text>
               </View>
               <Pressable
                 onPress={() => setCloseModalVisible(false)}
@@ -1047,40 +1489,77 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
             {/* Breakdown Rows */}
             <View style={styles.modalBreakdownSection}>
               <View style={styles.modalBreakdownRow}>
-                <Text style={styles.modalBreakdownLabel}>Opening Balance / Float</Text>
+                <Text style={styles.modalBreakdownLabel}>
+                  Opening Balance / Float
+                </Text>
                 <Text style={styles.modalBreakdownValue}>
-                  ₹{session.openingBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  ₹
+                  {session.openingBalance.toLocaleString("en-IN", {
+                    minimumFractionDigits: 2,
+                  })}
                 </Text>
               </View>
 
               <View style={styles.modalBreakdownRow}>
-                <Text style={styles.modalBreakdownLabel}>Cash Sales (This Session)</Text>
+                <Text style={styles.modalBreakdownLabel}>
+                  Cash Sales (This Session)
+                </Text>
                 <Text style={styles.modalBreakdownValue}>
-                  ₹{session.cashSales.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  ₹
+                  {session.cashSales.toLocaleString("en-IN", {
+                    minimumFractionDigits: 2,
+                  })}
                 </Text>
               </View>
 
               <View style={styles.modalBreakdownRow}>
-                <Text style={styles.modalBreakdownLabel}>Cash Refunds (This Session)</Text>
-                <Text style={[styles.modalBreakdownValue, styles.modalRefundsText]}>
-                  -₹{session.cashRefunds.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                <Text style={styles.modalBreakdownLabel}>
+                  Cash Refunds (This Session)
+                </Text>
+                <Text
+                  style={[styles.modalBreakdownValue, styles.modalRefundsText]}
+                >
+                  -₹
+                  {session.cashRefunds.toLocaleString("en-IN", {
+                    minimumFractionDigits: 2,
+                  })}
                 </Text>
               </View>
 
               {totalPettyCashIn > 0 && (
                 <View style={styles.modalBreakdownRow}>
-                  <Text style={styles.modalBreakdownLabel}>Petty Cash In (Float Added)</Text>
-                  <Text style={[styles.modalBreakdownValue, { color: '#059669', fontWeight: '600' }]}>
-                    +₹{totalPettyCashIn.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  <Text style={styles.modalBreakdownLabel}>
+                    Petty Cash In (Float Added)
+                  </Text>
+                  <Text
+                    style={[
+                      styles.modalBreakdownValue,
+                      { color: "#059669", fontWeight: "600" },
+                    ]}
+                  >
+                    +₹
+                    {totalPettyCashIn.toLocaleString("en-IN", {
+                      minimumFractionDigits: 2,
+                    })}
                   </Text>
                 </View>
               )}
 
               {totalPettyCashOut > 0 && (
                 <View style={styles.modalBreakdownRow}>
-                  <Text style={styles.modalBreakdownLabel}>Petty Cash Out (Expenses / Payouts)</Text>
-                  <Text style={[styles.modalBreakdownValue, styles.modalRefundsText]}>
-                    -₹{totalPettyCashOut.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  <Text style={styles.modalBreakdownLabel}>
+                    Petty Cash Out (Expenses / Payouts)
+                  </Text>
+                  <Text
+                    style={[
+                      styles.modalBreakdownValue,
+                      styles.modalRefundsText,
+                    ]}
+                  >
+                    -₹
+                    {totalPettyCashOut.toLocaleString("en-IN", {
+                      minimumFractionDigits: 2,
+                    })}
                   </Text>
                 </View>
               )}
@@ -1088,9 +1567,14 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
               <View style={styles.modalBreakdownDivider} />
 
               <View style={styles.modalBreakdownTotalRow}>
-                <Text style={styles.modalExpectedLabel}>Expected Cash in Drawer</Text>
+                <Text style={styles.modalExpectedLabel}>
+                  Expected Cash in Drawer
+                </Text>
                 <Text style={styles.modalExpectedValue}>
-                  ₹{session.expectedCash.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  ₹
+                  {session.expectedCash.toLocaleString("en-IN", {
+                    minimumFractionDigits: 2,
+                  })}
                 </Text>
               </View>
             </View>
@@ -1116,7 +1600,9 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
             <View style={styles.varianceBox}>
               <View>
                 <Text style={styles.varianceLabel}>Variance</Text>
-                <Text style={styles.varianceSubtext}>(Counted Cash - Expected Cash)</Text>
+                <Text style={styles.varianceSubtext}>
+                  (Counted Cash - Expected Cash)
+                </Text>
               </View>
               <Text
                 style={[
@@ -1124,11 +1610,12 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
                   variance < -0.01
                     ? styles.varianceShortage
                     : variance > 0.01
-                    ? styles.varianceOverage
-                    : styles.varianceBalanced,
+                      ? styles.varianceOverage
+                      : styles.varianceBalanced,
                 ]}
               >
-                {variance >= 0 ? '+' : ''}₹{variance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                {variance >= 0 ? "+" : ""}₹
+                {variance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
               </Text>
             </View>
 
@@ -1178,11 +1665,19 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
         onRequestClose={() => setHistoryModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.historyModalCard, isMobile && styles.historyModalCardMobile]}>
+          <View
+            style={[
+              styles.historyModalCard,
+              isMobile && styles.historyModalCardMobile,
+            ]}
+          >
             <View style={styles.modalHeader}>
               <View>
                 <Text style={styles.modalTitle}>Register Session History</Text>
-                <Text style={styles.modalSubtitle}>Past cash drawer sessions, closures and reconciliations (RPT-12)</Text>
+                <Text style={styles.modalSubtitle}>
+                  Past cash drawer sessions, closures and reconciliations
+                  (RPT-12)
+                </Text>
               </View>
               <Pressable
                 onPress={() => setHistoryModalVisible(false)}
@@ -1200,54 +1695,78 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
                       <View style={styles.mobileHistoryHeader}>
                         <View>
                           <Text style={styles.historySessionId}>{item.id}</Text>
-                          <Text style={styles.historyDate}>{item.date} • {item.closedAt}</Text>
+                          <Text style={styles.historyDate}>
+                            {item.date} • {item.closedAt}
+                          </Text>
                         </View>
                         <View
                           style={[
                             styles.varianceBadge,
-                            item.status === 'Shortage'
+                            item.status === "Shortage"
                               ? styles.varBadgeShortage
-                              : item.status === 'Overage'
-                              ? styles.varBadgeOverage
-                              : styles.varBadgeBalanced,
+                              : item.status === "Overage"
+                                ? styles.varBadgeOverage
+                                : styles.varBadgeBalanced,
                           ]}
                         >
                           <Text
                             style={[
                               styles.varianceBadgeText,
-                              item.status === 'Shortage'
+                              item.status === "Shortage"
                                 ? styles.varTextShortage
-                                : item.status === 'Overage'
-                                ? styles.varTextOverage
-                                : styles.varTextBalanced,
+                                : item.status === "Overage"
+                                  ? styles.varTextOverage
+                                  : styles.varTextBalanced,
                             ]}
                           >
-                            {item.variance === 0 ? '✓ Balanced' : `${item.variance > 0 ? '+' : ''}₹${item.variance.toFixed(2)}`}
+                            {item.variance === 0
+                              ? "✓ Balanced"
+                              : `${item.variance > 0 ? "+" : ""}₹${item.variance.toFixed(2)}`}
                           </Text>
                         </View>
                       </View>
 
                       <View style={styles.mobileHistoryDetailsRow}>
                         <Text style={styles.mobileHistoryLabel}>
-                          Cashier: <Text style={{ color: '#0F172A', fontWeight: '600' }}>{item.cashier}</Text>
+                          Cashier:{" "}
+                          <Text style={{ color: "#0F172A", fontWeight: "600" }}>
+                            {item.cashier}
+                          </Text>
                         </Text>
                         <View style={styles.mobileHistoryShiftBadge}>
-                          <Text style={styles.mobileHistoryShiftText}>{item.shift}</Text>
+                          <Text style={styles.mobileHistoryShiftText}>
+                            {item.shift}
+                          </Text>
                         </View>
                       </View>
 
                       <View style={styles.mobileHistoryMetricsGrid}>
                         <View style={styles.mobileHistoryMetricItem}>
-                          <Text style={styles.mobileHistoryMetricLabel}>Opening Float</Text>
-                          <Text style={styles.mobileHistoryMetricVal}>₹{item.openingBalance.toFixed(2)}</Text>
+                          <Text style={styles.mobileHistoryMetricLabel}>
+                            Opening Float
+                          </Text>
+                          <Text style={styles.mobileHistoryMetricVal}>
+                            ₹{item.openingBalance.toFixed(2)}
+                          </Text>
                         </View>
                         <View style={styles.mobileHistoryMetricItem}>
-                          <Text style={styles.mobileHistoryMetricLabel}>Expected</Text>
-                          <Text style={styles.mobileHistoryMetricVal}>₹{item.expectedCash.toFixed(2)}</Text>
+                          <Text style={styles.mobileHistoryMetricLabel}>
+                            Expected
+                          </Text>
+                          <Text style={styles.mobileHistoryMetricVal}>
+                            ₹{item.expectedCash.toFixed(2)}
+                          </Text>
                         </View>
                         <View style={styles.mobileHistoryMetricItem}>
-                          <Text style={styles.mobileHistoryMetricLabel}>Counted</Text>
-                          <Text style={[styles.mobileHistoryMetricVal, { fontWeight: '800', color: '#0F172A' }]}>
+                          <Text style={styles.mobileHistoryMetricLabel}>
+                            Counted
+                          </Text>
+                          <Text
+                            style={[
+                              styles.mobileHistoryMetricVal,
+                              { fontWeight: "800", color: "#0F172A" },
+                            ]}
+                          >
                             ₹{item.countedCash.toFixed(2)}
                           </Text>
                         </View>
@@ -1256,7 +1775,9 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
                       {item.movements && item.movements.length > 0 && (
                         <View style={styles.mobileHistoryMovementsBox}>
                           <Text style={styles.historyMovementsSummaryText}>
-                            📋 {item.movements.length} Petty Cash Movement(s): +₹{(item.pettyCashIn || 0).toFixed(2)} / -₹{(item.pettyCashOut || 0).toFixed(2)}
+                            📋 {item.movements.length} Petty Cash Movement(s):
+                            +₹{(item.pettyCashIn || 0).toFixed(2)} / -₹
+                            {(item.pettyCashOut || 0).toFixed(2)}
                           </Text>
                         </View>
                       )}
@@ -1266,13 +1787,43 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
               ) : (
                 <View style={styles.historyTable}>
                   <View style={styles.historyTableHeader}>
-                    <Text style={[styles.historyTh, { flex: 1.2 }]}>Session ID / Date</Text>
+                    <Text style={[styles.historyTh, { flex: 1.2 }]}>
+                      Session ID / Date
+                    </Text>
                     <Text style={[styles.historyTh, { flex: 1 }]}>Cashier</Text>
                     <Text style={[styles.historyTh, { flex: 0.8 }]}>Shift</Text>
-                    <Text style={[styles.historyTh, { flex: 1, textAlign: 'right' }]}>Opening Float</Text>
-                    <Text style={[styles.historyTh, { flex: 1, textAlign: 'right' }]}>Expected</Text>
-                    <Text style={[styles.historyTh, { flex: 1, textAlign: 'right' }]}>Counted</Text>
-                    <Text style={[styles.historyTh, { flex: 1, textAlign: 'center' }]}>Variance</Text>
+                    <Text
+                      style={[
+                        styles.historyTh,
+                        { flex: 1, textAlign: "right" },
+                      ]}
+                    >
+                      Opening Float
+                    </Text>
+                    <Text
+                      style={[
+                        styles.historyTh,
+                        { flex: 1, textAlign: "right" },
+                      ]}
+                    >
+                      Expected
+                    </Text>
+                    <Text
+                      style={[
+                        styles.historyTh,
+                        { flex: 1, textAlign: "right" },
+                      ]}
+                    >
+                      Counted
+                    </Text>
+                    <Text
+                      style={[
+                        styles.historyTh,
+                        { flex: 1, textAlign: "center" },
+                      ]}
+                    >
+                      Variance
+                    </Text>
                   </View>
 
                   {paginatedData.map((item) => (
@@ -1280,41 +1831,64 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
                       <View style={styles.historyTableRow}>
                         <View style={{ flex: 1.2 }}>
                           <Text style={styles.historySessionId}>{item.id}</Text>
-                          <Text style={styles.historyDate}>{item.date} • {item.closedAt}</Text>
+                          <Text style={styles.historyDate}>
+                            {item.date} • {item.closedAt}
+                          </Text>
                         </View>
-                        <Text style={[styles.historyTd, { flex: 1 }]}>{item.cashier}</Text>
-                        <Text style={[styles.historyTd, { flex: 0.8 }]}>{item.shift}</Text>
-                        <Text style={[styles.historyTd, { flex: 1, textAlign: 'right' }]}>
+                        <Text style={[styles.historyTd, { flex: 1 }]}>
+                          {item.cashier}
+                        </Text>
+                        <Text style={[styles.historyTd, { flex: 0.8 }]}>
+                          {item.shift}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.historyTd,
+                            { flex: 1, textAlign: "right" },
+                          ]}
+                        >
                           ₹{item.openingBalance.toFixed(2)}
                         </Text>
-                        <Text style={[styles.historyTd, { flex: 1, textAlign: 'right' }]}>
+                        <Text
+                          style={[
+                            styles.historyTd,
+                            { flex: 1, textAlign: "right" },
+                          ]}
+                        >
                           ₹{item.expectedCash.toFixed(2)}
                         </Text>
-                        <Text style={[styles.historyTd, { flex: 1, textAlign: 'right', fontWeight: '700' }]}>
+                        <Text
+                          style={[
+                            styles.historyTd,
+                            { flex: 1, textAlign: "right", fontWeight: "700" },
+                          ]}
+                        >
                           ₹{item.countedCash.toFixed(2)}
                         </Text>
-                        <View style={{ flex: 1, alignItems: 'center' }}>
+                        <View style={{ flex: 1, alignItems: "center" }}>
                           <View
                             style={[
                               styles.varianceBadge,
-                              item.status === 'Shortage'
+                              item.status === "Shortage"
                                 ? styles.varBadgeShortage
-                                : item.status === 'Overage'
-                                ? styles.varBadgeOverage
-                                : styles.varBadgeBalanced,
+                                : item.status === "Overage"
+                                  ? styles.varBadgeOverage
+                                  : styles.varBadgeBalanced,
                             ]}
                           >
                             <Text
                               style={[
                                 styles.varianceBadgeText,
-                                item.status === 'Shortage'
+                                item.status === "Shortage"
                                   ? styles.varTextShortage
-                                  : item.status === 'Overage'
-                                  ? styles.varTextOverage
-                                  : styles.varTextBalanced,
+                                  : item.status === "Overage"
+                                    ? styles.varTextOverage
+                                    : styles.varTextBalanced,
                               ]}
                             >
-                              {item.variance === 0 ? '✓ Balanced' : `${item.variance > 0 ? '+' : ''}₹${item.variance.toFixed(2)}`}
+                              {item.variance === 0
+                                ? "✓ Balanced"
+                                : `${item.variance > 0 ? "+" : ""}₹${item.variance.toFixed(2)}`}
                             </Text>
                           </View>
                         </View>
@@ -1322,7 +1896,10 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
                       {item.movements && item.movements.length > 0 && (
                         <View style={styles.historyMovementsRow}>
                           <Text style={styles.historyMovementsSummaryText}>
-                            📋 Includes {item.movements.length} Petty Cash Movement(s): Float In: +₹{(item.pettyCashIn || 0).toFixed(2)}, Expenses: -₹{(item.pettyCashOut || 0).toFixed(2)}
+                            📋 Includes {item.movements.length} Petty Cash
+                            Movement(s): Float In: +₹
+                            {(item.pettyCashIn || 0).toFixed(2)}, Expenses: -₹
+                            {(item.pettyCashOut || 0).toFixed(2)}
                           </Text>
                         </View>
                       )}
@@ -1338,7 +1915,10 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
                 totalItems={historyList.length}
                 itemsPerPage={itemsPerPage}
                 onPageChange={setCurrentPage}
-                onItemsPerPageChange={(n) => { setItemsPerPage(n); setCurrentPage(1); }}
+                onItemsPerPageChange={(n) => {
+                  setItemsPerPage(n);
+                  setCurrentPage(1);
+                }}
               />
             </View>
 
@@ -1364,11 +1944,18 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
         onRequestClose={() => setCashMovementModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.closeModalCard, isMobile && styles.closeModalCardMobile]}>
+          <View
+            style={[
+              styles.closeModalCard,
+              isMobile && styles.closeModalCardMobile,
+            ]}
+          >
             <View style={styles.modalHeader}>
               <View>
                 <Text style={styles.modalTitle}>Petty Cash Movement</Text>
-                <Text style={styles.modalSubtitle}>Record cash-in or payout for expenses (CASH-03)</Text>
+                <Text style={styles.modalSubtitle}>
+                  Record cash-in or payout for expenses (CASH-03)
+                </Text>
               </View>
               <Pressable
                 onPress={() => setCashMovementModalVisible(false)}
@@ -1381,18 +1968,18 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
             <View style={styles.movementTypeSelector}>
               <Pressable
                 onPress={() => {
-                  setMovementType('OUT');
-                  setMovementError('');
+                  setMovementType("OUT");
+                  setMovementError("");
                 }}
                 style={[
                   styles.movementTypeBtn,
-                  movementType === 'OUT' && styles.movementTypeBtnActiveOut,
+                  movementType === "OUT" && styles.movementTypeBtnActiveOut,
                 ]}
               >
                 <Text
                   style={[
                     styles.movementTypeBtnText,
-                    movementType === 'OUT' && styles.movementTypeBtnTextActive,
+                    movementType === "OUT" && styles.movementTypeBtnTextActive,
                   ]}
                 >
                   Cash Payout / Expense
@@ -1400,18 +1987,18 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
               </Pressable>
               <Pressable
                 onPress={() => {
-                  setMovementType('IN');
-                  setMovementError('');
+                  setMovementType("IN");
+                  setMovementError("");
                 }}
                 style={[
                   styles.movementTypeBtn,
-                  movementType === 'IN' && styles.movementTypeBtnActiveIn,
+                  movementType === "IN" && styles.movementTypeBtnActiveIn,
                 ]}
               >
                 <Text
                   style={[
                     styles.movementTypeBtnText,
-                    movementType === 'IN' && styles.movementTypeBtnTextActive,
+                    movementType === "IN" && styles.movementTypeBtnTextActive,
                   ]}
                 >
                   Add Cash Float (Cash In)
@@ -1435,7 +2022,7 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
                   value={movementAmount}
                   onChangeText={(val) => {
                     setMovementAmount(val);
-                    if (movementError) setMovementError('');
+                    if (movementError) setMovementError("");
                   }}
                   placeholder="0.00"
                   placeholderTextColor="#94A3B8"
@@ -1446,30 +2033,46 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
             </View>
 
             <View style={styles.formGroup}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 6,
+                }}
+              >
                 <Text style={styles.fieldLabel}>Reason / Expense Category</Text>
-                <Text style={{ fontSize: 11, color: '#64748B' }}>
-                  {movementReason.trim() ? '✓ Reason set' : '(Optional - auto-defaults if blank)'}
+                <Text style={{ fontSize: 11, color: "#64748B" }}>
+                  {movementReason.trim()
+                    ? "✓ Reason set"
+                    : "(Optional - auto-defaults if blank)"}
                 </Text>
               </View>
 
               {/* Quick suggestion chips */}
               <View style={styles.quickChipsRow}>
-                {movementType === 'IN' ? (
+                {movementType === "IN" ? (
                   <>
-                    {['Change Float', 'Opening Top-up', 'Bank Withdrawal', 'Cash Deposit'].map((chip) => (
+                    {[
+                      "Change Float",
+                      "Opening Top-up",
+                      "Bank Withdrawal",
+                      "Cash Deposit",
+                    ].map((chip) => (
                       <Pressable
                         key={chip}
                         onPress={() => setMovementReason(chip)}
                         style={[
                           styles.quickChipBtn,
-                          movementReason === chip && styles.quickChipBtnActiveIn,
+                          movementReason === chip &&
+                            styles.quickChipBtnActiveIn,
                         ]}
                       >
                         <Text
                           style={[
                             styles.quickChipText,
-                            movementReason === chip && styles.quickChipTextActiveIn,
+                            movementReason === chip &&
+                              styles.quickChipTextActiveIn,
                           ]}
                         >
                           + {chip}
@@ -1479,19 +2082,26 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
                   </>
                 ) : (
                   <>
-                    {['Courier / Delivery', 'Tea & Refreshments', 'Cleaning & Supplies', 'Repairs / Misc'].map((chip) => (
+                    {[
+                      "Courier / Delivery",
+                      "Tea & Refreshments",
+                      "Cleaning & Supplies",
+                      "Repairs / Misc",
+                    ].map((chip) => (
                       <Pressable
                         key={chip}
                         onPress={() => setMovementReason(chip)}
                         style={[
                           styles.quickChipBtn,
-                          movementReason === chip && styles.quickChipBtnActiveOut,
+                          movementReason === chip &&
+                            styles.quickChipBtnActiveOut,
                         ]}
                       >
                         <Text
                           style={[
                             styles.quickChipText,
-                            movementReason === chip && styles.quickChipTextActiveOut,
+                            movementReason === chip &&
+                              styles.quickChipTextActiveOut,
                           ]}
                         >
                           − {chip}
@@ -1506,20 +2116,25 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
                 style={styles.currencyInput}
                 value={movementReason}
                 onChangeText={setMovementReason}
-                placeholder={movementType === 'IN' ? 'e.g. Cash float addition (or leave blank for default)' : 'e.g. Courier charges (or leave blank for default)'}
+                placeholder={
+                  movementType === "IN"
+                    ? "e.g. Cash float addition (or leave blank for default)"
+                    : "e.g. Courier charges (or leave blank for default)"
+                }
                 placeholderTextColor="#94A3B8"
               />
             </View>
 
             <Text style={styles.modalSubmitHint}>
-              💡 Entry will be logged to the Petty Cash table below and adjust drawer expected cash.
+              💡 Entry will be logged to the Petty Cash table below and adjust
+              drawer expected cash.
             </Text>
 
             <View style={styles.modalFooterRow}>
               <Pressable
                 onPress={() => {
                   setCashMovementModalVisible(false);
-                  setMovementError('');
+                  setMovementError("");
                 }}
                 style={styles.cancelBtn}
               >
@@ -1542,13 +2157,13 @@ export default function CashRegisterScreen({ onNavigate, onShowToast, isMultiBra
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
   },
   contentContainer: {
     padding: 24,
     maxWidth: 1300,
-    alignSelf: 'center',
-    width: '100%',
+    alignSelf: "center",
+    width: "100%",
   },
   contentContainerMobile: {
     padding: 16,
@@ -1556,14 +2171,14 @@ const styles = StyleSheet.create({
 
   // Header Row
   headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 24,
   },
   headerRowMobile: {
-    flexDirection: 'column',
-    alignItems: 'flex-start',
+    flexDirection: "column",
+    alignItems: "flex-start",
     gap: 14,
   },
   headerTitleBox: {
@@ -1571,65 +2186,65 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     fontSize: 26,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
     letterSpacing: -0.5,
     marginBottom: 4,
   },
   pageSubtitle: {
     fontSize: 14,
-    color: '#64748B',
-    fontWeight: '500',
+    color: "#64748B",
+    fontWeight: "500",
   },
   historyBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 8,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOpacity: 0.03,
     shadowRadius: 4,
     elevation: 1,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   historyBtnHovered: {
-    backgroundColor: '#F1F5F9',
-    borderColor: '#CBD5E1',
+    backgroundColor: "#F1F5F9",
+    borderColor: "#CBD5E1",
   },
   historyBtnIcon: {
     fontSize: 14,
   },
   historyBtnText: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#334155',
+    fontWeight: "700",
+    color: "#334155",
   },
 
   // STATE A: REGISTER IS CLOSED (Images 1 & 2)
   closedStateWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 32,
   },
   closedCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     padding: 40,
-    width: '100%',
+    width: "100%",
     maxWidth: 720,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.04,
     shadowRadius: 12,
     elevation: 2,
-    alignItems: 'center',
+    alignItems: "center",
   },
   closedCardMobile: {
     padding: 20,
@@ -1638,9 +2253,9 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: '#E6F4EA',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#E6F4EA",
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: 20,
   },
   calculatorIcon: {
@@ -1648,71 +2263,71 @@ const styles = StyleSheet.create({
   },
   closedHeadline: {
     fontSize: 22,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
     marginBottom: 8,
-    textAlign: 'center',
+    textAlign: "center",
   },
   closedSubtext: {
     fontSize: 14,
-    color: '#64748B',
-    textAlign: 'center',
+    color: "#64748B",
+    textAlign: "center",
     marginBottom: 28,
     maxWidth: 480,
     lineHeight: 20,
   },
   formGroup: {
-    width: '100%',
+    width: "100%",
     marginBottom: 20,
   },
   fieldLabel: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#1E293B',
+    fontWeight: "700",
+    color: "#1E293B",
     marginBottom: 8,
   },
   currencyInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     borderRadius: 8,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
     paddingHorizontal: 14,
     height: 48,
   },
   currencySymbol: {
     fontSize: 15,
-    fontWeight: '700',
-    color: '#64748B',
+    fontWeight: "700",
+    color: "#64748B",
     marginRight: 8,
   },
   currencyInput: {
     flex: 1,
     fontSize: 15,
-    color: '#0F172A',
-    fontWeight: '600',
-    outlineStyle: 'none',
+    color: "#0F172A",
+    fontWeight: "600",
+    outlineStyle: "none",
   },
   textAreaInput: {
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     borderRadius: 8,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
     padding: 12,
     fontSize: 14,
-    color: '#0F172A',
+    color: "#0F172A",
     minHeight: 88,
-    textAlignVertical: 'top',
-    outlineStyle: 'none',
+    textAlignVertical: "top",
+    outlineStyle: "none",
   },
   infoBanner: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#ECFDF5',
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#ECFDF5",
     borderWidth: 1,
-    borderColor: '#A7F3D0',
+    borderColor: "#A7F3D0",
     borderRadius: 8,
     paddingVertical: 12,
     paddingHorizontal: 16,
@@ -1721,43 +2336,43 @@ const styles = StyleSheet.create({
   },
   infoBannerIcon: {
     fontSize: 16,
-    color: '#059669',
-    fontWeight: '800',
+    color: "#059669",
+    fontWeight: "800",
   },
   infoBannerText: {
     flex: 1,
     fontSize: 13,
-    color: '#065F46',
-    fontWeight: '500',
+    color: "#065F46",
+    fontWeight: "500",
     lineHeight: 18,
   },
   openRegisterBtn: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 8,
-    backgroundColor: '#0F5C3E',
+    backgroundColor: "#0F5C3E",
     height: 48,
     borderRadius: 8,
-    cursor: 'pointer',
-    shadowColor: '#0F5C3E',
+    cursor: "pointer",
+    shadowColor: "#0F5C3E",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 2,
   },
   openRegisterBtnHovered: {
-    backgroundColor: '#0A4830',
+    backgroundColor: "#0A4830",
   },
   openRegisterBtnIcon: {
     fontSize: 16,
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
   openRegisterBtnText: {
     fontSize: 15,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
 
   // STATE B: REGISTER IS OPEN (Image 3)
@@ -1765,40 +2380,40 @@ const styles = StyleSheet.create({
     gap: 24,
   },
   statusCardsRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 16,
   },
   statusCardsRowMobile: {
-    flexDirection: 'column',
+    flexDirection: "column",
   },
   statusCard: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     padding: 20,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOpacity: 0.03,
     shadowRadius: 6,
     elevation: 1,
   },
   statusCardMobile: {
-    width: '100%',
+    width: "100%",
   },
   statusCardIconBox: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#E6F4EA',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#E6F4EA",
+    alignItems: "center",
+    justifyContent: "center",
   },
   timeIconBox: {
-    backgroundColor: '#E0F2FE',
+    backgroundColor: "#E0F2FE",
   },
   statusCardEmoji: {
     fontSize: 22,
@@ -1808,15 +2423,15 @@ const styles = StyleSheet.create({
   },
   statusCardLabel: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-    textTransform: 'uppercase',
+    fontWeight: "600",
+    color: "#64748B",
+    textTransform: "uppercase",
     letterSpacing: 0.5,
     marginBottom: 4,
   },
   openBadgeRow: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#D1FAE5',
+    alignSelf: "flex-start",
+    backgroundColor: "#D1FAE5",
     paddingHorizontal: 10,
     paddingVertical: 3,
     borderRadius: 6,
@@ -1824,111 +2439,111 @@ const styles = StyleSheet.create({
   },
   openBadgeText: {
     fontSize: 13,
-    fontWeight: '800',
-    color: '#065F46',
+    fontWeight: "800",
+    color: "#065F46",
   },
   sessionTimeValue: {
     fontSize: 20,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
     marginBottom: 4,
   },
   lastActivityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
   },
   liveGreenDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#10B981',
+    backgroundColor: "#10B981",
   },
   statusMetaText: {
     fontSize: 12,
-    color: '#64748B',
+    color: "#64748B",
     lineHeight: 18,
   },
   statusMetaHighlight: {
-    fontWeight: '700',
-    color: '#1E293B',
+    fontWeight: "700",
+    color: "#1E293B",
   },
 
   // Sales Summary
   sectionCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     padding: 20,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOpacity: 0.03,
     shadowRadius: 6,
     elevation: 1,
   },
   sectionHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 16,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
     gap: 10,
   },
   sectionTitle: {
     fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   quickHeaderActions: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 8,
   },
   newSaleSmallBtn: {
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   newSaleSmallBtnText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   pettyCashBtn: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: "#F1F5F9",
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   pettyCashBtnText: {
-    color: '#334155',
+    color: "#334155",
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   summaryPillsRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 12,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
   },
   summaryPillsRowMobile: {
-    flexDirection: 'column',
+    flexDirection: "column",
   },
   summaryItemCard: {
     flex: 1,
     minWidth: 140,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     padding: 14,
   },
   summaryItemHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
     marginBottom: 6,
   },
@@ -1937,13 +2552,13 @@ const styles = StyleSheet.create({
   },
   summaryItemLabel: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
+    fontWeight: "600",
+    color: "#64748B",
   },
   summaryItemValue: {
     fontSize: 18,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   badgeSummaryCard: {
     flex: 1,
@@ -1953,113 +2568,113 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   refundsCard: {
-    backgroundColor: '#FEF2F2',
-    borderColor: '#FECACA',
+    backgroundColor: "#FEF2F2",
+    borderColor: "#FECACA",
   },
   refundsLabel: {
-    color: '#991B1B',
+    color: "#991B1B",
   },
   refundsValue: {
     fontSize: 18,
-    fontWeight: '800',
-    color: '#B91C1C',
+    fontWeight: "800",
+    color: "#B91C1C",
   },
   discountsCard: {
-    backgroundColor: '#FFFBEB',
-    borderColor: '#FDE68A',
+    backgroundColor: "#FFFBEB",
+    borderColor: "#FDE68A",
   },
   discountsLabel: {
-    color: '#92400E',
+    color: "#92400E",
   },
   discountsValue: {
     fontSize: 18,
-    fontWeight: '800',
-    color: '#B45309',
+    fontWeight: "800",
+    color: "#B45309",
   },
 
   // Reconciliation Grid (Bottom)
   reconciliationGrid: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 20,
   },
   reconciliationGridCompact: {
-    flexDirection: 'column',
+    flexDirection: "column",
   },
   reconciliationCard: {
     flex: 1.4,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     padding: 24,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOpacity: 0.03,
     shadowRadius: 6,
     elevation: 1,
   },
   reconciliationTitle: {
     fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
     marginBottom: 16,
   },
   reconciliationTable: {
     gap: 12,
   },
   reconRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   reconLabel: {
     fontSize: 14,
-    color: '#64748B',
-    fontWeight: '500',
+    color: "#64748B",
+    fontWeight: "500",
   },
   reconValue: {
     fontSize: 15,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   reconPositive: {
-    color: '#059669',
+    color: "#059669",
   },
   reconNegative: {
-    color: '#DC2626',
+    color: "#DC2626",
   },
   reconDivider: {
     height: 1,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: "#E2E8F0",
     marginVertical: 4,
   },
   reconTotalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingTop: 8,
   },
   reconTotalLabel: {
     fontSize: 15,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   reconTotalValue: {
     fontSize: 22,
-    fontWeight: '900',
-    color: '#0F5C3E',
+    fontWeight: "900",
+    color: "#0F5C3E",
   },
 
   // Close Action Card (Right)
   closeActionCard: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     padding: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
     shadowOpacity: 0.03,
     shadowRadius: 6,
     elevation: 1,
@@ -2068,9 +2683,9 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#E6F4EA',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#E6F4EA",
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: 14,
   },
   closeDrawerIcon: {
@@ -2078,52 +2693,52 @@ const styles = StyleSheet.create({
   },
   closeActionHint: {
     fontSize: 13,
-    color: '#64748B',
-    textAlign: 'center',
+    color: "#64748B",
+    textAlign: "center",
     marginBottom: 20,
     lineHeight: 18,
     maxWidth: 260,
   },
   closeRegisterPrimaryBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 8,
-    backgroundColor: '#0F5C3E',
+    backgroundColor: "#0F5C3E",
     paddingHorizontal: 24,
     height: 46,
     borderRadius: 8,
-    width: '100%',
-    cursor: 'pointer',
+    width: "100%",
+    cursor: "pointer",
   },
   closeRegisterPrimaryBtnHovered: {
-    backgroundColor: '#0A4830',
+    backgroundColor: "#0A4830",
   },
   closeRegisterBtnIcon: {
     fontSize: 15,
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
   closeRegisterBtnText: {
     fontSize: 14,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
 
   // MODALS
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(15, 23, 42, 0.65)",
+    alignItems: "center",
+    justifyContent: "center",
     padding: 16,
   },
   closeModalCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 16,
     padding: 28,
-    width: '100%',
+    width: "100%",
     maxWidth: 520,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOpacity: 0.2,
     shadowRadius: 16,
     elevation: 8,
@@ -2132,112 +2747,112 @@ const styles = StyleSheet.create({
     padding: 18,
   },
   modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
     marginBottom: 20,
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   modalSubtitle: {
     fontSize: 13,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 2,
   },
   modalCloseBtn: {
     padding: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   modalCloseBtnText: {
     fontSize: 18,
-    color: '#94A3B8',
-    fontWeight: '700',
+    color: "#94A3B8",
+    fontWeight: "700",
   },
   modalBreakdownSection: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     padding: 16,
     marginBottom: 20,
     gap: 10,
   },
   modalBreakdownRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   modalBreakdownLabel: {
     fontSize: 13,
-    color: '#64748B',
-    fontWeight: '500',
+    color: "#64748B",
+    fontWeight: "500",
   },
   modalBreakdownValue: {
     fontSize: 14,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   modalRefundsText: {
-    color: '#DC2626',
+    color: "#DC2626",
   },
   modalBreakdownDivider: {
     height: 1,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: "#E2E8F0",
     marginVertical: 2,
   },
   modalBreakdownTotalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingTop: 4,
   },
   modalExpectedLabel: {
     fontSize: 14,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   modalExpectedValue: {
     fontSize: 18,
-    fontWeight: '900',
-    color: '#0F5C3E',
+    fontWeight: "900",
+    color: "#0F5C3E",
   },
   varianceBox: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#F1F5F9',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#F1F5F9",
     borderRadius: 8,
     padding: 14,
     marginBottom: 20,
   },
   varianceLabel: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#1E293B',
+    fontWeight: "700",
+    color: "#1E293B",
   },
   varianceSubtext: {
     fontSize: 11,
-    color: '#64748B',
+    color: "#64748B",
   },
   varianceValue: {
     fontSize: 18,
-    fontWeight: '900',
+    fontWeight: "900",
   },
   varianceBalanced: {
-    color: '#059669',
+    color: "#059669",
   },
   varianceShortage: {
-    color: '#DC2626',
+    color: "#DC2626",
   },
   varianceOverage: {
-    color: '#2563EB',
+    color: "#2563EB",
   },
   modalFooterRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
+    flexDirection: "row",
+    justifyContent: "flex-end",
     gap: 12,
     marginTop: 8,
   },
@@ -2246,38 +2861,38 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    cursor: 'pointer',
+    borderColor: "#E2E8F0",
+    cursor: "pointer",
   },
   cancelBtnText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#64748B',
+    fontWeight: "600",
+    color: "#64748B",
   },
   confirmCloseBtn: {
-    backgroundColor: '#0F5C3E',
+    backgroundColor: "#0F5C3E",
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   confirmCloseBtnHovered: {
-    backgroundColor: '#0A4830',
+    backgroundColor: "#0A4830",
   },
   confirmCloseBtnText: {
     fontSize: 14,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
 
   // History Modal
   historyModalCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 16,
     padding: 28,
-    width: '100%',
+    width: "100%",
     maxWidth: 860,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOpacity: 0.2,
     shadowRadius: 16,
     elevation: 8,
@@ -2287,44 +2902,44 @@ const styles = StyleSheet.create({
   },
   historyTable: {
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     borderRadius: 8,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   historyTableHeader: {
-    flexDirection: 'row',
-    backgroundColor: '#F8FAFC',
+    flexDirection: "row",
+    backgroundColor: "#F8FAFC",
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: "#E2E8F0",
     paddingVertical: 12,
     paddingHorizontal: 14,
   },
   historyTh: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#475569',
-    textTransform: 'uppercase',
+    fontWeight: "700",
+    color: "#475569",
+    textTransform: "uppercase",
   },
   historyTableRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: "#F1F5F9",
   },
   historySessionId: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   historyDate: {
     fontSize: 11,
-    color: '#64748B',
+    color: "#64748B",
   },
   historyTd: {
     fontSize: 13,
-    color: '#334155',
+    color: "#334155",
   },
   varianceBadge: {
     paddingHorizontal: 8,
@@ -2332,39 +2947,39 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   varBadgeBalanced: {
-    backgroundColor: '#D1FAE5',
+    backgroundColor: "#D1FAE5",
   },
   varTextBalanced: {
-    color: '#065F46',
-    fontWeight: '700',
+    color: "#065F46",
+    fontWeight: "700",
     fontSize: 12,
   },
   varBadgeShortage: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: "#FEE2E2",
   },
   varTextShortage: {
-    color: '#991B1B',
-    fontWeight: '700',
+    color: "#991B1B",
+    fontWeight: "700",
     fontSize: 12,
   },
   varBadgeOverage: {
-    backgroundColor: '#DBEAFE',
+    backgroundColor: "#DBEAFE",
   },
   varTextOverage: {
-    color: '#1E40AF',
-    fontWeight: '700',
+    color: "#1E40AF",
+    fontWeight: "700",
     fontSize: 12,
   },
   historyModalFooter: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
+    flexDirection: "row",
+    justifyContent: "flex-end",
     marginTop: 20,
   },
 
   // Movement Modal
   movementTypeSelector: {
-    flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
+    flexDirection: "row",
+    backgroundColor: "#F1F5F9",
     borderRadius: 8,
     padding: 4,
     marginBottom: 18,
@@ -2372,154 +2987,154 @@ const styles = StyleSheet.create({
   movementTypeBtn: {
     flex: 1,
     paddingVertical: 8,
-    alignItems: 'center',
+    alignItems: "center",
     borderRadius: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   movementTypeBtnActiveOut: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: "#FEE2E2",
   },
   movementTypeBtnActiveIn: {
-    backgroundColor: '#D1FAE5',
+    backgroundColor: "#D1FAE5",
   },
   movementTypeBtnText: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#64748B',
+    fontWeight: "600",
+    color: "#64748B",
   },
   movementTypeBtnTextActive: {
-    color: '#0F172A',
-    fontWeight: '800',
+    color: "#0F172A",
+    fontWeight: "800",
   },
 
   // PETTY CASH MOVEMENTS SECTION (CASH-03)
   pettyCashSectionCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     padding: 20,
     marginTop: 20,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOpacity: 0.02,
     shadowRadius: 6,
     elevation: 1,
   },
   pettyCashSectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: "#F1F5F9",
     marginBottom: 16,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
     gap: 12,
   },
   pettyCashSectionHeaderMobile: {
-    flexDirection: 'column',
-    alignItems: 'flex-start',
+    flexDirection: "column",
+    alignItems: "flex-start",
   },
   pettyCashTitleBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     marginBottom: 4,
   },
   pettyCashSectionTitle: {
     fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   cashBadge: {
-    backgroundColor: '#E0F2FE',
+    backgroundColor: "#E0F2FE",
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6,
   },
   cashBadgeText: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#0284C7',
+    fontWeight: "700",
+    color: "#0284C7",
   },
   pettyCashSectionSubtitle: {
     fontSize: 13,
-    color: '#64748B',
+    color: "#64748B",
   },
   pettyCashHeaderRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
   },
   pettyCashHeaderRightMobile: {
-    width: '100%',
-    justifyContent: 'space-between',
+    width: "100%",
+    justifyContent: "space-between",
   },
   pettyCashSummaryChipRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   pettySummaryChip: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
   },
   pettySummaryIn: {
-    backgroundColor: '#ECFDF5',
+    backgroundColor: "#ECFDF5",
     borderWidth: 1,
-    borderColor: '#A7F3D0',
+    borderColor: "#A7F3D0",
   },
   pettySummaryOut: {
-    backgroundColor: '#FEF2F2',
+    backgroundColor: "#FEF2F2",
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: "#FECACA",
   },
   pettySummaryChipLabel: {
     fontSize: 11,
-    fontWeight: '600',
-    color: '#475569',
+    fontWeight: "600",
+    color: "#475569",
   },
   pettySummaryChipValueIn: {
     fontSize: 12,
-    fontWeight: '800',
-    color: '#059669',
+    fontWeight: "800",
+    color: "#059669",
   },
   pettySummaryChipValueOut: {
     fontSize: 12,
-    fontWeight: '800',
-    color: '#DC2626',
+    fontWeight: "800",
+    color: "#DC2626",
   },
   recordMovementBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 8,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   recordMovementBtnHovered: {
-    backgroundColor: '#115E59',
+    backgroundColor: "#115E59",
   },
   recordMovementBtnIcon: {
     fontSize: 14,
-    fontWeight: '800',
-    color: '#FFFFFF',
+    fontWeight: "800",
+    color: "#FFFFFF",
   },
   recordMovementBtnText: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
   emptyMovementsBox: {
     paddingVertical: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   emptyMovementsIcon: {
     fontSize: 32,
@@ -2527,69 +3142,69 @@ const styles = StyleSheet.create({
   },
   emptyMovementsTitle: {
     fontSize: 15,
-    fontWeight: '700',
-    color: '#334155',
+    fontWeight: "700",
+    color: "#334155",
     marginBottom: 4,
   },
   emptyMovementsSubtitle: {
     fontSize: 13,
-    color: '#94A3B8',
-    textAlign: 'center',
+    color: "#94A3B8",
+    textAlign: "center",
     maxWidth: 420,
     marginBottom: 16,
   },
   emptyRecordBtn: {
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 8,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   emptyRecordBtnText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
+    color: "#FFFFFF",
+    fontWeight: "700",
     fontSize: 13,
   },
   movementsTable: {
-    width: '100%',
+    width: "100%",
     minWidth: 900,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     borderRadius: 8,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   movementsTableHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: "#E2E8F0",
   },
   movementsTh: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#64748B',
+    fontWeight: "700",
+    color: "#64748B",
     letterSpacing: 0.5,
   },
   movementsTableRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    backgroundColor: '#FFFFFF',
+    borderBottomColor: "#F1F5F9",
+    backgroundColor: "#FFFFFF",
   },
   movementsTableRowLast: {
     borderBottomWidth: 0,
   },
   movIdText: {
     fontSize: 12,
-    fontWeight: '800',
-    color: '#0F766E',
-    backgroundColor: '#F0FDFA',
+    fontWeight: "800",
+    color: "#0F766E",
+    backgroundColor: "#F0FDFA",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -2601,59 +3216,59 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
   },
   badgeCashIn: {
-    backgroundColor: '#ECFDF5',
+    backgroundColor: "#ECFDF5",
   },
   badgeCashOut: {
-    backgroundColor: '#FEF2F2',
+    backgroundColor: "#FEF2F2",
   },
   movementTypeBadgeText: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   badgeTextCashIn: {
-    color: '#059669',
+    color: "#059669",
   },
   badgeTextCashOut: {
-    color: '#DC2626',
+    color: "#DC2626",
   },
   deleteMovBtn: {
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-    cursor: 'pointer',
+    backgroundColor: "#F1F5F9",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
   },
   deleteMovBtnText: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#64748B',
+    fontWeight: "700",
+    color: "#64748B",
   },
   historyMovementsRow: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: "#F1F5F9",
   },
   historyMovementsSummaryText: {
     fontSize: 12,
-    color: '#0F766E',
-    fontWeight: '600',
+    color: "#0F766E",
+    fontWeight: "600",
   },
 
   // Highlight & Banner
   justAddedBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#ECFDF5',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#ECFDF5",
     borderWidth: 1,
-    borderColor: '#6EE7B7',
+    borderColor: "#6EE7B7",
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -2661,79 +3276,79 @@ const styles = StyleSheet.create({
   },
   justAddedBannerText: {
     fontSize: 13,
-    color: '#065F46',
-    fontWeight: '600',
+    color: "#065F46",
+    fontWeight: "600",
   },
   movementsTableRowHighlight: {
-    backgroundColor: '#F0FDF4',
+    backgroundColor: "#F0FDF4",
     borderLeftWidth: 4,
-    borderLeftColor: '#059669',
+    borderLeftColor: "#059669",
   },
   justAddedBadge: {
-    backgroundColor: '#059669',
+    backgroundColor: "#059669",
     paddingHorizontal: 5,
     paddingVertical: 1,
     borderRadius: 4,
   },
   justAddedBadgeText: {
     fontSize: 9,
-    fontWeight: '800',
-    color: '#FFFFFF',
+    fontWeight: "800",
+    color: "#FFFFFF",
     letterSpacing: 0.5,
   },
   modalErrorBox: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: "#FEE2E2",
     borderWidth: 1,
-    borderColor: '#FCA5A5',
+    borderColor: "#FCA5A5",
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
     marginBottom: 14,
   },
   modalErrorText: {
-    color: '#991B1B',
+    color: "#991B1B",
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   quickChipsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 6,
     marginBottom: 8,
   },
   quickChipBtn: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: "#F1F5F9",
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   quickChipBtnActiveIn: {
-    backgroundColor: '#CCFBF1',
-    borderColor: '#0F766E',
+    backgroundColor: "#CCFBF1",
+    borderColor: "#0F766E",
   },
   quickChipBtnActiveOut: {
-    backgroundColor: '#FEE2E2',
-    borderColor: '#DC2626',
+    backgroundColor: "#FEE2E2",
+    borderColor: "#DC2626",
   },
   quickChipText: {
     fontSize: 11,
-    fontWeight: '600',
-    color: '#475569',
+    fontWeight: "600",
+    color: "#475569",
   },
   quickChipTextActiveIn: {
-    color: '#0F766E',
-    fontWeight: '700',
+    color: "#0F766E",
+    fontWeight: "700",
   },
   quickChipTextActiveOut: {
-    color: '#DC2626',
-    fontWeight: '700',
+    color: "#DC2626",
+    fontWeight: "700",
   },
   modalSubmitHint: {
     fontSize: 11,
-    color: '#64748B',
+    color: "#64748B",
     lineHeight: 16,
     marginBottom: 14,
   },
@@ -2743,55 +3358,55 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   mobileMovementCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     borderRadius: 10,
     padding: 14,
     ...Platform.select({
-      web: { boxShadow: '0 1px 2px rgba(0,0,0,0.03)' },
+      web: { boxShadow: "0 1px 2px rgba(0,0,0,0.03)" },
       default: { elevation: 1 },
     }),
   },
   mobileMovementCardHighlight: {
-    borderColor: '#6EE7B7',
-    backgroundColor: '#F0FDF4',
+    borderColor: "#6EE7B7",
+    backgroundColor: "#F0FDF4",
   },
   mobileMovementHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 8,
   },
   mobileMovementReason: {
     fontSize: 13.5,
-    fontWeight: '600',
-    color: '#0F172A',
+    fontWeight: "600",
+    color: "#0F172A",
     marginBottom: 10,
     lineHeight: 18,
   },
   mobileMovementFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: "#F1F5F9",
   },
   mobileMovementTime: {
     fontSize: 11.5,
-    color: '#64748B',
-    fontWeight: '500',
+    color: "#64748B",
+    fontWeight: "500",
   },
   mobileMovementCashier: {
     fontSize: 11.5,
-    color: '#475569',
-    fontWeight: '600',
+    color: "#475569",
+    fontWeight: "600",
     marginTop: 2,
   },
   mobileMovementAmount: {
     fontSize: 15,
-    fontWeight: '800',
+    fontWeight: "800",
   },
 
   // Mobile KPI Cards for Register History Modal
@@ -2800,70 +3415,70 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   mobileHistoryCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     borderRadius: 10,
     padding: 14,
     ...Platform.select({
-      web: { boxShadow: '0 1px 3px rgba(0,0,0,0.04)' },
+      web: { boxShadow: "0 1px 3px rgba(0,0,0,0.04)" },
       default: { elevation: 1 },
     }),
   },
   mobileHistoryHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
     marginBottom: 8,
   },
   mobileHistoryDetailsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 10,
   },
   mobileHistoryLabel: {
     fontSize: 12.5,
-    color: '#64748B',
+    color: "#64748B",
   },
   mobileHistoryShiftBadge: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: "#F1F5F9",
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
   },
   mobileHistoryShiftText: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#475569',
+    fontWeight: "700",
+    color: "#475569",
   },
   mobileHistoryMetricsGrid: {
-    flexDirection: 'row',
-    backgroundColor: '#F8FAFC',
+    flexDirection: "row",
+    backgroundColor: "#F8FAFC",
     borderRadius: 8,
     padding: 10,
-    justifyContent: 'space-between',
+    justifyContent: "space-between",
   },
   mobileHistoryMetricItem: {
-    alignItems: 'center',
+    alignItems: "center",
     flex: 1,
   },
   mobileHistoryMetricLabel: {
     fontSize: 10.5,
-    color: '#64748B',
-    fontWeight: '600',
+    color: "#64748B",
+    fontWeight: "600",
     marginBottom: 2,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
   },
   mobileHistoryMetricVal: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#334155',
+    fontWeight: "700",
+    color: "#334155",
   },
   mobileHistoryMovementsBox: {
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: "#F1F5F9",
   },
 });

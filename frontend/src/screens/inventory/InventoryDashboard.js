@@ -35,8 +35,21 @@ export default function InventoryDashboard({
 
   useEffect(() => {
     let isMounted = true;
-    const isFiltered = selectedBranch && selectedBranch !== "All Branches";
-    const branchParam = isFiltered ? selectedBranch : undefined;
+    const branchName =
+      typeof selectedBranch === "object" && selectedBranch !== null
+        ? selectedBranch.name
+        : selectedBranch;
+    const branchId =
+      typeof selectedBranch === "object" && selectedBranch !== null
+        ? selectedBranch.id
+        : selectedBranch;
+    const isFiltered = Boolean(
+      branchName &&
+      branchName !== "All Branches" &&
+      branchName !== "all" &&
+      branchName !== "No Active Branch",
+    );
+    const branchParam = isFiltered ? branchId || branchName : undefined;
 
     async function loadDashboardData() {
       setLoading(true);
@@ -52,8 +65,10 @@ export default function InventoryDashboard({
             list = list.filter(
               (po) =>
                 !po.branch ||
-                po.branch === selectedBranch ||
-                po.branchName === selectedBranch,
+                po.branch === branchName ||
+                po.branchName === branchName ||
+                po.branch_id === branchId ||
+                po.branchId === branchId,
             );
           }
           const formatted = list.map((po) => ({
@@ -108,7 +123,11 @@ export default function InventoryDashboard({
           let movs = movementsRes.data;
           if (isFiltered) {
             movs = movs.filter(
-              (m) => !m.branchName || m.branchName === selectedBranch,
+              (m) =>
+                !m.branchName ||
+                m.branchName === branchName ||
+                m.branch_id === branchId ||
+                m.branchId === branchId,
             );
           }
           setRecentMovements(movs);
@@ -132,8 +151,9 @@ export default function InventoryDashboard({
             items = items.filter(
               (item) =>
                 !item.branchName ||
-                item.branchName === selectedBranch ||
-                item.branchId === selectedBranch,
+                item.branchName === branchName ||
+                item.branch_id === branchId ||
+                item.branchId === branchId,
             );
           }
           setInventoryItems(items);

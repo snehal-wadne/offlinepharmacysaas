@@ -4,15 +4,31 @@
  * Request handlers for Goods Receipts.
  */
 
-const goodsReceiptService = require('../services/goods-receipt.service');
+const goodsReceiptService = require("../services/goods-receipt.service");
 
-const { pool } = require('../db/connection');
+const { pool } = require("../db/connection");
 
 const getOrgId = async (req) => {
+  if (req.user && req.user.organisation_id) return req.user.organisation_id;
   if (req.user && req.user.organisationId) return req.user.organisationId;
-  if (req.headers['x-organisation-id']) return req.headers['x-organisation-id'];
+  if (req.tenant && req.tenant.organisationId) return req.tenant.organisationId;
+  if (req.tenantContext && req.tenantContext.organisationId)
+    return req.tenantContext.organisationId;
+  if (req.headers["x-organisation-id"]) return req.headers["x-organisation-id"];
   if (req.query && req.query.organisationId) return req.query.organisationId;
   if (req.body && req.body.organisationId) return req.body.organisationId;
+
+  if (req.user && req.user.id) {
+    try {
+      const memRes = await pool.query(
+        "SELECT organisation_id FROM organisation_memberships WHERE user_id = $1 LIMIT 1",
+        [req.user.id],
+      );
+      if (memRes.rows.length > 0) return memRes.rows[0].organisation_id;
+    } catch (e) {
+      // Ignore
+    }
+  }
 
   return null;
 };
@@ -21,13 +37,14 @@ const getGoodsReceipts = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
     if (!organisationId) {
-      return res.status(400).json({ error: 'Organisation ID is required' });
+      return res.status(400).json({ error: "Organisation ID is required" });
     }
-    const { purchaseId, limit, offset } = req.query;
+    const { purchaseId, limit, offset, branchId } = req.query;
 
     const receipts = await goodsReceiptService.getGoodsReceipts({
       organisationId,
       purchaseId,
+      branchId: branchId || req.headers["x-branch-id"] || null,
       limit,
       offset,
     });
@@ -38,10 +55,10 @@ const getGoodsReceipts = async (req, res) => {
       data: receipts,
     });
   } catch (error) {
-    console.error('Error fetching goods receipts:', error);
+    console.error("Error fetching goods receipts:", error);
     res.status(500).json({
       success: false,
-      error: error.message || 'Failed to fetch goods receipts',
+      error: error.message || "Failed to fetch goods receipts",
     });
   }
 };
@@ -50,11 +67,14 @@ const getGoodsReceiptById = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
     if (!organisationId) {
-      return res.status(400).json({ error: 'Organisation ID is required' });
+      return res.status(400).json({ error: "Organisation ID is required" });
     }
     const { id } = req.params;
 
-    const receipt = await goodsReceiptService.getGoodsReceiptById(organisationId, id);
+    const receipt = await goodsReceiptService.getGoodsReceiptById(
+      organisationId,
+      id,
+    );
     if (!receipt) {
       return res.status(404).json({
         success: false,
@@ -70,7 +90,7 @@ const getGoodsReceiptById = async (req, res) => {
     console.error(`Error fetching goods receipt ${req.params.id}:`, error);
     res.status(500).json({
       success: false,
-      error: error.message || 'Failed to fetch goods receipt',
+      error: error.message || "Failed to fetch goods receipt",
     });
   }
 };
@@ -79,25 +99,26 @@ const createGoodsReceipt = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
     if (!organisationId) {
-      return res.status(400).json({ error: 'Organisation ID is required' });
+      return res.status(400).json({ error: "Organisation ID is required" });
     }
     const receiptData = {
       ...req.body,
       organisationId,
     };
 
-    const newReceipt = await goodsReceiptService.createGoodsReceipt(receiptData);
+    const newReceipt =
+      await goodsReceiptService.createGoodsReceipt(receiptData);
 
     res.status(201).json({
       success: true,
-      message: 'Goods receipt created successfully',
+      message: "Goods receipt created successfully",
       data: newReceipt,
     });
   } catch (error) {
-    console.error('Error creating goods receipt:', error);
+    console.error("Error creating goods receipt:", error);
     res.status(error.statusCode || 400).json({
       success: false,
-      error: error.message || 'Failed to create goods receipt',
+      error: error.message || "Failed to create goods receipt",
     });
   }
 };
@@ -106,7 +127,7 @@ const updateGoodsReceiptStatus = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
     if (!organisationId) {
-      return res.status(400).json({ error: 'Organisation ID is required' });
+      return res.status(400).json({ error: "Organisation ID is required" });
     }
     const { id } = req.params;
     const { status } = req.body;
@@ -114,7 +135,7 @@ const updateGoodsReceiptStatus = async (req, res) => {
     if (!status) {
       return res.status(400).json({
         success: false,
-        error: 'Status is required',
+        error: "Status is required",
       });
     }
 
@@ -126,14 +147,17 @@ const updateGoodsReceiptStatus = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Goods receipt status updated successfully',
+      message: "Goods receipt status updated successfully",
       data: updatedReceipt,
     });
   } catch (error) {
-    console.error(`Error updating status for goods receipt ${req.params.id}:`, error);
+    console.error(
+      `Error updating status for goods receipt ${req.params.id}:`,
+      error,
+    );
     res.status(error.statusCode || 500).json({
       success: false,
-      error: error.message || 'Failed to update goods receipt status',
+      error: error.message || "Failed to update goods receipt status",
     });
   }
 };

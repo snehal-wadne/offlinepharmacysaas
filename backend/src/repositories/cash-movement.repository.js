@@ -18,7 +18,10 @@
 const { pool } = require("../db/connection");
 const { getCache, setCache, deleteCache } = require("../cache/cache");
 const { getNextBusinessNumber } = require("./number-sequence.repository");
-const { invalidateSessionReconciliationCache, registerAfterCommit } = require("./cash-register-dashboard.repository");
+const {
+  invalidateSessionReconciliationCache,
+  registerAfterCommit,
+} = require("./cash-register-dashboard.repository");
 
 const MOVEMENT_CACHE_TTL = 60;
 
@@ -33,6 +36,20 @@ const CASH_MOVEMENT_COLUMNS = `
   amount,
   reason,
   created_at
+`;
+
+const ENRICHED_CASH_MOVEMENT_COLUMNS = `
+  cm.id,
+  cm.organisation_id,
+  cm.branch_id,
+  cm.cash_register_session_id,
+  cm.cashier_id,
+  cm.movement_number,
+  cm.movement_type,
+  cm.amount,
+  cm.reason,
+  cm.created_at,
+  u.name AS cashier_name
 `;
 
 /**
@@ -220,20 +237,39 @@ const createMovement = async ({
       reason.trim(),
     ]);
 
+    const enrichedRes = await dbClient.query(
+      `
+      SELECT
+        ${ENRICHED_CASH_MOVEMENT_COLUMNS}
+      FROM cash_movements cm
+      LEFT JOIN users u ON u.id = cm.cashier_id
+      WHERE cm.id = $1 AND cm.organisation_id = $2;
+    `,
+      [result.rows[0].id, organisationId],
+    );
+    const createdMovement = enrichedRes.rows[0] || result.rows[0];
+
     if (ownsTransaction) {
       await dbClient.query("COMMIT");
     }
 
-    const createdMovement = result.rows[0];
-
     // Invalidate caches strictly after commit
     if (ownsTransaction) {
       await invalidateCashMovementCache(organisationId, cashRegisterSessionId);
-      await invalidateSessionReconciliationCache(organisationId, cashRegisterSessionId);
+      await invalidateSessionReconciliationCache(
+        organisationId,
+        cashRegisterSessionId,
+      );
     } else {
       registerAfterCommit(dbClient, async () => {
-        await invalidateCashMovementCache(organisationId, cashRegisterSessionId);
-        await invalidateSessionReconciliationCache(organisationId, cashRegisterSessionId);
+        await invalidateCashMovementCache(
+          organisationId,
+          cashRegisterSessionId,
+        );
+        await invalidateSessionReconciliationCache(
+          organisationId,
+          cashRegisterSessionId,
+        );
       });
     }
 
@@ -284,7 +320,13 @@ const listMovementsBySession = async ({
   if (!client && offset === 0 && limit === 50) {
     try {
       const cached = await getCache(cacheKey);
-      if (cached) return cached;
+      if (
+        cached &&
+        Array.isArray(cached) &&
+        (cached.length === 0 || cached[0].cashier_name)
+      ) {
+        return cached;
+      }
     } catch (cacheErr) {
       console.error("Cash movement cache read error:", cacheErr.message);
     }
@@ -297,12 +339,13 @@ const listMovementsBySession = async ({
 
   const query = `
     SELECT
-      ${CASH_MOVEMENT_COLUMNS}
-    FROM cash_movements
-    WHERE organisation_id = $1
-      AND branch_id = $2
-      AND cash_register_session_id = $3
-    ORDER BY created_at ASC
+      ${ENRICHED_CASH_MOVEMENT_COLUMNS}
+    FROM cash_movements cm
+    LEFT JOIN users u ON u.id = cm.cashier_id
+    WHERE cm.organisation_id = $1
+      AND cm.branch_id = $2
+      AND cm.cash_register_session_id = $3
+    ORDER BY cm.created_at ASC
     LIMIT $4 OFFSET $5;
   `;
 

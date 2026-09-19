@@ -38,7 +38,11 @@ const SYNC_STATUS_BADGES = {
   CONFLICT: { bg: "#FEE2E2", text: "#B91C1C", label: "Conflict" },
 };
 
-export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
+export default function GoodsReceivingScreen({
+  onShowToast,
+  onNavigate,
+  selectedBranch = "All Branches",
+}) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
   const isMobile = width < 768;
@@ -65,7 +69,18 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
 
       let serverRecords = [];
       try {
-        const response = await fetchGoodsReceipts();
+        const rawBranch =
+          typeof selectedBranch === "object" && selectedBranch !== null
+            ? selectedBranch.id || selectedBranch.name
+            : selectedBranch;
+        const branchParam =
+          rawBranch &&
+          rawBranch !== "All Branches" &&
+          rawBranch !== "all" &&
+          rawBranch !== "No Active Branch"
+            ? rawBranch
+            : undefined;
+        const response = await fetchGoodsReceipts({ branchId: branchParam });
         if (response && response.data && response.data.length > 0) {
           serverRecords = response.data.map((grn) => ({
             realId: grn.id,
@@ -153,7 +168,7 @@ export default function GoodsReceivingScreen({ onShowToast, onNavigate }) {
       isMounted = false;
       if (unsubscribe) unsubscribe();
     };
-  }, []);
+  }, [selectedBranch]);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [formData, setFormData] = useState({

@@ -14,8 +14,9 @@ const getInventory = async ({
   offset = 0,
 }) => {
   try {
-    const isAllBranches = !branchId || branchId === 'all' || branchId === 'All Branches';
-    let branchClause = '';
+    const isAllBranches =
+      !branchId || branchId === "all" || branchId === "All Branches";
+    let branchClause = "";
     const values = [organisationId];
 
     if (!isAllBranches) {
@@ -23,7 +24,7 @@ const getInventory = async ({
       branchClause = `AND (ib.branch_id::text = $${values.length} OR b.name ILIKE $${values.length})`;
     }
 
-    let searchClause = '';
+    let searchClause = "";
     if (search) {
       values.push(`%${search}%`);
       searchClause = `AND (p.medicine_name ILIKE $${values.length} OR p.brand_name ILIKE $${values.length} OR p.sku ILIKE $${values.length} OR ib.batch_number ILIKE $${values.length} OR s.name ILIKE $${values.length})`;
@@ -156,7 +157,7 @@ const saveOrUpdateInventory = async (organisationId, itemData) => {
     // Fallback: check if any branch exists
     const anyB = await pool.query(
       `SELECT id FROM branches WHERE organisation_id = $1 LIMIT 1;`,
-      [organisationId]
+      [organisationId],
     );
     if (anyB.rows.length > 0) {
       bId = anyB.rows[0].id;
@@ -320,14 +321,15 @@ const getInventorySummary = async (organisationId, branchId = null) => {
     throw new Error("organisationId is required");
   }
 
-  const isAllBranches = !branchId || branchId === 'all' || branchId === 'All Branches';
-  let branchJoin = '';
-  let branchClause = '';
+  const isAllBranches =
+    !branchId || branchId === "all" || branchId === "All Branches";
+  let branchJoin = "";
+  let branchClause = "";
   const params = [organisationId];
 
   if (!isAllBranches) {
     params.push(branchId);
-    branchJoin = 'INNER JOIN branches b ON b.id = ib.branch_id';
+    branchJoin = "INNER JOIN branches b ON b.id = ib.branch_id";
     branchClause = `AND (ib.branch_id::text = $2 OR b.name ILIKE $2)`;
   }
 
@@ -389,58 +391,124 @@ const recordStockMovement = async (
   }
 };
 
-const getStockMovements = async (organisationId, limit = 10, branchId = null) => {
+const getStockMovements = async (
+  organisationId,
+  limit = 10,
+  branchId = null,
+) => {
   try {
-    const isAllBranches = !branchId || branchId === 'all' || branchId === 'All Branches';
-    let query = `
-      SELECT
-         id,
-         branch_name AS "branchName",
-         movement_type AS "type",
-         item_name AS "item",
-         quantity,
-         reference,
-         status,
-         created_at
-       FROM stock_movements
-    `;
-    const params = [];
+    if (!organisationId) return [];
+    const isAllBranches =
+      !branchId || branchId === "all" || branchId === "All Branches";
+    const params = [organisationId];
+    let branchFilter = "";
     if (!isAllBranches) {
       params.push(branchId);
-      query += ` WHERE (branch_name ILIKE $1) `;
+      branchFilter = `WHERE (m.branch_id::text = $2 OR b.name ILIKE $2)`;
     }
     params.push(limit);
-    query += ` ORDER BY created_at DESC LIMIT $${params.length};`;
+
+    const query = `
+      SELECT
+        m.id,
+        m.branch_id,
+        COALESCE(b.name, 'Main Branch') AS "branchName",
+        m.created_at,
+        m.type,
+        m.item,
+        m.quantity,
+        m.reference,
+        m.status
+      FROM (
+        -- Inward Stock (Goods Receipts / Purchases)
+        SELECT
+          gri.id,
+          po.branch_id,
+          gr.received_date AS created_at,
+          'Purchase' AS type,
+          p.medicine_name AS item,
+          ('+' || gri.received_quantity::text) AS quantity,
+          gr.receipt_number AS reference,
+          'Completed' AS status
+        FROM goods_receipt_items gri
+        JOIN goods_receipts gr ON gr.id = gri.goods_receipt_id
+        JOIN purchases po ON po.id = gr.purchase_id
+        JOIN purchase_items pi ON pi.id = gri.purchase_item_id
+        JOIN products p ON p.id = pi.product_id
+        WHERE gr.organisation_id = $1
+
+        UNION ALL
+
+        -- Outward Stock (Sales Invoices)
+        SELECT
+          ii.id,
+          i.branch_id,
+          i.created_at,
+          'Sale' AS type,
+          ii.product_name AS item,
+          ('-' || ii.quantity::text) AS quantity,
+          i.invoice_number AS reference,
+          'Completed' AS status
+        FROM invoice_items ii
+        JOIN invoices i ON i.id = ii.invoice_id
+        WHERE i.organisation_id = $1
+
+        UNION ALL
+
+        -- Stock Transfers
+        SELECT
+          sti.id,
+          st.from_branch_id AS branch_id,
+          st.created_at,
+          'Transfer' AS type,
+          p.medicine_name AS item,
+          ('-' || sti.quantity::text) AS quantity,
+          st.transfer_number AS reference,
+          CASE WHEN st.status = 'COMPLETED' THEN 'Completed' ELSE 'In Transit' END AS status
+        FROM stock_transfer_items sti
+        JOIN stock_transfers st ON st.id = sti.transfer_id
+        JOIN inventory_batches ib ON ib.id = sti.inventory_batch_id
+        JOIN products p ON p.id = ib.product_id
+        WHERE st.organisation_id = $1
+      ) m
+      LEFT JOIN branches b ON b.id = m.branch_id
+      ${branchFilter}
+      ORDER BY m.created_at DESC
+      LIMIT $${params.length};
+    `;
 
     const res = await pool.query(query, params);
 
-    if (res.rows.length > 0) {
-      return res.rows.map((r) => {
-        const d = new Date(r.created_at);
-        const dateStr = d.toLocaleDateString("en-GB", {
-          day: "2-digit",
-          month: "short",
-          year: "numeric",
-        });
-        const timeStr = d.toLocaleTimeString("en-GB", {
-          hour: "2-digit",
-          minute: "2-digit",
-        });
-        return {
-          id: r.id,
-          date: `${dateStr}, ${timeStr}`,
-          type: r.type,
-          item: r.item,
-          quantity: r.quantity,
-          reference: r.reference,
-          status: r.status || "Completed",
-        };
-      });
-    }
+    return res.rows.map((r) => {
+      const d = new Date(r.created_at);
+      const dateStr = isNaN(d.getTime())
+        ? "-"
+        : d.toLocaleDateString("en-GB", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+          });
+      const timeStr = isNaN(d.getTime())
+        ? ""
+        : d.toLocaleTimeString("en-GB", {
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+      return {
+        id: r.id,
+        date: timeStr ? `${dateStr}, ${timeStr}` : dateStr,
+        type: r.type,
+        item: r.item,
+        quantity: r.quantity,
+        reference: r.reference,
+        status: r.status || "Completed",
+        branchName: r.branchName,
+      };
+    });
   } catch (e) {
-    console.warn("Failed to fetch stock_movements from DB:", e.message);
+    console.warn("Failed to fetch stock movements from DB:", e.message);
+    return [];
   }
-  return null;
 };
 
 const CODE128_PATTERNS = [

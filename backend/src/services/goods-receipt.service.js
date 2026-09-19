@@ -4,39 +4,61 @@
  * Business logic for goods receipt operations.
  */
 
-const goodsReceiptRepo = require('../repositories/goods-receipt.repository');
-const purchaseRepo = require('../repositories/purchase.repository');
-const { pool } = require('../db/connection');
+const goodsReceiptRepo = require("../repositories/goods-receipt.repository");
+const purchaseRepo = require("../repositories/purchase.repository");
+const { pool } = require("../db/connection");
 
 const normalizeStatus = (s) => {
-  if (!s) return 'PENDING_INSPECTION';
+  if (!s) return "PENDING_INSPECTION";
   const upper = String(s).toUpperCase().trim();
-  if (upper === 'VERIFIED') return 'VERIFIED';
-  if (upper === 'DISCREPANCY') return 'DISCREPANCY';
-  return 'PENDING_INSPECTION';
+  if (upper === "VERIFIED") return "VERIFIED";
+  if (upper === "DISCREPANCY") return "DISCREPANCY";
+  return "PENDING_INSPECTION";
 };
 
-const getGoodsReceipts = async ({ organisationId, purchaseId, limit = 50, offset = 0 }) => {
+const getGoodsReceipts = async ({
+  organisationId,
+  purchaseId,
+  limit = 50,
+  offset = 0,
+  branchId = null,
+}) => {
   if (!organisationId) {
-    throw new Error('organisationId is required');
+    throw new Error("organisationId is required");
   }
 
   if (purchaseId) {
-    return await goodsReceiptRepo.getGoodsReceiptsByPurchase(organisationId, purchaseId, limit, offset);
+    return await goodsReceiptRepo.getGoodsReceiptsByPurchase(
+      organisationId,
+      purchaseId,
+      limit,
+      offset,
+    );
   }
 
-  return await goodsReceiptRepo.getGoodsReceiptsByOrganisation(organisationId, limit, offset);
+  return await goodsReceiptRepo.getGoodsReceiptsByOrganisation(
+    organisationId,
+    limit,
+    offset,
+    branchId,
+  );
 };
 
 const getGoodsReceiptById = async (organisationId, receiptId) => {
   if (!organisationId || !receiptId) {
-    throw new Error('organisationId and receiptId are required');
+    throw new Error("organisationId and receiptId are required");
   }
 
-  const receipt = await goodsReceiptRepo.getGoodsReceiptById(organisationId, receiptId);
+  const receipt = await goodsReceiptRepo.getGoodsReceiptById(
+    organisationId,
+    receiptId,
+  );
   if (!receipt) return null;
 
-  const items = await goodsReceiptRepo.getGoodsReceiptItems(organisationId, receiptId);
+  const items = await goodsReceiptRepo.getGoodsReceiptItems(
+    organisationId,
+    receiptId,
+  );
   return {
     ...receipt,
     items,
@@ -51,56 +73,59 @@ const createGoodsReceipt = async (receiptData) => {
     supplier,
     supplierName,
     receiptNumber,
-    receivedDate = new Date().toISOString().split('T')[0],
+    receivedDate = new Date().toISOString().split("T")[0],
     receivedBy = null,
     supplierInvoiceNumber = null,
     packageCount = 1,
-    status = 'VERIFIED',
+    status = "VERIFIED",
     notes = null,
     items = [],
   } = receiptData;
 
   if (!organisationId) {
-    throw new Error('organisationId is required');
+    throw new Error("organisationId is required");
   }
 
   // Resolve purchaseId if not directly provided
   if (!purchaseId) {
-    const poNum = poReference || 'PO-1026';
+    const poNum = poReference || "PO-1026";
     const poRes = await pool.query(
       `SELECT id FROM purchases WHERE organisation_id = $1 AND purchase_number = $2 LIMIT 1;`,
-      [organisationId, poNum]
+      [organisationId, poNum],
     );
 
     if (poRes.rows.length > 0) {
       purchaseId = poRes.rows[0].id;
     } else {
       // Find or create supplier
-      const sName = supplierName || supplier || 'Sun Pharma Care';
+      const sName = supplierName || supplier || "Sun Pharma Care";
       let supplierId;
       const sRes = await pool.query(
         `SELECT id FROM suppliers WHERE organisation_id = $1 AND LOWER(name) = LOWER($2) LIMIT 1;`,
-        [organisationId, sName]
+        [organisationId, sName],
       );
       if (sRes.rows.length > 0) {
         supplierId = sRes.rows[0].id;
       } else {
         const newS = await pool.query(
           `INSERT INTO suppliers (organisation_id, name) VALUES ($1, $2) RETURNING id;`,
-          [organisationId, sName]
+          [organisationId, sName],
         );
         supplierId = newS.rows[0].id;
       }
 
       // Find branch
-      const bRes = await pool.query(`SELECT id FROM branches WHERE organisation_id = $1 LIMIT 1;`, [organisationId]);
+      const bRes = await pool.query(
+        `SELECT id FROM branches WHERE organisation_id = $1 LIMIT 1;`,
+        [organisationId],
+      );
       let branchId;
       if (bRes.rows.length > 0) {
         branchId = bRes.rows[0].id;
       } else {
         const newB = await pool.query(
           `INSERT INTO branches (organisation_id, name) VALUES ($1, 'Main Branch') RETURNING id;`,
-          [organisationId]
+          [organisationId],
         );
         branchId = newB.rows[0].id;
       }
@@ -109,13 +134,14 @@ const createGoodsReceipt = async (receiptData) => {
       const newPO = await pool.query(
         `INSERT INTO purchases (organisation_id, purchase_number, supplier_id, branch_id, status)
          VALUES ($1, $2, $3, $4, 'RECEIVED') RETURNING id;`,
-        [organisationId, poNum, supplierId, branchId]
+        [organisationId, poNum, supplierId, branchId],
       );
       purchaseId = newPO.rows[0].id;
     }
   }
 
-  const finalGRN = receiptNumber || `GRN-2026-0${Math.floor(100 + Math.random() * 900)}`;
+  const finalGRN =
+    receiptNumber || `GRN-2026-0${Math.floor(100 + Math.random() * 900)}`;
 
   const receipt = await goodsReceiptRepo.createGoodsReceipt({
     organisationId,
@@ -133,9 +159,13 @@ const createGoodsReceipt = async (receiptData) => {
   return receipt;
 };
 
-const updateGoodsReceiptStatus = async ({ organisationId, receiptId, status }) => {
+const updateGoodsReceiptStatus = async ({
+  organisationId,
+  receiptId,
+  status,
+}) => {
   if (!organisationId || !receiptId) {
-    throw new Error('organisationId and receiptId are required');
+    throw new Error("organisationId and receiptId are required");
   }
 
   const dbStatus = normalizeStatus(status);
@@ -147,7 +177,7 @@ const updateGoodsReceiptStatus = async ({ organisationId, receiptId, status }) =
      WHERE (id::text = $2 OR receipt_number = $2)
        AND organisation_id = $3
      RETURNING *;`,
-    [dbStatus, receiptId, organisationId]
+    [dbStatus, receiptId, organisationId],
   );
 
   if (res.rows.length === 0) {
@@ -165,4 +195,3 @@ module.exports = {
   createGoodsReceipt,
   updateGoodsReceiptStatus,
 };
-

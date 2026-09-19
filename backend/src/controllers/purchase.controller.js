@@ -4,16 +4,27 @@
  * Exposes Express request handlers for purchase endpoints.
  */
 
-const purchaseService = require('../services/purchase.service');
+const purchaseService = require("../services/purchase.service");
 
-const { pool } = require('../db/connection');
+const { pool } = require("../db/connection");
 
 const getOrgId = async (req) => {
   if (req.user && req.user.organisationId) return req.user.organisationId;
-  if (req.headers['x-organisation-id']) return req.headers['x-organisation-id'];
+  if (req.user && req.user.organisation_id) return req.user.organisation_id;
+  if (req.tenant && req.tenant.organisationId) return req.tenant.organisationId;
+  if (req.tenantContext && req.tenantContext.organisationId)
+    return req.tenantContext.organisationId;
+  if (req.headers["x-organisation-id"]) return req.headers["x-organisation-id"];
   if (req.query && req.query.organisationId) return req.query.organisationId;
   if (req.body && req.body.organisationId) return req.body.organisationId;
-
+  const userId = req.auth?.id || req.user?.id;
+  if (userId) {
+    const mem = await pool.query(
+      "SELECT organisation_id FROM organisation_memberships WHERE user_id = $1 AND status = 'ACTIVE' LIMIT 1;",
+      [userId],
+    );
+    if (mem.rows.length > 0) return mem.rows[0].organisation_id;
+  }
   return null;
 };
 
@@ -25,7 +36,7 @@ const getPurchases = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
     if (!organisationId) {
-      return res.status(400).json({ error: 'Organisation ID is required' });
+      return res.status(400).json({ error: "Organisation ID is required" });
     }
     const { status, search, branchId, supplierId, limit, offset } = req.query;
 
@@ -45,10 +56,10 @@ const getPurchases = async (req, res) => {
       data: purchases,
     });
   } catch (error) {
-    console.error('Error fetching purchases:', error);
+    console.error("Error fetching purchases:", error);
     res.status(error.statusCode || 500).json({
       success: false,
-      error: error.message || 'Failed to fetch purchases',
+      error: error.message || "Failed to fetch purchases",
     });
   }
 };
@@ -60,7 +71,7 @@ const getPurchaseById = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
     if (!organisationId) {
-      return res.status(400).json({ error: 'Organisation ID is required' });
+      return res.status(400).json({ error: "Organisation ID is required" });
     }
     const { id } = req.params;
 
@@ -80,7 +91,7 @@ const getPurchaseById = async (req, res) => {
     console.error(`Error fetching purchase ${req.params.id}:`, error);
     res.status(error.statusCode || 500).json({
       success: false,
-      error: error.message || 'Failed to fetch purchase order',
+      error: error.message || "Failed to fetch purchase order",
     });
   }
 };
@@ -92,7 +103,7 @@ const createPurchase = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
     if (!organisationId) {
-      return res.status(400).json({ error: 'Organisation ID is required' });
+      return res.status(400).json({ error: "Organisation ID is required" });
     }
     const purchaseData = {
       ...req.body,
@@ -103,14 +114,14 @@ const createPurchase = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Purchase order created successfully',
+      message: "Purchase order created successfully",
       data: newPO,
     });
   } catch (error) {
-    console.error('Error creating purchase order:', error);
+    console.error("Error creating purchase order:", error);
     res.status(error.statusCode || 400).json({
       success: false,
-      error: error.message || 'Failed to create purchase order',
+      error: error.message || "Failed to create purchase order",
     });
   }
 };
@@ -123,7 +134,7 @@ const updatePurchaseStatus = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
     if (!organisationId) {
-      return res.status(400).json({ error: 'Organisation ID is required' });
+      return res.status(400).json({ error: "Organisation ID is required" });
     }
     const { id } = req.params;
     const { status } = req.body;
@@ -131,11 +142,15 @@ const updatePurchaseStatus = async (req, res) => {
     if (!status) {
       return res.status(400).json({
         success: false,
-        error: 'Status is required in request body',
+        error: "Status is required in request body",
       });
     }
 
-    const updatedPO = await purchaseService.updatePurchaseStatus(organisationId, id, status);
+    const updatedPO = await purchaseService.updatePurchaseStatus(
+      organisationId,
+      id,
+      status,
+    );
 
     res.status(200).json({
       success: true,
@@ -146,7 +161,7 @@ const updatePurchaseStatus = async (req, res) => {
     console.error(`Error updating status for PO ${req.params.id}:`, error);
     res.status(error.statusCode || 400).json({
       success: false,
-      error: error.message || 'Failed to update purchase status',
+      error: error.message || "Failed to update purchase status",
     });
   }
 };
@@ -159,12 +174,16 @@ const receivePurchase = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
     if (!organisationId) {
-      return res.status(400).json({ error: 'Organisation ID is required' });
+      return res.status(400).json({ error: "Organisation ID is required" });
     }
     const { id } = req.params;
     const receiveData = req.body || {};
 
-    const result = await purchaseService.receivePurchaseStock(organisationId, id, receiveData);
+    const result = await purchaseService.receivePurchaseStock(
+      organisationId,
+      id,
+      receiveData,
+    );
 
     res.status(200).json({
       success: true,
@@ -175,7 +194,7 @@ const receivePurchase = async (req, res) => {
     console.error(`Error receiving stock for PO ${req.params.id}:`, error);
     res.status(error.statusCode || 400).json({
       success: false,
-      error: error.message || 'Failed to receive purchase stock',
+      error: error.message || "Failed to receive purchase stock",
     });
   }
 };
@@ -184,7 +203,7 @@ const getPurchaseSummary = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
     if (!organisationId) {
-      return res.status(400).json({ error: 'Organisation ID is required' });
+      return res.status(400).json({ error: "Organisation ID is required" });
     }
     const summary = await purchaseService.getPurchaseSummary(organisationId);
     res.status(200).json({
@@ -192,10 +211,10 @@ const getPurchaseSummary = async (req, res) => {
       data: summary,
     });
   } catch (error) {
-    console.error('Error fetching purchase summary:', error);
+    console.error("Error fetching purchase summary:", error);
     res.status(500).json({
       success: false,
-      error: error.message || 'Failed to fetch purchase summary',
+      error: error.message || "Failed to fetch purchase summary",
     });
   }
 };

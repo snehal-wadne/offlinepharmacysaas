@@ -4,14 +4,30 @@
  * Request handlers for Customer API endpoints.
  */
 
-const customerService = require('../services/customer.service');
-const { pool } = require('../db/connection');
+const customerService = require("../services/customer.service");
+const { pool } = require("../db/connection");
 
 const getOrgId = async (req) => {
+  if (req.user && req.user.organisation_id) return req.user.organisation_id;
   if (req.user && req.user.organisationId) return req.user.organisationId;
-  if (req.headers['x-organisation-id']) return req.headers['x-organisation-id'];
+  if (req.tenant && req.tenant.organisationId) return req.tenant.organisationId;
+  if (req.tenantContext && req.tenantContext.organisationId)
+    return req.tenantContext.organisationId;
+  if (req.headers["x-organisation-id"]) return req.headers["x-organisation-id"];
   if (req.query && req.query.organisationId) return req.query.organisationId;
   if (req.body && req.body.organisationId) return req.body.organisationId;
+
+  if (req.user && req.user.id) {
+    try {
+      const memRes = await pool.query(
+        "SELECT organisation_id FROM organisation_memberships WHERE user_id = $1 LIMIT 1",
+        [req.user.id],
+      );
+      if (memRes.rows.length > 0) return memRes.rows[0].organisation_id;
+    } catch (e) {
+      // Ignore
+    }
+  }
 
   return null;
 };
@@ -20,7 +36,7 @@ const getCustomers = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
     if (!organisationId) {
-      return res.status(400).json({ error: 'Organisation ID is required' });
+      return res.status(400).json({ error: "Organisation ID is required" });
     }
     const { search, category, limit, offset } = req.query;
 
@@ -38,10 +54,10 @@ const getCustomers = async (req, res) => {
       data: customers,
     });
   } catch (error) {
-    console.error('Error fetching customers:', error);
+    console.error("Error fetching customers:", error);
     res.status(500).json({
       success: false,
-      error: error.message || 'Failed to fetch customers',
+      error: error.message || "Failed to fetch customers",
     });
   }
 };
@@ -50,7 +66,7 @@ const getCustomersSummary = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
     if (!organisationId) {
-      return res.status(400).json({ error: 'Organisation ID is required' });
+      return res.status(400).json({ error: "Organisation ID is required" });
     }
     const summary = await customerService.getCustomersSummary(organisationId);
 
@@ -59,10 +75,10 @@ const getCustomersSummary = async (req, res) => {
       data: summary,
     });
   } catch (error) {
-    console.error('Error fetching customer summary:', error);
+    console.error("Error fetching customer summary:", error);
     res.status(500).json({
       success: false,
-      error: error.message || 'Failed to fetch customer summary',
+      error: error.message || "Failed to fetch customer summary",
     });
   }
 };
@@ -71,7 +87,7 @@ const createCustomer = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
     if (!organisationId) {
-      return res.status(400).json({ error: 'Organisation ID is required' });
+      return res.status(400).json({ error: "Organisation ID is required" });
     }
     const customerData = {
       ...req.body,
@@ -82,14 +98,14 @@ const createCustomer = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Customer profile created successfully',
+      message: "Customer profile created successfully",
       data: newCustomer,
     });
   } catch (error) {
-    console.error('Error creating customer:', error);
+    console.error("Error creating customer:", error);
     res.status(error.statusCode || 400).json({
       success: false,
-      error: error.message || 'Failed to create customer',
+      error: error.message || "Failed to create customer",
     });
   }
 };
@@ -98,22 +114,26 @@ const updateCustomer = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
     if (!organisationId) {
-      return res.status(400).json({ error: 'Organisation ID is required' });
+      return res.status(400).json({ error: "Organisation ID is required" });
     }
     const { id } = req.params;
 
-    const updatedCustomer = await customerService.updateCustomer(organisationId, id, req.body);
+    const updatedCustomer = await customerService.updateCustomer(
+      organisationId,
+      id,
+      req.body,
+    );
 
     res.status(200).json({
       success: true,
-      message: 'Customer information updated successfully',
+      message: "Customer information updated successfully",
       data: updatedCustomer,
     });
   } catch (error) {
     console.error(`Error updating customer ${req.params.id}:`, error);
     res.status(error.statusCode || 500).json({
       success: false,
-      error: error.message || 'Failed to update customer',
+      error: error.message || "Failed to update customer",
     });
   }
 };
@@ -122,7 +142,7 @@ const deleteCustomer = async (req, res) => {
   try {
     const organisationId = await getOrgId(req);
     if (!organisationId) {
-      return res.status(400).json({ error: 'Organisation ID is required' });
+      return res.status(400).json({ error: "Organisation ID is required" });
     }
     const { id } = req.params;
 
@@ -137,13 +157,13 @@ const deleteCustomer = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Customer profile deleted successfully',
+      message: "Customer profile deleted successfully",
     });
   } catch (error) {
     console.error(`Error deleting customer ${req.params.id}:`, error);
     res.status(error.statusCode || 500).json({
       success: false,
-      error: error.message || 'Failed to delete customer',
+      error: error.message || "Failed to delete customer",
     });
   }
 };

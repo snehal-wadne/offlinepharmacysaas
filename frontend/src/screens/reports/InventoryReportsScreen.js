@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -7,33 +7,61 @@ import {
   StyleSheet,
   useWindowDimensions,
   Platform,
-} from 'react-native';
-import InventoryStatCard from '../../components/inventory/InventoryStatCard';
-import { exportToCSV, openPrintDocument } from '../../utils/exportUtils';
-import { SkeletonTableRow } from '../../components/common/SkeletonLoader';
-import PaginationControls from '../../components/common/PaginationControls';
-import { fetchInventoryReport } from '../../api/reportApi';
+} from "react-native";
+import InventoryStatCard from "../../components/inventory/InventoryStatCard";
+import { exportToCSV, openPrintDocument } from "../../utils/exportUtils";
+import { SkeletonTableRow } from "../../components/common/SkeletonLoader";
+import PaginationControls from "../../components/common/PaginationControls";
+import { fetchInventoryReport } from "../../api/reportApi";
 
 const HEALTH_BADGES = {
-  Optimal: { bg: '#DCFCE7', text: '#15803D' },
-  Moderate: { bg: '#FEF3C7', text: '#B45309' },
-  'Slow Moving': { bg: '#FEE2E2', text: '#B91C1C' },
+  Optimal: { bg: "#DCFCE7", text: "#15803D" },
+  Moderate: { bg: "#FEF3C7", text: "#B45309" },
+  "Slow Moving": { bg: "#FEE2E2", text: "#B91C1C" },
 };
 
 const URGENCY_BADGES = {
-  High: { bg: '#FEE2E2', text: '#B91C1C' },
-  Medium: { bg: '#FEF3C7', text: '#B45309' },
-  Low: { bg: '#DCFCE7', text: '#15803D' },
+  High: { bg: "#FEE2E2", text: "#B91C1C" },
+  Medium: { bg: "#FEF3C7", text: "#B45309" },
+  Low: { bg: "#DCFCE7", text: "#15803D" },
 };
 
 const INITIAL_KPIS = [
-  { id: 'rep-inv-1', label: 'Total Stock Valuation', value: '₹0', subtext: '0 items', variant: 'teal' },
-  { id: 'rep-inv-2', label: 'Total Units in Stock', value: '0', subtext: '0 batches', variant: 'teal' },
-  { id: 'rep-inv-3', label: 'Low Stock Batches', value: '0', subtext: 'Quantity < 50 units', variant: 'amber' },
-  { id: 'rep-inv-4', label: 'Expired / Near Expiry', value: '0', subtext: '0 expired, 0 near expiry', variant: 'red' },
+  {
+    id: "rep-inv-1",
+    label: "Total Stock Valuation",
+    value: "₹0",
+    subtext: "0 items",
+    variant: "teal",
+  },
+  {
+    id: "rep-inv-2",
+    label: "Total Units in Stock",
+    value: "0",
+    subtext: "0 batches",
+    variant: "teal",
+  },
+  {
+    id: "rep-inv-3",
+    label: "Low Stock Batches",
+    value: "0",
+    subtext: "Quantity < 50 units",
+    variant: "amber",
+  },
+  {
+    id: "rep-inv-4",
+    label: "Expired / Near Expiry",
+    value: "0",
+    subtext: "0 expired, 0 near expiry",
+    variant: "red",
+  },
 ];
 
-export default function InventoryReportsScreen({ onShowToast, onNavigate, selectedBranch = 'All Branches' }) {
+export default function InventoryReportsScreen({
+  onShowToast,
+  onNavigate,
+  selectedBranch = "All Branches",
+}) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
   const isMobile = width < 768;
@@ -50,38 +78,45 @@ export default function InventoryReportsScreen({ onShowToast, onNavigate, select
     async function loadReport() {
       try {
         setLoading(true);
+        const branchDisplayName =
+          typeof selectedBranch === "object" && selectedBranch !== null
+            ? selectedBranch.name
+            : selectedBranch || "All Branches";
         const res = await fetchInventoryReport({ branchId: selectedBranch });
         if (!isMounted) return;
         if (res && res.success && res.data) {
           const summary = res.data.summary || {};
           setKpis([
             {
-              id: 'rep-inv-1',
-              label: 'Total Stock Valuation',
-              value: `₹${Number(summary.totalValuationMrp || 0).toLocaleString('en-IN')}`,
-              subtext: selectedBranch === 'All Branches' ? 'Across all branches' : selectedBranch,
-              variant: 'teal',
+              id: "rep-inv-1",
+              label: "Total Stock Valuation",
+              value: `₹${Number(summary.totalValuationMrp || 0).toLocaleString("en-IN")}`,
+              subtext:
+                branchDisplayName === "All Branches"
+                  ? "Across all branches"
+                  : branchDisplayName,
+              variant: "teal",
             },
             {
-              id: 'rep-inv-2',
-              label: 'Total Units in Stock',
-              value: `${Number(summary.totalUnitsInStock || 0).toLocaleString('en-IN')}`,
+              id: "rep-inv-2",
+              label: "Total Units in Stock",
+              value: `${Number(summary.totalUnitsInStock || 0).toLocaleString("en-IN")}`,
               subtext: `${summary.totalBatches || 0} active batches`,
-              variant: 'teal',
+              variant: "teal",
             },
             {
-              id: 'rep-inv-3',
-              label: 'Low Stock Batches',
+              id: "rep-inv-3",
+              label: "Low Stock Batches",
               value: `${summary.lowStockBatches || 0}`,
-              subtext: 'Quantity < 50 units',
-              variant: 'amber',
+              subtext: "Quantity < 50 units",
+              variant: "amber",
             },
             {
-              id: 'rep-inv-4',
-              label: 'Expired / Near Expiry',
-              value: `${(Number(summary.expiredBatches || 0) + Number(summary.nearExpiryBatches || 0))}`,
+              id: "rep-inv-4",
+              label: "Expired / Near Expiry",
+              value: `${Number(summary.expiredBatches || 0) + Number(summary.nearExpiryBatches || 0)}`,
               subtext: `${summary.expiredBatches || 0} expired, ${summary.nearExpiryBatches || 0} near expiry`,
-              variant: 'red',
+              variant: "red",
             },
           ]);
 
@@ -91,8 +126,12 @@ export default function InventoryReportsScreen({ onShowToast, onNavigate, select
             const catMap = {};
             let totalVal = 0;
             items.forEach((item) => {
-              const catName = item.category || item.manufacturer || 'General Medicines';
-              const val = Number(item.valuationMrp || (Number(item.stock || 0) * Number(item.mrp || 0)));
+              const catName =
+                item.category || item.manufacturer || "General Medicines";
+              const val = Number(
+                item.valuationMrp ||
+                  Number(item.stock || 0) * Number(item.mrp || 0),
+              );
               totalVal += val;
               if (!catMap[catName]) {
                 catMap[catName] = { count: 0, val: 0 };
@@ -102,32 +141,44 @@ export default function InventoryReportsScreen({ onShowToast, onNavigate, select
             });
 
             const computedCats = Object.entries(catMap).map(([name, data]) => {
-              const holding = totalVal > 0 ? ((data.val / totalVal) * 100).toFixed(1) : '0.0';
+              const holding =
+                totalVal > 0 ? ((data.val / totalVal) * 100).toFixed(1) : "0.0";
               return {
                 category: name,
                 totalItems: data.count,
-                valuation: `₹${Math.round(data.val).toLocaleString('en-IN')}`,
+                valuation: `₹${Math.round(data.val).toLocaleString("en-IN")}`,
                 turnover: `${(Math.random() * 2 + 3).toFixed(1)}x`,
                 holdingPercent: `${holding}%`,
-                status: Number(holding) > 30 ? 'Optimal' : Number(holding) > 15 ? 'Moderate' : 'Slow Moving',
+                status:
+                  Number(holding) > 30
+                    ? "Optimal"
+                    : Number(holding) > 15
+                      ? "Moderate"
+                      : "Slow Moving",
               };
             });
             setCategoryData(computedCats);
 
             // Compute fast moving items
-            const sortedByStock = [...items].sort((a, b) => Number(b.stock || 0) - Number(a.stock || 0)).slice(0, 10);
+            const sortedByStock = [...items]
+              .sort((a, b) => Number(b.stock || 0) - Number(a.stock || 0))
+              .slice(0, 10);
             const computedFast = sortedByStock.map((it) => {
               const stock = Number(it.stock || 0);
               const estSold = Math.max(1, Math.round(stock * 0.4));
               const revenue = estSold * Number(it.mrp || 0);
-              const runway = Math.max(3, Math.round(stock / (estSold / 30 || 1)));
+              const runway = Math.max(
+                3,
+                Math.round(stock / (estSold / 30 || 1)),
+              );
               return {
-                sku: it.sku || 'SKU-00',
-                medicine: it.name || 'Medicine',
+                sku: it.sku || "SKU-00",
+                medicine: it.name || "Medicine",
                 unitsSoldMonthly: estSold,
-                monthlyRevenue: `₹${Math.round(revenue).toLocaleString('en-IN')}`,
+                monthlyRevenue: `₹${Math.round(revenue).toLocaleString("en-IN")}`,
                 daysOfStockLeft: runway,
-                reorderUrgency: runway <= 10 ? 'High' : runway <= 25 ? 'Medium' : 'Low',
+                reorderUrgency:
+                  runway <= 10 ? "High" : runway <= 25 ? "Medium" : "Low",
               };
             });
             setFastMovingItems(computedFast);
@@ -141,7 +192,7 @@ export default function InventoryReportsScreen({ onShowToast, onNavigate, select
           setKpis(INITIAL_KPIS);
         }
       } catch (err) {
-        console.warn('Backend inventory report error:', err.message);
+        console.warn("Backend inventory report error:", err.message);
         setCategoryData([]);
         setFastMovingItems([]);
         setKpis(INITIAL_KPIS);
@@ -150,36 +201,73 @@ export default function InventoryReportsScreen({ onShowToast, onNavigate, select
       }
     }
     loadReport();
-    return () => { isMounted = false; };
+    return () => {
+      isMounted = false;
+    };
   }, [selectedBranch]);
 
   const totalPages = Math.ceil(categoryData.length / itemsPerPage);
   const paginatedCategories = categoryData.slice(
     (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
+    currentPage * itemsPerPage,
   );
 
   const handleExport = (type) => {
-    if (type === 'csv') {
+    if (type === "csv") {
       // Create consolidated CSV
-      const headers = ['Product Category / SKU', 'Items Count / Medicine Name', 'Valuation / Monthly Sales', 'Turnover Rate / Monthly Revenue', 'Holding % / Stock Runway', 'Stock Health / Reorder Urgency'];
+      const headers = [
+        "Product Category / SKU",
+        "Items Count / Medicine Name",
+        "Valuation / Monthly Sales",
+        "Turnover Rate / Monthly Revenue",
+        "Holding % / Stock Runway",
+        "Stock Health / Reorder Urgency",
+      ];
       const rows = [
-        ['PRODUCT CATEGORY VALUATION & STOCK HOLDING'],
-        ['Product Category', 'Items Count', 'Valuation (₹)', 'Turnover Rate', 'Holding %', 'Stock Health'],
-        ...categoryData.map(cat => [
-          cat.category, cat.totalItems, cat.valuation, cat.turnover, cat.holdingPercent, cat.status
+        ["PRODUCT CATEGORY VALUATION & STOCK HOLDING"],
+        [
+          "Product Category",
+          "Items Count",
+          "Valuation (₹)",
+          "Turnover Rate",
+          "Holding %",
+          "Stock Health",
+        ],
+        ...categoryData.map((cat) => [
+          cat.category,
+          cat.totalItems,
+          cat.valuation,
+          cat.turnover,
+          cat.holdingPercent,
+          cat.status,
         ]),
         [],
-        ['FAST-MOVING MEDICINES DEMAND FORECAST'],
-        ['SKU', 'Medicine Name', 'Monthly Sales', 'Monthly Revenue', 'Stock Runway', 'Reorder Urgency'],
-        ...fastMovingItems.map(item => [
-          item.sku, item.medicine, `${item.unitsSoldMonthly} units`, item.monthlyRevenue, `${item.daysOfStockLeft} days`, item.reorderUrgency
-        ])
+        ["FAST-MOVING MEDICINES DEMAND FORECAST"],
+        [
+          "SKU",
+          "Medicine Name",
+          "Monthly Sales",
+          "Monthly Revenue",
+          "Stock Runway",
+          "Reorder Urgency",
+        ],
+        ...fastMovingItems.map((item) => [
+          item.sku,
+          item.medicine,
+          `${item.unitsSoldMonthly} units`,
+          item.monthlyRevenue,
+          `${item.daysOfStockLeft} days`,
+          item.reorderUrgency,
+        ]),
       ];
-      exportToCSV(headers, rows, 'inventory_valuation_and_forecast.csv');
-    } else if (type === 'pdf') {
-      const currentDate = new Date().toLocaleDateString('en-IN', { dateStyle: 'medium' });
-      const currentTime = new Date().toLocaleTimeString('en-IN', { timeStyle: 'short' });
+      exportToCSV(headers, rows, "inventory_valuation_and_forecast.csv");
+    } else if (type === "pdf") {
+      const currentDate = new Date().toLocaleDateString("en-IN", {
+        dateStyle: "medium",
+      });
+      const currentTime = new Date().toLocaleTimeString("en-IN", {
+        timeStyle: "short",
+      });
 
       const html = `
         <!DOCTYPE html>
@@ -347,7 +435,12 @@ export default function InventoryReportsScreen({ onShowToast, onNavigate, select
               </tr>
             </thead>
             <tbody>
-              ${categoryData.length === 0 ? '<tr><td colspan="6" class="text-center" style="padding: 20px; color: #94a3b8;">No category data available</td></tr>' : categoryData.map(cat => `
+              ${
+                categoryData.length === 0
+                  ? '<tr><td colspan="6" class="text-center" style="padding: 20px; color: #94a3b8;">No category data available</td></tr>'
+                  : categoryData
+                      .map(
+                        (cat) => `
                 <tr>
                   <td>${cat.category}</td>
                   <td class="text-center">${cat.totalItems}</td>
@@ -355,10 +448,13 @@ export default function InventoryReportsScreen({ onShowToast, onNavigate, select
                   <td class="text-center font-semibold" style="color: #0f766e">${cat.turnover}</td>
                   <td class="text-center">${cat.holdingPercent}</td>
                   <td class="text-center">
-                    <span class="badge badge-${cat.status.toLowerCase().replace(' ', '-')}">${cat.status}</span>
+                    <span class="badge badge-${cat.status.toLowerCase().replace(" ", "-")}">${cat.status}</span>
                   </td>
                 </tr>
-              `).join('')}
+              `,
+                      )
+                      .join("")
+              }
             </tbody>
           </table>
 
@@ -375,7 +471,12 @@ export default function InventoryReportsScreen({ onShowToast, onNavigate, select
               </tr>
             </thead>
             <tbody>
-              ${fastMovingItems.length === 0 ? '<tr><td colspan="6" class="text-center" style="padding: 20px; color: #94a3b8;">No fast-moving medicine data available</td></tr>' : fastMovingItems.map(item => `
+              ${
+                fastMovingItems.length === 0
+                  ? '<tr><td colspan="6" class="text-center" style="padding: 20px; color: #94a3b8;">No fast-moving medicine data available</td></tr>'
+                  : fastMovingItems
+                      .map(
+                        (item) => `
                 <tr>
                   <td class="text-center font-semibold">${item.sku}</td>
                   <td>${item.medicine}</td>
@@ -386,7 +487,10 @@ export default function InventoryReportsScreen({ onShowToast, onNavigate, select
                     <span class="badge badge-${item.reorderUrgency.toLowerCase()}">${item.reorderUrgency}</span>
                   </td>
                 </tr>
-              `).join('')}
+              `,
+                      )
+                      .join("")
+              }
             </tbody>
           </table>
 
@@ -399,11 +503,13 @@ export default function InventoryReportsScreen({ onShowToast, onNavigate, select
         </html>
       `;
 
-      openPrintDocument(html, 'Inventory_Valuation_and_Forecast_Report');
+      openPrintDocument(html, "Inventory_Valuation_and_Forecast_Report");
     }
 
     if (onShowToast) {
-      onShowToast(`✓ Exported Inventory Valuation & Turnover Report as ${type.toUpperCase()}!`);
+      onShowToast(
+        `✓ Exported Inventory Valuation & Turnover Report as ${type.toUpperCase()}!`,
+      );
     }
   };
 
@@ -418,14 +524,15 @@ export default function InventoryReportsScreen({ onShowToast, onNavigate, select
         <View>
           <Text style={styles.pageTitle}>Inventory Reports</Text>
           <Text style={styles.pageSubtitle}>
-            Stock valuation breakdowns, turnover velocity, and fast-moving medicine forecasting.
+            Stock valuation breakdowns, turnover velocity, and fast-moving
+            medicine forecasting.
           </Text>
         </View>
 
         {/* Export Actions */}
         <View style={styles.actionsRow}>
           <Pressable
-            onPress={() => handleExport('csv')}
+            onPress={() => handleExport("csv")}
             style={styles.exportBtnSecondary}
             accessibilityRole="button"
           >
@@ -433,7 +540,7 @@ export default function InventoryReportsScreen({ onShowToast, onNavigate, select
           </Pressable>
 
           <Pressable
-            onPress={() => handleExport('pdf')}
+            onPress={() => handleExport("pdf")}
             style={styles.exportBtnPrimary}
             accessibilityRole="button"
           >
@@ -460,9 +567,12 @@ export default function InventoryReportsScreen({ onShowToast, onNavigate, select
       <View style={styles.cardContainer}>
         <View style={styles.cardHeader}>
           <View>
-            <Text style={styles.cardTitle}>Category Valuation & Stock Holding</Text>
+            <Text style={styles.cardTitle}>
+              Category Valuation & Stock Holding
+            </Text>
             <Text style={styles.cardSubtitle}>
-              Valuation share and annualized turnover rate categorized by product family.
+              Valuation share and annualized turnover rate categorized by
+              product family.
             </Text>
           </View>
         </View>
@@ -477,51 +587,104 @@ export default function InventoryReportsScreen({ onShowToast, onNavigate, select
               </View>
             ) : (
               paginatedCategories.map((cat) => {
-              const badge = HEALTH_BADGES[cat.status] || HEALTH_BADGES.Optimal;
-              return (
-                <View key={cat.category} style={styles.mobileReportCard}>
-                  <View style={styles.mobileReportCardHeader}>
-                    <Text style={styles.mobileCatName}>{cat.category}</Text>
-                    <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
-                      <Text style={[styles.statusBadgeText, { color: badge.text }]}>
-                        {cat.status}
+                const badge =
+                  HEALTH_BADGES[cat.status] || HEALTH_BADGES.Optimal;
+                return (
+                  <View key={cat.category} style={styles.mobileReportCard}>
+                    <View style={styles.mobileReportCardHeader}>
+                      <Text style={styles.mobileCatName}>{cat.category}</Text>
+                      <View
+                        style={[
+                          styles.statusBadge,
+                          { backgroundColor: badge.bg },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.statusBadgeText,
+                            { color: badge.text },
+                          ]}
+                        >
+                          {cat.status}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.mobileValuationRow}>
+                      <Text style={styles.mobileValLabel}>VALUATION</Text>
+                      <Text style={styles.mobileValAmount}>
+                        {cat.valuation}
                       </Text>
                     </View>
-                  </View>
 
-                  <View style={styles.mobileValuationRow}>
-                    <Text style={styles.mobileValLabel}>VALUATION</Text>
-                    <Text style={styles.mobileValAmount}>{cat.valuation}</Text>
+                    <View style={styles.mobileReportDetailsGrid}>
+                      <View style={styles.mobileReportDetailItem}>
+                        <Text style={styles.mobileReportDetailLabel}>
+                          ITEMS COUNT
+                        </Text>
+                        <Text style={styles.mobileReportDetailVal}>
+                          {cat.totalItems}
+                        </Text>
+                      </View>
+                      <View style={styles.mobileReportDetailItem}>
+                        <Text style={styles.mobileReportDetailLabel}>
+                          TURNOVER RATE
+                        </Text>
+                        <Text
+                          style={[
+                            styles.mobileReportDetailVal,
+                            { color: "#0F766E" },
+                          ]}
+                        >
+                          {cat.turnover}
+                        </Text>
+                      </View>
+                      <View style={styles.mobileReportDetailItem}>
+                        <Text style={styles.mobileReportDetailLabel}>
+                          HOLDING %
+                        </Text>
+                        <Text style={styles.mobileReportDetailVal}>
+                          {cat.holdingPercent}
+                        </Text>
+                      </View>
+                    </View>
                   </View>
-
-                  <View style={styles.mobileReportDetailsGrid}>
-                    <View style={styles.mobileReportDetailItem}>
-                      <Text style={styles.mobileReportDetailLabel}>ITEMS COUNT</Text>
-                      <Text style={styles.mobileReportDetailVal}>{cat.totalItems}</Text>
-                    </View>
-                    <View style={styles.mobileReportDetailItem}>
-                      <Text style={styles.mobileReportDetailLabel}>TURNOVER RATE</Text>
-                      <Text style={[styles.mobileReportDetailVal, { color: '#0F766E' }]}>{cat.turnover}</Text>
-                    </View>
-                    <View style={styles.mobileReportDetailItem}>
-                      <Text style={styles.mobileReportDetailLabel}>HOLDING %</Text>
-                      <Text style={styles.mobileReportDetailVal}>{cat.holdingPercent}</Text>
-                    </View>
-                  </View>
-                </View>
-              );
-            }))}
+                );
+              })
+            )}
           </View>
         ) : (
           <ScrollView horizontal showsHorizontalScrollIndicator={true}>
             <View style={styles.tableWrapper}>
               <View style={styles.tableHeader}>
-                <Text style={[styles.thCell, { width: 220 }]}>PRODUCT CATEGORY</Text>
-                <Text style={[styles.thCell, { width: 110, textAlign: 'center' }]}>ITEMS COUNT</Text>
-                <Text style={[styles.thCell, { width: 150, textAlign: 'right' }]}>VALUATION (₹)</Text>
-                <Text style={[styles.thCell, { width: 140, textAlign: 'center' }]}>TURNOVER RATE</Text>
-                <Text style={[styles.thCell, { width: 120, textAlign: 'center' }]}>HOLDING %</Text>
-                <Text style={[styles.thCell, { width: 140, textAlign: 'center' }]}>STOCK HEALTH</Text>
+                <Text style={[styles.thCell, { width: 220 }]}>
+                  PRODUCT CATEGORY
+                </Text>
+                <Text
+                  style={[styles.thCell, { width: 110, textAlign: "center" }]}
+                >
+                  ITEMS COUNT
+                </Text>
+                <Text
+                  style={[styles.thCell, { width: 150, textAlign: "right" }]}
+                >
+                  VALUATION (₹)
+                </Text>
+                <Text
+                  style={[styles.thCell, { width: 140, textAlign: "center" }]}
+                >
+                  TURNOVER RATE
+                </Text>
+                <Text
+                  style={[styles.thCell, { width: 120, textAlign: "center" }]}
+                >
+                  HOLDING %
+                </Text>
+                <Text
+                  style={[styles.thCell, { width: 140, textAlign: "center" }]}
+                >
+                  STOCK HEALTH
+                </Text>
               </View>
 
               {loading ? (
@@ -531,47 +694,113 @@ export default function InventoryReportsScreen({ onShowToast, onNavigate, select
                   ))}
                 </View>
               ) : paginatedCategories.length === 0 ? (
-                <View style={{ padding: 32, alignItems: 'center', justifyContent: 'center' }}>
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#64748B' }}>No category valuation data found</Text>
-                  <Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 4 }}>No inventory records for the selected branch filter.</Text>
+                <View
+                  style={{
+                    padding: 32,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontWeight: "600",
+                      color: "#64748B",
+                    }}
+                  >
+                    No category valuation data found
+                  </Text>
+                  <Text
+                    style={{ fontSize: 12, color: "#94A3B8", marginTop: 4 }}
+                  >
+                    No inventory records for the selected branch filter.
+                  </Text>
                 </View>
               ) : (
                 paginatedCategories.map((cat, index) => {
-                const badge = HEALTH_BADGES[cat.status] || HEALTH_BADGES.Optimal;
-                return (
-                  <View
-                    key={cat.category}
-                    style={[
-                      styles.tableRow,
-                      index % 2 === 1 && styles.tableRowAlt,
-                    ]}
-                  >
-                    <Text style={[styles.tdCell, styles.catName, { width: 220 }]}>
-                      {cat.category}
-                    </Text>
-                    <Text style={[styles.tdCell, { width: 110, textAlign: 'center', fontWeight: '600' }]}>
-                      {cat.totalItems}
-                    </Text>
-                    <Text style={[styles.tdCell, styles.valText, { width: 150, textAlign: 'right' }]}>
-                      {cat.valuation}
-                    </Text>
-                    <Text style={[styles.tdCell, { width: 140, textAlign: 'center', fontWeight: '700', color: '#0F766E' }]}>
-                      {cat.turnover}
-                    </Text>
-                    <Text style={[styles.tdCell, { width: 120, textAlign: 'center', fontWeight: '600' }]}>
-                      {cat.holdingPercent}
-                    </Text>
+                  const badge =
+                    HEALTH_BADGES[cat.status] || HEALTH_BADGES.Optimal;
+                  return (
+                    <View
+                      key={cat.category}
+                      style={[
+                        styles.tableRow,
+                        index % 2 === 1 && styles.tableRowAlt,
+                      ]}
+                    >
+                      <Text
+                        style={[styles.tdCell, styles.catName, { width: 220 }]}
+                      >
+                        {cat.category}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.tdCell,
+                          {
+                            width: 110,
+                            textAlign: "center",
+                            fontWeight: "600",
+                          },
+                        ]}
+                      >
+                        {cat.totalItems}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.tdCell,
+                          styles.valText,
+                          { width: 150, textAlign: "right" },
+                        ]}
+                      >
+                        {cat.valuation}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.tdCell,
+                          {
+                            width: 140,
+                            textAlign: "center",
+                            fontWeight: "700",
+                            color: "#0F766E",
+                          },
+                        ]}
+                      >
+                        {cat.turnover}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.tdCell,
+                          {
+                            width: 120,
+                            textAlign: "center",
+                            fontWeight: "600",
+                          },
+                        ]}
+                      >
+                        {cat.holdingPercent}
+                      </Text>
 
-                    <View style={[styles.statusWrapper, { width: 140 }]}>
-                      <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
-                        <Text style={[styles.statusBadgeText, { color: badge.text }]}>
-                          {cat.status}
-                        </Text>
+                      <View style={[styles.statusWrapper, { width: 140 }]}>
+                        <View
+                          style={[
+                            styles.statusBadge,
+                            { backgroundColor: badge.bg },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.statusBadgeText,
+                              { color: badge.text },
+                            ]}
+                          >
+                            {cat.status}
+                          </Text>
+                        </View>
                       </View>
                     </View>
-                  </View>
-                );
-              }))}
+                  );
+                })
+              )}
             </View>
           </ScrollView>
         )}
@@ -589,9 +818,12 @@ export default function InventoryReportsScreen({ onShowToast, onNavigate, select
       <View style={styles.cardContainer}>
         <View style={styles.cardHeader}>
           <View>
-            <Text style={styles.cardTitle}>Fast-Moving Medicines (Runway & Forecast)</Text>
+            <Text style={styles.cardTitle}>
+              Fast-Moving Medicines (Runway & Forecast)
+            </Text>
             <Text style={styles.cardSubtitle}>
-              Top velocity medications, monthly sales revenue, and projected days of inventory remaining.
+              Top velocity medications, monthly sales revenue, and projected
+              days of inventory remaining.
             </Text>
           </View>
         </View>
@@ -605,57 +837,120 @@ export default function InventoryReportsScreen({ onShowToast, onNavigate, select
                 ))}
               </View>
             ) : fastMovingItems.length === 0 ? (
-              <View style={{ padding: 24, alignItems: 'center' }}>
-                <Text style={{ fontSize: 13, color: '#64748B' }}>No fast-moving items recorded.</Text>
+              <View style={{ padding: 24, alignItems: "center" }}>
+                <Text style={{ fontSize: 13, color: "#64748B" }}>
+                  No fast-moving items recorded.
+                </Text>
               </View>
             ) : (
               fastMovingItems.map((item) => {
-              const badge = URGENCY_BADGES[item.reorderUrgency] || URGENCY_BADGES.Low;
-              return (
-                <View key={item.sku} style={styles.mobileReportCard}>
-                  <View style={styles.mobileReportCardHeader}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={styles.skuText}>{item.sku}</Text>
+                const badge =
+                  URGENCY_BADGES[item.reorderUrgency] || URGENCY_BADGES.Low;
+                return (
+                  <View key={item.sku} style={styles.mobileReportCard}>
+                    <View style={styles.mobileReportCardHeader}>
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 6,
+                        }}
+                      >
+                        <Text style={styles.skuText}>{item.sku}</Text>
+                      </View>
+                      <View
+                        style={[
+                          styles.statusBadge,
+                          { backgroundColor: badge.bg },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.statusBadgeText,
+                            { color: badge.text },
+                          ]}
+                        >
+                          {item.reorderUrgency} Urgency
+                        </Text>
+                      </View>
                     </View>
-                    <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
-                      <Text style={[styles.statusBadgeText, { color: badge.text }]}>
-                        {item.reorderUrgency} Urgency
-                      </Text>
+
+                    <Text style={styles.mobileMedName}>{item.medicine}</Text>
+
+                    <View style={styles.mobileReportDetailsGrid}>
+                      <View style={styles.mobileReportDetailItem}>
+                        <Text style={styles.mobileReportDetailLabel}>
+                          MONTHLY SALES
+                        </Text>
+                        <Text style={styles.mobileReportDetailVal}>
+                          {item.unitsSoldMonthly.toLocaleString()} units
+                        </Text>
+                      </View>
+                      <View style={styles.mobileReportDetailItem}>
+                        <Text style={styles.mobileReportDetailLabel}>
+                          REVENUE
+                        </Text>
+                        <Text
+                          style={[
+                            styles.mobileReportDetailVal,
+                            { color: "#0F766E" },
+                          ]}
+                        >
+                          {item.monthlyRevenue}
+                        </Text>
+                      </View>
+                      <View style={styles.mobileReportDetailItem}>
+                        <Text style={styles.mobileReportDetailLabel}>
+                          STOCK RUNWAY
+                        </Text>
+                        <Text
+                          style={[
+                            styles.mobileReportDetailVal,
+                            {
+                              color:
+                                item.daysOfStockLeft <= 15
+                                  ? "#DC2626"
+                                  : "#D97706",
+                            },
+                          ]}
+                        >
+                          {item.daysOfStockLeft} days left
+                        </Text>
+                      </View>
                     </View>
                   </View>
-
-                  <Text style={styles.mobileMedName}>{item.medicine}</Text>
-
-                  <View style={styles.mobileReportDetailsGrid}>
-                    <View style={styles.mobileReportDetailItem}>
-                      <Text style={styles.mobileReportDetailLabel}>MONTHLY SALES</Text>
-                      <Text style={styles.mobileReportDetailVal}>{item.unitsSoldMonthly.toLocaleString()} units</Text>
-                    </View>
-                    <View style={styles.mobileReportDetailItem}>
-                      <Text style={styles.mobileReportDetailLabel}>REVENUE</Text>
-                      <Text style={[styles.mobileReportDetailVal, { color: '#0F766E' }]}>{item.monthlyRevenue}</Text>
-                    </View>
-                    <View style={styles.mobileReportDetailItem}>
-                      <Text style={styles.mobileReportDetailLabel}>STOCK RUNWAY</Text>
-                      <Text style={[styles.mobileReportDetailVal, { color: item.daysOfStockLeft <= 15 ? '#DC2626' : '#D97706' }]}>
-                        {item.daysOfStockLeft} days left
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              );
-            }))}
+                );
+              })
+            )}
           </View>
         ) : (
           <ScrollView horizontal showsHorizontalScrollIndicator={true}>
             <View style={styles.tableWrapper}>
               <View style={styles.tableHeader}>
                 <Text style={[styles.thCell, { width: 100 }]}>SKU</Text>
-                <Text style={[styles.thCell, { width: 200 }]}>MEDICINE NAME</Text>
-                <Text style={[styles.thCell, { width: 160, textAlign: 'center' }]}>MONTHLY SALES</Text>
-                <Text style={[styles.thCell, { width: 160, textAlign: 'right' }]}>MONTHLY REVENUE</Text>
-                <Text style={[styles.thCell, { width: 160, textAlign: 'center' }]}>STOCK RUNWAY</Text>
-                <Text style={[styles.thCell, { width: 140, textAlign: 'center' }]}>REORDER URGENCY</Text>
+                <Text style={[styles.thCell, { width: 200 }]}>
+                  MEDICINE NAME
+                </Text>
+                <Text
+                  style={[styles.thCell, { width: 160, textAlign: "center" }]}
+                >
+                  MONTHLY SALES
+                </Text>
+                <Text
+                  style={[styles.thCell, { width: 160, textAlign: "right" }]}
+                >
+                  MONTHLY REVENUE
+                </Text>
+                <Text
+                  style={[styles.thCell, { width: 160, textAlign: "center" }]}
+                >
+                  STOCK RUNWAY
+                </Text>
+                <Text
+                  style={[styles.thCell, { width: 140, textAlign: "center" }]}
+                >
+                  REORDER URGENCY
+                </Text>
               </View>
 
               {loading ? (
@@ -665,45 +960,107 @@ export default function InventoryReportsScreen({ onShowToast, onNavigate, select
                   ))}
                 </View>
               ) : fastMovingItems.length === 0 ? (
-                <View style={{ padding: 32, alignItems: 'center', justifyContent: 'center' }}>
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#64748B' }}>No fast-moving items recorded</Text>
-                  <Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 4 }}>Sales demand and inventory velocity will appear here once transactions occur.</Text>
+                <View
+                  style={{
+                    padding: 32,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontWeight: "600",
+                      color: "#64748B",
+                    }}
+                  >
+                    No fast-moving items recorded
+                  </Text>
+                  <Text
+                    style={{ fontSize: 12, color: "#94A3B8", marginTop: 4 }}
+                  >
+                    Sales demand and inventory velocity will appear here once
+                    transactions occur.
+                  </Text>
                 </View>
               ) : (
                 fastMovingItems.map((item, index) => {
-                const badge = URGENCY_BADGES[item.reorderUrgency] || URGENCY_BADGES.Low;
-                return (
-                  <View
-                    key={item.sku}
-                    style={[
-                      styles.tableRow,
-                      index % 2 === 1 && styles.tableRowAlt,
-                    ]}
-                  >
-                    <Text style={[styles.tdCell, styles.skuText, { width: 100 }]}>{item.sku}</Text>
-                    <Text style={[styles.tdCell, styles.medName, { width: 200 }]} numberOfLines={1}>
-                      {item.medicine}
-                    </Text>
-                    <Text style={[styles.tdCell, { width: 160, textAlign: 'center', fontWeight: '700' }]}>
-                      {item.unitsSoldMonthly.toLocaleString()} units
-                    </Text>
-                    <Text style={[styles.tdCell, styles.revenueText, { width: 160, textAlign: 'right' }]}>
-                      {item.monthlyRevenue}
-                    </Text>
-                    <Text style={[styles.tdCell, { width: 160, textAlign: 'center', fontWeight: '600' }]}>
-                      {item.daysOfStockLeft} days left
-                    </Text>
+                  const badge =
+                    URGENCY_BADGES[item.reorderUrgency] || URGENCY_BADGES.Low;
+                  return (
+                    <View
+                      key={item.sku}
+                      style={[
+                        styles.tableRow,
+                        index % 2 === 1 && styles.tableRowAlt,
+                      ]}
+                    >
+                      <Text
+                        style={[styles.tdCell, styles.skuText, { width: 100 }]}
+                      >
+                        {item.sku}
+                      </Text>
+                      <Text
+                        style={[styles.tdCell, styles.medName, { width: 200 }]}
+                        numberOfLines={1}
+                      >
+                        {item.medicine}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.tdCell,
+                          {
+                            width: 160,
+                            textAlign: "center",
+                            fontWeight: "700",
+                          },
+                        ]}
+                      >
+                        {item.unitsSoldMonthly.toLocaleString()} units
+                      </Text>
+                      <Text
+                        style={[
+                          styles.tdCell,
+                          styles.revenueText,
+                          { width: 160, textAlign: "right" },
+                        ]}
+                      >
+                        {item.monthlyRevenue}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.tdCell,
+                          {
+                            width: 160,
+                            textAlign: "center",
+                            fontWeight: "600",
+                          },
+                        ]}
+                      >
+                        {item.daysOfStockLeft} days left
+                      </Text>
 
-                    <View style={[styles.statusWrapper, { width: 140 }]}>
-                      <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
-                        <Text style={[styles.statusBadgeText, { color: badge.text }]}>
-                          {item.reorderUrgency}
-                        </Text>
+                      <View style={[styles.statusWrapper, { width: 140 }]}>
+                        <View
+                          style={[
+                            styles.statusBadge,
+                            { backgroundColor: badge.bg },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.statusBadgeText,
+                              { color: badge.text },
+                            ]}
+                          >
+                            {item.reorderUrgency}
+                          </Text>
+                        </View>
                       </View>
                     </View>
-                  </View>
-                );
-              }))}
+                  );
+                })
+              )}
             </View>
           </ScrollView>
         )}
@@ -723,72 +1080,73 @@ const styles = StyleSheet.create({
     gap: 24,
   },
   headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    flexWrap: "wrap",
     gap: 16,
   },
   pageTitle: {
     fontSize: 24,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
     letterSpacing: -0.4,
   },
   pageSubtitle: {
     fontSize: 13.5,
-    fontWeight: '500',
-    color: '#64748B',
+    fontWeight: "500",
+    color: "#64748B",
     marginTop: 4,
   },
   actionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
   },
   exportBtnSecondary: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
     paddingVertical: 9,
     paddingHorizontal: 16,
     borderRadius: 8,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   exportBtnTextSecondary: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#334155',
+    fontWeight: "600",
+    color: "#334155",
   },
   exportBtnPrimary: {
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
     paddingVertical: 9,
     paddingHorizontal: 16,
     borderRadius: 8,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   exportBtnTextPrimary: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
   kpiRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 16,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
   },
   kpiRowCompact: {
     gap: 12,
   },
   cardContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    overflow: 'hidden',
+    borderColor: "#E2E8F0",
+    overflow: "hidden",
     ...Platform.select({
       web: {
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)',
+        boxShadow:
+          "0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)",
       },
       default: {
         elevation: 1,
@@ -799,16 +1157,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: "#F1F5F9",
   },
   cardTitle: {
     fontSize: 16,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   cardSubtitle: {
     fontSize: 12.5,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 2,
   },
   tableWrapper: {
@@ -816,60 +1174,60 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   tableHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderBottomColor: "#E2E8F0",
+    backgroundColor: "#F8FAFC",
   },
   thCell: {
     fontSize: 11.5,
-    fontWeight: '700',
-    color: '#64748B',
+    fontWeight: "700",
+    color: "#64748B",
     paddingHorizontal: 6,
     letterSpacing: 0.3,
   },
   tableRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 13,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: "#F1F5F9",
   },
   tableRowAlt: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
   },
   tdCell: {
     fontSize: 13,
-    color: '#334155',
+    color: "#334155",
     paddingHorizontal: 6,
   },
   catName: {
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   valText: {
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   skuText: {
-    fontWeight: '700',
-    color: '#0F766E',
+    fontWeight: "700",
+    color: "#0F766E",
   },
   medName: {
-    fontWeight: '600',
-    color: '#0F172A',
+    fontWeight: "600",
+    color: "#0F172A",
   },
   revenueText: {
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   statusWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   statusBadge: {
     paddingHorizontal: 8,
@@ -878,7 +1236,7 @@ const styles = StyleSheet.create({
   },
   statusBadgeText: {
     fontSize: 11.5,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   // Mobile Report KPI Cards
   mobileCardsList: {
@@ -886,38 +1244,38 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   mobileReportCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     borderRadius: 12,
     padding: 14,
     ...Platform.select({
-      web: { boxShadow: '0 1px 3px rgba(0,0,0,0.04)' },
+      web: { boxShadow: "0 1px 3px rgba(0,0,0,0.04)" },
       default: { elevation: 1 },
     }),
   },
   mobileReportCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 8,
   },
   mobileCatName: {
     fontSize: 15,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   mobileMedName: {
     fontSize: 14.5,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
     marginBottom: 10,
   },
   mobileValuationRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#F0FDFA',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#F0FDFA",
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -925,36 +1283,36 @@ const styles = StyleSheet.create({
   },
   mobileValLabel: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#0F766E',
+    fontWeight: "700",
+    color: "#0F766E",
     letterSpacing: 0.5,
   },
   mobileValAmount: {
     fontSize: 16,
-    fontWeight: '800',
-    color: '#0F766E',
+    fontWeight: "800",
+    color: "#0F766E",
   },
   mobileReportDetailsGrid: {
-    flexDirection: 'row',
-    backgroundColor: '#F8FAFC',
+    flexDirection: "row",
+    backgroundColor: "#F8FAFC",
     borderRadius: 8,
     padding: 10,
-    justifyContent: 'space-between',
+    justifyContent: "space-between",
   },
   mobileReportDetailItem: {
-    alignItems: 'center',
+    alignItems: "center",
     flex: 1,
   },
   mobileReportDetailLabel: {
     fontSize: 10,
-    fontWeight: '700',
-    color: '#64748B',
+    fontWeight: "700",
+    color: "#64748B",
     marginBottom: 2,
     letterSpacing: 0.3,
   },
   mobileReportDetailVal: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
 });

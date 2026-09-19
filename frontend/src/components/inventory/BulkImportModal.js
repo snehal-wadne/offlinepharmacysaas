@@ -111,12 +111,17 @@ export default function BulkImportModal({
   // 1. Download Sample CSV Template
   const handleDownloadTemplate = () => {
     try {
-      exportToCSV(CSV_SAMPLE_HEADERS, CSV_SAMPLE_ROWS, "pharmacy_catalog_import_template.csv");
+      exportToCSV(
+        CSV_SAMPLE_HEADERS,
+        CSV_SAMPLE_ROWS,
+        "pharmacy_catalog_import_template.csv",
+      );
       if (onShowToast) {
         onShowToast("✓ Downloaded CSV import template!");
       }
     } catch (err) {
-      if (onShowToast) onShowToast(`⚠️ Failed to download template: ${err.message}`);
+      if (onShowToast)
+        onShowToast(`⚠️ Failed to download template: ${err.message}`);
     }
   };
 
@@ -128,7 +133,8 @@ export default function BulkImportModal({
         fileInputRef.current.click();
       }
     } else {
-      if (onShowToast) onShowToast("File upload available in Web / Browser mode");
+      if (onShowToast)
+        onShowToast("File upload available in Web / Browser mode");
     }
   };
 
@@ -173,11 +179,13 @@ export default function BulkImportModal({
           .filter((l) => l.length > 0);
 
         if (lines.length < 2) {
-          throw new Error("CSV must contain at least a header row and 1 data row");
+          throw new Error(
+            "CSV must contain at least a header row and 1 data row",
+          );
         }
 
         const headers = parseCSVLine(lines[0]).map((h) =>
-          h.toLowerCase().replace(/[^a-z0-9]/g, "")
+          h.toLowerCase().replace(/[^a-z0-9]/g, ""),
         );
 
         const rows = [];
@@ -200,16 +208,23 @@ export default function BulkImportModal({
             "";
           const brandName = rowObj.brandname || rowObj.brand || medName;
           const genericName = rowObj.genericname || rowObj.generic || medName;
-          const sku = rowObj.sku || `SKU-${Date.now().toString().slice(-4)}-${i}`;
-          const batchNo = rowObj.batchno || rowObj.batch || `BAT-${Math.floor(1000 + Math.random() * 9000)}`;
+          const sku =
+            rowObj.sku || `SKU-${Date.now().toString().slice(-4)}-${i}`;
+          const batchNo =
+            rowObj.batchno ||
+            rowObj.batch ||
+            `BAT-${Math.floor(1000 + Math.random() * 9000)}`;
           const expiryDate = rowObj.expirydate || rowObj.expiry || "2027-12-31";
           const qty = parseInt(rowObj.quantity || rowObj.qty || "0", 10);
-          const amt = parseFloat(rowObj.amount || rowObj.price || rowObj.mrp || "0") || 0;
+          const amt =
+            parseFloat(rowObj.amount || rowObj.price || rowObj.mrp || "0") || 0;
           const strength = rowObj.strength || "500mg";
           const packSize = rowObj.packsize || rowObj.pack || "10 Tablets";
           const manufacturer = rowObj.manufacturer || "Generic Pharma";
-          const supplierName = rowObj.suppliername || rowObj.supplier || "Direct Supply";
-          const shelfLocation = rowObj.shelflocation || rowObj.shelf || "Shelf-A1";
+          const supplierName =
+            rowObj.suppliername || rowObj.supplier || "Direct Supply";
+          const shelfLocation =
+            rowObj.shelflocation || rowObj.shelf || "Shelf-A1";
 
           const errors = [];
           if (!medName) errors.push("Missing Medicine Name");
@@ -230,9 +245,10 @@ export default function BulkImportModal({
             expiryDate,
             quantity: isNaN(qty) ? 0 : qty,
             amount: amt,
-            shelfLocation,
-            branchId: selectedBranch === "All Branches" ? "Main Branch" : selectedBranch,
-            isValid: errors.length === 0,
+            branchId:
+              (typeof selectedBranch === "object" && selectedBranch !== null
+                ? selectedBranch.id || selectedBranch.name
+                : selectedBranch) || "Main Branch",
             errorMessage: errors.join(", "),
           });
         }
@@ -290,7 +306,9 @@ export default function BulkImportModal({
 
     setImporting(false);
     if (onShowToast) {
-      onShowToast(`✓ Successfully imported ${successCount} products into inventory!`);
+      onShowToast(
+        `✓ Successfully imported ${successCount} products into inventory!`,
+      );
     }
 
     if (onImportComplete) {
@@ -311,7 +329,12 @@ export default function BulkImportModal({
   const invalidRowsCount = parsedRows.filter((r) => !r.isValid).length;
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={handleClose}
+    >
       <View style={styles.modalOverlay}>
         <View style={[styles.modalCard, isMobile && styles.modalCardMobile]}>
           {/* Header */}
@@ -319,13 +342,20 @@ export default function BulkImportModal({
             <View style={styles.headerTitleGroup}>
               <Text style={styles.headerIcon}>📥</Text>
               <View>
-                <Text style={styles.headerTitle}>Bulk Catalog & Inventory CSV Import</Text>
+                <Text style={styles.headerTitle}>
+                  Bulk Catalog & Inventory CSV Import
+                </Text>
                 <Text style={styles.headerSubtitle}>
-                  Import medicines, batches, and starting stock levels in bulk (PRD-10, DAT-01)
+                  Import medicines, batches, and starting stock levels in bulk
+                  (PRD-10, DAT-01)
                 </Text>
               </View>
             </View>
-            <Pressable onPress={handleClose} style={styles.closeBtn} accessibilityLabel="Close modal">
+            <Pressable
+              onPress={handleClose}
+              style={styles.closeBtn}
+              accessibilityLabel="Close modal"
+            >
               <Text style={styles.closeBtnText}>✕</Text>
             </Pressable>
           </View>
@@ -341,7 +371,10 @@ export default function BulkImportModal({
             />
           )}
 
-          <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={true}>
+          <ScrollView
+            style={styles.modalBody}
+            showsVerticalScrollIndicator={true}
+          >
             {/* Step 1: Download Template & Instructions */}
             <View style={styles.stepCard}>
               <View style={styles.stepHeader}>
@@ -349,12 +382,18 @@ export default function BulkImportModal({
                   <Text style={styles.stepNumberText}>1</Text>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.stepTitle}>Download Standard CSV Template</Text>
+                  <Text style={styles.stepTitle}>
+                    Download Standard CSV Template
+                  </Text>
                   <Text style={styles.stepDescription}>
-                    Use our pre-formatted spreadsheet template with predefined medicine, batch, and pricing headers.
+                    Use our pre-formatted spreadsheet template with predefined
+                    medicine, batch, and pricing headers.
                   </Text>
                 </View>
-                <Pressable onPress={handleDownloadTemplate} style={styles.templateBtn}>
+                <Pressable
+                  onPress={handleDownloadTemplate}
+                  style={styles.templateBtn}
+                >
                   <Text style={styles.templateBtnIcon}>📄</Text>
                   <Text style={styles.templateBtnText}>Download Template</Text>
                 </Pressable>
@@ -368,7 +407,9 @@ export default function BulkImportModal({
                   <Text style={styles.stepNumberText}>2</Text>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.stepTitle}>Select CSV File to Upload</Text>
+                  <Text style={styles.stepTitle}>
+                    Select CSV File to Upload
+                  </Text>
                   <Text style={styles.stepDescription}>
                     {fileName
                       ? `Selected: ${fileName} (${parsedRows.length} rows detected)`
@@ -377,7 +418,9 @@ export default function BulkImportModal({
                 </View>
                 <Pressable onPress={handlePickFile} style={styles.browseBtn}>
                   <Text style={styles.browseBtnIcon}>📁</Text>
-                  <Text style={styles.browseBtnText}>{fileName ? "Change File" : "Browse File"}</Text>
+                  <Text style={styles.browseBtnText}>
+                    {fileName ? "Change File" : "Browse File"}
+                  </Text>
                 </Pressable>
               </View>
             </View>
@@ -387,22 +430,30 @@ export default function BulkImportModal({
               <View style={styles.previewContainer}>
                 {/* Summary Chips */}
                 <View style={styles.statsRow}>
-                  <View style={[styles.statChip, { backgroundColor: "#F1F5F9" }]}>
+                  <View
+                    style={[styles.statChip, { backgroundColor: "#F1F5F9" }]}
+                  >
                     <Text style={styles.statChipLabel}>TOTAL ROWS</Text>
                     <Text style={[styles.statChipValue, { color: "#1E293B" }]}>
                       {parsedRows.length}
                     </Text>
                   </View>
-                  <View style={[styles.statChip, { backgroundColor: "#DCFCE7" }]}>
+                  <View
+                    style={[styles.statChip, { backgroundColor: "#DCFCE7" }]}
+                  >
                     <Text style={styles.statChipLabel}>READY TO IMPORT</Text>
                     <Text style={[styles.statChipValue, { color: "#15803D" }]}>
                       {validRowsCount}
                     </Text>
                   </View>
                   {invalidRowsCount > 0 && (
-                    <View style={[styles.statChip, { backgroundColor: "#FEE2E2" }]}>
+                    <View
+                      style={[styles.statChip, { backgroundColor: "#FEE2E2" }]}
+                    >
                       <Text style={styles.statChipLabel}>ERRORS / SKIPPED</Text>
-                      <Text style={[styles.statChipValue, { color: "#B91C1C" }]}>
+                      <Text
+                        style={[styles.statChipValue, { color: "#B91C1C" }]}
+                      >
                         {invalidRowsCount}
                       </Text>
                     </View>
@@ -410,17 +461,50 @@ export default function BulkImportModal({
                 </View>
 
                 {/* Preview Table Header */}
-                <Text style={styles.previewTitle}>Previewing Data Records (First 15 Rows)</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={true} style={styles.tableScroll}>
+                <Text style={styles.previewTitle}>
+                  Previewing Data Records (First 15 Rows)
+                </Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={true}
+                  style={styles.tableScroll}
+                >
                   <View>
                     <View style={styles.tableHeaderRow}>
                       <Text style={[styles.thCell, { width: 50 }]}>#</Text>
-                      <Text style={[styles.thCell, { width: 180 }]}>MEDICINE NAME</Text>
-                      <Text style={[styles.thCell, { width: 100 }]}>BATCH NO</Text>
-                      <Text style={[styles.thCell, { width: 110 }]}>EXPIRY</Text>
-                      <Text style={[styles.thCell, { width: 80, textAlign: "right" }]}>QTY</Text>
-                      <Text style={[styles.thCell, { width: 90, textAlign: "right" }]}>MRP (₹)</Text>
-                      <Text style={[styles.thCell, { width: 140, textAlign: "center" }]}>STATUS</Text>
+                      <Text style={[styles.thCell, { width: 180 }]}>
+                        MEDICINE NAME
+                      </Text>
+                      <Text style={[styles.thCell, { width: 100 }]}>
+                        BATCH NO
+                      </Text>
+                      <Text style={[styles.thCell, { width: 110 }]}>
+                        EXPIRY
+                      </Text>
+                      <Text
+                        style={[
+                          styles.thCell,
+                          { width: 80, textAlign: "right" },
+                        ]}
+                      >
+                        QTY
+                      </Text>
+                      <Text
+                        style={[
+                          styles.thCell,
+                          { width: 90, textAlign: "right" },
+                        ]}
+                      >
+                        MRP (₹)
+                      </Text>
+                      <Text
+                        style={[
+                          styles.thCell,
+                          { width: 140, textAlign: "center" },
+                        ]}
+                      >
+                        STATUS
+                      </Text>
                     </View>
 
                     {parsedRows.slice(0, 15).map((row, idx) => (
@@ -432,23 +516,53 @@ export default function BulkImportModal({
                           !row.isValid && styles.tableDataRowError,
                         ]}
                       >
-                        <Text style={[styles.tdCell, { width: 50 }]}>{row.index}</Text>
-                        <Text style={[styles.tdCell, { width: 180, fontWeight: "600" }]} numberOfLines={1}>
+                        <Text style={[styles.tdCell, { width: 50 }]}>
+                          {row.index}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.tdCell,
+                            { width: 180, fontWeight: "600" },
+                          ]}
+                          numberOfLines={1}
+                        >
                           {row.medicineName || "—"}
                         </Text>
-                        <Text style={[styles.tdCell, { width: 100 }]}>{row.batchNo}</Text>
-                        <Text style={[styles.tdCell, { width: 110 }]}>{row.expiryDate}</Text>
-                        <Text style={[styles.tdCell, { width: 80, textAlign: "right", fontWeight: "700" }]}>
+                        <Text style={[styles.tdCell, { width: 100 }]}>
+                          {row.batchNo}
+                        </Text>
+                        <Text style={[styles.tdCell, { width: 110 }]}>
+                          {row.expiryDate}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.tdCell,
+                            {
+                              width: 80,
+                              textAlign: "right",
+                              fontWeight: "700",
+                            },
+                          ]}
+                        >
                           {row.quantity}
                         </Text>
-                        <Text style={[styles.tdCell, { width: 90, textAlign: "right" }]}>
+                        <Text
+                          style={[
+                            styles.tdCell,
+                            { width: 90, textAlign: "right" },
+                          ]}
+                        >
                           ₹{row.amount.toFixed(2)}
                         </Text>
                         <View style={[styles.tdStatusWrap, { width: 140 }]}>
                           <View
                             style={[
                               styles.statusBadge,
-                              { backgroundColor: row.isValid ? "#DCFCE7" : "#FEE2E2" },
+                              {
+                                backgroundColor: row.isValid
+                                  ? "#DCFCE7"
+                                  : "#FEE2E2",
+                              },
                             ]}
                           >
                             <Text
@@ -478,7 +592,12 @@ export default function BulkImportModal({
                   </Text>
                 </View>
                 <View style={styles.progressBarTrack}>
-                  <View style={[styles.progressBarFill, { width: `${importProgress}%` }]} />
+                  <View
+                    style={[
+                      styles.progressBarFill,
+                      { width: `${importProgress}%` },
+                    ]}
+                  />
                 </View>
               </View>
             )}
@@ -486,7 +605,11 @@ export default function BulkImportModal({
 
           {/* Footer Actions */}
           <View style={styles.footerBar}>
-            <Pressable onPress={handleClose} style={styles.cancelBtn} disabled={importing}>
+            <Pressable
+              onPress={handleClose}
+              style={styles.cancelBtn}
+              disabled={importing}
+            >
               <Text style={styles.cancelBtnText}>Cancel</Text>
             </Pressable>
 

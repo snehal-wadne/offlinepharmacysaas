@@ -64,13 +64,17 @@ export function PosProvider({
     let isMounted = true;
     async function hydratePosData() {
       try {
+        const rawBranch =
+          (typeof selectedBranch === "object" && selectedBranch !== null
+            ? selectedBranch.id
+            : selectedBranch) || currentUser?.branchId;
         const branchParam =
-          currentUser?.branchId ||
-          (selectedBranch &&
-          selectedBranch !== "All Branches" &&
-          selectedBranch !== "No Active Branch"
-            ? selectedBranch
-            : "");
+          rawBranch &&
+          rawBranch !== "All Branches" &&
+          rawBranch !== "all" &&
+          rawBranch !== "No Active Branch"
+            ? rawBranch
+            : "";
         const [liveProds, liveHeld, liveInvs, liveReturns] = await Promise.all([
           fetchCashierProducts("", "", branchParam),
           fetchHeldBills(),

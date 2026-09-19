@@ -148,9 +148,16 @@ export default function StockAdjustmentsScreen({
       if (localProds.length > 0) {
         setStockItems(localProds);
       } else {
+        const rawBranch =
+          typeof selectedBranch === "object" && selectedBranch !== null
+            ? selectedBranch.id || selectedBranch.name
+            : selectedBranch;
         const branchParam =
-          selectedBranch && selectedBranch !== "All Branches"
-            ? selectedBranch
+          rawBranch &&
+          rawBranch !== "All Branches" &&
+          rawBranch !== "all" &&
+          rawBranch !== "No Active Branch"
+            ? rawBranch
             : undefined;
         const invRes = await fetchInventory({ branchId: branchParam });
         if (invRes && invRes.data && Array.isArray(invRes.data)) {

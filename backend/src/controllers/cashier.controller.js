@@ -17,14 +17,74 @@ const cashDenominationRepo = require("../repositories/cash-denomination.reposito
 const cashRegisterDashboardRepo = require("../repositories/cash-register-dashboard.repository");
 const { pool } = require("../db/connection");
 
+const isUuid = (str) =>
+  typeof str === "string" &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+
 const resolveAuthContext = async (req) => {
-  const organisationId =
+  let organisationId =
     req.tenant?.organisationId ||
     req.tenantContext?.organisationId ||
-    req.user?.organisationId;
-  const branchId =
-    req.tenant?.branchId || req.tenantContext?.branchId || req.user?.branchId;
+    req.user?.organisation_id ||
+    req.user?.organisationId ||
+    req.headers["x-organisation-id"];
+
+  let branchId =
+    req.query?.branchId ||
+    req.headers["x-branch-id"] ||
+    req.tenant?.branchId ||
+    req.tenantContext?.branchId ||
+    req.user?.branch_id ||
+    req.user?.branchId;
+
   const cashierId = req.auth?.id || req.user?.id;
+
+  // Resolve organisation if missing
+  if (!organisationId && cashierId) {
+    const userOrg = await pool.query(
+      `SELECT organisation_id FROM organisation_memberships WHERE user_id = $1 AND status = 'ACTIVE' LIMIT 1;`,
+      [cashierId],
+    );
+    if (userOrg.rows.length > 0) {
+      organisationId = userOrg.rows[0].organisation_id;
+    }
+  }
+
+  // Resolve branch if it is a string name or missing
+  if (organisationId) {
+    if (branchId && !isUuid(branchId)) {
+      const nameRes = await pool.query(
+        "SELECT id FROM branches WHERE organisation_id = $1 AND (name ILIKE $2 OR branch_code ILIKE $2) LIMIT 1;",
+        [organisationId, branchId],
+      );
+      if (nameRes.rows.length > 0) {
+        branchId = nameRes.rows[0].id;
+      } else {
+        branchId = null;
+      }
+    }
+
+    if (!branchId && cashierId) {
+      const baRes = await pool.query(
+        `SELECT ba.branch_id FROM branch_assignments ba
+         JOIN organisation_memberships om ON om.id = ba.membership_id
+         WHERE om.organisation_id = $1 AND om.user_id = $2 AND om.status = 'ACTIVE'
+         ORDER BY ba.is_primary DESC LIMIT 1;`,
+        [organisationId, cashierId],
+      );
+      if (baRes.rows.length > 0) {
+        branchId = baRes.rows[0].branch_id;
+      } else {
+        const defaultBranch = await pool.query(
+          "SELECT id FROM branches WHERE organisation_id = $1 AND status = 'ACTIVE' ORDER BY created_at ASC LIMIT 1;",
+          [organisationId],
+        );
+        if (defaultBranch.rows.length > 0) {
+          branchId = defaultBranch.rows[0].id;
+        }
+      }
+    }
+  }
 
   return { organisationId, branchId, cashierId };
 };

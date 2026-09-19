@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -8,33 +8,61 @@ import {
   StyleSheet,
   useWindowDimensions,
   Platform,
-} from 'react-native';
-import InventoryStatCard from '../../components/inventory/InventoryStatCard';
-import { exportToCSV, exportToPDF } from '../../utils/exportUtils';
-import { SkeletonTableRow } from '../../components/common/SkeletonLoader';
-import PaginationControls from '../../components/common/PaginationControls';
-import { fetchExpiryReport } from '../../api/reportApi';
+} from "react-native";
+import InventoryStatCard from "../../components/inventory/InventoryStatCard";
+import { exportToCSV, exportToPDF } from "../../utils/exportUtils";
+import { SkeletonTableRow } from "../../components/common/SkeletonLoader";
+import PaginationControls from "../../components/common/PaginationControls";
+import { fetchExpiryReport } from "../../api/reportApi";
 
 const RISK_BADGES = {
-  Critical: { bg: '#FEE2E2', text: '#B91C1C' },
-  'High Risk': { bg: '#FFEDD5', text: '#C2410C' },
-  'Medium Risk': { bg: '#FEF3C7', text: '#B45309' },
-  Expired: { bg: '#FEE2E2', text: '#991B1B' },
+  Critical: { bg: "#FEE2E2", text: "#B91C1C" },
+  "High Risk": { bg: "#FFEDD5", text: "#C2410C" },
+  "Medium Risk": { bg: "#FEF3C7", text: "#B45309" },
+  Expired: { bg: "#FEE2E2", text: "#991B1B" },
 };
 
 const INITIAL_KPIS = [
-  { id: 'exp-rep-1', label: 'Total Loss at Risk', value: '₹0', subtext: '0 items', variant: 'red' },
-  { id: 'exp-rep-2', label: 'Critical (< 30 Days)', value: '0', subtext: '0 items', variant: 'red' },
-  { id: 'exp-rep-3', label: 'High Risk (30-60 Days)', value: '0', subtext: '0 items', variant: 'amber' },
-  { id: 'exp-rep-4', label: 'Already Expired', value: '0', subtext: '0 items', variant: 'red' },
+  {
+    id: "exp-rep-1",
+    label: "Total Loss at Risk",
+    value: "₹0",
+    subtext: "0 items",
+    variant: "red",
+  },
+  {
+    id: "exp-rep-2",
+    label: "Critical (< 30 Days)",
+    value: "0",
+    subtext: "0 items",
+    variant: "red",
+  },
+  {
+    id: "exp-rep-3",
+    label: "High Risk (30-60 Days)",
+    value: "0",
+    subtext: "0 items",
+    variant: "amber",
+  },
+  {
+    id: "exp-rep-4",
+    label: "Already Expired",
+    value: "0",
+    subtext: "0 items",
+    variant: "red",
+  },
 ];
 
-export default function ExpiryReportsScreen({ onShowToast, onNavigate, selectedBranch = 'All Branches' }) {
+export default function ExpiryReportsScreen({
+  onShowToast,
+  onNavigate,
+  selectedBranch = "All Branches",
+}) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
   const isMobile = width < 768;
 
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const [riskItems, setRiskItems] = useState([]);
   const [kpis, setKpis] = useState(INITIAL_KPIS);
   const [loading, setLoading] = useState(true);
@@ -45,7 +73,10 @@ export default function ExpiryReportsScreen({ onShowToast, onNavigate, selectedB
     let isMounted = true;
     async function loadExpiryData() {
       try {
-        setLoading(true);
+        const branchDisplayName =
+          typeof selectedBranch === "object" && selectedBranch !== null
+            ? selectedBranch.name
+            : selectedBranch || "All Branches";
         const res = await fetchExpiryReport({ branchId: selectedBranch });
         if (!isMounted) return;
 
@@ -53,57 +84,71 @@ export default function ExpiryReportsScreen({ onShowToast, onNavigate, selectedB
           const summary = res.data.summary || {};
           setKpis([
             {
-              id: 'exp-rep-1',
-              label: 'Total Loss at Risk',
-              value: `₹${Number(summary.totalLossAtRisk || 0).toLocaleString('en-IN')}`,
-              subtext: selectedBranch === 'All Branches' ? 'Across all branches' : selectedBranch,
-              variant: 'red',
+              id: "exp-rep-1",
+              label: "Total Loss at Risk",
+              value: `₹${Number(summary.totalLossAtRisk || 0).toLocaleString("en-IN")}`,
+              subtext:
+                branchDisplayName === "All Branches"
+                  ? "Across all branches"
+                  : branchDisplayName,
+              variant: "red",
             },
             {
-              id: 'exp-rep-2',
-              label: 'Critical (< 30 Days)',
+              id: "exp-rep-2",
+              label: "Critical (< 30 Days)",
               value: `${summary.within30DaysCount || 0}`,
-              subtext: 'Urgent action required',
-              variant: 'red',
+              subtext: "Urgent action required",
+              variant: "red",
             },
             {
-              id: 'exp-rep-3',
-              label: 'High Risk (30-60 Days)',
+              id: "exp-rep-3",
+              label: "High Risk (30-60 Days)",
               value: `${summary.within60DaysCount || 0}`,
-              subtext: 'Prioritize FEFO dispensing',
-              variant: 'amber',
+              subtext: "Prioritize FEFO dispensing",
+              variant: "amber",
             },
             {
-              id: 'exp-rep-4',
-              label: 'Already Expired',
+              id: "exp-rep-4",
+              label: "Already Expired",
               value: `${summary.expiredCount || 0}`,
-              subtext: 'Move to quarantine',
-              variant: 'red',
+              subtext: "Move to quarantine",
+              variant: "red",
             },
           ]);
 
-          if (res.data.batches && Array.isArray(res.data.batches) && res.data.batches.length > 0) {
+          if (
+            res.data.batches &&
+            Array.isArray(res.data.batches) &&
+            res.data.batches.length > 0
+          ) {
             const mapped = res.data.batches.map((b, idx) => {
-              const expDate = b.expiryDate ? new Date(b.expiryDate) : new Date();
-              const daysRem = Math.max(0, Math.ceil((expDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
-              let riskLevel = 'Medium Risk';
-              let recommendedAction = 'FEFO Priority';
-              if (b.urgency === 'EXPIRED' || daysRem <= 0) {
-                riskLevel = 'Expired';
-                recommendedAction = 'Quarantine & Write-Off';
+              const expDate = b.expiryDate
+                ? new Date(b.expiryDate)
+                : new Date();
+              const daysRem = Math.max(
+                0,
+                Math.ceil(
+                  (expDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24),
+                ),
+              );
+              let riskLevel = "Medium Risk";
+              let recommendedAction = "FEFO Priority";
+              if (b.urgency === "EXPIRED" || daysRem <= 0) {
+                riskLevel = "Expired";
+                recommendedAction = "Quarantine & Write-Off";
               } else if (daysRem <= 30) {
-                riskLevel = 'Critical';
-                recommendedAction = 'Return to Vendor';
+                riskLevel = "Critical";
+                recommendedAction = "Return to Vendor";
               } else if (daysRem <= 60) {
-                riskLevel = 'High Risk';
-                recommendedAction = 'Apply 20% Discount';
+                riskLevel = "High Risk";
+                recommendedAction = "Apply 20% Discount";
               }
 
               return {
                 batchNo: b.batchNumber || `BAT-${idx + 100}`,
-                medicine: b.productName || 'Medicine',
-                supplier: 'Verified Distributor',
-                expiryDate: expDate.toISOString().split('T')[0],
+                medicine: b.productName || "Medicine",
+                supplier: "Verified Distributor",
+                expiryDate: expDate.toISOString().split("T")[0],
                 daysRemaining: daysRem,
                 quantity: b.stockQuantity || 0,
                 costValue: `₹${Number(b.totalCostValuation || 0).toFixed(2)}`,
@@ -120,7 +165,7 @@ export default function ExpiryReportsScreen({ onShowToast, onNavigate, selectedB
           setKpis(INITIAL_KPIS);
         }
       } catch (err) {
-        console.warn('Backend expiry report error:', err.message);
+        console.warn("Backend expiry report error:", err.message);
         setRiskItems([]);
         setKpis(INITIAL_KPIS);
       } finally {
@@ -128,7 +173,9 @@ export default function ExpiryReportsScreen({ onShowToast, onNavigate, selectedB
       }
     }
     loadExpiryData();
-    return () => { isMounted = false; };
+    return () => {
+      isMounted = false;
+    };
   }, [selectedBranch]);
 
   const filteredItems = riskItems.filter((item) => {
@@ -144,20 +191,20 @@ export default function ExpiryReportsScreen({ onShowToast, onNavigate, selectedB
   const totalPages = Math.ceil(filteredItems.length / itemsPerPage);
   const paginatedItems = filteredItems.slice(
     (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
+    currentPage * itemsPerPage,
   );
 
   const handleExport = (type) => {
     const headers = [
-      'Batch No.',
-      'Medicine Name',
-      'Supplier',
-      'Expiry Date',
-      'Days Remaining',
-      'Quantity',
-      'Cost Value',
-      'Risk Level',
-      'Recommended Action',
+      "Batch No.",
+      "Medicine Name",
+      "Supplier",
+      "Expiry Date",
+      "Days Remaining",
+      "Quantity",
+      "Cost Value",
+      "Risk Level",
+      "Recommended Action",
     ];
     const rows = filteredItems.map((item) => [
       item.batchNo,
@@ -171,26 +218,30 @@ export default function ExpiryReportsScreen({ onShowToast, onNavigate, selectedB
       item.recommendedAction,
     ]);
 
-    if (type === 'csv') {
-      exportToCSV(headers, rows, 'batch_expiry_risk_report.csv');
-    } else if (type === 'pdf') {
+    if (type === "csv") {
+      exportToCSV(headers, rows, "batch_expiry_risk_report.csv");
+    } else if (type === "pdf") {
       exportToPDF(
-        'Batch Expiry Risk & Exposure Report',
-        'Near-expiry batches requiring price markdowns, transfer velocity, or vendor write-off returns.',
+        "Batch Expiry Risk & Exposure Report",
+        "Near-expiry batches requiring price markdowns, transfer velocity, or vendor write-off returns.",
         headers,
         rows,
-        'batch_expiry_risk_report.pdf'
+        "batch_expiry_risk_report.pdf",
       );
     }
 
     if (onShowToast) {
-      onShowToast(`✓ Exported Batch Expiry Risk Report as ${type.toUpperCase()}!`);
+      onShowToast(
+        `✓ Exported Batch Expiry Risk Report as ${type.toUpperCase()}!`,
+      );
     }
   };
 
   const handleExecuteAction = (item) => {
     if (onShowToast) {
-      onShowToast(`Action triggered: "${item.recommendedAction}" for batch ${item.batchNo}`);
+      onShowToast(
+        `Action triggered: "${item.recommendedAction}" for batch ${item.batchNo}`,
+      );
     }
   };
 
@@ -205,14 +256,15 @@ export default function ExpiryReportsScreen({ onShowToast, onNavigate, selectedB
         <View>
           <Text style={styles.pageTitle}>Expiry Reports</Text>
           <Text style={styles.pageSubtitle}>
-            Batch expiration timelines, financial exposure, write-off loss metrics, and risk mitigation.
+            Batch expiration timelines, financial exposure, write-off loss
+            metrics, and risk mitigation.
           </Text>
         </View>
 
         {/* Export Buttons */}
         <View style={styles.actionsRow}>
           <Pressable
-            onPress={() => handleExport('csv')}
+            onPress={() => handleExport("csv")}
             style={styles.exportBtnSecondary}
             accessibilityRole="button"
           >
@@ -220,7 +272,7 @@ export default function ExpiryReportsScreen({ onShowToast, onNavigate, selectedB
           </Pressable>
 
           <Pressable
-            onPress={() => handleExport('pdf')}
+            onPress={() => handleExport("pdf")}
             style={styles.exportBtnPrimary}
             accessibilityRole="button"
           >
@@ -247,9 +299,12 @@ export default function ExpiryReportsScreen({ onShowToast, onNavigate, selectedB
       <View style={styles.cardContainer}>
         <View style={styles.cardHeader}>
           <View>
-            <Text style={styles.cardTitle}>Batch Expiry Risk & Financial Exposure</Text>
+            <Text style={styles.cardTitle}>
+              Batch Expiry Risk & Financial Exposure
+            </Text>
             <Text style={styles.cardSubtitle}>
-              Near-expiry batches requiring price markdowns, transfer velocity, or vendor write-off returns.
+              Near-expiry batches requiring price markdowns, transfer velocity,
+              or vendor write-off returns.
             </Text>
           </View>
         </View>
@@ -265,7 +320,10 @@ export default function ExpiryReportsScreen({ onShowToast, onNavigate, selectedB
               onChangeText={setSearchQuery}
             />
             {searchQuery ? (
-              <Pressable onPress={() => setSearchQuery('')} style={styles.clearBtn}>
+              <Pressable
+                onPress={() => setSearchQuery("")}
+                style={styles.clearBtn}
+              >
                 <Text style={styles.clearBtnText}>✕</Text>
               </Pressable>
             ) : null}
@@ -283,27 +341,58 @@ export default function ExpiryReportsScreen({ onShowToast, onNavigate, selectedB
             ) : filteredItems.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyTitle}>No expiring batches found</Text>
-                <Text style={styles.emptySubtitle}>Try changing your search terms.</Text>
+                <Text style={styles.emptySubtitle}>
+                  Try changing your search terms.
+                </Text>
               </View>
             ) : (
               paginatedItems.map((item) => {
-                const badge = RISK_BADGES[item.riskLevel] || RISK_BADGES.Critical;
-                const isCriticalOrExpired = item.riskLevel === 'Critical' || item.riskLevel === 'Expired';
+                const badge =
+                  RISK_BADGES[item.riskLevel] || RISK_BADGES.Critical;
+                const isCriticalOrExpired =
+                  item.riskLevel === "Critical" || item.riskLevel === "Expired";
 
                 return (
                   <View key={item.batchNo} style={styles.mobileExpiryCard}>
                     {/* Header Row: Batch No + Days countdown + Risk badge */}
                     <View style={styles.mobileExpiryTopRow}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 6,
+                          flexWrap: "wrap",
+                        }}
+                      >
                         <Text style={styles.batchText}>{item.batchNo}</Text>
-                        <View style={[styles.mobileDaysPill, isCriticalOrExpired && styles.daysPillUrgent]}>
-                          <Text style={[styles.mobileDaysText, isCriticalOrExpired && styles.daysTextUrgent]}>
+                        <View
+                          style={[
+                            styles.mobileDaysPill,
+                            isCriticalOrExpired && styles.daysPillUrgent,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.mobileDaysText,
+                              isCriticalOrExpired && styles.daysTextUrgent,
+                            ]}
+                          >
                             ⏳ {item.daysRemaining}
                           </Text>
                         </View>
                       </View>
-                      <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
-                        <Text style={[styles.statusBadgeText, { color: badge.text }]}>
+                      <View
+                        style={[
+                          styles.statusBadge,
+                          { backgroundColor: badge.bg },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.statusBadgeText,
+                            { color: badge.text },
+                          ]}
+                        >
                           {item.riskLevel}
                         </Text>
                       </View>
@@ -311,17 +400,32 @@ export default function ExpiryReportsScreen({ onShowToast, onNavigate, selectedB
 
                     {/* Medicine & Supplier */}
                     <Text style={styles.mobileMedName}>{item.medicine}</Text>
-                    <Text style={styles.mobileSupplierText}>Supplier: {item.supplier} • Exp: {item.expiryDate}</Text>
+                    <Text style={styles.mobileSupplierText}>
+                      Supplier: {item.supplier} • Exp: {item.expiryDate}
+                    </Text>
 
                     {/* Quantity & Cost */}
                     <View style={styles.mobileExpiryDetailsGrid}>
                       <View style={styles.mobileExpiryDetailItem}>
-                        <Text style={styles.mobileExpiryDetailLabel}>QUANTITY</Text>
-                        <Text style={styles.mobileExpiryDetailVal}>{item.quantity} units</Text>
+                        <Text style={styles.mobileExpiryDetailLabel}>
+                          QUANTITY
+                        </Text>
+                        <Text style={styles.mobileExpiryDetailVal}>
+                          {item.quantity} units
+                        </Text>
                       </View>
                       <View style={styles.mobileExpiryDetailItem}>
-                        <Text style={styles.mobileExpiryDetailLabel}>FINANCIAL EXPOSURE</Text>
-                        <Text style={[styles.mobileExpiryDetailVal, { color: '#DC2626' }]}>{item.costValue}</Text>
+                        <Text style={styles.mobileExpiryDetailLabel}>
+                          FINANCIAL EXPOSURE
+                        </Text>
+                        <Text
+                          style={[
+                            styles.mobileExpiryDetailVal,
+                            { color: "#DC2626" },
+                          ]}
+                        >
+                          {item.costValue}
+                        </Text>
                       </View>
                     </View>
 
@@ -331,7 +435,10 @@ export default function ExpiryReportsScreen({ onShowToast, onNavigate, selectedB
                       style={styles.mobileActionBtn}
                       accessibilityRole="button"
                     >
-                      <Text style={styles.mobileActionBtnText} numberOfLines={1}>
+                      <Text
+                        style={styles.mobileActionBtnText}
+                        numberOfLines={1}
+                      >
                         ⚡ {item.recommendedAction} ➔
                       </Text>
                     </Pressable>
@@ -345,14 +452,34 @@ export default function ExpiryReportsScreen({ onShowToast, onNavigate, selectedB
             <View style={styles.tableWrapper}>
               <View style={styles.tableHeader}>
                 <Text style={[styles.thCell, { width: 110 }]}>BATCH NO.</Text>
-                <Text style={[styles.thCell, { width: 180 }]}>MEDICINE NAME</Text>
+                <Text style={[styles.thCell, { width: 180 }]}>
+                  MEDICINE NAME
+                </Text>
                 <Text style={[styles.thCell, { width: 160 }]}>SUPPLIER</Text>
                 <Text style={[styles.thCell, { width: 120 }]}>EXPIRY DATE</Text>
-                <Text style={[styles.thCell, { width: 130, textAlign: 'center' }]}>DAYS REMAINING</Text>
-                <Text style={[styles.thCell, { width: 90, textAlign: 'center' }]}>QUANTITY</Text>
-                <Text style={[styles.thCell, { width: 130, textAlign: 'right' }]}>COST VALUE (₹)</Text>
-                <Text style={[styles.thCell, { width: 120, textAlign: 'center' }]}>RISK LEVEL</Text>
-                <Text style={[styles.thCell, { width: 200 }]}>RECOMMENDED ACTION</Text>
+                <Text
+                  style={[styles.thCell, { width: 130, textAlign: "center" }]}
+                >
+                  DAYS REMAINING
+                </Text>
+                <Text
+                  style={[styles.thCell, { width: 90, textAlign: "center" }]}
+                >
+                  QUANTITY
+                </Text>
+                <Text
+                  style={[styles.thCell, { width: 130, textAlign: "right" }]}
+                >
+                  COST VALUE (₹)
+                </Text>
+                <Text
+                  style={[styles.thCell, { width: 120, textAlign: "center" }]}
+                >
+                  RISK LEVEL
+                </Text>
+                <Text style={[styles.thCell, { width: 200 }]}>
+                  RECOMMENDED ACTION
+                </Text>
               </View>
 
               {loading ? (
@@ -363,12 +490,17 @@ export default function ExpiryReportsScreen({ onShowToast, onNavigate, selectedB
                 </View>
               ) : filteredItems.length === 0 ? (
                 <View style={styles.emptyState}>
-                  <Text style={styles.emptyTitle}>No expiring batches found</Text>
-                  <Text style={styles.emptySubtitle}>Try changing your search terms.</Text>
+                  <Text style={styles.emptyTitle}>
+                    No expiring batches found
+                  </Text>
+                  <Text style={styles.emptySubtitle}>
+                    Try changing your search terms.
+                  </Text>
                 </View>
               ) : (
                 paginatedItems.map((item, index) => {
-                  const badge = RISK_BADGES[item.riskLevel] || RISK_BADGES.Critical;
+                  const badge =
+                    RISK_BADGES[item.riskLevel] || RISK_BADGES.Critical;
                   return (
                     <View
                       key={item.batchNo}
@@ -377,37 +509,73 @@ export default function ExpiryReportsScreen({ onShowToast, onNavigate, selectedB
                         index % 2 === 1 && styles.tableRowAlt,
                       ]}
                     >
-                      <Text style={[styles.tdCell, styles.batchText, { width: 110 }]}>
+                      <Text
+                        style={[
+                          styles.tdCell,
+                          styles.batchText,
+                          { width: 110 },
+                        ]}
+                      >
                         {item.batchNo}
                       </Text>
-                      <Text style={[styles.tdCell, styles.medName, { width: 180 }]} numberOfLines={1}>
+                      <Text
+                        style={[styles.tdCell, styles.medName, { width: 180 }]}
+                        numberOfLines={1}
+                      >
                         {item.medicine}
                       </Text>
-                      <Text style={[styles.tdCell, { width: 160 }]} numberOfLines={1}>
+                      <Text
+                        style={[styles.tdCell, { width: 160 }]}
+                        numberOfLines={1}
+                      >
                         {item.supplier}
                       </Text>
-                      <Text style={[styles.tdCell, { width: 120 }]}>{item.expiryDate}</Text>
+                      <Text style={[styles.tdCell, { width: 120 }]}>
+                        {item.expiryDate}
+                      </Text>
                       <Text
                         style={[
                           styles.tdCell,
                           styles.daysText,
-                          item.daysRemaining === 'Expired' && styles.expiredText,
-                          { width: 130, textAlign: 'center' },
+                          item.daysRemaining === "Expired" &&
+                            styles.expiredText,
+                          { width: 130, textAlign: "center" },
                         ]}
                       >
                         {item.daysRemaining}
                       </Text>
-                      <Text style={[styles.tdCell, { width: 90, textAlign: 'center', fontWeight: '600' }]}>
+                      <Text
+                        style={[
+                          styles.tdCell,
+                          { width: 90, textAlign: "center", fontWeight: "600" },
+                        ]}
+                      >
                         {item.quantity}
                       </Text>
-                      <Text style={[styles.tdCell, styles.costText, { width: 130, textAlign: 'right' }]}>
+                      <Text
+                        style={[
+                          styles.tdCell,
+                          styles.costText,
+                          { width: 130, textAlign: "right" },
+                        ]}
+                      >
                         {item.costValue}
                       </Text>
 
                       {/* Risk Badge */}
                       <View style={[styles.statusWrapper, { width: 120 }]}>
-                        <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
-                          <Text style={[styles.statusBadgeText, { color: badge.text }]}>
+                        <View
+                          style={[
+                            styles.statusBadge,
+                            { backgroundColor: badge.bg },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.statusBadgeText,
+                              { color: badge.text },
+                            ]}
+                          >
                             {item.riskLevel}
                           </Text>
                         </View>
@@ -455,72 +623,73 @@ const styles = StyleSheet.create({
     gap: 24,
   },
   headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    flexWrap: "wrap",
     gap: 16,
   },
   pageTitle: {
     fontSize: 24,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
     letterSpacing: -0.4,
   },
   pageSubtitle: {
     fontSize: 13.5,
-    fontWeight: '500',
-    color: '#64748B',
+    fontWeight: "500",
+    color: "#64748B",
     marginTop: 4,
   },
   actionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
   },
   exportBtnSecondary: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: "#CBD5E1",
     paddingVertical: 9,
     paddingHorizontal: 16,
     borderRadius: 8,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   exportBtnTextSecondary: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#334155',
+    fontWeight: "600",
+    color: "#334155",
   },
   exportBtnPrimary: {
-    backgroundColor: '#0F766E',
+    backgroundColor: "#0F766E",
     paddingVertical: 9,
     paddingHorizontal: 16,
     borderRadius: 8,
-    cursor: 'pointer',
+    cursor: "pointer",
   },
   exportBtnTextPrimary: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
   kpiRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 16,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
   },
   kpiRowCompact: {
     gap: 12,
   },
   cardContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    overflow: 'hidden',
+    borderColor: "#E2E8F0",
+    overflow: "hidden",
     ...Platform.select({
       web: {
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)',
+        boxShadow:
+          "0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)",
       },
       default: {
         elevation: 1,
@@ -531,31 +700,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: "#F1F5F9",
   },
   cardTitle: {
     fontSize: 16,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   cardSubtitle: {
     fontSize: 12.5,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 2,
   },
   filtersBar: {
     paddingHorizontal: 20,
     paddingVertical: 12,
-    backgroundColor: '#FAFAFA',
+    backgroundColor: "#FAFAFA",
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: "#F1F5F9",
   },
   searchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     borderRadius: 8,
     paddingHorizontal: 12,
     height: 38,
@@ -563,74 +732,74 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 13,
-    color: '#0F172A',
-    outlineStyle: 'none',
+    color: "#0F172A",
+    outlineStyle: "none",
   },
   clearBtn: {
     padding: 4,
   },
   clearBtnText: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: "#94A3B8",
   },
   tableWrapper: {
     minWidth: 1150,
     paddingHorizontal: 8,
   },
   tableHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderBottomColor: "#E2E8F0",
+    backgroundColor: "#F8FAFC",
   },
   thCell: {
     fontSize: 11.5,
-    fontWeight: '700',
-    color: '#64748B',
+    fontWeight: "700",
+    color: "#64748B",
     paddingHorizontal: 6,
     letterSpacing: 0.3,
   },
   tableRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 13,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: "#F1F5F9",
   },
   tableRowAlt: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#F8FAFC",
   },
   tdCell: {
     fontSize: 13,
-    color: '#334155',
+    color: "#334155",
     paddingHorizontal: 6,
   },
   batchText: {
-    fontWeight: '700',
-    color: '#0F766E',
+    fontWeight: "700",
+    color: "#0F766E",
   },
   medName: {
-    fontWeight: '600',
-    color: '#0F172A',
+    fontWeight: "600",
+    color: "#0F172A",
   },
   daysText: {
-    fontWeight: '700',
-    color: '#D97706',
+    fontWeight: "700",
+    color: "#D97706",
   },
   expiredText: {
-    color: '#DC2626',
+    color: "#DC2626",
   },
   costText: {
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   statusWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   statusBadge: {
     paddingHorizontal: 8,
@@ -639,34 +808,34 @@ const styles = StyleSheet.create({
   },
   statusBadgeText: {
     fontSize: 11.5,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   actionPillBtn: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: "#F1F5F9",
     paddingVertical: 4,
     paddingHorizontal: 10,
     borderRadius: 6,
-    cursor: 'pointer',
-    alignSelf: 'flex-start',
+    cursor: "pointer",
+    alignSelf: "flex-start",
   },
   actionPillText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#2563EB',
+    fontWeight: "600",
+    color: "#2563EB",
   },
   emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 40,
   },
   emptyTitle: {
     fontSize: 15,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   emptySubtitle: {
     fontSize: 13,
-    color: '#64748B',
+    color: "#64748B",
     marginTop: 2,
   },
   // Mobile Batch Expiry KPI Cards
@@ -675,84 +844,84 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   mobileExpiryCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: "#E2E8F0",
     borderRadius: 12,
     padding: 14,
     ...Platform.select({
-      web: { boxShadow: '0 1px 3px rgba(0,0,0,0.04)' },
+      web: { boxShadow: "0 1px 3px rgba(0,0,0,0.04)" },
       default: { elevation: 1 },
     }),
   },
   mobileExpiryTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 8,
   },
   mobileDaysPill: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: "#FEF3C7",
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
   },
   daysPillUrgent: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: "#FEE2E2",
   },
   mobileDaysText: {
     fontSize: 11.5,
-    fontWeight: '700',
-    color: '#B45309',
+    fontWeight: "700",
+    color: "#B45309",
   },
   daysTextUrgent: {
-    color: '#B91C1C',
+    color: "#B91C1C",
   },
   mobileMedName: {
     fontSize: 15,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
     marginBottom: 3,
   },
   mobileSupplierText: {
     fontSize: 12,
-    color: '#64748B',
+    color: "#64748B",
     marginBottom: 10,
   },
   mobileExpiryDetailsGrid: {
-    flexDirection: 'row',
-    backgroundColor: '#F8FAFC',
+    flexDirection: "row",
+    backgroundColor: "#F8FAFC",
     borderRadius: 8,
     padding: 10,
-    justifyContent: 'space-between',
+    justifyContent: "space-between",
     marginBottom: 10,
   },
   mobileExpiryDetailItem: {
-    alignItems: 'center',
+    alignItems: "center",
     flex: 1,
   },
   mobileExpiryDetailLabel: {
     fontSize: 10,
-    fontWeight: '700',
-    color: '#64748B',
+    fontWeight: "700",
+    color: "#64748B",
     marginBottom: 2,
     letterSpacing: 0.3,
   },
   mobileExpiryDetailVal: {
     fontSize: 13.5,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: "700",
+    color: "#0F172A",
   },
   mobileActionBtn: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: "#F1F5F9",
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 8,
-    alignItems: 'center',
+    alignItems: "center",
   },
   mobileActionBtnText: {
     fontSize: 12.5,
-    fontWeight: '700',
-    color: '#2563EB',
+    fontWeight: "700",
+    color: "#2563EB",
   },
 });

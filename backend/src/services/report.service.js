@@ -4,29 +4,63 @@
  * Provides analytical summaries, GSTR compliance data, and operational reporting.
  */
 
-const { pool } = require('../db/connection');
+const { pool } = require("../db/connection");
 
 class ReportService {
+  /**
+   * Helper: Resolve branch UUID from ID, name, or code
+   */
+  async _resolveBranchId(organisationId, branchId) {
+    if (
+      !branchId ||
+      branchId === "All Branches" ||
+      branchId === "all" ||
+      branchId === "No Active Branch"
+    )
+      return null;
+    const isUuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        branchId,
+      );
+    if (isUuid) return branchId;
+    try {
+      const res = await pool.query(
+        `SELECT id FROM branches WHERE organisation_id = $1 AND (name ILIKE $2 OR branch_code ILIKE $2) LIMIT 1;`,
+        [organisationId, branchId],
+      );
+      return res.rows[0]?.id || null;
+    } catch {
+      return null;
+    }
+  }
+
   /**
    * Sales & Financial Summary
    */
   async getSalesSummary({ organisationId, branchId, startDate, endDate }) {
     if (!organisationId) {
-      throw new Error('organisationId is required');
+      throw new Error("organisationId is required");
     }
 
-    const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const resolvedBranchId = await this._resolveBranchId(
+      organisationId,
+      branchId,
+    );
+    const start = startDate
+      ? new Date(startDate)
+      : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const end = endDate ? new Date(endDate) : new Date();
 
-    let branchClause = '';
+    let branchClause = "";
     const params = [organisationId, start, end];
-    if (branchId) {
-      params.push(branchId);
-      branchClause = 'AND branch_id = $4';
+    if (resolvedBranchId) {
+      params.push(resolvedBranchId);
+      branchClause = "AND branch_id = $4";
     }
 
     // High level metrics
-    const statsRes = await pool.query(`
+    const statsRes = await pool.query(
+      `
       SELECT 
         COALESCE(SUM(total_amount), 0.00) AS "totalSales",
         COUNT(*)::int AS "totalInvoices",
@@ -36,17 +70,20 @@ class ReportService {
         AND invoice_date >= $2 AND invoice_date <= $3
         AND status = 'PAID'
         ${branchClause};
-    `, params);
+    `,
+      params,
+    );
 
     // Payment methods breakdown
-    let pmtBranchClause = '';
+    let pmtBranchClause = "";
     const pmtParams = [organisationId, start, end];
-    if (branchId) {
-      pmtParams.push(branchId);
-      pmtBranchClause = 'AND p.branch_id = $4';
+    if (resolvedBranchId) {
+      pmtParams.push(resolvedBranchId);
+      pmtBranchClause = "AND p.branch_id = $4";
     }
 
-    const pmtRes = await pool.query(`
+    const pmtRes = await pool.query(
+      `
       SELECT 
         pt.payment_method AS "method",
         COALESCE(SUM(pt.amount), 0.00) AS "totalAmount",
@@ -58,10 +95,13 @@ class ReportService {
         AND p.status = 'COMPLETED'
         ${pmtBranchClause}
       GROUP BY pt.payment_method;
-    `, pmtParams);
+    `,
+      pmtParams,
+    );
 
     // Daily trend
-    const trendRes = await pool.query(`
+    const trendRes = await pool.query(
+      `
       SELECT 
         TO_CHAR(invoice_date, 'YYYY-MM-DD') AS "date",
         COALESCE(SUM(total_amount), 0.00) AS "sales",
@@ -73,15 +113,19 @@ class ReportService {
         ${branchClause}
       GROUP BY TO_CHAR(invoice_date, 'YYYY-MM-DD')
       ORDER BY "date" ASC;
-    `, params);
+    `,
+      params,
+    );
 
     return {
       overview: {
         totalSales: parseFloat(statsRes.rows[0]?.totalSales || 0),
         totalInvoices: parseInt(statsRes.rows[0]?.totalInvoices || 0, 10),
-        averageTicketSize: parseFloat(statsRes.rows[0]?.averageTicketSize || 0).toFixed(2),
+        averageTicketSize: parseFloat(
+          statsRes.rows[0]?.averageTicketSize || 0,
+        ).toFixed(2),
       },
-      paymentMethods: pmtRes.rows.map(r => ({
+      paymentMethods: pmtRes.rows.map((r) => ({
         method: r.method,
         amount: parseFloat(r.totalAmount),
         transactions: r.transactionCount,
@@ -95,20 +139,25 @@ class ReportService {
    */
   async getGstReport({ organisationId, branchId, month, year }) {
     if (!organisationId) {
-      throw new Error('organisationId is required');
+      throw new Error("organisationId is required");
     }
 
+    const resolvedBranchId = await this._resolveBranchId(
+      organisationId,
+      branchId,
+    );
     const currentYear = year || new Date().getFullYear();
     const currentMonth = month || new Date().getMonth() + 1;
 
-    let branchClause = '';
+    let branchClause = "";
     const params = [organisationId, currentYear, currentMonth];
-    if (branchId) {
-      params.push(branchId);
-      branchClause = 'AND i.branch_id = $4';
+    if (resolvedBranchId) {
+      params.push(resolvedBranchId);
+      branchClause = "AND i.branch_id = $4";
     }
 
-    const gstSummaryRes = await pool.query(`
+    const gstSummaryRes = await pool.query(
+      `
       SELECT 
         12.0 AS "gstRate",
         ROUND(COALESCE(SUM(i.total_amount) / 1.12, 0.00), 2) AS "taxableValue",
@@ -123,11 +172,13 @@ class ReportService {
         AND EXTRACT(MONTH FROM i.invoice_date) = $3
         AND i.status = 'PAID'
         ${branchClause}
-    `, params);
+    `,
+      params,
+    );
 
     return {
-      period: `${currentYear}-${String(currentMonth).padStart(2, '0')}`,
-      slabs: gstSummaryRes.rows.map(r => ({
+      period: `${currentYear}-${String(currentMonth).padStart(2, "0")}`,
+      slabs: gstSummaryRes.rows.map((r) => ({
         gstRate: `${r.gstRate}%`,
         taxableValue: parseFloat(r.taxableValue || 0),
         cgstAmount: parseFloat(r.cgstAmount || 0),
@@ -143,19 +194,28 @@ class ReportService {
   /**
    * Cashier Reconciliation & Shift Auditing
    */
-  async getCashierReconciliationReport({ organisationId, branchId, limit = 20 }) {
+  async getCashierReconciliationReport({
+    organisationId,
+    branchId,
+    limit = 20,
+  }) {
     if (!organisationId) {
-      throw new Error('organisationId is required');
+      throw new Error("organisationId is required");
     }
 
-    let branchClause = '';
+    const resolvedBranchId = await this._resolveBranchId(
+      organisationId,
+      branchId,
+    );
+    let branchClause = "";
     const params = [organisationId, limit];
-    if (branchId) {
-      params.push(branchId);
-      branchClause = 'AND crs.branch_id = $3';
+    if (resolvedBranchId) {
+      params.push(resolvedBranchId);
+      branchClause = "AND crs.branch_id = $3";
     }
 
-    const res = await pool.query(`
+    const res = await pool.query(
+      `
       SELECT 
         crs.id,
         crs.session_number AS "sessionNumber",
@@ -178,7 +238,9 @@ class ReportService {
         ${branchClause}
       ORDER BY crs.opened_at DESC
       LIMIT $2;
-    `, params);
+    `,
+      params,
+    );
 
     return res.rows;
   }
@@ -188,17 +250,22 @@ class ReportService {
    */
   async getExpiryReport({ organisationId, branchId }) {
     if (!organisationId) {
-      throw new Error('organisationId is required');
+      throw new Error("organisationId is required");
     }
 
-    let branchClause = '';
+    const resolvedBranchId = await this._resolveBranchId(
+      organisationId,
+      branchId,
+    );
+    let branchClause = "";
     const params = [organisationId];
-    if (branchId) {
-      params.push(branchId);
-      branchClause = 'AND ib.branch_id = $2';
+    if (resolvedBranchId) {
+      params.push(resolvedBranchId);
+      branchClause = "AND ib.branch_id = $2";
     }
 
-    const res = await pool.query(`
+    const res = await pool.query(
+      `
       SELECT 
         COALESCE(p.brand_name || ' (' || p.medicine_name || ')', p.medicine_name) AS "productName",
         ib.batch_number AS "batchNumber",
@@ -221,12 +288,14 @@ class ReportService {
         AND ib.expiry_date <= CURRENT_DATE + INTERVAL '90 days'
         ${branchClause}
       ORDER BY ib.expiry_date ASC;
-    `, params);
+    `,
+      params,
+    );
 
-    const expired = res.rows.filter(r => r.urgency === 'EXPIRED');
-    const within30 = res.rows.filter(r => r.urgency === 'EXPIRING_30_DAYS');
-    const within60 = res.rows.filter(r => r.urgency === 'EXPIRING_60_DAYS');
-    const within90 = res.rows.filter(r => r.urgency === 'EXPIRING_90_DAYS');
+    const expired = res.rows.filter((r) => r.urgency === "EXPIRED");
+    const within30 = res.rows.filter((r) => r.urgency === "EXPIRING_30_DAYS");
+    const within60 = res.rows.filter((r) => r.urgency === "EXPIRING_60_DAYS");
+    const within90 = res.rows.filter((r) => r.urgency === "EXPIRING_90_DAYS");
 
     return {
       summary: {
@@ -235,7 +304,10 @@ class ReportService {
         within30DaysCount: within30.length,
         within60DaysCount: within60.length,
         within90DaysCount: within90.length,
-        totalLossAtRisk: res.rows.reduce((sum, r) => sum + parseFloat(r.totalCostValuation || 0), 0),
+        totalLossAtRisk: res.rows.reduce(
+          (sum, r) => sum + parseFloat(r.totalCostValuation || 0),
+          0,
+        ),
       },
       batches: res.rows,
     };
@@ -246,17 +318,22 @@ class ReportService {
    */
   async getFastMovingReport({ organisationId, branchId, limit = 10 }) {
     if (!organisationId) {
-      throw new Error('organisationId is required');
+      throw new Error("organisationId is required");
     }
 
-    let branchClause = '';
+    const resolvedBranchId = await this._resolveBranchId(
+      organisationId,
+      branchId,
+    );
+    let branchClause = "";
     const params = [organisationId, limit];
-    if (branchId) {
-      params.push(branchId);
-      branchClause = 'AND i.branch_id = $3';
+    if (resolvedBranchId) {
+      params.push(resolvedBranchId);
+      branchClause = "AND i.branch_id = $3";
     }
 
-    const res = await pool.query(`
+    const res = await pool.query(
+      `
       SELECT 
         p.id AS "productId",
         COALESCE(p.brand_name || ' (' || p.medicine_name || ')', p.medicine_name) AS "productName",
@@ -273,7 +350,9 @@ class ReportService {
       GROUP BY p.id, p.medicine_name, p.brand_name, p.sku
       ORDER BY "totalUnitsSold" DESC
       LIMIT $2;
-    `, params);
+    `,
+      params,
+    );
 
     return res.rows;
   }
@@ -283,17 +362,22 @@ class ReportService {
    */
   async getInventoryReport({ organisationId, branchId }) {
     if (!organisationId) {
-      throw new Error('organisationId is required');
+      throw new Error("organisationId is required");
     }
 
-    let branchClause = '';
+    const resolvedBranchId = await this._resolveBranchId(
+      organisationId,
+      branchId,
+    );
+    let branchClause = "";
     const params = [organisationId];
-    if (branchId) {
-      params.push(branchId);
-      branchClause = 'AND ib.branch_id = $2';
+    if (resolvedBranchId) {
+      params.push(resolvedBranchId);
+      branchClause = "AND ib.branch_id = $2";
     }
 
-    const summaryRes = await pool.query(`
+    const summaryRes = await pool.query(
+      `
       SELECT
         COUNT(DISTINCT p.id)::int AS "totalProducts",
         COUNT(ib.id)::int AS "totalBatches",
@@ -308,9 +392,12 @@ class ReportService {
       JOIN products p ON p.id = ib.product_id
       WHERE p.organisation_id = $1
         ${branchClause};
-    `, params);
+    `,
+      params,
+    );
 
-    const itemsRes = await pool.query(`
+    const itemsRes = await pool.query(
+      `
       SELECT
         p.id AS "productId",
         COALESCE(p.brand_name || ' (' || p.medicine_name || ')', p.medicine_name) AS "name",
@@ -329,7 +416,9 @@ class ReportService {
         ${branchClause}
       ORDER BY ib.quantity ASC
       LIMIT 100;
-    `, params);
+    `,
+      params,
+    );
 
     return {
       summary: summaryRes.rows[0] || {},
@@ -342,20 +431,27 @@ class ReportService {
    */
   async getProfitLossReport({ organisationId, branchId, startDate, endDate }) {
     if (!organisationId) {
-      throw new Error('organisationId is required');
+      throw new Error("organisationId is required");
     }
 
-    const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const resolvedBranchId = await this._resolveBranchId(
+      organisationId,
+      branchId,
+    );
+    const start = startDate
+      ? new Date(startDate)
+      : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const end = endDate ? new Date(endDate) : new Date();
 
-    let branchClause = '';
+    let branchClause = "";
     const params = [organisationId, start, end];
-    if (branchId) {
-      params.push(branchId);
-      branchClause = 'AND i.branch_id = $4';
+    if (resolvedBranchId) {
+      params.push(resolvedBranchId);
+      branchClause = "AND i.branch_id = $4";
     }
 
-    const res = await pool.query(`
+    const res = await pool.query(
+      `
       SELECT
         COALESCE(SUM(i.total_amount), 0.00) AS "grossRevenue",
         COALESCE(SUM(i.subtotal), 0.00) AS "subtotal",
@@ -369,7 +465,9 @@ class ReportService {
         AND i.created_at >= $2 AND i.created_at <= $3
         AND i.status IN ('PAID', 'COMPLETED')
         ${branchClause};
-    `, params);
+    `,
+      params,
+    );
 
     const row = res.rows[0] || {};
     const revenue = parseFloat(row.grossRevenue || 0);

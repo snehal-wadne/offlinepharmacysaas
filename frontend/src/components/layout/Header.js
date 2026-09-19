@@ -12,7 +12,7 @@ import {
 import { useOfflineSync } from "../../offline/OfflineSyncContext";
 import { apiGet } from "../../api/apiClient";
 
-const DEFAULT_BRANCH_OPTIONS = ["All Branches"];
+const DEFAULT_BRANCH_OPTIONS = [{ id: null, name: "All Branches" }];
 
 export default function Header({
   currentBranch = "All Branches",
@@ -55,11 +55,12 @@ export default function Header({
         const activeBranches = branchList.filter(
           (b) => b.status === "ACTIVE" || b.status === "Active" || !b.status,
         );
-        const dbNames = activeBranches.map((b) => b.name);
-        const combined = [
-          "All Branches",
-          ...dbNames.filter((n) => n !== "All Branches"),
-        ];
+        const branchObjs = activeBranches.map((b) => ({
+          id: b.id,
+          name: b.name,
+          branchCode: b.branch_code || b.branchCode,
+        }));
+        const combined = [{ id: null, name: "All Branches" }, ...branchObjs];
         setBranchOptions(combined);
         return;
       }
@@ -67,7 +68,7 @@ export default function Header({
       console.warn("Could not fetch database branches in Header:", err.message);
     }
 
-    setBranchOptions(["All Branches"]);
+    setBranchOptions(DEFAULT_BRANCH_OPTIONS);
   };
 
   // --- Global Search (products & customers) ---
@@ -236,8 +237,8 @@ export default function Header({
                     const isSelected = branchName === displayBranch;
                     return (
                       <Pressable
-                        key={branchName}
-                        onPress={() => handleSelectBranch(branchName)}
+                        key={branch.id || branchName}
+                        onPress={() => handleSelectBranch(branch)}
                         style={[
                           styles.dropdownItem,
                           isSelected && styles.dropdownItemSelected,

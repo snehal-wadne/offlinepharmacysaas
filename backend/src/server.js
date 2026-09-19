@@ -197,7 +197,7 @@ const startServer = () => {
     console.log(`✨ Backend server is listening on port ${PORT}`);
     console.log(`🏪 Cashier API:    http://localhost:${PORT}/api/cashier`);
     console.log(`🔄 Sync API:       http://localhost:${PORT}/api/sync`);
-    console.log(`🩺 Health API:     http://localhost:${PORT}/health`);
+    console.log(`🩺  Health API:     http://localhost:${PORT}/health`);
     console.log(`👑 Superadmin API: http://localhost:${PORT}/api/superadmin`);
     console.log("=================================================");
   });
