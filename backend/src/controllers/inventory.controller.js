@@ -5,40 +5,17 @@
  */
 
 const inventoryService = require("../services/inventory.service");
-const { pool } = require("../db/connection");
-
-const getOrgId = async (req) => {
-  if (req.user && req.user.organisationId) return req.user.organisationId;
-  if (req.user && req.user.organisation_id) return req.user.organisation_id;
-  if (req.tenant && req.tenant.organisationId) return req.tenant.organisationId;
-  if (req.tenantContext && req.tenantContext.organisationId)
-    return req.tenantContext.organisationId;
-  if (req.headers["x-organisation-id"]) return req.headers["x-organisation-id"];
-  if (req.query && req.query.organisationId) return req.query.organisationId;
-  if (req.body && req.body.organisationId) return req.body.organisationId;
-  const userId = req.auth?.id || req.user?.id;
-  if (userId) {
-    const mem = await pool.query(
-      "SELECT organisation_id FROM organisation_memberships WHERE user_id = $1 AND status = 'ACTIVE' LIMIT 1;",
-      [userId],
-    );
-    if (mem.rows.length > 0) return mem.rows[0].organisation_id;
-  }
-  return null;
-};
+const {
+  getAuthorizedOrgId,
+  getAuthorizedBranchId,
+  sanitizeTenantPayload,
+} = require("../utils/tenant-context");
 
 const getInventory = async (req, res) => {
   try {
-    const organisationId = await getOrgId(req);
-    if (!organisationId) {
-      return res.status(400).json({ error: "Organisation ID is required" });
-    }
-    const { search, limit, offset, branchId: queryBranchId } = req.query;
-    const branchId =
-      queryBranchId ||
-      req.headers["x-branch-id"] ||
-      req.tenant?.branchId ||
-      null;
+    const organisationId = await getAuthorizedOrgId(req);
+    const branchId = await getAuthorizedBranchId(req, organisationId);
+    const { search, limit, offset } = req.query;
 
     const inventory = await inventoryService.getInventory({
       organisationId,
@@ -55,7 +32,7 @@ const getInventory = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching inventory:", error);
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
       error: error.message || "Failed to fetch inventory",
     });
@@ -64,11 +41,12 @@ const getInventory = async (req, res) => {
 
 const saveInventory = async (req, res) => {
   try {
-    const organisationId = await getOrgId(req);
-    if (!organisationId) {
-      return res.status(400).json({ error: "Organisation ID is required" });
-    }
-    const itemData = req.body;
+    const organisationId = await getAuthorizedOrgId(req);
+    const branchId = await getAuthorizedBranchId(req, organisationId);
+    const itemData = sanitizeTenantPayload(req.body, {
+      branchId: branchId || req.body.branchId,
+      updatedBy: req.user?.id,
+    });
 
     const saved = await inventoryService.saveOrUpdateInventory(
       organisationId,
@@ -91,12 +69,14 @@ const saveInventory = async (req, res) => {
 
 const updateInventory = async (req, res) => {
   try {
-    const organisationId = await getOrgId(req);
-    if (!organisationId) {
-      return res.status(400).json({ error: "Organisation ID is required" });
-    }
+    const organisationId = await getAuthorizedOrgId(req);
+    const branchId = await getAuthorizedBranchId(req, organisationId);
     const { id } = req.params;
-    const itemData = { ...req.body, id };
+    const itemData = sanitizeTenantPayload(req.body, {
+      id,
+      branchId: branchId || req.body.branchId,
+      updatedBy: req.user?.id,
+    });
 
     const updated = await inventoryService.saveOrUpdateInventory(
       organisationId,
@@ -119,10 +99,7 @@ const updateInventory = async (req, res) => {
 
 const deleteInventory = async (req, res) => {
   try {
-    const organisationId = await getOrgId(req);
-    if (!organisationId) {
-      return res.status(400).json({ error: "Organisation ID is required" });
-    }
+    const organisationId = await getAuthorizedOrgId(req);
     const { id } = req.params;
 
     const deleted = await inventoryService.deleteInventoryEntry(
@@ -138,7 +115,7 @@ const deleteInventory = async (req, res) => {
     });
   } catch (error) {
     console.error(`Error deleting inventory item ${req.params.id}:`, error);
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
       error: error.message || "Failed to delete inventory item",
     });
@@ -147,15 +124,9 @@ const deleteInventory = async (req, res) => {
 
 const getInventorySummary = async (req, res) => {
   try {
-    const organisationId = await getOrgId(req);
-    if (!organisationId) {
-      return res.status(400).json({ error: "Organisation ID is required" });
-    }
-    const branchId =
-      req.query.branchId ||
-      req.headers["x-branch-id"] ||
-      req.tenant?.branchId ||
-      null;
+    const organisationId = await getAuthorizedOrgId(req);
+    const branchId = await getAuthorizedBranchId(req, organisationId);
+
     const summary = await inventoryService.getInventorySummary(
       organisationId,
       branchId,
@@ -167,7 +138,7 @@ const getInventorySummary = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching inventory summary:", error);
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
       error: error.message || "Failed to fetch inventory summary",
     });
@@ -176,16 +147,10 @@ const getInventorySummary = async (req, res) => {
 
 const getRecentStockMovements = async (req, res) => {
   try {
-    const organisationId = await getOrgId(req);
-    if (!organisationId) {
-      return res.status(400).json({ error: "Organisation ID is required" });
-    }
+    const organisationId = await getAuthorizedOrgId(req);
+    const branchId = await getAuthorizedBranchId(req, organisationId);
     const limit = Number(req.query.limit) || 10;
-    const branchId =
-      req.query.branchId ||
-      req.headers["x-branch-id"] ||
-      req.tenant?.branchId ||
-      null;
+
     const movements = await inventoryService.getStockMovements(
       organisationId,
       limit,
@@ -198,7 +163,7 @@ const getRecentStockMovements = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching stock movements:", error);
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
       error: error.message || "Failed to fetch stock movements",
     });
@@ -207,14 +172,12 @@ const getRecentStockMovements = async (req, res) => {
 
 const recordMovement = async (req, res) => {
   try {
-    const organisationId = await getOrgId(req);
-    if (!organisationId) {
-      return res.status(400).json({ error: "Organisation ID is required" });
-    }
+    const organisationId = await getAuthorizedOrgId(req);
+    const branchId = await getAuthorizedBranchId(req, organisationId);
     const { branchName, type, item, quantity, reference, status } = req.body;
 
     await inventoryService.recordStockMovement(organisationId, {
-      branchName,
+      branchName: branchName || branchId,
       type,
       item,
       quantity,
@@ -228,7 +191,7 @@ const recordMovement = async (req, res) => {
     });
   } catch (error) {
     console.error("Error recording stock movement:", error);
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
       error: error.message || "Failed to record stock movement",
     });
@@ -237,10 +200,7 @@ const recordMovement = async (req, res) => {
 
 const getItemBarcode = async (req, res) => {
   try {
-    const organisationId = await getOrgId(req);
-    if (!organisationId) {
-      return res.status(400).json({ error: "Organisation ID is required" });
-    }
+    const organisationId = await getAuthorizedOrgId(req);
     const { id } = req.params;
 
     const barcodeData = await inventoryService.getItemBarcodeData(
@@ -254,7 +214,7 @@ const getItemBarcode = async (req, res) => {
     });
   } catch (error) {
     console.error(`Error fetching barcode for item ${req.params.id}:`, error);
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
       error: error.message || "Failed to generate barcode data",
     });

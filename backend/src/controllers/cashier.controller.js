@@ -21,67 +21,36 @@ const isUuid = (str) =>
   typeof str === "string" &&
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 
+const {
+  getAuthorizedOrgId,
+  getAuthorizedBranchId,
+  sanitizeTenantPayload,
+} = require("../utils/tenant-context");
+
 const resolveAuthContext = async (req) => {
-  let organisationId =
-    req.tenant?.organisationId ||
-    req.tenantContext?.organisationId ||
-    req.user?.organisation_id ||
-    req.user?.organisationId ||
-    req.headers["x-organisation-id"];
+  const organisationId = await getAuthorizedOrgId(req);
+  let branchId = await getAuthorizedBranchId(req, organisationId, {
+    required: false,
+  });
+  const cashierId = req.user?.id || req.auth?.id;
 
-  let branchId =
-    req.query?.branchId ||
-    req.headers["x-branch-id"] ||
-    req.tenant?.branchId ||
-    req.tenantContext?.branchId ||
-    req.user?.branch_id ||
-    req.user?.branchId;
-
-  const cashierId = req.auth?.id || req.user?.id;
-
-  // Resolve organisation if missing
-  if (!organisationId && cashierId) {
-    const userOrg = await pool.query(
-      `SELECT organisation_id FROM organisation_memberships WHERE user_id = $1 AND status = 'ACTIVE' LIMIT 1;`,
-      [cashierId],
+  if (!branchId && cashierId) {
+    const baRes = await pool.query(
+      `SELECT ba.branch_id FROM branch_assignments ba
+       JOIN organisation_memberships om ON om.id = ba.membership_id
+       WHERE om.organisation_id = $1 AND om.user_id = $2 AND om.status = 'ACTIVE'
+       ORDER BY ba.is_primary DESC LIMIT 1;`,
+      [organisationId, cashierId],
     );
-    if (userOrg.rows.length > 0) {
-      organisationId = userOrg.rows[0].organisation_id;
-    }
-  }
-
-  // Resolve branch if it is a string name or missing
-  if (organisationId) {
-    if (branchId && !isUuid(branchId)) {
-      const nameRes = await pool.query(
-        "SELECT id FROM branches WHERE organisation_id = $1 AND (name ILIKE $2 OR branch_code ILIKE $2) LIMIT 1;",
-        [organisationId, branchId],
+    if (baRes.rows.length > 0) {
+      branchId = baRes.rows[0].branch_id;
+    } else {
+      const defaultBranch = await pool.query(
+        "SELECT id FROM branches WHERE organisation_id = $1 AND status = 'ACTIVE' ORDER BY created_at ASC LIMIT 1;",
+        [organisationId],
       );
-      if (nameRes.rows.length > 0) {
-        branchId = nameRes.rows[0].id;
-      } else {
-        branchId = null;
-      }
-    }
-
-    if (!branchId && cashierId) {
-      const baRes = await pool.query(
-        `SELECT ba.branch_id FROM branch_assignments ba
-         JOIN organisation_memberships om ON om.id = ba.membership_id
-         WHERE om.organisation_id = $1 AND om.user_id = $2 AND om.status = 'ACTIVE'
-         ORDER BY ba.is_primary DESC LIMIT 1;`,
-        [organisationId, cashierId],
-      );
-      if (baRes.rows.length > 0) {
-        branchId = baRes.rows[0].branch_id;
-      } else {
-        const defaultBranch = await pool.query(
-          "SELECT id FROM branches WHERE organisation_id = $1 AND status = 'ACTIVE' ORDER BY created_at ASC LIMIT 1;",
-          [organisationId],
-        );
-        if (defaultBranch.rows.length > 0) {
-          branchId = defaultBranch.rows[0].id;
-        }
+      if (defaultBranch.rows.length > 0) {
+        branchId = defaultBranch.rows[0].id;
       }
     }
   }
@@ -219,13 +188,29 @@ const openSession = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Error opening register session:", error);
     const isConflict =
       error.message &&
       (error.message.includes("already open") ||
         error.message.includes("unique_open_session") ||
         error.message.includes("idx_unique_open_session_per_register"));
-    return res.status(isConflict ? 409 : 400).json({
+    if (isConflict) {
+      console.warn("Register session open conflict:", error.message);
+      let existingSession = null;
+      try {
+        const auth = await resolveAuthContext(req);
+        existingSession = await cashRegisterSessionRepo.getCurrentSession(
+          auth.organisationId,
+          auth.branchId,
+        );
+      } catch (_) {}
+      return res.status(409).json({
+        success: false,
+        error: error.message,
+        data: existingSession,
+      });
+    }
+    console.error("Error opening register session:", error);
+    return res.status(400).json({
       success: false,
       error: error.message,
     });
@@ -452,14 +437,11 @@ const getSessionSummary = async (req, res) => {
 // --- Products & Barcode Search ---
 const searchProducts = async (req, res) => {
   try {
-    const { search, barcode, branchId: queryBranchId } = req.query;
-    const branchId =
-      queryBranchId ||
-      req.headers["x-branch-id"] ||
-      req.tenant?.branchId ||
-      null;
+    const { organisationId, branchId } = await resolveAuthContext(req);
+    const { search, barcode } = req.query;
 
     const result = await cashierService.searchProducts({
+      organisationId,
       search,
       barcode,
       branchId,
@@ -467,7 +449,9 @@ const searchProducts = async (req, res) => {
     res.status(200).json(result);
   } catch (error) {
     console.error("Error searching products:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res
+      .status(error.statusCode || 500)
+      .json({ success: false, error: error.message });
   }
 };
 
@@ -475,123 +459,157 @@ const searchProducts = async (req, res) => {
 const createSale = async (req, res) => {
   try {
     const authCtx = await resolveAuthContext(req);
-    const saleData = {
-      organisationId: req.body.organisationId || authCtx.organisationId,
-      branchId: req.body.branchId || authCtx.branchId,
-      cashierId: req.body.cashierId || authCtx.cashierId,
-      ...req.body,
-    };
+    const saleData = sanitizeTenantPayload(req.body, {
+      organisationId: authCtx.organisationId,
+      branchId: authCtx.branchId,
+      cashierId: authCtx.cashierId,
+    });
     const result = await cashierService.createSale(saleData);
     res.status(201).json(result);
   } catch (error) {
     console.error("Error processing sale:", error);
-    res.status(400).json({ success: false, error: error.message });
+    res
+      .status(error.statusCode || 400)
+      .json({ success: false, error: error.message });
   }
 };
 
 const getRecentSales = async (req, res) => {
   try {
+    const { organisationId, branchId } = await resolveAuthContext(req);
     const limit = Number(req.query.limit) || 20;
-    const result = await cashierService.getRecentSales(limit);
+    const result = await cashierService.getRecentSales(
+      organisationId,
+      branchId,
+      limit,
+    );
     res.status(200).json(result);
   } catch (error) {
     console.error("Error fetching recent sales:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res
+      .status(error.statusCode || 500)
+      .json({ success: false, error: error.message });
   }
 };
 
 const getSaleByInvoiceNo = async (req, res) => {
   try {
+    const { organisationId } = await resolveAuthContext(req);
     const { invoiceNo } = req.params;
-    const result = await cashierService.getSaleByInvoiceNo(invoiceNo);
+    const result = await cashierService.getSaleByInvoiceNo(
+      organisationId,
+      invoiceNo,
+    );
     if (!result.success) {
       return res.status(404).json(result);
     }
     res.status(200).json(result);
   } catch (error) {
     console.error("Error fetching invoice:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res
+      .status(error.statusCode || 500)
+      .json({ success: false, error: error.message });
   }
 };
 
 // --- Held Bills ---
 const getHeldBills = async (req, res) => {
   try {
-    const result = await cashierService.getHeldBills();
+    const { organisationId, branchId } = await resolveAuthContext(req);
+    const result = await cashierService.getHeldBills(organisationId, branchId);
     res.status(200).json(result);
   } catch (error) {
     console.error("Error getting held bills:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res
+      .status(error.statusCode || 500)
+      .json({ success: false, error: error.message });
   }
 };
 
 const saveHeldBill = async (req, res) => {
   try {
     const authCtx = await resolveAuthContext(req);
-    const billData = {
-      organisationId: req.body.organisationId || authCtx.organisationId,
-      branchId: req.body.branchId || authCtx.branchId,
-      cashierId: req.body.cashierId || authCtx.cashierId,
-      ...req.body,
-    };
+    const billData = sanitizeTenantPayload(req.body, {
+      organisationId: authCtx.organisationId,
+      branchId: authCtx.branchId,
+      cashierId: authCtx.cashierId,
+    });
     const result = await cashierService.saveHeldBill(billData);
     res.status(201).json(result);
   } catch (error) {
     console.error("Error holding bill:", error);
-    res.status(400).json({ success: false, error: error.message });
+    res
+      .status(error.statusCode || 400)
+      .json({ success: false, error: error.message });
   }
 };
 
 const deleteHeldBill = async (req, res) => {
   try {
+    const { organisationId } = await resolveAuthContext(req);
     const { holdId } = req.params;
-    const result = await cashierService.deleteHeldBill(holdId);
+    const result = await cashierService.deleteHeldBill(organisationId, holdId);
     res.status(200).json(result);
   } catch (error) {
     console.error("Error removing held bill:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res
+      .status(error.statusCode || 500)
+      .json({ success: false, error: error.message });
   }
 };
 
 // --- Sales Returns ---
 const searchReturnInvoice = async (req, res) => {
   try {
+    const { organisationId } = await resolveAuthContext(req);
     const { invoiceNo } = req.query;
-    const result = await cashierService.searchReturnInvoice(invoiceNo);
+    const result = await cashierService.searchReturnInvoice(
+      organisationId,
+      invoiceNo,
+    );
     if (!result.success) {
       return res.status(404).json(result);
     }
     res.status(200).json(result);
   } catch (error) {
     console.error("Error searching invoice for return:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res
+      .status(error.statusCode || 500)
+      .json({ success: false, error: error.message });
   }
 };
 
 const processReturn = async (req, res) => {
   try {
     const authCtx = await resolveAuthContext(req);
-    const returnData = {
-      organisationId: req.body.organisationId || authCtx.organisationId,
-      branchId: req.body.branchId || authCtx.branchId,
-      cashierId: req.body.cashierId || authCtx.cashierId,
-      ...req.body,
-    };
+    const returnData = sanitizeTenantPayload(req.body, {
+      organisationId: authCtx.organisationId,
+      branchId: authCtx.branchId,
+      cashierId: authCtx.cashierId,
+    });
     const result = await cashierService.processReturn(returnData);
     res.status(201).json(result);
   } catch (error) {
     console.error("Error processing return:", error);
-    res.status(400).json({ success: false, error: error.message });
+    res
+      .status(error.statusCode || 400)
+      .json({ success: false, error: error.message });
   }
 };
 
 const getReturnHistory = async (req, res) => {
   try {
-    const result = await cashierService.getReturnHistory();
+    const { organisationId, branchId } = await resolveAuthContext(req);
+    const result = await cashierService.getReturnHistory(
+      organisationId,
+      branchId,
+    );
     res.status(200).json(result);
   } catch (error) {
     console.error("Error fetching return history:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res
+      .status(error.statusCode || 500)
+      .json({ success: false, error: error.message });
   }
 };
 

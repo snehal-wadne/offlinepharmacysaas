@@ -4,24 +4,15 @@
  * Request handlers for Supplier endpoints.
  */
 
-const supplierService = require('../services/supplier.service');
-const { pool } = require('../db/connection');
-
-const getOrgId = async (req) => {
-  if (req.user && req.user.organisationId) return req.user.organisationId;
-  if (req.headers['x-organisation-id']) return req.headers['x-organisation-id'];
-  if (req.query && req.query.organisationId) return req.query.organisationId;
-  if (req.body && req.body.organisationId) return req.body.organisationId;
-
-  return null;
-};
+const supplierService = require("../services/supplier.service");
+const {
+  getAuthorizedOrgId,
+  sanitizeTenantPayload,
+} = require("../utils/tenant-context");
 
 const getSuppliers = async (req, res) => {
   try {
-    const organisationId = await getOrgId(req);
-    if (!organisationId) {
-      return res.status(400).json({ error: 'Organisation ID is required' });
-    }
+    const organisationId = await getAuthorizedOrgId(req);
     const { search, limit, offset } = req.query;
 
     const suppliers = await supplierService.getSuppliers({
@@ -37,20 +28,17 @@ const getSuppliers = async (req, res) => {
       data: suppliers,
     });
   } catch (error) {
-    console.error('Error fetching suppliers:', error);
-    res.status(500).json({
+    console.error("Error fetching suppliers:", error);
+    res.status(error.statusCode || 500).json({
       success: false,
-      error: error.message || 'Failed to fetch suppliers',
+      error: error.message || "Failed to fetch suppliers",
     });
   }
 };
 
 const getSupplierById = async (req, res) => {
   try {
-    const organisationId = await getOrgId(req);
-    if (!organisationId) {
-      return res.status(400).json({ error: 'Organisation ID is required' });
-    }
+    const organisationId = await getAuthorizedOrgId(req);
     const { id } = req.params;
 
     const supplier = await supplierService.getSupplierById(organisationId, id);
@@ -67,53 +55,47 @@ const getSupplierById = async (req, res) => {
     });
   } catch (error) {
     console.error(`Error fetching supplier ${req.params.id}:`, error);
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
-      error: error.message || 'Failed to fetch supplier',
+      error: error.message || "Failed to fetch supplier",
     });
   }
 };
 
 const createSupplier = async (req, res) => {
   try {
-    const organisationId = await getOrgId(req);
-    if (!organisationId) {
-      return res.status(400).json({ error: 'Organisation ID is required' });
-    }
-    const supplierData = {
-      ...req.body,
+    const organisationId = await getAuthorizedOrgId(req);
+    const supplierData = sanitizeTenantPayload(req.body, {
       organisationId,
-    };
+      createdBy: req.user?.id,
+    });
 
     const newSupplier = await supplierService.createSupplier(supplierData);
 
     res.status(201).json({
       success: true,
-      message: 'Supplier created successfully',
+      message: "Supplier created successfully",
       data: newSupplier,
     });
   } catch (error) {
-    console.error('Error creating supplier:', error);
+    console.error("Error creating supplier:", error);
     res.status(error.statusCode || 400).json({
       success: false,
-      error: error.message || 'Failed to create supplier',
+      error: error.message || "Failed to create supplier",
     });
   }
 };
 
 const updateSupplierStatus = async (req, res) => {
   try {
-    const organisationId = await getOrgId(req);
-    if (!organisationId) {
-      return res.status(400).json({ error: 'Organisation ID is required' });
-    }
+    const organisationId = await getAuthorizedOrgId(req);
     const { id } = req.params;
     const { status } = req.body;
 
     if (!status) {
       return res.status(400).json({
         success: false,
-        error: 'Status is required',
+        error: "Status is required",
       });
     }
 
@@ -125,48 +107,50 @@ const updateSupplierStatus = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Supplier status updated successfully',
+      message: "Supplier status updated successfully",
       data: updatedSupplier,
     });
   } catch (error) {
-    console.error(`Error updating status for supplier ${req.params.id}:`, error);
+    console.error(
+      `Error updating status for supplier ${req.params.id}:`,
+      error,
+    );
     res.status(error.statusCode || 500).json({
       success: false,
-      error: error.message || 'Failed to update supplier status',
+      error: error.message || "Failed to update supplier status",
     });
   }
 };
 
 const updateSupplier = async (req, res) => {
   try {
-    const organisationId = await getOrgId(req);
-    if (!organisationId) {
-      return res.status(400).json({ error: 'Organisation ID is required' });
-    }
+    const organisationId = await getAuthorizedOrgId(req);
     const { id } = req.params;
+    const updateData = sanitizeTenantPayload(req.body);
 
-    const updatedSupplier = await supplierService.updateSupplier(organisationId, id, req.body);
+    const updatedSupplier = await supplierService.updateSupplier(
+      organisationId,
+      id,
+      updateData,
+    );
 
     res.status(200).json({
       success: true,
-      message: 'Supplier updated successfully',
+      message: "Supplier updated successfully",
       data: updatedSupplier,
     });
   } catch (error) {
     console.error(`Error updating supplier ${req.params.id}:`, error);
     res.status(error.statusCode || 500).json({
       success: false,
-      error: error.message || 'Failed to update supplier',
+      error: error.message || "Failed to update supplier",
     });
   }
 };
 
 const deleteSupplier = async (req, res) => {
   try {
-    const organisationId = await getOrgId(req);
-    if (!organisationId) {
-      return res.status(400).json({ error: 'Organisation ID is required' });
-    }
+    const organisationId = await getAuthorizedOrgId(req);
     const { id } = req.params;
 
     const deleted = await supplierService.deleteSupplier(organisationId, id);
@@ -180,13 +164,13 @@ const deleteSupplier = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Supplier deleted successfully',
+      message: "Supplier deleted successfully",
     });
   } catch (error) {
     console.error(`Error deleting supplier ${req.params.id}:`, error);
     res.status(error.statusCode || 500).json({
       success: false,
-      error: error.message || 'Failed to delete supplier',
+      error: error.message || "Failed to delete supplier",
     });
   }
 };

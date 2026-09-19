@@ -95,7 +95,7 @@ class SyncService {
     };
   }
 
-  async processBatch(mutations = [], batchId = null) {
+  async processBatch(mutations = [], batchId = null, fallbackOrgId = null) {
     const isOnline = await checkDbConnection();
     const syncedIds = [];
     const errors = [];
@@ -170,12 +170,12 @@ class SyncService {
           }
 
           case "CREATE_CUSTOMER": {
-            let customerOrgId = payload.organisationId;
+            let customerOrgId = payload.organisationId || fallbackOrgId;
             if (!customerOrgId) {
-              const defaultOrg = await pool.query(
-                "SELECT id FROM organisations LIMIT 1;",
+              console.warn(
+                `[Sync] Skipping customer ${payload.name || id} due to missing organisationId`,
               );
-              customerOrgId = defaultOrg.rows[0]?.id;
+              continue;
             }
             if (payload.phone) {
               const existingCust = await pool.query(
@@ -2945,7 +2945,11 @@ class SyncService {
       let cashierId = effectiveUserId || payload.cashierId;
       if (!cashierId || !isUuid(cashierId)) {
         const uRes = await client.query(
-          `SELECT id FROM users WHERE status = 'ACTIVE' ORDER BY created_at ASC LIMIT 1`,
+          `SELECT u.id FROM users u
+           JOIN organisation_memberships om ON om.user_id = u.id
+           WHERE om.organisation_id = $1 AND om.status = 'ACTIVE' AND u.status = 'ACTIVE'
+           ORDER BY om.created_at ASC LIMIT 1`,
+          [resolvedOrgId],
         );
         cashierId = uRes.rows[0]?.id;
       }
@@ -3206,7 +3210,11 @@ class SyncService {
       let cashierId = effectiveUserId || payload.cashierId;
       if (!cashierId || !isUuid(cashierId)) {
         const uRes = await client.query(
-          "SELECT id FROM users WHERE status = 'ACTIVE' ORDER BY created_at ASC LIMIT 1",
+          `SELECT u.id FROM users u
+           JOIN organisation_memberships om ON om.user_id = u.id
+           WHERE om.organisation_id = $1 AND om.status = 'ACTIVE' AND u.status = 'ACTIVE'
+           ORDER BY om.created_at ASC LIMIT 1`,
+          [resolvedOrgId],
         );
         cashierId = uRes.rows[0]?.id;
       }

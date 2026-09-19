@@ -5,9 +5,9 @@
  * for Purchase Orders and Goods Receiving.
  */
 
-const purchaseRepo = require('../repositories/purchase.repository');
-const goodsReceiptRepo = require('../repositories/goods-receipt.repository');
-const { pool } = require('../db/connection');
+const purchaseRepo = require("../repositories/purchase.repository");
+const goodsReceiptRepo = require("../repositories/goods-receipt.repository");
+const { pool } = require("../db/connection");
 
 /**
  * List purchases with optional status, search, branch, or supplier filters.
@@ -22,7 +22,7 @@ const getPurchases = async ({
   offset = 0,
 }) => {
   if (!organisationId) {
-    throw new Error('organisationId is required');
+    throw new Error("organisationId is required");
   }
 
   const purchases = await purchaseRepo.getPurchasesWithFilters(organisationId, {
@@ -35,32 +35,38 @@ const getPurchases = async ({
   });
 
   const STATUS_MAP = {
-    DRAFT: 'Draft',
-    PENDING: 'Pending',
-    APPROVED: 'Approved',
-    RECEIVED: 'Received',
-    PARTIALLY_RECEIVED: 'Partially Received',
-    CANCELLED: 'Cancelled',
+    DRAFT: "Draft",
+    PENDING: "Pending",
+    APPROVED: "Approved",
+    RECEIVED: "Received",
+    PARTIALLY_RECEIVED: "Partially Received",
+    CANCELLED: "Cancelled",
   };
 
   const formatDate = (dStr) => {
-    if (!dStr) return '05 Sep 2026';
+    if (!dStr) return "05 Sep 2026";
     const d = new Date(dStr);
     if (isNaN(d.getTime())) return dStr;
-    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    return d.toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
   };
 
   return purchases.map((p) => {
     const rawAmt = parseFloat(p.total_amount || 0);
-    const formattedAmt = `₹${rawAmt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    const formattedStatus = STATUS_MAP[p.status] || p.status || 'Pending';
+    const formattedAmt = `₹${rawAmt.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const formattedStatus = STATUS_MAP[p.status] || p.status || "Pending";
 
     let customerName = null;
     let customerPhone = null;
     let prescriptionRef = null;
     let isCustomerOrder = false;
-    if (p.notes && p.notes.includes('[Customer:')) {
-      const match = p.notes.match(/\[Customer:\s*([^|\]]+)(?:\|\s*([^|\]]+))?(?:\|\s*Rx:\s*([^\]]+))?\]/);
+    if (p.notes && p.notes.includes("[Customer:")) {
+      const match = p.notes.match(
+        /\[Customer:\s*([^|\]]+)(?:\|\s*([^|\]]+))?(?:\|\s*Rx:\s*([^\]]+))?\]/,
+      );
       if (match) {
         isCustomerOrder = true;
         customerName = match[1]?.trim();
@@ -73,21 +79,21 @@ const getPurchases = async ({
       id: p.purchase_number || p.id,
       dbId: p.id,
       poNumber: p.purchase_number,
-      supplier: p.supplier_name || 'Sun Pharma Care',
+      supplier: p.supplier_name || "Sun Pharma Care",
       orderDate: formatDate(p.order_date),
       expectedDate: formatDate(p.expected_date),
-      amount: rawAmt > 0 ? formattedAmt : '₹12,450.00',
-      numericAmount: rawAmt > 0 ? rawAmt : 12450.00,
+      amount: rawAmt > 0 ? formattedAmt : "₹12,450.00",
+      numericAmount: rawAmt > 0 ? rawAmt : 12450.0,
       itemsCount: Number(p.items_count) || 1,
-      branch: p.branch_name || 'Main Branch',
+      branch: p.branch_name || "Main Branch",
       status: formattedStatus,
       rawStatus: p.status,
-      notes: p.notes || '',
+      notes: p.notes || "",
       customerName,
       customerPhone,
       prescriptionRef,
       isCustomerOrder,
-      createdBy: p.created_by_name || 'Manager',
+      createdBy: p.created_by_name || "Manager",
     };
   });
 };
@@ -97,10 +103,13 @@ const getPurchases = async ({
  */
 const getPurchaseById = async (organisationId, purchaseId) => {
   if (!organisationId || !purchaseId) {
-    throw new Error('organisationId and purchaseId are required');
+    throw new Error("organisationId and purchaseId are required");
   }
 
-  const purchase = await purchaseRepo.getPurchaseById(organisationId, purchaseId);
+  const purchase = await purchaseRepo.getPurchaseById(
+    organisationId,
+    purchaseId,
+  );
   if (!purchase) {
     return null;
   }
@@ -116,44 +125,71 @@ const getPurchaseById = async (organisationId, purchaseId) => {
  * Helper to resolve supplier, branch and product UUIDs from name strings if UUIDs are not provided.
  */
 const resolvePurchaseEntities = async (organisationId, purchaseData) => {
-  let { supplierId, branchId, supplierName, supplier, branchName, branch, items = [] } = purchaseData;
+  let {
+    supplierId,
+    branchId,
+    supplierName,
+    supplier,
+    branchName,
+    branch,
+    items = [],
+  } = purchaseData;
 
-  const resolvedSupplierName = supplierName || supplier || 'Sun Pharma Care';
-  const resolvedBranchName = branchName || branch || 'Main Branch';
+  const resolvedSupplierName = supplierName || supplier || "Sun Pharma Care";
+  const resolvedBranchName = branchName || branch || "Main Branch";
 
   // 1. Resolve Supplier ID
-  if (!supplierId) {
+  if (supplierId) {
+    const sCheck = await pool.query(
+      `SELECT id FROM suppliers WHERE id = $1 AND organisation_id = $2 LIMIT 1;`,
+      [supplierId, organisationId],
+    );
+    if (sCheck.rows.length === 0) {
+      throw new Error(`Supplier ${supplierId} not found in this organisation.`);
+    }
+  } else {
     const sRes = await pool.query(
       `SELECT id FROM suppliers WHERE organisation_id = $1 AND LOWER(name) = LOWER($2) LIMIT 1;`,
-      [organisationId, resolvedSupplierName]
+      [organisationId, resolvedSupplierName],
     );
     if (sRes.rows.length > 0) {
       supplierId = sRes.rows[0].id;
     } else {
       const newS = await pool.query(
         `INSERT INTO suppliers (organisation_id, name) VALUES ($1, $2) RETURNING id;`,
-        [organisationId, resolvedSupplierName]
+        [organisationId, resolvedSupplierName],
       );
       supplierId = newS.rows[0].id;
     }
   }
 
   // 2. Resolve Branch ID
-  if (!branchId) {
+  if (branchId) {
+    const bCheck = await pool.query(
+      `SELECT id FROM branches WHERE id = $1 AND organisation_id = $2 AND status = 'ACTIVE' LIMIT 1;`,
+      [branchId, organisationId],
+    );
+    if (bCheck.rows.length === 0) {
+      throw new Error(`Branch ${branchId} not found in this organisation.`);
+    }
+  } else {
     const bRes = await pool.query(
-      `SELECT id FROM branches WHERE organisation_id = $1 AND (LOWER(name) = LOWER($2) OR name ILIKE $3) LIMIT 1;`,
-      [organisationId, resolvedBranchName, `%${resolvedBranchName}%`]
+      `SELECT id FROM branches WHERE organisation_id = $1 AND (LOWER(name) = LOWER($2) OR name ILIKE $3) AND status = 'ACTIVE' LIMIT 1;`,
+      [organisationId, resolvedBranchName, `%${resolvedBranchName}%`],
     );
     if (bRes.rows.length > 0) {
       branchId = bRes.rows[0].id;
     } else {
-      const anyB = await pool.query(`SELECT id FROM branches WHERE organisation_id = $1 LIMIT 1;`, [organisationId]);
+      const anyB = await pool.query(
+        `SELECT id FROM branches WHERE organisation_id = $1 AND status = 'ACTIVE' ORDER BY created_at ASC LIMIT 1;`,
+        [organisationId],
+      );
       if (anyB.rows.length > 0) {
         branchId = anyB.rows[0].id;
       } else {
         const newB = await pool.query(
           `INSERT INTO branches (organisation_id, name) VALUES ($1, $2) RETURNING id;`,
-          [organisationId, resolvedBranchName]
+          [organisationId, resolvedBranchName],
         );
         branchId = newB.rows[0].id;
       }
@@ -164,20 +200,31 @@ const resolvePurchaseEntities = async (organisationId, purchaseData) => {
   const resolvedItems = [];
   for (const item of items) {
     let productId = item.productId;
-    const productName = item.productName || item.medicine || 'Paracetamol 500mg';
+    const productName =
+      item.productName || item.medicine || "Paracetamol 500mg";
     const sku = item.sku || `SKU-${Date.now().toString().slice(-6)}`;
 
-    if (!productId) {
+    if (productId) {
+      const pCheck = await pool.query(
+        `SELECT id FROM products WHERE id = $1 AND organisation_id = $2 LIMIT 1;`,
+        [productId, organisationId],
+      );
+      if (pCheck.rows.length === 0) {
+        throw new Error(
+          `Product ${productId} does not belong to this organisation.`,
+        );
+      }
+    } else {
       const pRes = await pool.query(
         `SELECT id FROM products WHERE organisation_id = $1 AND (LOWER(medicine_name) = LOWER($2) OR sku = $3) LIMIT 1;`,
-        [organisationId, productName, sku]
+        [organisationId, productName, sku],
       );
       if (pRes.rows.length > 0) {
         productId = pRes.rows[0].id;
       } else {
         const newP = await pool.query(
           `INSERT INTO products (organisation_id, medicine_name, brand_name, sku) VALUES ($1, $2, $3, $4) RETURNING id;`,
-          [organisationId, productName, productName, sku]
+          [organisationId, productName, productName, sku],
         );
         productId = newP.rows[0].id;
       }
@@ -202,19 +249,22 @@ const createPurchase = async (purchaseData) => {
   const {
     organisationId,
     purchaseNumber,
-    orderDate = new Date().toISOString().split('T')[0],
+    orderDate = new Date().toISOString().split("T")[0],
     expectedDate = null,
-    status = 'PENDING',
+    status = "PENDING",
     notes = null,
     createdBy = null,
   } = purchaseData;
 
   if (!organisationId) {
-    throw new Error('organisationId is required');
+    throw new Error("organisationId is required");
   }
 
   // Resolve supplierId, branchId, and product items
-  const { supplierId, branchId, resolvedItems } = await resolvePurchaseEntities(organisationId, purchaseData);
+  const { supplierId, branchId, resolvedItems } = await resolvePurchaseEntities(
+    organisationId,
+    purchaseData,
+  );
 
   // Generate purchase number if not provided
   let finalPO = purchaseNumber;
@@ -226,7 +276,7 @@ const createPurchase = async (purchaseData) => {
   // Format customer tag if customer-specific order
   let finalNotes = notes || null;
   if (purchaseData.customerName) {
-    const custTag = `[Customer: ${purchaseData.customerName.trim()}${purchaseData.customerPhone ? ' | ' + purchaseData.customerPhone.trim() : ''}${purchaseData.prescriptionRef ? ' | Rx: ' + purchaseData.prescriptionRef.trim() : ''}]`;
+    const custTag = `[Customer: ${purchaseData.customerName.trim()}${purchaseData.customerPhone ? " | " + purchaseData.customerPhone.trim() : ""}${purchaseData.prescriptionRef ? " | Rx: " + purchaseData.prescriptionRef.trim() : ""}]`;
     finalNotes = finalNotes ? `${custTag} ${finalNotes}` : custTag;
   }
 
@@ -237,7 +287,7 @@ const createPurchase = async (purchaseData) => {
     branchId,
     orderDate,
     expectedDate,
-    status: (status || 'PENDING').toUpperCase(),
+    status: (status || "PENDING").toUpperCase(),
     notes: finalNotes,
     createdBy,
     items: resolvedItems,
@@ -251,26 +301,42 @@ const createPurchase = async (purchaseData) => {
  */
 const updatePurchaseStatus = async (organisationId, purchaseId, newStatus) => {
   if (!organisationId || !purchaseId || !newStatus) {
-    throw new Error('organisationId, purchaseId, and status are required');
+    throw new Error("organisationId, purchaseId, and status are required");
   }
 
-  const existingPO = await purchaseRepo.getPurchaseById(organisationId, purchaseId);
+  const existingPO = await purchaseRepo.getPurchaseById(
+    organisationId,
+    purchaseId,
+  );
   if (!existingPO) {
-    const error = new Error('Purchase Order not found');
+    const error = new Error("Purchase Order not found");
     error.statusCode = 404;
     throw error;
   }
 
-  const validStatuses = ['DRAFT', 'PENDING', 'APPROVED', 'PARTIALLY_RECEIVED', 'RECEIVED', 'CANCELLED'];
+  const validStatuses = [
+    "DRAFT",
+    "PENDING",
+    "APPROVED",
+    "PARTIALLY_RECEIVED",
+    "RECEIVED",
+    "CANCELLED",
+  ];
   const formattedStatus = newStatus.toUpperCase();
 
   if (!validStatuses.includes(formattedStatus)) {
-    const error = new Error(`Invalid status '${newStatus}'. Allowed: ${validStatuses.join(', ')}`);
+    const error = new Error(
+      `Invalid status '${newStatus}'. Allowed: ${validStatuses.join(", ")}`,
+    );
     error.statusCode = 400;
     throw error;
   }
 
-  const updated = await purchaseRepo.updatePurchaseStatus(organisationId, purchaseId, formattedStatus);
+  const updated = await purchaseRepo.updatePurchaseStatus(
+    organisationId,
+    purchaseId,
+    formattedStatus,
+  );
   return updated;
 };
 
@@ -278,47 +344,60 @@ const updatePurchaseStatus = async (organisationId, purchaseId, newStatus) => {
  * Mark a Purchase Order as APPROVED (so it gets listed under Approved section).
  */
 const approvePurchase = async (organisationId, purchaseId) => {
-  return await updatePurchaseStatus(organisationId, purchaseId, 'APPROVED');
+  return await updatePurchaseStatus(organisationId, purchaseId, "APPROVED");
 };
 
 /**
  * Process Goods Receiving for a purchase order:
  * Creates a goods receipt entry and updates PO status (RECEIVED or PARTIALLY_RECEIVED).
  */
-const receivePurchaseStock = async (organisationId, purchaseId, receiveData = {}) => {
+const receivePurchaseStock = async (
+  organisationId,
+  purchaseId,
+  receiveData = {},
+) => {
   if (!organisationId || !purchaseId) {
-    throw new Error('organisationId and purchaseId are required');
+    throw new Error("organisationId and purchaseId are required");
   }
 
-  const existingPO = await purchaseRepo.getPurchaseById(organisationId, purchaseId);
+  const existingPO = await purchaseRepo.getPurchaseById(
+    organisationId,
+    purchaseId,
+  );
   if (!existingPO) {
-    const error = new Error('Purchase Order not found');
+    const error = new Error("Purchase Order not found");
     error.statusCode = 404;
     throw error;
   }
 
-  const poItems = await purchaseRepo.getPurchaseItems(organisationId, purchaseId);
+  const poItems = await purchaseRepo.getPurchaseItems(
+    organisationId,
+    purchaseId,
+  );
 
   const client = await pool.connect();
   try {
-    await client.query('BEGIN');
+    await client.query("BEGIN");
 
     // Generate Goods Receipt Number
-    const receiptNumber = receiveData.receiptNumber || `GR-${Date.now().toString().slice(-4)}`;
-    const receivedDate = receiveData.receivedDate || new Date().toISOString().split('T')[0];
+    const receiptNumber =
+      receiveData.receiptNumber || `GR-${Date.now().toString().slice(-4)}`;
+    const receivedDate =
+      receiveData.receivedDate || new Date().toISOString().split("T")[0];
     const receivedBy = receiveData.receivedBy || existingPO.created_by || null;
     const supplierInvoiceNumber = receiveData.supplierInvoiceNumber || null;
     const packageCount = Number(receiveData.packageCount) || 1;
-    const notes = receiveData.notes || 'Stock received against purchase order';
+    const notes = receiveData.notes || "Stock received against purchase order";
 
     // Map received items
-    const receiptItems = (receiveData.items && receiveData.items.length > 0)
-      ? receiveData.items
-      : poItems.map((item) => ({
-          purchaseItemId: item.id,
-          receivedQuantity: item.ordered_quantity,
-          rejectedQuantity: 0,
-        }));
+    const receiptItems =
+      receiveData.items && receiveData.items.length > 0
+        ? receiveData.items
+        : poItems.map((item) => ({
+            purchaseItemId: item.id,
+            receivedQuantity: item.ordered_quantity,
+            rejectedQuantity: 0,
+          }));
 
     const createdReceipt = await goodsReceiptRepo.createGoodsReceipt({
       organisationId,
@@ -328,24 +407,28 @@ const receivePurchaseStock = async (organisationId, purchaseId, receiveData = {}
       receivedBy,
       supplierInvoiceNumber,
       packageCount,
-      status: 'VERIFIED',
+      status: "VERIFIED",
       notes,
       items: receiptItems,
     });
 
     // Update PO Status to RECEIVED
     const isPartial = receiveData.isPartial || false;
-    const nextStatus = isPartial ? 'PARTIALLY_RECEIVED' : 'RECEIVED';
-    const updatedPO = await purchaseRepo.updatePurchaseStatus(organisationId, purchaseId, nextStatus);
+    const nextStatus = isPartial ? "PARTIALLY_RECEIVED" : "RECEIVED";
+    const updatedPO = await purchaseRepo.updatePurchaseStatus(
+      organisationId,
+      purchaseId,
+      nextStatus,
+    );
 
-    await client.query('COMMIT');
+    await client.query("COMMIT");
 
     return {
       purchase: updatedPO,
       receipt: createdReceipt,
     };
   } catch (error) {
-    await client.query('ROLLBACK');
+    await client.query("ROLLBACK");
     throw error;
   } finally {
     client.release();
@@ -354,7 +437,7 @@ const receivePurchaseStock = async (organisationId, purchaseId, receiveData = {}
 
 const getPurchaseSummary = async (organisationId) => {
   if (!organisationId) {
-    throw new Error('organisationId is required');
+    throw new Error("organisationId is required");
   }
 
   const query = `

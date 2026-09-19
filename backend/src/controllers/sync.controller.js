@@ -7,7 +7,7 @@ const syncService = require("../services/sync.service");
 
 const getStatus = async (req, res) => {
   try {
-    const orgId = req.tenantContext?.organisationId || req.query.organisationId;
+    const orgId = req.tenantContext?.organisationId || req.user?.organisationId;
     const status = await syncService.getStatus(orgId);
     res.status(200).json(status);
   } catch (error) {
@@ -18,7 +18,12 @@ const getStatus = async (req, res) => {
 const processBatch = async (req, res) => {
   try {
     const { mutations, batchId } = req.body;
-    const result = await syncService.processBatch(mutations || [], batchId);
+    const orgId = req.tenantContext?.organisationId || req.user?.organisationId;
+    const result = await syncService.processBatch(
+      mutations || [],
+      batchId,
+      orgId,
+    );
     res.status(200).json(result);
   } catch (error) {
     console.error("[SyncController] Batch error:", error);
@@ -39,7 +44,12 @@ const pushMutations = async (req, res) => {
       return res.status(200).json(result);
     }
     // Fallback to processBatch for simple batch payloads
-    const result = await syncService.processBatch(mutations || [], batchId);
+    const orgId = req.tenantContext?.organisationId || req.user?.organisationId;
+    const result = await syncService.processBatch(
+      mutations || [],
+      batchId,
+      orgId,
+    );
     return res.status(200).json(result);
   } catch (error) {
     console.error("[SyncController] Push error:", error);
@@ -51,8 +61,15 @@ const pullChanges = async (req, res) => {
   try {
     const { cursor, limit } = req.query;
     const organisationId =
-      req.tenantContext?.organisationId || req.query.organisationId;
-    const branchId = req.tenantContext?.branchId || req.query.branchId;
+      req.tenantContext?.organisationId || req.user?.organisationId;
+    const branchId = req.tenantContext?.branchId || req.user?.branchId;
+
+    if (!organisationId) {
+      return res.status(403).json({
+        success: false,
+        error: "Forbidden: No active organisation context",
+      });
+    }
 
     const result = await syncService.pullChanges({
       cursor,
@@ -80,8 +97,8 @@ const testConnection = async (req, res) => {
 const bootstrap = async (req, res) => {
   try {
     const organisationId =
-      req.tenantContext?.organisationId || req.query.organisationId;
-    const branchId = req.tenantContext?.branchId || req.query.branchId;
+      req.tenantContext?.organisationId || req.user?.organisationId;
+    const branchId = req.tenantContext?.branchId || req.user?.branchId;
 
     if (!organisationId) {
       return res.status(400).json({

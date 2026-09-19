@@ -5,39 +5,14 @@
  */
 
 const customerService = require("../services/customer.service");
-const { pool } = require("../db/connection");
-
-const getOrgId = async (req) => {
-  if (req.user && req.user.organisation_id) return req.user.organisation_id;
-  if (req.user && req.user.organisationId) return req.user.organisationId;
-  if (req.tenant && req.tenant.organisationId) return req.tenant.organisationId;
-  if (req.tenantContext && req.tenantContext.organisationId)
-    return req.tenantContext.organisationId;
-  if (req.headers["x-organisation-id"]) return req.headers["x-organisation-id"];
-  if (req.query && req.query.organisationId) return req.query.organisationId;
-  if (req.body && req.body.organisationId) return req.body.organisationId;
-
-  if (req.user && req.user.id) {
-    try {
-      const memRes = await pool.query(
-        "SELECT organisation_id FROM organisation_memberships WHERE user_id = $1 LIMIT 1",
-        [req.user.id],
-      );
-      if (memRes.rows.length > 0) return memRes.rows[0].organisation_id;
-    } catch (e) {
-      // Ignore
-    }
-  }
-
-  return null;
-};
+const {
+  getAuthorizedOrgId,
+  sanitizeTenantPayload,
+} = require("../utils/tenant-context");
 
 const getCustomers = async (req, res) => {
   try {
-    const organisationId = await getOrgId(req);
-    if (!organisationId) {
-      return res.status(400).json({ error: "Organisation ID is required" });
-    }
+    const organisationId = await getAuthorizedOrgId(req);
     const { search, category, limit, offset } = req.query;
 
     const customers = await customerService.getCustomers({
@@ -55,7 +30,7 @@ const getCustomers = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching customers:", error);
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
       error: error.message || "Failed to fetch customers",
     });
@@ -64,10 +39,7 @@ const getCustomers = async (req, res) => {
 
 const getCustomersSummary = async (req, res) => {
   try {
-    const organisationId = await getOrgId(req);
-    if (!organisationId) {
-      return res.status(400).json({ error: "Organisation ID is required" });
-    }
+    const organisationId = await getAuthorizedOrgId(req);
     const summary = await customerService.getCustomersSummary(organisationId);
 
     res.status(200).json({
@@ -76,7 +48,7 @@ const getCustomersSummary = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching customer summary:", error);
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
       error: error.message || "Failed to fetch customer summary",
     });
@@ -85,14 +57,11 @@ const getCustomersSummary = async (req, res) => {
 
 const createCustomer = async (req, res) => {
   try {
-    const organisationId = await getOrgId(req);
-    if (!organisationId) {
-      return res.status(400).json({ error: "Organisation ID is required" });
-    }
-    const customerData = {
-      ...req.body,
+    const organisationId = await getAuthorizedOrgId(req);
+    const customerData = sanitizeTenantPayload(req.body, {
       organisationId,
-    };
+      createdBy: req.user?.id,
+    });
 
     const newCustomer = await customerService.createCustomer(customerData);
 
@@ -112,16 +81,14 @@ const createCustomer = async (req, res) => {
 
 const updateCustomer = async (req, res) => {
   try {
-    const organisationId = await getOrgId(req);
-    if (!organisationId) {
-      return res.status(400).json({ error: "Organisation ID is required" });
-    }
+    const organisationId = await getAuthorizedOrgId(req);
     const { id } = req.params;
+    const updateData = sanitizeTenantPayload(req.body);
 
     const updatedCustomer = await customerService.updateCustomer(
       organisationId,
       id,
-      req.body,
+      updateData,
     );
 
     res.status(200).json({
@@ -140,10 +107,7 @@ const updateCustomer = async (req, res) => {
 
 const deleteCustomer = async (req, res) => {
   try {
-    const organisationId = await getOrgId(req);
-    if (!organisationId) {
-      return res.status(400).json({ error: "Organisation ID is required" });
-    }
+    const organisationId = await getAuthorizedOrgId(req);
     const { id } = req.params;
 
     const deleted = await customerService.deleteCustomer(organisationId, id);

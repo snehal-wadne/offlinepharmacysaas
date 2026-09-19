@@ -86,8 +86,20 @@ const createGoodsReceipt = async (receiptData) => {
     throw new Error("organisationId is required");
   }
 
-  // Resolve purchaseId if not directly provided
-  if (!purchaseId) {
+  // Resolve or verify purchaseId
+  if (purchaseId) {
+    const pCheck = await pool.query(
+      `SELECT id, branch_id FROM purchases WHERE id = $1 AND organisation_id = $2 LIMIT 1;`,
+      [purchaseId, organisationId],
+    );
+    if (pCheck.rows.length === 0) {
+      const err = new Error(
+        `Purchase order ${purchaseId} not found in this organisation.`,
+      );
+      err.statusCode = 404;
+      throw err;
+    }
+  } else {
     const poNum = poReference || "PO-1026";
     const poRes = await pool.query(
       `SELECT id FROM purchases WHERE organisation_id = $1 AND purchase_number = $2 LIMIT 1;`,
@@ -114,23 +126,32 @@ const createGoodsReceipt = async (receiptData) => {
         supplierId = newS.rows[0].id;
       }
 
-      // Find branch
-      const bRes = await pool.query(
-        `SELECT id FROM branches WHERE organisation_id = $1 LIMIT 1;`,
-        [organisationId],
-      );
-      let branchId;
-      if (bRes.rows.length > 0) {
-        branchId = bRes.rows[0].id;
-      } else {
-        const newB = await pool.query(
-          `INSERT INTO branches (organisation_id, name) VALUES ($1, 'Main Branch') RETURNING id;`,
+      // Find branch for this organisation
+      let branchId = receiptData.branchId;
+      if (branchId) {
+        const bCheck = await pool.query(
+          `SELECT id FROM branches WHERE id = $1 AND organisation_id = $2 AND status = 'ACTIVE' LIMIT 1;`,
+          [branchId, organisationId],
+        );
+        branchId = bCheck.rows[0]?.id || null;
+      }
+      if (!branchId) {
+        const bRes = await pool.query(
+          `SELECT id FROM branches WHERE organisation_id = $1 AND status = 'ACTIVE' ORDER BY created_at ASC LIMIT 1;`,
           [organisationId],
         );
-        branchId = newB.rows[0].id;
+        if (bRes.rows.length > 0) {
+          branchId = bRes.rows[0].id;
+        } else {
+          const newB = await pool.query(
+            `INSERT INTO branches (organisation_id, name) VALUES ($1, 'Main Branch') RETURNING id;`,
+            [organisationId],
+          );
+          branchId = newB.rows[0].id;
+        }
       }
 
-      // Create fallback purchase record
+      // Create fallback purchase record scoped to this organisation
       const newPO = await pool.query(
         `INSERT INTO purchases (organisation_id, purchase_number, supplier_id, branch_id, status)
          VALUES ($1, $2, $3, $4, 'RECEIVED') RETURNING id;`,

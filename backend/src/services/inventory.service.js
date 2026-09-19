@@ -57,8 +57,8 @@ const getInventory = async ({
         u.name AS "updatedBy"
       FROM inventory_batches ib
       INNER JOIN products p ON p.id = ib.product_id
-      INNER JOIN branches b ON b.id = ib.branch_id
-      INNER JOIN suppliers s ON s.id = ib.supplier_id
+      INNER JOIN branches b ON b.id = ib.branch_id AND b.organisation_id = $1
+      INNER JOIN suppliers s ON s.id = ib.supplier_id AND s.organisation_id = $1
       LEFT JOIN users u ON u.id = ib.updated_by
       WHERE p.organisation_id = $1
         ${branchClause}
@@ -154,9 +154,9 @@ const saveOrUpdateInventory = async (organisationId, itemData) => {
   if (bRes.rows.length > 0) {
     bId = bRes.rows[0].id;
   } else {
-    // Fallback: check if any branch exists
+    // Fallback: check if any active branch exists in this organisation
     const anyB = await pool.query(
-      `SELECT id FROM branches WHERE organisation_id = $1 LIMIT 1;`,
+      `SELECT id FROM branches WHERE organisation_id = $1 AND status = 'ACTIVE' ORDER BY created_at ASC LIMIT 1;`,
       [organisationId],
     );
     if (anyB.rows.length > 0) {
@@ -176,8 +176,13 @@ const saveOrUpdateInventory = async (organisationId, itemData) => {
 
   if (id) {
     const batchRes = await pool.query(
-      `SELECT id, product_id FROM inventory_batches WHERE id::text = $1 OR batch_number = $1 LIMIT 1;`,
-      [id],
+      `SELECT ib.id, ib.product_id 
+       FROM inventory_batches ib
+       JOIN products p ON p.id = ib.product_id
+       WHERE (ib.id::text = $1 OR ib.batch_number = $1)
+         AND p.organisation_id = $2
+       LIMIT 1;`,
+      [id, organisationId],
     );
     if (batchRes.rows.length > 0) {
       existingBatch = batchRes.rows[0];
@@ -309,8 +314,9 @@ const deleteInventoryEntry = async (organisationId, batchId) => {
   const res = await pool.query(
     `DELETE FROM inventory_batches
      WHERE (id::text = $1 OR batch_number = $1)
+       AND product_id IN (SELECT id FROM products WHERE organisation_id = $2)
      RETURNING id;`,
-    [batchId],
+    [batchId, organisationId],
   );
 
   return res.rowCount > 0;

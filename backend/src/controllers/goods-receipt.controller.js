@@ -5,46 +5,22 @@
  */
 
 const goodsReceiptService = require("../services/goods-receipt.service");
-
-const { pool } = require("../db/connection");
-
-const getOrgId = async (req) => {
-  if (req.user && req.user.organisation_id) return req.user.organisation_id;
-  if (req.user && req.user.organisationId) return req.user.organisationId;
-  if (req.tenant && req.tenant.organisationId) return req.tenant.organisationId;
-  if (req.tenantContext && req.tenantContext.organisationId)
-    return req.tenantContext.organisationId;
-  if (req.headers["x-organisation-id"]) return req.headers["x-organisation-id"];
-  if (req.query && req.query.organisationId) return req.query.organisationId;
-  if (req.body && req.body.organisationId) return req.body.organisationId;
-
-  if (req.user && req.user.id) {
-    try {
-      const memRes = await pool.query(
-        "SELECT organisation_id FROM organisation_memberships WHERE user_id = $1 LIMIT 1",
-        [req.user.id],
-      );
-      if (memRes.rows.length > 0) return memRes.rows[0].organisation_id;
-    } catch (e) {
-      // Ignore
-    }
-  }
-
-  return null;
-};
+const {
+  getAuthorizedOrgId,
+  getAuthorizedBranchId,
+  sanitizeTenantPayload,
+} = require("../utils/tenant-context");
 
 const getGoodsReceipts = async (req, res) => {
   try {
-    const organisationId = await getOrgId(req);
-    if (!organisationId) {
-      return res.status(400).json({ error: "Organisation ID is required" });
-    }
-    const { purchaseId, limit, offset, branchId } = req.query;
+    const organisationId = await getAuthorizedOrgId(req);
+    const branchId = await getAuthorizedBranchId(req, organisationId);
+    const { purchaseId, limit, offset } = req.query;
 
     const receipts = await goodsReceiptService.getGoodsReceipts({
       organisationId,
       purchaseId,
-      branchId: branchId || req.headers["x-branch-id"] || null,
+      branchId,
       limit,
       offset,
     });
@@ -56,7 +32,7 @@ const getGoodsReceipts = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching goods receipts:", error);
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
       error: error.message || "Failed to fetch goods receipts",
     });
@@ -65,10 +41,7 @@ const getGoodsReceipts = async (req, res) => {
 
 const getGoodsReceiptById = async (req, res) => {
   try {
-    const organisationId = await getOrgId(req);
-    if (!organisationId) {
-      return res.status(400).json({ error: "Organisation ID is required" });
-    }
+    const organisationId = await getAuthorizedOrgId(req);
     const { id } = req.params;
 
     const receipt = await goodsReceiptService.getGoodsReceiptById(
@@ -88,7 +61,7 @@ const getGoodsReceiptById = async (req, res) => {
     });
   } catch (error) {
     console.error(`Error fetching goods receipt ${req.params.id}:`, error);
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
       error: error.message || "Failed to fetch goods receipt",
     });
@@ -97,14 +70,14 @@ const getGoodsReceiptById = async (req, res) => {
 
 const createGoodsReceipt = async (req, res) => {
   try {
-    const organisationId = await getOrgId(req);
-    if (!organisationId) {
-      return res.status(400).json({ error: "Organisation ID is required" });
-    }
-    const receiptData = {
-      ...req.body,
+    const organisationId = await getAuthorizedOrgId(req);
+    const branchId = await getAuthorizedBranchId(req, organisationId);
+
+    const receiptData = sanitizeTenantPayload(req.body, {
       organisationId,
-    };
+      branchId: branchId || undefined,
+      receivedBy: req.user?.id,
+    });
 
     const newReceipt =
       await goodsReceiptService.createGoodsReceipt(receiptData);
@@ -125,10 +98,7 @@ const createGoodsReceipt = async (req, res) => {
 
 const updateGoodsReceiptStatus = async (req, res) => {
   try {
-    const organisationId = await getOrgId(req);
-    if (!organisationId) {
-      return res.status(400).json({ error: "Organisation ID is required" });
-    }
+    const organisationId = await getAuthorizedOrgId(req);
     const { id } = req.params;
     const { status } = req.body;
 
