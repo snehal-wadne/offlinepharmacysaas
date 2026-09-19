@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -18,6 +18,20 @@ import {
   fetchInventorySummary,
   fetchStockMovements,
 } from "../../api/inventoryApi";
+
+// Universal array extractor for flexible backend response structures
+const extractArray = (res) => {
+  if (!res) return [];
+  if (Array.isArray(res)) return res;
+  if (Array.isArray(res.data)) return res.data;
+  if (res.data && Array.isArray(res.data.data)) return res.data.data;
+  if (res.data && Array.isArray(res.data.items)) return res.data.items;
+  if (res.data && Array.isArray(res.data.purchases)) return res.data.purchases;
+  if (res.data && Array.isArray(res.data.orders)) return res.data.orders;
+  if (res.data && Array.isArray(res.data.movements)) return res.data.movements;
+  if (Array.isArray(res.items)) return res.items;
+  return [];
+};
 
 export default function InventoryDashboard({
   onNavigate,
@@ -47,20 +61,25 @@ export default function InventoryDashboard({
       branchName &&
       branchName !== "All Branches" &&
       branchName !== "all" &&
-      branchName !== "No Active Branch",
+      branchName !== "No Active Branch"
     );
     const branchParam = isFiltered ? branchId || branchName : undefined;
 
     async function loadDashboardData() {
       setLoading(true);
+
+      // 1. Fetch Pending Purchase Orders
       try {
-        // Load Pending Purchase Orders
         const poRes = await fetchPurchases({
           status: "PENDING",
           branchId: branchParam,
         });
-        if (isMounted && poRes && Array.isArray(poRes.data)) {
-          let list = poRes.data;
+
+        const rawOrders = extractArray(poRes);
+
+
+        if (isMounted) {
+          let list = rawOrders;
           if (isFiltered) {
             list = list.filter(
               (po) =>
@@ -68,97 +87,106 @@ export default function InventoryDashboard({
                 po.branch === branchName ||
                 po.branchName === branchName ||
                 po.branch_id === branchId ||
-                po.branchId === branchId,
+                po.branchId === branchId
             );
           }
+
           const formatted = list.map((po) => ({
-            id: po.purchase_number || po.purchaseNumber || po.id,
+            id: po.purchase_number || po.purchaseNumber || po.id || "PO-000",
             rawId: po.id,
             supplierName:
-              po.supplier_name || po.supplierName || po.supplier || "Supplier",
+              po.supplier_name ||
+              po.supplierName ||
+              (typeof po.supplier === "object" ? po.supplier?.name : po.supplier) ||
+              "Supplier",
             amount:
               po.total_amount != null
                 ? `₹${Number(po.total_amount).toLocaleString("en-IN")}`
-                : po.totalAmount
+                : po.totalAmount != null
                   ? `₹${Number(po.totalAmount).toLocaleString("en-IN")}`
-                  : "₹0.00",
-            timeAgo: po.order_date
-              ? new Date(po.order_date).toLocaleDateString("en-GB", {
+                  : po.amount != null
+                    ? `₹${Number(po.amount).toLocaleString("en-IN")}`
+                    : "₹0.00",
+            timeAgo:
+              po.order_date || po.orderDate || po.createdAt
+                ? new Date(
+                  po.order_date || po.orderDate || po.createdAt
+                ).toLocaleDateString("en-GB", {
                   day: "2-digit",
                   month: "short",
                   year: "numeric",
                 })
-              : "Recently",
+                : "Recently",
           }));
+          console.log(formatted);
+
           setPendingOrders(formatted);
-        } else if (isMounted) {
-          setPendingOrders([]);
         }
       } catch (err) {
         console.warn(
           "[InventoryDashboard] Pending POs fetch error:",
-          err.message,
+          err.message
         );
         if (isMounted) setPendingOrders([]);
       }
 
+      // 2. Fetch Summary Statistics
       try {
-        // Load Summary KPI statistics
-        const summaryRes = await fetchInventorySummary({
-          branchId: branchParam,
-        });
-        if (isMounted && summaryRes && summaryRes.data) {
-          setSummaryData(summaryRes.data);
+        const summaryRes = await fetchInventorySummary({ branchId: branchParam });
+        if (isMounted && summaryRes) {
+          const payload = summaryRes.data?.data || summaryRes.data || summaryRes;
+          setSummaryData(payload);
         }
       } catch (err) {
         console.warn("[InventoryDashboard] Summary API error:", err.message);
       }
 
+      // 3. Fetch Recent Stock Movements
       try {
-        // Load Recent Stock Movements from backend
         const movementsRes = await fetchStockMovements({
           branchId: branchParam,
         });
-        if (isMounted && movementsRes && Array.isArray(movementsRes.data)) {
-          let movs = movementsRes.data;
+
+        const rawMovs = extractArray(movementsRes);
+
+        if (isMounted) {
+          let movs = rawMovs;
           if (isFiltered) {
             movs = movs.filter(
               (m) =>
                 !m.branchName ||
                 m.branchName === branchName ||
                 m.branch_id === branchId ||
-                m.branchId === branchId,
+                m.branchId === branchId
             );
           }
           setRecentMovements(movs);
-        } else if (isMounted) {
-          setRecentMovements([]);
         }
       } catch (err) {
         console.warn(
           "[InventoryDashboard] Stock movements API error:",
-          err.message,
+          err.message
         );
         if (isMounted) setRecentMovements([]);
       }
 
+      // 4. Fetch Inventory Items
       try {
-        // Load Inventory Batches for dynamic calculation
         const invRes = await fetchInventory({ branchId: branchParam });
-        if (isMounted && invRes && Array.isArray(invRes.data)) {
-          let items = invRes.data;
+        const rawInv = extractArray(invRes);
+
+        if (isMounted) {
+          let items = rawInv;
           if (isFiltered) {
             items = items.filter(
               (item) =>
                 !item.branchName ||
                 item.branchName === branchName ||
                 item.branch_id === branchId ||
-                item.branchId === branchId,
+                item.branchId === branchId
             );
           }
           setInventoryItems(items);
-        } else if (isMounted) {
-          setInventoryItems([]);
         }
       } catch (err) {
         console.warn("[InventoryDashboard] Inventory API error:", err.message);
@@ -174,84 +202,59 @@ export default function InventoryDashboard({
     };
   }, [selectedBranch]);
 
-  const handleQuickAction = (id, label) => {
-    if (id === "view-stock") {
-      if (onNavigate) onNavigate("stock-adjustments");
-    } else if (id === "stock-adjustment") {
-      if (onNavigate) onNavigate("stock-adjustments");
+  const handleQuickAction = (id) => {
+    if (id === "view-stock" || id === "stock-adjustment") {
+      onNavigate?.("stock-adjustments");
     } else if (id === "add-customer") {
-      if (onNavigate) onNavigate("customers-patients");
-      if (onShowToast)
-        onShowToast("Redirecting to Customers & Patients Directory...");
+      onNavigate?.("customers-patients");
+      onShowToast?.("Redirecting to Customers & Patients Directory...");
     } else if (id === "receive-stock") {
-      if (onNavigate) onNavigate("goods-receiving");
+      onNavigate?.("goods-receiving");
     } else if (id === "customer-ledger") {
-      if (onNavigate) onNavigate("customer-ledger");
-      if (onShowToast)
-        onShowToast("Redirecting to Customer Ledger Statement...");
+      onNavigate?.("customer-ledger");
+      onShowToast?.("Redirecting to Customer Ledger Statement...");
     } else if (id === "stock-transfer") {
-      if (onNavigate) onNavigate("stock-transfer");
+      onNavigate?.("stock-transfer");
     } else if (id === "create-stocktake") {
-      if (onNavigate) onNavigate("inventory-reports");
-    } else if (id === "customer-ledger") {
-      if (onNavigate) onNavigate("customer-ledger");
+      onNavigate?.("inventory-reports");
     }
   };
 
-  const handleViewAllStock = () => {
-    if (onNavigate) {
-      onNavigate("stock-adjustments");
-    }
-  };
-
-  const handleViewAllPurchaseOrders = () => {
-    if (onNavigate) {
-      onNavigate("purchases");
-    }
-  };
-
-  const handleViewAllMovements = () => {
-    if (onNavigate) {
-      onNavigate("inventory-reports");
-    }
-  };
+  const handleViewAllStock = () => onNavigate?.("stock-adjustments");
+  const handleViewAllPurchaseOrders = () => onNavigate?.("purchases");
+  const handleViewAllMovements = () => onNavigate?.("inventory-reports");
 
   const handleOrderPress = (order) => {
-    if (onNavigate) {
-      onNavigate("purchases");
-    }
-    if (onShowToast) {
-      onShowToast(`Viewing details for ${order.id} (${order.supplierName})`);
-    }
+    onNavigate?.("purchases");
+    onShowToast?.(`Viewing details for ${order.id || order.poNumber}`);
   };
 
   const handleMovementPress = (movement) => {
-    if (onShowToast) {
-      onShowToast(
-        `Movement: ${movement.item} (${movement.type} ${movement.quantity})`,
-      );
-    }
+    onShowToast?.(
+      `Movement: ${movement.item || movement.productName || "Item"} (${movement.type || ""} ${movement.quantity || ""})`
+    );
   };
 
-  // Compute Dynamic 4 KPI Stat Cards
+  // KPI Calculations
   const totalProductsVal =
     summaryData?.totalProducts != null
       ? summaryData.totalProducts
       : inventoryItems.length > 0
         ? new Set(
-            inventoryItems.map(
-              (i) => i.productId || i.brandName || i.medicineName || i.id,
-            ),
-          ).size
+          inventoryItems.map(
+            (i) => i.productId || i.brandName || i.medicineName || i.name || i.id
+          )
+        ).size
         : 0;
 
   const lowStockVal =
     summaryData?.lowStockCount != null
       ? summaryData.lowStockCount
       : inventoryItems.length > 0
-        ? inventoryItems.filter(
-            (i) => Number(i.quantity) < 50 && Number(i.quantity) > 0,
-          ).length
+        ? inventoryItems.filter((i) => {
+          const qty = Number(i.quantity ?? i.stock_quantity ?? i.stock ?? 0);
+          return qty < 50 && qty > 0;
+        }).length
         : 0;
 
   const nearExpiryVal =
@@ -259,13 +262,14 @@ export default function InventoryDashboard({
       ? summaryData.nearExpiryCount
       : inventoryItems.length > 0
         ? inventoryItems.filter((i) => {
-            if (i.expiryDate) {
-              const diffDays =
-                (new Date(i.expiryDate) - new Date()) / (1000 * 60 * 60 * 24);
-              return diffDays >= 0 && diffDays <= 60;
-            }
-            return false;
-          }).length
+          const expDate = i.expiryDate || i.expiry_date || i.exp_date;
+          if (expDate) {
+            const diffDays =
+              (new Date(expDate) - new Date()) / (1000 * 60 * 60 * 24);
+            return diffDays >= 0 && diffDays <= 60;
+          }
+          return false;
+        }).length
         : 0;
 
   const expiredVal =
@@ -273,9 +277,11 @@ export default function InventoryDashboard({
       ? summaryData.expiredCount
       : inventoryItems.length > 0
         ? inventoryItems.filter((i) => {
-            if (i.expiryDate) return new Date(i.expiryDate) < new Date();
-            return Number(i.quantity) === 0;
-          }).length
+          const expDate = i.expiryDate || i.expiry_date || i.exp_date;
+          const qty = Number(i.quantity ?? i.stock_quantity ?? i.stock ?? 0);
+          if (expDate) return new Date(expDate) < new Date();
+          return qty === 0;
+        }).length
         : 0;
 
   const dynamicKpiData = [
@@ -312,94 +318,79 @@ export default function InventoryDashboard({
     },
   ];
 
-  // Compute Categorized Stock Summary dynamically
-  const categorySummaryData = React.useMemo(() => {
+  // Dynamic Categorized Stock Summary Calculation
+  const categorySummaryData = useMemo(() => {
     if (!inventoryItems || inventoryItems.length === 0) {
       return [];
     }
 
-    const categoryMap = {
-      "Pain Relief & Analgesics": {
-        id: "cat-1",
-        category: "Pain Relief & Analgesics",
-        totalItems: 0,
-        inStock: 0,
-        lowStock: 0,
-        outOfStock: 0,
-      },
-      "Antibiotics & Antibacterials": {
-        id: "cat-2",
-        category: "Antibiotics & Antibacterials",
-        totalItems: 0,
-        inStock: 0,
-        lowStock: 0,
-        outOfStock: 0,
-      },
-      "Respiratory & Anti-Allergy": {
-        id: "cat-3",
-        category: "Respiratory & Anti-Allergy",
-        totalItems: 0,
-        inStock: 0,
-        lowStock: 0,
-        outOfStock: 0,
-      },
-      "Gastrointestinal & Acid Relief": {
-        id: "cat-4",
-        category: "Gastrointestinal & Acid Relief",
-        totalItems: 0,
-        inStock: 0,
-        lowStock: 0,
-        outOfStock: 0,
-      },
-      "General Health & Others": {
-        id: "cat-5",
-        category: "General Health & Others",
-        totalItems: 0,
-        inStock: 0,
-        lowStock: 0,
-        outOfStock: 0,
-      },
-    };
+    const categoryMap = {};
 
     inventoryItems.forEach((item) => {
-      const med = (item.medicineName || item.brandName || "").toLowerCase();
-      let catKey = "General Health & Others";
+      const medName = (
+        item.medicineName ||
+        item.brandName ||
+        item.name ||
+        ""
+      ).toLowerCase();
 
-      if (
-        med.includes("paracetamol") ||
-        med.includes("dolo") ||
-        med.includes("brufen") ||
-        med.includes("ibuprofen") ||
-        med.includes("advil") ||
-        med.includes("calpol") ||
-        med.includes("suraj")
-      ) {
-        catKey = "Pain Relief & Analgesics";
-      } else if (
-        med.includes("amox") ||
-        med.includes("mox") ||
-        med.includes("antibiotic") ||
-        med.includes("azithro")
-      ) {
-        catKey = "Antibiotics & Antibacterials";
-      } else if (
-        med.includes("cetirizine") ||
-        med.includes("cetcip") ||
-        med.includes("zyrtec") ||
-        med.includes("cough")
-      ) {
-        catKey = "Respiratory & Anti-Allergy";
-      } else if (
-        med.includes("omeprazole") ||
-        med.includes("omez") ||
-        med.includes("razole") ||
-        med.includes("antacid")
-      ) {
-        catKey = "Gastrointestinal & Acid Relief";
+      // Resolve explicit category field first, fallback to keyword matching
+      let catName =
+        item.category ||
+        item.categoryName ||
+        item.category_name ||
+        item.category_title;
+
+      if (!catName) {
+        if (
+          medName.includes("paracetamol") ||
+          medName.includes("dolo") ||
+          medName.includes("brufen") ||
+          medName.includes("ibuprofen") ||
+          medName.includes("advil") ||
+          medName.includes("calpol") ||
+          medName.includes("suraj")
+        ) {
+          catName = "Pain Relief & Analgesics";
+        } else if (
+          medName.includes("amox") ||
+          medName.includes("mox") ||
+          medName.includes("antibiotic") ||
+          medName.includes("azithro")
+        ) {
+          catName = "Antibiotics & Antibacterials";
+        } else if (
+          medName.includes("cetirizine") ||
+          medName.includes("cetcip") ||
+          medName.includes("zyrtec") ||
+          medName.includes("cough")
+        ) {
+          catName = "Respiratory & Anti-Allergy";
+        } else if (
+          medName.includes("omeprazole") ||
+          medName.includes("omez") ||
+          medName.includes("razole") ||
+          medName.includes("antacid")
+        ) {
+          catName = "Gastrointestinal & Acid Relief";
+        } else {
+          catName = "General Health & Others";
+        }
       }
 
-      const cat = categoryMap[catKey];
-      const qty = Number(item.quantity || 0);
+      if (!categoryMap[catName]) {
+        categoryMap[catName] = {
+          id: `cat-${Object.keys(categoryMap).length + 1}`,
+          category: catName,
+          totalItems: 0,
+          inStock: 0,
+          lowStock: 0,
+          outOfStock: 0,
+        };
+      }
+
+      const cat = categoryMap[catName];
+      const qty = Number(item.quantity ?? item.stock_quantity ?? item.stock ?? 0);
 
       cat.totalItems += 1;
       if (qty >= 50) cat.inStock += 1;
@@ -407,7 +398,7 @@ export default function InventoryDashboard({
       else cat.outOfStock += 1;
     });
 
-    return Object.values(categoryMap).filter((c) => c.totalItems > 0);
+    return Object.values(categoryMap);
   }, [inventoryItems]);
 
   if (loading) {
@@ -445,17 +436,17 @@ export default function InventoryDashboard({
         {dynamicKpiData.map((kpi) => (
           <InventoryStatCard
             key={kpi.id}
-            label={kpi.label || kpi.title}
+            label={kpi.label}
             value={kpi.value}
-            subtext={kpi.subtext || kpi.trend}
-            variant={kpi.variant || "teal"}
+            subtext={kpi.subtext}
+            variant={kpi.variant}
             onPress={() => {
               if (kpi.id === "kpi-2") {
-                if (onNavigate) onNavigate("stock-status");
+                onNavigate?.("stock-status");
               } else if (kpi.id === "kpi-3" || kpi.id === "kpi-4") {
-                if (onNavigate) onNavigate("expiry-reports");
+                onNavigate?.("expiry-reports");
               } else {
-                if (onNavigate) onNavigate("stock-adjustments");
+                onNavigate?.("stock-adjustments");
               }
             }}
           />
