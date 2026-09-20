@@ -137,11 +137,3 @@ export function apiPatch(endpoint, body, options = {}) {
 export function apiDelete(endpoint, options = {}) {
   return apiRequest(endpoint, { method: "DELETE", ...options });
 }
-
-export function apiPatch(endpoint, body, options = {}) {
-  return apiRequest(endpoint, {
-    method: "PATCH",
-    body: JSON.stringify(body),
-    ...options,
-  });
-}
