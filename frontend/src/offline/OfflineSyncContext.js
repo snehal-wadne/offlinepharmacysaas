@@ -15,6 +15,7 @@ import React, {
 import { db } from "../db/pharmaflowDb";
 import { LocalPersistenceService } from "../db/services/localPersistenceService";
 import { syncEngine } from "../sync/syncEngine";
+import { getAccessToken } from "../api/supabaseClient";
 
 const localPersistenceService = new LocalPersistenceService(db);
 const OfflineSyncContext = createContext(null);
@@ -39,7 +40,19 @@ export function OfflineSyncProvider({ children }) {
 
   // Initialize and load local storage data
   useEffect(() => {
-    syncEngine.start();
+    let isMounted = true;
+    getAccessToken()
+      .then((token) => {
+        if (token && typeof syncEngine?.setAuthToken === "function") {
+          syncEngine.setAuthToken(token);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (isMounted) {
+          syncEngine.start();
+        }
+      });
     const unsub = syncEngine.subscribe((state) => {
       setIsOnline(state.isOnline);
       setPendingCount(state.pendingCount);

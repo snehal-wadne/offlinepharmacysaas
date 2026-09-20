@@ -77,21 +77,55 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
   }, []);
 
   const loadSuppliersData = async () => {
-    try {
-      setLoading(true);
-      const res = await fetchSuppliers();
-      if (res && res.data && Array.isArray(res.data)) {
-        setSuppliers(res.data);
-      } else {
-        setSuppliers([]);
-      }
-    } catch (err) {
-      console.warn("Failed to load suppliers from DB:", err.message);
-      setSuppliers([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  try {
+    setLoading(true);
+
+    const res = await fetchSuppliers();
+
+    console.log("[SuppliersScreen] Raw API response:", res);
+
+    // Backend response:
+    // {
+    //   data: [...]
+    // }
+    //
+    // Axios response may be:
+    // {
+    //   data: {
+    //     data: [...]
+    //   }
+    // }
+
+    const supplierData = Array.isArray(res?.data?.data)
+      ? res.data.data
+      : Array.isArray(res?.data)
+        ? res.data
+        : Array.isArray(res)
+          ? res
+          : [];
+
+    console.log(
+      "[SuppliersScreen] Suppliers received:",
+      supplierData
+    );
+
+    console.log(
+      "[SuppliersScreen] Supplier count:",
+      supplierData.length
+    );
+
+    setSuppliers(supplierData);
+  } catch (err) {
+    console.warn(
+      "[SuppliersScreen] Failed to load suppliers from DB:",
+      err?.message || err
+    );
+
+    setSuppliers([]);
+  } finally {
+    setLoading(false);
+  }
+};
 
   // Dynamic 4 Top KPI Cards Calculations
   const activeCount = suppliers.filter(

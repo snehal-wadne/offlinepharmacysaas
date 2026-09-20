@@ -160,6 +160,8 @@ const ERP_PATH_ROUTES = Object.entries(ERP_ROUTE_PATHS).reduce(
 
 function getRouteFromLocation() {
   if (typeof window === "undefined") return "dashboard";
+  if (window.location.pathname.startsWith("/superadmin")) return "dashboard";
+
   const path = `/${window.location.pathname.replace(/^\/+|\/+$/g, "")}`;
   if (ERP_PATH_ROUTES[path]) return ERP_PATH_ROUTES[path];
 
@@ -169,6 +171,7 @@ function getRouteFromLocation() {
 
 function updateErpLocation(routeKey, payload) {
   if (typeof window === "undefined" || !window.history) return;
+  if (window.location.pathname.startsWith("/superadmin")) return;
 
   const params = payload
     ? new URLSearchParams({ customerId: String(payload) })
@@ -178,6 +181,22 @@ function updateErpLocation(routeKey, payload) {
     query ? `?${query}` : ""
   }`;
   window.history.pushState({ routeKey, payload }, "", url);
+}
+
+function updateBrowserRoute(routeKey, replace = false) {
+  if (
+    typeof window === "undefined" ||
+    !ERP_ROUTE_KEYS.has(routeKey) ||
+    window.location.pathname.startsWith("/superadmin")
+  ) {
+    return;
+  }
+
+  const nextPath = ERP_ROUTE_PATHS[routeKey] || `/${routeKey}`;
+  if (window.location.pathname !== nextPath) {
+    const method = replace ? "replaceState" : "pushState";
+    window.history[method]({}, "", nextPath);
+  }
 }
 
 const hasPermission = (user, permission) => {
@@ -225,6 +244,21 @@ export default function AppNavigator() {
   const [authStatus, setAuthStatus] = useState("INITIALIZING");
   const [currentUser, setCurrentUser] = useState(null);
   const [googleOnboardingData, setGoogleOnboardingData] = useState(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const handleBrowserNavigation = () => {
+      setCurrentRoute(getRouteFromLocation());
+    };
+
+    window.addEventListener("popstate", handleBrowserNavigation);
+    updateBrowserRoute(currentRoute, true);
+
+    return () => {
+      window.removeEventListener("popstate", handleBrowserNavigation);
+    };
+  }, []);
 
   const resolveBranchContext = (user) => {
     if (!user || user.hasBranch === false) return null;
@@ -285,13 +319,17 @@ export default function AppNavigator() {
       if (response.ok) {
         const resData = await response.json();
         const user = resData.data?.user || resData.user;
-        setCurrentUser(user);
+        const userWithToken = user
+          ? { ...user, token: session.access_token }
+          : null;
+        setCurrentUser(userWithToken);
         setGoogleOnboardingData(null);
         setAuthError("");
         setAuthSession({ organisationId: user?.organisationId });
 
         if (user && user.hasBranch === false) {
           setCurrentRoute("branches");
+          updateBrowserRoute("branches", true);
           setSelectedBranch(null);
         } else if (user) {
           setSelectedBranch(resolveBranchContext(user));
@@ -463,6 +501,7 @@ export default function AppNavigator() {
     ) {
       showToast("Please create your initial pharmacy branch first.");
       setCurrentRoute("branches");
+      updateBrowserRoute("branches", true);
       setMobileMenuOpen(false);
       return;
     }
@@ -470,6 +509,7 @@ export default function AppNavigator() {
     updateErpLocation(routeKey, payload);
     setSelectedCustomerId(payload || null);
     setCurrentRoute(routeKey);
+    updateBrowserRoute(routeKey);
     setMobileMenuOpen(false);
   };
 
@@ -482,6 +522,7 @@ export default function AppNavigator() {
     setIsMultiBranch(multi);
     if (!multi && currentRoute === "stock-transfer") {
       setCurrentRoute("stock-adjustments");
+      updateBrowserRoute("stock-adjustments", true);
     }
     showToast(
       multi
@@ -832,12 +873,15 @@ export default function AppNavigator() {
         }}
         onLoginSuccess={(user, token) => {
           setAuthSession({ organisationId: user?.organisationId });
-          setCurrentUser(user);
+          setCurrentUser(
+            user ? { ...user, token: token || user?.token } : null,
+          );
           setGoogleOnboardingData(null);
           setAuthError("");
           setAuthStatus("AUTHENTICATED");
           if (user && user.hasBranch === false) {
             setCurrentRoute("branches");
+            updateBrowserRoute("branches", true);
             setSelectedBranch(null);
           } else {
             setSelectedBranch(resolveBranchContext(user));

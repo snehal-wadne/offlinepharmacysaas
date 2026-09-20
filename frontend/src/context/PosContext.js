@@ -8,6 +8,7 @@ import {
 } from "../api/cashierApi";
 import { localPersistenceService } from "../db";
 import { syncEngine, bootstrapService } from "../sync";
+import { getAccessToken } from "../api/supabaseClient";
 
 const PosContext = createContext(null);
 
@@ -165,53 +166,57 @@ export function PosProvider({
           effectiveBranchId || "BRANCH-MAIN",
         );
       }
-      if (effectiveToken && typeof syncEngine?.setAuthToken === "function") {
-        syncEngine.setAuthToken(effectiveToken);
-      }
+      (async () => {
+        const tokenToUse =
+          effectiveToken || (await getAccessToken().catch(() => null));
+        if (tokenToUse && typeof syncEngine?.setAuthToken === "function") {
+          syncEngine.setAuthToken(tokenToUse);
+        }
 
-      // Background online master data bootstrap for this authenticated tenant
-      if (typeof bootstrapService?.bootstrap === "function") {
-        bootstrapService
-          .bootstrap({
-            organisationId: effectiveOrgId,
-            branchId: effectiveBranchId,
-            authToken: effectiveToken,
-          })
-          .then(async (result) => {
-            if (isMounted && result && result.success) {
-              const freshProducts =
-                await localPersistenceService.getCatalogForPos?.(
-                  effectiveOrgId,
-                  effectiveBranchId,
-                );
-              if (isMounted && freshProducts && freshProducts.length > 0) {
-                setProducts(freshProducts);
-                setIsOfflineReady(true);
+        // Background online master data bootstrap for this authenticated tenant
+        if (typeof bootstrapService?.bootstrap === "function") {
+          bootstrapService
+            .bootstrap({
+              organisationId: effectiveOrgId,
+              branchId: effectiveBranchId,
+              authToken: tokenToUse,
+            })
+            .then(async (result) => {
+              if (isMounted && result && result.success) {
+                const freshProducts =
+                  await localPersistenceService.getCatalogForPos?.(
+                    effectiveOrgId,
+                    effectiveBranchId,
+                  );
+                if (isMounted && freshProducts && freshProducts.length > 0) {
+                  setProducts(freshProducts);
+                  setIsOfflineReady(true);
+                }
+                const freshCustomers =
+                  await localPersistenceService.getCustomersForPos?.(
+                    effectiveOrgId,
+                  );
+                if (isMounted && freshCustomers && freshCustomers.length > 0) {
+                  setCustomers(
+                    freshCustomers.map((c) => ({
+                      id: c.customerId,
+                      name: c.name,
+                      phone: c.phone || "",
+                      currentBalance: `₹${Number(c.outstandingBalance || 0).toFixed(2)}`,
+                      outstandingBalance: Number(c.outstandingBalance || 0),
+                    })),
+                  );
+                }
               }
-              const freshCustomers =
-                await localPersistenceService.getCustomersForPos?.(
-                  effectiveOrgId,
-                );
-              if (isMounted && freshCustomers && freshCustomers.length > 0) {
-                setCustomers(
-                  freshCustomers.map((c) => ({
-                    id: c.customerId,
-                    name: c.name,
-                    phone: c.phone || "",
-                    currentBalance: `₹${Number(c.outstandingBalance || 0).toFixed(2)}`,
-                    outstandingBalance: Number(c.outstandingBalance || 0),
-                  })),
-                );
-              }
-            }
-          })
-          .catch((bErr) => {
-            console.log(
-              "[PosContext] Online bootstrap skipped/offline:",
-              bErr?.message,
-            );
-          });
-      }
+            })
+            .catch((bErr) => {
+              console.log(
+                "[PosContext] Online bootstrap skipped/offline:",
+                bErr?.message,
+              );
+            });
+        }
+      })();
 
       // Load cached offline projection from Dexie for this authenticated tenant
       if (typeof localPersistenceService?.initialize === "function") {
@@ -644,10 +649,12 @@ export function PosProvider({
     if (!bootstrapService?.bootstrap) {
       throw new Error("Bootstrap service not available");
     }
+    const tokenToUse =
+      authToken || effectiveToken || (await getAccessToken().catch(() => null));
     const result = await bootstrapService.bootstrap({
       organisationId,
       branchId,
-      authToken,
+      authToken: tokenToUse,
       baseUrl,
     });
     if (typeof localPersistenceService?.setTenantContext === "function") {
@@ -656,8 +663,8 @@ export function PosProvider({
     if (typeof syncEngine?.setTenantContext === "function") {
       syncEngine.setTenantContext(organisationId, branchId);
     }
-    if (authToken && typeof syncEngine?.setAuthToken === "function") {
-      syncEngine.setAuthToken(authToken);
+    if (tokenToUse && typeof syncEngine?.setAuthToken === "function") {
+      syncEngine.setAuthToken(tokenToUse);
     }
     const loadedProducts = await localPersistenceService.getCatalogForPos(
       organisationId,

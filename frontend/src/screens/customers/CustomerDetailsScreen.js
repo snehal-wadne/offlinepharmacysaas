@@ -24,7 +24,9 @@ export default function CustomerDetailsScreen({
   const isCompact = width < 1100;
 
   // Active Customer state
-  const [selectedCustomerId, setSelectedCustomerId] = useState(customerId);
+  const [selectedCustomerId, setSelectedCustomerId] = useState(
+    customerId || null
+  );
   const [customer, setCustomer] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -42,53 +44,254 @@ export default function CustomerDetailsScreen({
 
   useEffect(() => {
     let isMounted = true;
-    async function loadCustomer() {
+
+    const loadCustomer = async () => {
       try {
         setLoading(true);
-        const res = await fetchCustomers();
-        if (isMounted && res && res.success && Array.isArray(res.data)) {
-          const found = res.data.find(
-            (c) => c.id === selectedCustomerId || c.customerNumber === selectedCustomerId
+
+        const response = await fetchCustomers();
+
+        console.log("=================================");
+        console.log("[CustomerDetails] API RESPONSE:", response);
+        console.log("[CustomerDetails] response.data:", response?.data);
+        console.log(
+          "[CustomerDetails] response.data.data:",
+          response?.data?.data
+        );
+        console.log("=================================");
+
+        // Handle all possible response structures
+        let customers = [];
+
+        if (Array.isArray(response?.data?.data)) {
+          // Axios:
+          // { data: { data: [...] } }
+          customers = response.data.data;
+        } else if (Array.isArray(response?.data)) {
+          // { data: [...] }
+          customers = response.data;
+        } else if (Array.isArray(response)) {
+          // [...]
+          customers = response;
+        }
+
+        console.log("[CustomerDetails] EXTRACTED CUSTOMERS:", customers);
+        console.log(
+          "[CustomerDetails] CUSTOMER COUNT:",
+          customers.length
+        );
+
+        if (!isMounted) return;
+
+        if (customers.length === 0) {
+          console.warn(
+            "[CustomerDetails] No customers found after extraction"
           );
-          setCustomer(found || res.data[0] || null);
-        } else if (isMounted) {
+          setCustomer(null);
+          return;
+        }
+
+        console.log(
+          "[CustomerDetails] selectedCustomerId:",
+          selectedCustomerId
+        );
+
+        const foundCustomer = customers.find((item) => {
+          return (
+            String(item?.id) === String(selectedCustomerId) ||
+            String(item?.customerNumber) === String(selectedCustomerId)
+          );
+        });
+
+        console.log(
+          "[CustomerDetails] FOUND CUSTOMER:",
+          foundCustomer
+        );
+
+        // If selected customer doesn't exist, show first customer
+        const finalCustomer = foundCustomer || customers[0];
+
+        console.log(
+          "[CustomerDetails] FINAL CUSTOMER:",
+          finalCustomer
+        );
+
+        setCustomer(finalCustomer);
+      } catch (error) {
+        console.error(
+          "[CustomerDetails] LOAD CUSTOMER ERROR:",
+          error
+        );
+
+        if (isMounted) {
           setCustomer(null);
         }
-      } catch (err) {
-        console.warn('[CustomerDetails] Failed to load customer:', err.message);
-        if (isMounted) setCustomer(null);
       } finally {
-        if (isMounted) setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
-    }
+    };
+
     loadCustomer();
-    return () => { isMounted = false; };
+
+    return () => {
+      isMounted = false;
+    };
   }, [selectedCustomerId]);
 
   const profile = useMemo(() => {
     if (!customer) return {};
+
+    const creditLimit =
+      Number(
+        customer.creditLimit ??
+        customer.credit_limit ??
+        0
+      );
+
+    const outstandingBalance =
+      Number(
+        customer.outstandingBalance ??
+        customer.outstanding_balance ??
+        0
+      );
+
+    const totalSpent =
+      Number(customer.totalSpent ?? 0);
+
+    const totalInvoices =
+      Number(
+        customer.totalInvoices ??
+        customer.invoices?.length ??
+        0
+      );
+
+    const totalReturns =
+      Number(
+        customer.totalReturns ??
+        customer.returns?.length ??
+        0
+      );
+
     return {
-      id: customer.customerNumber || customer.customer_number || customer.id,
-      name: customer.name,
-      phone: customer.phone || '',
-      email: customer.email || '',
-      age: customer.age || '30',
-      gender: customer.gender || 'M',
-      category: customer.category || 'Regular',
-      city: customer.city || 'Mumbai',
-      address: customer.address || '',
-      doctorName: customer.doctorName || 'Dr. Farooq Siddiqui',
-      doctorSpecialization: customer.doctorSpecialty || 'General Physician',
-      activeRxNo: customer.activeRxNo || '',
-      creditLimit: `₹${Number(customer.creditLimit || customer.credit_limit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
-      outstandingBalance: `₹${Number(customer.outstandingBalance || customer.outstanding_balance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
-      totalPurchasesCount: `${customer.totalInvoices || customer.invoices?.length || 0} Orders`,
-      totalSpent: `₹${Number(customer.totalSpent || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
-      loyaltyPoints: customer.loyaltyPoints || 0,
-      status: customer.status || 'Active',
-      customerSince: customer.created_at ? new Date(customer.created_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Active Member',
+      id:
+        customer.customerNumber ||
+        customer.customer_number ||
+        customer.id,
+
+      name: customer.name || "",
+
+      phone: customer.phone || "",
+
+      email: customer.email || "",
+
+      age: customer.age ?? "",
+
+      gender: customer.gender || "",
+
+      category: customer.category || "Regular",
+
+      city: customer.city || "",
+
+      address: customer.address || "",
+
+      doctorName:
+        customer.doctorName || "",
+
+      doctorSpecialization:
+        customer.doctorSpecialty ||
+        customer.doctorSpecialization ||
+        "",
+
+      activeRxNo:
+        customer.activeRxNo || "",
+
+      creditLimitValue: creditLimit,
+
+      creditLimit: `₹${creditLimit.toLocaleString("en-IN", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}`,
+
+      outstandingBalanceValue: outstandingBalance,
+
+      outstandingBalance: `₹${outstandingBalance.toLocaleString(
+        "en-IN",
+        {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }
+      )}`,
+
+      totalInvoices,
+
+      totalPurchasesCount: `${totalInvoices} Orders`,
+
+      totalSpentValue: totalSpent,
+
+      totalSpent: `₹${totalSpent.toLocaleString("en-IN", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}`,
+
+      totalReturnsValue: totalReturns,
+
+      totalReturns: `₹${totalReturns.toLocaleString("en-IN", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}`,
+
+      loyaltyPoints:
+        Number(customer.loyaltyPoints ?? 0),
+
+      status:
+        customer.status || "Active",
+
+      creditAllowed:
+        customer.creditAllowed !== false,
+
+      hospitalClinic:
+        customer.hospitalClinic || "",
+
+      chronicConditions:
+        customer.chronicConditions || "",
+
+      allergies:
+        customer.allergies || "",
+
+      customerSince:
+        customer.created_at
+          ? new Date(customer.created_at).toLocaleDateString(
+            "en-IN",
+            {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            }
+          )
+          : customer.createdAt
+            ? new Date(customer.createdAt).toLocaleDateString(
+              "en-IN",
+              {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              }
+            )
+            : "Active Member",
     };
   }, [customer]);
+
+  console.log(
+    "[CustomerDetails] CUSTOMER STATE:",
+    customer
+  );
+
+  console.log(
+    "[CustomerDetails] PROFILE:",
+    profile
+  );
 
   const invoices = customer?.invoices || [];
   const returns = customer?.returns || [];
@@ -399,69 +602,69 @@ export default function CustomerDetailsScreen({
                       <SkeletonItemCard key={i} />
                     ))
                   ) : paginatedInvoices.length === 0 ? (
+                    <View style={styles.emptyTableBox}>
+                      <Text style={styles.emptyTableText}>
+                        No invoices found matching your search.
+                      </Text>
+                    </View>
+                  ) : (
+                    paginatedInvoices.map((inv) => (
+                      <View key={inv.invoiceNo} style={styles.mobileCustomerCard}>
+                        <View style={styles.mobileCardHeader}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={styles.invNoText}>{inv.invoiceNo}</Text>
+                            <View style={styles.statusCompletedPill}>
+                              <Text style={styles.statusCompletedText}>{inv.status}</Text>
+                            </View>
+                          </View>
+                          <Pressable
+                            onPress={() => handleViewInvoice(inv)}
+                            style={styles.viewActionBtn}
+                            accessibilityRole="button"
+                            accessibilityLabel={`View invoice ${inv.invoiceNo}`}
+                          >
+                            <Text style={styles.viewActionBtnText}>View</Text>
+                          </Pressable>
+                        </View>
+
+                        <Text style={styles.mobileCardDate}>{inv.dateTime}</Text>
+
+                        <View style={styles.mobileCardFooter}>
+                          <View>
+                            <Text style={styles.mobileCardSub}>{inv.items} items</Text>
+                            <Text style={styles.mobileCardMethod}>Paid via {inv.paymentMethod}</Text>
+                          </View>
+                          <Text style={styles.mobileCardAmount}>{inv.amount}</Text>
+                        </View>
+                      </View>
+                    ))
+                  )}
+                </View>
+              ) : (
+                <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+                  <View style={styles.tableWrapper}>
+                    {/* Table Header */}
+                    <View style={styles.tableHeader}>
+                      <Text style={[styles.thCell, { width: 120 }]}>INVOICE NO.</Text>
+                      <Text style={[styles.thCell, { width: 170 }]}>DATE & TIME</Text>
+                      <Text style={[styles.thCell, { width: 80, textAlign: 'center' }]}>ITEMS</Text>
+                      <Text style={[styles.thCell, { width: 110, textAlign: 'right' }]}>AMOUNT (₹)</Text>
+                      <Text style={[styles.thCell, { width: 120, textAlign: 'center' }]}>PAYMENT METHOD</Text>
+                      <Text style={[styles.thCell, { width: 110, textAlign: 'center' }]}>STATUS</Text>
+                      <Text style={[styles.thCell, { width: 90, textAlign: 'center' }]}>ACTION</Text>
+                    </View>
+
+                    {/* Table Rows */}
+                    {loading ? (
+                      Array.from({ length: 5 }).map((_, i) => (
+                        <SkeletonTableRow key={i} columns={7} />
+                      ))
+                    ) : paginatedInvoices.length === 0 ? (
                       <View style={styles.emptyTableBox}>
-                        <Text style={styles.emptyTableText}>
-                          No invoices found matching your search.
-                        </Text>
+                        <Text style={styles.emptyTableText}>No invoices found matching your search.</Text>
                       </View>
                     ) : (
-                      paginatedInvoices.map((inv) => (
-                        <View key={inv.invoiceNo} style={styles.mobileCustomerCard}>
-                          <View style={styles.mobileCardHeader}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                              <Text style={styles.invNoText}>{inv.invoiceNo}</Text>
-                              <View style={styles.statusCompletedPill}>
-                                <Text style={styles.statusCompletedText}>{inv.status}</Text>
-                              </View>
-                            </View>
-                            <Pressable
-                              onPress={() => handleViewInvoice(inv)}
-                              style={styles.viewActionBtn}
-                              accessibilityRole="button"
-                              accessibilityLabel={`View invoice ${inv.invoiceNo}`}
-                            >
-                              <Text style={styles.viewActionBtnText}>View</Text>
-                            </Pressable>
-                          </View>
-  
-                          <Text style={styles.mobileCardDate}>{inv.dateTime}</Text>
-  
-                          <View style={styles.mobileCardFooter}>
-                            <View>
-                              <Text style={styles.mobileCardSub}>{inv.items} items</Text>
-                              <Text style={styles.mobileCardMethod}>Paid via {inv.paymentMethod}</Text>
-                            </View>
-                            <Text style={styles.mobileCardAmount}>{inv.amount}</Text>
-                          </View>
-                        </View>
-                      ))
-                    )}
-                  </View>
-                ) : (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-                    <View style={styles.tableWrapper}>
-                      {/* Table Header */}
-                      <View style={styles.tableHeader}>
-                        <Text style={[styles.thCell, { width: 120 }]}>INVOICE NO.</Text>
-                        <Text style={[styles.thCell, { width: 170 }]}>DATE & TIME</Text>
-                        <Text style={[styles.thCell, { width: 80, textAlign: 'center' }]}>ITEMS</Text>
-                        <Text style={[styles.thCell, { width: 110, textAlign: 'right' }]}>AMOUNT (₹)</Text>
-                        <Text style={[styles.thCell, { width: 120, textAlign: 'center' }]}>PAYMENT METHOD</Text>
-                        <Text style={[styles.thCell, { width: 110, textAlign: 'center' }]}>STATUS</Text>
-                        <Text style={[styles.thCell, { width: 90, textAlign: 'center' }]}>ACTION</Text>
-                      </View>
-  
-                      {/* Table Rows */}
-                      {loading ? (
-                        Array.from({ length: 5 }).map((_, i) => (
-                          <SkeletonTableRow key={i} columns={7} />
-                        ))
-                      ) : paginatedInvoices.length === 0 ? (
-                        <View style={styles.emptyTableBox}>
-                          <Text style={styles.emptyTableText}>No invoices found matching your search.</Text>
-                        </View>
-                      ) : (
-                        paginatedInvoices.map((inv, idx) => (
+                      paginatedInvoices.map((inv, idx) => (
                         <View
                           key={inv.invoiceNo}
                           style={[
@@ -609,7 +812,7 @@ export default function CustomerDetailsScreen({
                       style={[
                         styles.pageNavBtnText,
                         currentPage === totalPages &&
-                          styles.pageNavBtnTextDisabled,
+                        styles.pageNavBtnTextDisabled,
                       ]}
                     >
                       ›
@@ -1259,7 +1462,7 @@ export default function CustomerDetailsScreen({
                   Dispensed Items & Prescriptions
                 </Text>
                 {selectedInvoice.itemsList &&
-                selectedInvoice.itemsList.length > 0 ? (
+                  selectedInvoice.itemsList.length > 0 ? (
                   selectedInvoice.itemsList.map((item, idx) => (
                     <View key={idx} style={styles.modalItemRow}>
                       <View style={{ flex: 1 }}>

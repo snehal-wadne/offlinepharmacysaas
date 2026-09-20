@@ -61,129 +61,473 @@ export default function PurchaseReportsScreen({
   const [vendors, setVendors] = useState([]);
   const itemsPerPage = 10;
 
-  useEffect(() => {
-    let isMounted = true;
-    async function loadPurchaseAnalytics() {
-      try {
-        setLoading(true);
-        const branchDisplayName =
-          typeof selectedBranch === "object" && selectedBranch !== null
-            ? selectedBranch.name
-            : selectedBranch || "All Branches";
-        const branchParam =
-          typeof selectedBranch === "object" && selectedBranch !== null
-            ? selectedBranch.id || selectedBranch.name
-            : selectedBranch;
-        const cleanBranch =
-          branchParam &&
-          branchParam !== "All Branches" &&
-          branchParam !== "all" &&
-          branchParam !== "No Active Branch"
-            ? branchParam
-            : undefined;
+ useEffect(() => {
+  let isMounted = true;
 
-        const [pnlRes, salesRes, purchasesRes] = await Promise.all([
-          fetchProfitLossReport({ branchId: cleanBranch }),
-          fetchSalesReport({ branchId: cleanBranch }),
-          fetchPurchases({ branchId: cleanBranch }).catch(() => null),
+  async function loadPurchaseAnalytics() {
+    try {
+      setLoading(true);
+
+      console.log(
+        "\n============================================================"
+      );
+      console.log("📊 PURCHASE REPORTS - LOAD START");
+      console.log("============================================================");
+
+      console.log("🔹 selectedBranch:", selectedBranch);
+      console.log(
+        "🔹 selectedBranch type:",
+        typeof selectedBranch
+      );
+
+      const branchDisplayName =
+        typeof selectedBranch === "object" &&
+        selectedBranch !== null
+          ? selectedBranch.name
+          : selectedBranch || "All Branches";
+
+      const branchParam =
+        typeof selectedBranch === "object" &&
+        selectedBranch !== null
+          ? selectedBranch.id || selectedBranch.name
+          : selectedBranch;
+
+      const cleanBranch =
+        branchParam &&
+        branchParam !== "All Branches" &&
+        branchParam !== "all" &&
+        branchParam !== "No Active Branch"
+          ? branchParam
+          : undefined;
+
+      console.log("🔹 branchDisplayName:", branchDisplayName);
+      console.log("🔹 branchParam:", branchParam);
+      console.log("🔹 cleanBranch:", cleanBranch);
+
+      console.log(
+        "\n🚀 Calling APIs..."
+      );
+
+      const [pnlRes, salesRes, purchasesRes] =
+        await Promise.all([
+          fetchProfitLossReport({
+            branchId: cleanBranch,
+          }),
+
+          fetchSalesReport({
+            branchId: cleanBranch,
+          }),
+
+          fetchPurchases({
+            branchId: cleanBranch,
+          }).catch((err) => {
+            console.warn(
+              "⚠️ fetchPurchases failed:",
+              err
+            );
+            return null;
+          }),
         ]);
 
-        if (!isMounted) return;
+      if (!isMounted) return;
 
-        if (pnlRes && pnlRes.success && pnlRes.data) {
-          const pnl = pnlRes.data;
-          const grossRev = Number(pnl.grossRevenue || 0);
-          const cogs = Number(pnl.estimatedCogs || 0);
-          const profit = Number(pnl.grossProfit || 0);
-          const margin =
-            pnl.profitMarginPercent ||
-            (grossRev > 0 ? ((profit / grossRev) * 100).toFixed(1) : 0);
+      // ============================================================
+      // LOG COMPLETE API RESPONSES
+      // ============================================================
 
-          setKpis([
-            {
-              id: "rep-pur-1",
-              label: "Est. Procurement COGS",
-              value: `₹${cogs.toLocaleString("en-IN")}`,
-              subtext:
-                branchDisplayName === "All Branches"
-                  ? "Across all branches"
-                  : branchDisplayName,
-              variant: "teal",
-            },
-            {
-              id: "rep-pur-2",
-              label: "Gross Revenue",
-              value: `₹${grossRev.toLocaleString("en-IN")}`,
-              subtext: `${pnl.invoicesCount || 0} invoices settled`,
-              variant: "teal",
-            },
-            {
-              id: "rep-pur-3",
-              label: "Gross Profit",
-              value: `₹${profit.toLocaleString("en-IN")}`,
-              subtext: `${margin}% gross margin`,
-              variant: "teal",
-            },
-            {
-              id: "rep-pur-4",
-              label: "Taxes Collected (GST)",
-              value: `₹${Number(pnl.taxCollected || 0).toLocaleString("en-IN")}`,
-              subtext: "Output GST liability",
-              variant: "amber",
-            },
-          ]);
-        }
+      console.log(
+        "\n============================================================"
+      );
+      console.log("📦 P&L API RESPONSE");
+      console.log("============================================================");
 
-        if (
-          purchasesRes &&
-          purchasesRes.success &&
-          Array.isArray(purchasesRes.data)
-        ) {
-          const map = {};
-          purchasesRes.data.forEach((po) => {
-            const sup = po.supplierName || po.supplier || "Direct Supplier";
-            if (!map[sup]) {
-              map[sup] = {
-                id: `v-${Object.keys(map).length + 1}`,
-                supplier: sup,
-                totalPOs: 0,
-                spentRaw: 0,
-                leadTimeAvg: "2.5 Days",
-                fulfillmentRate: "98%",
-                qualityAcceptance: "99.5%",
-                primaryCategory: po.category || "Pharmaceuticals",
-              };
-            }
-            map[sup].totalPOs += 1;
-            const amount =
-              typeof po.numericAmount === "number"
-                ? po.numericAmount
-                : parseFloat(
-                    String(po.amount || "0").replace(/[^0-9.]/g, ""),
-                  ) || 0;
-            map[sup].spentRaw += amount;
-          });
-          setVendors(
-            Object.values(map).map((v) => ({
-              ...v,
-              totalSpent: `₹${v.spentRaw.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
-            })),
+      console.log("pnlRes:", pnlRes);
+      console.log(
+        "pnlRes.success:",
+        pnlRes?.success
+      );
+      console.log(
+        "pnlRes.data:",
+        pnlRes?.data
+      );
+      console.log(
+        "pnlRes.data type:",
+        typeof pnlRes?.data
+      );
+
+      console.log(
+        "\n============================================================"
+      );
+      console.log("📦 SALES API RESPONSE");
+      console.log("============================================================");
+
+      console.log("salesRes:", salesRes);
+      console.log(
+        "salesRes.success:",
+        salesRes?.success
+      );
+      console.log(
+        "salesRes.data:",
+        salesRes?.data
+      );
+      console.log(
+        "salesRes.data.overview:",
+        salesRes?.data?.overview
+      );
+      console.log(
+        "salesRes.data.dailyTrend:",
+        salesRes?.data?.dailyTrend
+      );
+      console.log(
+        "salesRes.data.paymentMethods:",
+        salesRes?.data?.paymentMethods
+      );
+
+      console.log(
+        "\n============================================================"
+      );
+      console.log("📦 PURCHASE API RESPONSE");
+      console.log("============================================================");
+
+      console.log(
+        "purchasesRes:",
+        purchasesRes
+      );
+
+      console.log(
+        "purchasesRes.success:",
+        purchasesRes?.success
+      );
+
+      console.log(
+        "purchasesRes.data:",
+        purchasesRes?.data
+      );
+
+      console.log(
+        "purchasesRes.data type:",
+        Array.isArray(purchasesRes?.data)
+          ? "ARRAY"
+          : typeof purchasesRes?.data
+      );
+
+      console.log(
+        "purchasesRes.data length:",
+        Array.isArray(purchasesRes?.data)
+          ? purchasesRes.data.length
+          : "NOT ARRAY"
+      );
+
+      // ============================================================
+      // P&L / KPI DATA
+      // ============================================================
+
+      if (
+        pnlRes?.success &&
+        pnlRes?.data?.data
+      ) {
+        const pnl = pnlRes.data.data;
+
+        console.log(
+          "\n📈 P&L DATA USED FOR KPIs:",
+          pnl
+        );
+
+        const grossRev = Number(
+          pnl.grossRevenue || 0
+        );
+
+        const cogs = Number(
+          pnl.estimatedCogs || 0
+        );
+
+        const profit = Number(
+          pnl.grossProfit || 0
+        );
+
+        const margin =
+          pnl.profitMarginPercent ??
+          (
+            grossRev > 0
+              ? (profit / grossRev) * 100
+              : 0
+          ).toFixed(1);
+
+        console.log("💰 grossRev:", grossRev);
+        console.log("💰 cogs:", cogs);
+        console.log("💰 profit:", profit);
+        console.log("📊 margin:", margin);
+        console.log(
+          "🧾 invoicesCount:",
+          pnl.invoicesCount
+        );
+        console.log(
+          "🧾 taxCollected:",
+          pnl.taxCollected
+        );
+
+        setKpis([
+          {
+            id: "rep-pur-1",
+            label: "Est. Procurement COGS",
+            value: `₹${cogs.toLocaleString(
+              "en-IN",
+              {
+                maximumFractionDigits: 2,
+              }
+            )}`,
+            subtext:
+              branchDisplayName ===
+              "All Branches"
+                ? "Across all branches"
+                : branchDisplayName,
+            variant: "teal",
+          },
+
+          {
+            id: "rep-pur-2",
+            label: "Gross Revenue",
+            value: `₹${grossRev.toLocaleString(
+              "en-IN",
+              {
+                maximumFractionDigits: 2,
+              }
+            )}`,
+            subtext: `${
+              pnl.invoicesCount || 0
+            } invoices settled`,
+            variant: "teal",
+          },
+
+          {
+            id: "rep-pur-3",
+            label: "Gross Profit",
+            value: `₹${profit.toLocaleString(
+              "en-IN",
+              {
+                maximumFractionDigits: 2,
+              }
+            )}`,
+            subtext: `${margin}% gross margin`,
+            variant: "teal",
+          },
+
+          {
+            id: "rep-pur-4",
+            label: "Taxes Collected (GST)",
+            value: `₹${Number(
+              pnl.taxCollected || 0
+            ).toLocaleString("en-IN", {
+              maximumFractionDigits: 2,
+            })}`,
+            subtext: "Output GST liability",
+            variant: "amber",
+          },
+        ]);
+
+        console.log("✅ KPI state updated");
+      } else {
+        console.warn(
+          "⚠️ Invalid P&L response:",
+          pnlRes
+        );
+      }
+
+      // ============================================================
+      // PURCHASE / VENDOR DATA
+      // ============================================================
+
+      console.log(
+        "\n============================================================"
+      );
+      console.log("🏪 PROCESSING VENDOR DATA");
+      console.log("============================================================");
+
+      if (
+        purchasesRes?.success &&
+        Array.isArray(purchasesRes?.data.data)
+      ) {
+        const purchaseList =
+          purchasesRes.data.data;
+
+        console.log(
+          "✅ Purchase records found:",
+          purchaseList.length
+        );
+
+        console.log(
+          "📋 First purchase record:",
+          purchaseList[0]
+        );
+
+        const map = {};
+
+        purchaseList.forEach((po, index) => {
+          console.log(
+            `\n--- Purchase Record ${index + 1} ---`
           );
-        } else {
-          setVendors([]);
-        }
-      } catch (err) {
-        console.warn("Backend purchase report unavailable:", err.message);
-        if (isMounted) setVendors([]);
-      } finally {
-        if (isMounted) setLoading(false);
+
+          console.log("PO:", po);
+
+          const supplier =
+            po.supplierName ||
+            po.supplier ||
+            "Direct Supplier";
+
+          console.log(
+            "Supplier:",
+            supplier
+          );
+
+          let amount = 0;
+
+          if (
+            typeof po.numericAmount ===
+            "number"
+          ) {
+            amount =
+              po.numericAmount;
+          } else {
+            amount =
+              parseFloat(
+                String(
+                  po.amount || "0"
+                ).replace(
+                  /[^0-9.]/g,
+                  ""
+                )
+              ) || 0;
+          }
+
+          console.log(
+            "Amount:",
+            amount
+          );
+
+          if (!map[supplier]) {
+            map[supplier] = {
+              id: `v-${
+                Object.keys(map)
+                  .length + 1
+              }`,
+
+              supplier,
+
+              totalPOs: 0,
+
+              spentRaw: 0,
+
+              leadTimeAvg:
+                "2.5 Days",
+
+              fulfillmentRate:
+                "98%",
+
+              qualityAcceptance:
+                "99.5%",
+
+              primaryCategory:
+                po.category ||
+                "Pharmaceuticals",
+            };
+          }
+
+          map[supplier].totalPOs += 1;
+
+          map[supplier].spentRaw +=
+            amount;
+        });
+
+        console.log(
+          "\n📦 Vendor map:",
+          map
+        );
+
+        const vendorArray =
+          Object.values(map);
+
+        console.log(
+          "\n🏪 Vendor array:",
+          vendorArray
+        );
+
+        const finalVendors =
+          vendorArray.map((v) => ({
+            ...v,
+
+            totalSpent:
+              `₹${v.spentRaw.toLocaleString(
+                "en-IN",
+                {
+                  maximumFractionDigits: 2,
+                }
+              )}`,
+          }));
+
+        console.log(
+          "\n✅ FINAL VENDORS FOR UI:",
+          finalVendors
+        );
+
+        console.log(
+          "✅ Final vendor count:",
+          finalVendors.length
+        );
+
+        setVendors(
+          finalVendors
+        );
+
+        setCurrentPage(1);
+      } else {
+        console.warn(
+          "⚠️ Purchase response does not contain expected array:",
+          purchasesRes
+        );
+
+        setVendors([]);
+      }
+
+      console.log(
+        "\n============================================================"
+      );
+      console.log("📊 PURCHASE REPORTS - LOAD COMPLETE");
+      console.log("============================================================\n");
+
+    } catch (err) {
+      console.error(
+        "\n❌ PURCHASE REPORT LOAD ERROR"
+      );
+
+      console.error(
+        "Error:",
+        err
+      );
+
+      console.error(
+        "Message:",
+        err?.message
+      );
+
+      if (isMounted) {
+        setVendors([]);
+        setKpis(
+          DEFAULT_PURCHASE_KPIS
+        );
+      }
+    } finally {
+      if (isMounted) {
+        setLoading(false);
       }
     }
-    loadPurchaseAnalytics();
-    return () => {
-      isMounted = false;
-    };
-  }, [selectedBranch]);
+  }
+
+  loadPurchaseAnalytics();
+
+  return () => {
+    isMounted = false;
+  };
+}, [selectedBranch]);
 
   const totalPages = Math.ceil(vendors.length / itemsPerPage);
   const paginatedVendors = vendors.slice(

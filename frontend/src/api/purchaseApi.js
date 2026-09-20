@@ -77,14 +77,14 @@ export async function fetchGoodsReceipts(params = {}) {
   if (params.purchaseId) query.append("purchaseId", params.purchaseId);
 
   const queryString = query.toString() ? `?${query.toString()}` : "";
-  return apiGet(`/goods-receipts${queryString}`);
+  return apiGet(`/api/goods-receipts${queryString}`);
 }
 
 /**
  * POST /api/goods-receipts
  */
 export async function createGoodsReceipt(receiptData) {
-  return apiPost("/goods-receipts", receiptData);
+  return apiPost("/api/goods-receipts", receiptData);
 }
 
 /**
@@ -92,7 +92,7 @@ export async function createGoodsReceipt(receiptData) {
  */
 export async function updateGoodsReceiptStatus(id, status) {
   return apiPut(
-    `/goods-receipts/${id}/status`,
+    `/api/goods-receipts/${id}/status`,
     { status },
     { method: "PATCH" },
   );
@@ -106,33 +106,33 @@ export async function fetchSuppliers(params = {}) {
   if (params.search) query.append("search", params.search);
 
   const queryString = query.toString() ? `?${query.toString()}` : "";
-  return apiGet(`/suppliers${queryString}`);
+  return apiGet(`/api/suppliers${queryString}`);
 }
 
 /**
  * POST /api/suppliers
  */
 export async function createSupplier(supplierData) {
-  return apiPost("/suppliers", supplierData);
+  return apiPost("/api/suppliers", supplierData);
 }
 
 /**
  * PATCH /api/suppliers/:id/status
  */
 export async function updateSupplierStatus(id, status) {
-  return apiPut(`/suppliers/${id}/status`, { status }, { method: "PATCH" });
+  return apiPut(`/api/suppliers/${id}/status`, { status }, { method: "PATCH" });
 }
 
 /**
  * PUT /api/suppliers/:id
  */
 export async function updateSupplier(id, supplierData) {
-  return apiPut(`/suppliers/${id}`, supplierData);
+  return apiPut(`/api/suppliers/${id}`, supplierData);
 }
 
 /**
  * DELETE /api/suppliers/:id
  */
 export async function deleteSupplier(id) {
-  return apiDelete(`/suppliers/${id}`);
+  return apiDelete(`/api/suppliers/${id}`);
 }

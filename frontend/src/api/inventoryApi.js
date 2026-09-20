@@ -86,12 +86,12 @@ export async function fetchStockTransfers(params = {}) {
   if (params.status && params.status !== "All Statuses")
     query.append("status", params.status);
   const queryString = query.toString() ? `?${query.toString()}` : "";
-  return apiGet(`/stock-transfers${queryString}`);
+  return apiGet(`/api/stock-transfers${queryString}`);
 }
 
 /**
  * POST /api/stock-transfers
  */
 export async function createStockTransferApi(data) {
-  return apiPost("/stock-transfers", data);
+  return apiPost("/api/stock-transfers", data);
 }

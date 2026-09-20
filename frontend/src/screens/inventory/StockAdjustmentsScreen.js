@@ -61,8 +61,8 @@ export default function StockAdjustmentsScreen({
 
     const unsubscribe = subscribeFn
       ? subscribeFn(() => {
-          if (isMounted) loadInventoryData();
-        })
+        if (isMounted) loadInventoryData();
+      })
       : null;
 
     return () => {
@@ -195,15 +195,17 @@ export default function StockAdjustmentsScreen({
             : selectedBranch;
         const branchParam =
           rawBranch &&
-          rawBranch !== "All Branches" &&
-          rawBranch !== "all" &&
-          rawBranch !== "No Active Branch"
+            rawBranch !== "All Branches" &&
+            rawBranch !== "all" &&
+            rawBranch !== "No Active Branch"
             ? rawBranch
             : undefined;
         const invRes = await fetchInventory({ branchId: branchParam });
-        if (invRes && invRes.data && Array.isArray(invRes.data)) {
+        console.log(invRes);
+
+        if (invRes && invRes.data?.data && Array.isArray(invRes.data?.data)) {
           setStockItems(
-            invRes.data.map((item, idx) => ({
+            invRes.data?.data.map((item, idx) => ({
               ...item,
               isActive: item.isActive !== undefined ? item.isActive : true,
               rxRequired:
@@ -335,8 +337,7 @@ export default function StockAdjustmentsScreen({
           const nextActive = !item.isActive;
           if (onShowToast) {
             onShowToast(
-              `[PATCH /api/inventory/${item.sku}/status] ${item.brandName || item.medicineName} status: ${
-                nextActive ? "Active (Live in billing)" : "Deactivated / Hidden"
+              `[PATCH /api/inventory/${item.sku}/status] ${item.brandName || item.medicineName} status: ${nextActive ? "Active (Live in billing)" : "Deactivated / Hidden"
               }`,
             );
           }
@@ -354,8 +355,7 @@ export default function StockAdjustmentsScreen({
           const nextRx = !item.rxRequired;
           if (onShowToast) {
             onShowToast(
-              `[PATCH /api/inventory/${item.sku}/rx] ${item.brandName || item.medicineName}: Prescription required: ${
-                nextRx ? "YES (Rx Needed)" : "NO (OTC)"
+              `[PATCH /api/inventory/${item.sku}/rx] ${item.brandName || item.medicineName}: Prescription required: ${nextRx ? "YES (Rx Needed)" : "NO (OTC)"
               }`,
             );
           }
@@ -532,7 +532,7 @@ export default function StockAdjustmentsScreen({
         }
 
         if (typeof syncEngine?.sync === "function") {
-          syncEngine.sync().catch(() => {});
+          syncEngine.sync().catch(() => { });
         }
       } else {
         const updatedPayload = {
@@ -1104,12 +1104,12 @@ export default function StockAdjustmentsScreen({
           prev.map((item) =>
             item.id === editingItemId
               ? {
-                  ...item,
-                  ...updatedItem,
-                  isActive: item.isActive !== undefined ? item.isActive : true,
-                  rxRequired:
-                    item.rxRequired !== undefined ? item.rxRequired : false,
-                }
+                ...item,
+                ...updatedItem,
+                isActive: item.isActive !== undefined ? item.isActive : true,
+                rxRequired:
+                  item.rxRequired !== undefined ? item.rxRequired : false,
+              }
               : item,
           ),
         );
@@ -2409,7 +2409,7 @@ export default function StockAdjustmentsScreen({
                                   style={[
                                     styles.branchOptionName,
                                     isSelected &&
-                                      styles.branchOptionNameFromActive,
+                                    styles.branchOptionNameFromActive,
                                   ]}
                                   numberOfLines={1}
                                 >
@@ -2500,9 +2500,9 @@ export default function StockAdjustmentsScreen({
                                   style={[
                                     styles.branchOptionName,
                                     isSelected &&
-                                      styles.branchOptionNameToActive,
+                                    styles.branchOptionNameToActive,
                                     isDisabled &&
-                                      styles.branchOptionNameDisabled,
+                                    styles.branchOptionNameDisabled,
                                   ]}
                                   numberOfLines={1}
                                 >
@@ -2585,14 +2585,14 @@ export default function StockAdjustmentsScreen({
                       style={[
                         styles.transferPresetBtn,
                         transferQty === preset &&
-                          styles.transferPresetBtnActive,
+                        styles.transferPresetBtnActive,
                       ]}
                     >
                       <Text
                         style={[
                           styles.transferPresetText,
                           transferQty === preset &&
-                            styles.transferPresetTextActive,
+                          styles.transferPresetTextActive,
                         ]}
                       >
                         +{preset}
@@ -2623,7 +2623,7 @@ export default function StockAdjustmentsScreen({
                       {Math.max(
                         0,
                         selectedItemForAction.quantity -
-                          (parseInt(transferQty, 10) || 0),
+                        (parseInt(transferQty, 10) || 0),
                       )}{" "}
                       units (-{parseInt(transferQty, 10) || 0})
                     </Text>
@@ -2748,9 +2748,9 @@ export default function StockAdjustmentsScreen({
                   style={[
                     styles.physicalLabelCard,
                     barcodeConfig.format === "shelf_70x35" &&
-                      styles.physicalLabelCardShelf,
+                    styles.physicalLabelCardShelf,
                     barcodeConfig.format === "sheet_a4" &&
-                      styles.physicalLabelCardA4,
+                    styles.physicalLabelCardA4,
                   ]}
                 >
                   {/* Pharmacy Banner */}
@@ -2883,14 +2883,14 @@ export default function StockAdjustmentsScreen({
                       style={[
                         styles.formatOptionBtn,
                         barcodeConfig.format === "thermal_50x25" &&
-                          styles.formatOptionBtnActive,
+                        styles.formatOptionBtnActive,
                       ]}
                     >
                       <Text
                         style={[
                           styles.formatOptionTitle,
                           barcodeConfig.format === "thermal_50x25" &&
-                            styles.formatOptionTitleActive,
+                          styles.formatOptionTitleActive,
                         ]}
                       >
                         🏷️ 50 × 25 mm
@@ -2910,14 +2910,14 @@ export default function StockAdjustmentsScreen({
                       style={[
                         styles.formatOptionBtn,
                         barcodeConfig.format === "shelf_70x35" &&
-                          styles.formatOptionBtnActive,
+                        styles.formatOptionBtnActive,
                       ]}
                     >
                       <Text
                         style={[
                           styles.formatOptionTitle,
                           barcodeConfig.format === "shelf_70x35" &&
-                            styles.formatOptionTitleActive,
+                          styles.formatOptionTitleActive,
                         ]}
                       >
                         📋 70 × 35 mm
@@ -2937,14 +2937,14 @@ export default function StockAdjustmentsScreen({
                       style={[
                         styles.formatOptionBtn,
                         barcodeConfig.format === "sheet_a4" &&
-                          styles.formatOptionBtnActive,
+                        styles.formatOptionBtnActive,
                       ]}
                     >
                       <Text
                         style={[
                           styles.formatOptionTitle,
                           barcodeConfig.format === "sheet_a4" &&
-                            styles.formatOptionTitleActive,
+                          styles.formatOptionTitleActive,
                         ]}
                       >
                         📄 A4 Sheet
@@ -3009,14 +3009,14 @@ export default function StockAdjustmentsScreen({
                         style={[
                           styles.presetPill,
                           String(barcodeConfig.copies) === preset &&
-                            styles.presetPillActive,
+                          styles.presetPillActive,
                         ]}
                       >
                         <Text
                           style={[
                             styles.presetPillText,
                             String(barcodeConfig.copies) === preset &&
-                              styles.presetPillTextActive,
+                            styles.presetPillTextActive,
                           ]}
                         >
                           {preset}
@@ -3048,7 +3048,7 @@ export default function StockAdjustmentsScreen({
                         style={[
                           styles.toggleChipText,
                           barcodeConfig.showPrice &&
-                            styles.toggleChipTextActive,
+                          styles.toggleChipTextActive,
                         ]}
                       >
                         {barcodeConfig.showPrice ? "✓" : "+"} MRP (₹)
@@ -3071,7 +3071,7 @@ export default function StockAdjustmentsScreen({
                         style={[
                           styles.toggleChipText,
                           barcodeConfig.showExpiry &&
-                            styles.toggleChipTextActive,
+                          styles.toggleChipTextActive,
                         ]}
                       >
                         {barcodeConfig.showExpiry ? "✓" : "+"} Expiry Date
@@ -3094,7 +3094,7 @@ export default function StockAdjustmentsScreen({
                         style={[
                           styles.toggleChipText,
                           barcodeConfig.showBatch &&
-                            styles.toggleChipTextActive,
+                          styles.toggleChipTextActive,
                         ]}
                       >
                         {barcodeConfig.showBatch ? "✓" : "+"} Batch No
@@ -3117,7 +3117,7 @@ export default function StockAdjustmentsScreen({
                         style={[
                           styles.toggleChipText,
                           barcodeConfig.showShelf &&
-                            styles.toggleChipTextActive,
+                          styles.toggleChipTextActive,
                         ]}
                       >
                         {barcodeConfig.showShelf ? "✓" : "+"} Shelf Location
@@ -3140,7 +3140,7 @@ export default function StockAdjustmentsScreen({
                         style={[
                           styles.toggleChipText,
                           barcodeConfig.showGeneric &&
-                            styles.toggleChipTextActive,
+                          styles.toggleChipTextActive,
                         ]}
                       >
                         {barcodeConfig.showGeneric ? "✓" : "+"} Generic Name

@@ -79,9 +79,9 @@ export default function ExpiryReportsScreen({
             : selectedBranch || "All Branches";
         const res = await fetchExpiryReport({ branchId: selectedBranch });
         if (!isMounted) return;
-
-        if (res && res.success && res.data) {
-          const summary = res.data.summary || {};
+        const payload = res?.data?.data;
+        if (res && res.success && payload) {
+          const summary = payload.summary || {};
           setKpis([
             {
               id: "exp-rep-1",
@@ -117,11 +117,11 @@ export default function ExpiryReportsScreen({
           ]);
 
           if (
-            res.data.batches &&
-            Array.isArray(res.data.batches) &&
-            res.data.batches.length > 0
+            payload.batches &&
+            Array.isArray(payload.batches) &&
+            payload.batches.length > 0
           ) {
-            const mapped = res.data.batches.map((b, idx) => {
+            const mapped = payload.batches.map((b, idx) => {
               const expDate = b.expiryDate
                 ? new Date(b.expiryDate)
                 : new Date();
@@ -538,7 +538,7 @@ export default function ExpiryReportsScreen({
                           styles.tdCell,
                           styles.daysText,
                           item.daysRemaining === "Expired" &&
-                            styles.expiredText,
+                          styles.expiredText,
                           { width: 130, textAlign: "center" },
                         ]}
                       >

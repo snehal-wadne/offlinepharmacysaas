@@ -66,14 +66,16 @@ export default function StockStatusScreen({
           : selectedBranch;
       const branchParam =
         rawBranch &&
-        rawBranch !== "All Branches" &&
-        rawBranch !== "all" &&
-        rawBranch !== "No Active Branch"
+          rawBranch !== "All Branches" &&
+          rawBranch !== "all" &&
+          rawBranch !== "No Active Branch"
           ? rawBranch
           : undefined;
       const res = await fetchInventory({ branchId: branchParam });
-      if (res && res.data && Array.isArray(res.data)) {
-        setRawInventory(res.data);
+      console.log(res.data?.data);
+
+      if (res && res.data?.data && Array.isArray(res.data?.data)) {
+        setRawInventory(res.data?.data);
       } else {
         setRawInventory([]);
       }
@@ -96,181 +98,488 @@ export default function StockStatusScreen({
   const [bulkImportModalOpen, setBulkImportModalOpen] = useState(false);
 
   // Live DB Low Stock Items (Quantity < 50 Rule)
-  const dbLowStockItems = rawInventory
-    .filter((item) => Number(item.quantity) < 50)
-    .map((item) => {
-      const qty = Number(item.quantity);
-      let status = "Low Stock";
-      if (qty === 0) status = "Out of Stock";
-      else if (qty < 15) status = "Critical";
-
-      return {
-        id: item.id,
-        medicine: item.medicineName || item.genericName,
-        brandName: item.brandName,
-        genericName: item.genericName || item.medicineName,
-        sku: item.sku,
-        currentStock: qty,
-        minimumStock: 15,
-        reorderLevel: 50,
-        supplier:
-          item.supplierName || item.manufacturer || "Pharma Distributor",
-        branch: item.branchId || "Main Branch",
-        status: status,
-        amount: item.amount,
-        batchNo: item.batchNo,
-      };
-    });
-
-  const baseLowStockList = dbLowStockItems;
-  const lowStockItemsList =
-    selectedBranch && selectedBranch !== "All Branches"
-      ? baseLowStockList.filter(
-          (i) =>
-            !i.branch ||
-            i.branch === selectedBranch ||
-            i.branchId === selectedBranch,
-        )
-      : baseLowStockList;
+  console.log(rawInventory);
 
   // Live DB Batch Expiry Timeline Mapping
-  const dbExpiryItems = rawInventory.map((item) => {
-    const qty = Number(item.quantity);
-    let status = "Safe";
-    if (qty === 0) status = "Expired";
-    else if (qty < 50 || item.status === "Low Stock") status = "Expiring Soon";
+ // ============================================================
+// NORMALIZE RAW INVENTORY DATA
+// ============================================================
+
+const normalizedInventory = rawInventory.map((item, index) => {
+  const quantity = Number(item.quantity ?? 0);
+
+  return {
+    id:
+      item.id ||
+      item._id ||
+      item.inventoryId ||
+      item.variationId ||
+      `inventory-${index}`,
+
+    medicine:
+      item.medicineName ||
+      item.genericName ||
+      item.productName ||
+      "Unknown Medicine",
+
+    brandName: item.brandName || "",
+
+    genericName:
+      item.genericName ||
+      item.medicineName ||
+      item.productName ||
+      "",
+
+    sku: item.sku || "",
+
+    quantity,
+
+    amount: item.amount ?? "",
+
+    batchNo: item.batchNo || "",
+
+    expiryDate:
+      item.expiryDate ||
+      item.expiry_date ||
+      item.batchExpiryDate ||
+      "",
+
+    shelfLocation: item.shelfLocation || "",
+
+    supplier:
+      item.supplierName ||
+      item.manufacturer ||
+      "",
+
+    manufacturer: item.manufacturer || "",
+
+    branch:
+      item.branchId ||
+      item.branchName ||
+      "Main Branch",
+
+    branchId: item.branchId || "",
+
+    status: item.status || "",
+
+    lastUpdated:
+      item.lastUpdated ||
+      item.updatedAt ||
+      "",
+
+    isActive: item.isActive,
+
+    packSize: item.packSize || "",
+
+    strength: item.strength || "",
+
+    rxRequired: item.rxRequired,
+
+    productId: item.productId || "",
+
+    updatedBy: item.updatedBy || "",
+  };
+});
+
+
+// ============================================================
+// EXPIRY STATUS CALCULATION
+// ============================================================
+
+const getExpiryStatus = (expiryDate) => {
+  if (!expiryDate) {
+    return "Safe";
+  }
+
+  const expiry = new Date(expiryDate);
+
+  if (Number.isNaN(expiry.getTime())) {
+    return "Safe";
+  }
+
+  const today = new Date();
+
+  // Remove time part
+  const todayDate = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate(),
+  );
+
+  const expiryOnlyDate = new Date(
+    expiry.getFullYear(),
+    expiry.getMonth(),
+    expiry.getDate(),
+  );
+
+  const differenceInMs =
+    expiryOnlyDate.getTime() - todayDate.getTime();
+
+  const differenceInDays = Math.ceil(
+    differenceInMs / (1000 * 60 * 60 * 24),
+  );
+
+  if (differenceInDays < 0) {
+    return "Expired";
+  }
+
+  if (differenceInDays <= 30) {
+    return "Expiring Soon";
+  }
+
+  return "Safe";
+};
+
+
+// ============================================================
+// LOW STOCK ITEMS
+// ============================================================
+
+const dbLowStockItems = normalizedInventory
+  .filter((item) => item.quantity < 50)
+  .map((item) => {
+    let status = "Low Stock";
+
+    if (item.quantity === 0) {
+      status = "Out of Stock";
+    } else if (item.quantity < 15) {
+      status = "Critical";
+    }
 
     return {
       id: item.id,
-      medicine: item.medicineName || item.genericName,
+
+      medicine: item.medicine,
+
       brandName: item.brandName,
-      genericName: item.genericName || item.medicineName,
-      batchNo: item.batchNo || "B-1001",
-      expiryDate:
-        item.expiryDate ||
-        item.expiry_date ||
-        (item.lastUpdated
-          ? `${new Date(item.lastUpdated).getFullYear() + 2}-12-31`
-          : "2028-12-31"),
-      quantity: qty,
-      mrp: item.amount || "₹15.00",
-      shelfLocation: item.shelfLocation || "A1-S1",
-      supplier: item.supplierName || item.manufacturer || "Pharma Distributor",
-      branch: item.branchId || "Main Branch",
-      status: status,
+
+      genericName: item.genericName,
+
+      sku: item.sku,
+
+      currentStock: item.quantity,
+
+      minimumStock: 15,
+
+      reorderLevel: 50,
+
+      supplier: item.supplier,
+
+      branch: item.branch,
+
+      branchId: item.branchId,
+
+      status,
+
+      amount: item.amount,
+
+      batchNo: item.batchNo,
+
+      expiryDate: item.expiryDate,
+
+      shelfLocation: item.shelfLocation,
+
+      manufacturer: item.manufacturer,
+
+      packSize: item.packSize,
+
+      strength: item.strength,
     };
   });
 
-  const baseExpiryList = dbExpiryItems;
-  const expiryItemsList =
-    selectedBranch && selectedBranch !== "All Branches"
-      ? baseExpiryList.filter(
-          (i) =>
-            !i.branch ||
-            i.branch === selectedBranch ||
-            i.branchId === selectedBranch,
-        )
-      : baseExpiryList;
 
-  // Dynamic 4 KPI Stat Cards Calculations
-  const lowStockAlertsCount = lowStockItemsList.length;
-  const expiringCount = expiryItemsList.filter(
-    (i) => i.status === "Expiring Soon",
-  ).length;
-  const expiredCount = expiryItemsList.filter(
-    (i) => i.status === "Expired" || i.quantity === 0,
-  ).length;
-  const deficitSum = lowStockItemsList.reduce((acc, item) => {
-    let numPrice = parseFloat(
-      String(item.amount || "15").replace(/[^0-9.]/g, ""),
-    );
-    if (isNaN(numPrice)) numPrice = 15;
-    const deficitQty = Math.max(0, 50 - item.currentStock);
-    return acc + deficitQty * numPrice;
-  }, 0);
+// ============================================================
+// EXPIRY ITEMS
+// ============================================================
 
-  const dynamicStockStatusKpis = [
-    {
-      id: "kpi-1",
-      label: "Low Stock Alerts",
-      value: lowStockAlertsCount.toLocaleString(),
-      subtext: "Quantity < 50 items",
-      variant: "amber",
-    },
-    {
-      id: "kpi-2",
-      label: "Expiring in 30 Days",
-      value: expiringCount.toLocaleString(),
-      subtext: "Requires monitoring",
-      variant: "blue",
-    },
-    {
-      id: "kpi-3",
-      label: "Expired Items",
-      value: expiredCount.toLocaleString(),
-      subtext: "Action required",
-      variant: "red",
-    },
-    {
-      id: "kpi-4",
-      label: "Reorder Deficit",
-      value: `₹${deficitSum.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`,
-      subtext: "Procurement value",
-      variant: "teal",
-    },
-  ];
+const dbExpiryItems = normalizedInventory.map((item) => {
+  const expiryStatus = getExpiryStatus(item.expiryDate);
 
-  const filteredLowStock = lowStockItemsList.filter((item) => {
-    const q = searchQuery.toLowerCase();
-    const matchesSearch =
-      (item.brandName && item.brandName.toLowerCase().includes(q)) ||
-      (item.genericName && item.genericName.toLowerCase().includes(q)) ||
-      (item.medicine && item.medicine.toLowerCase().includes(q)) ||
-      (item.sku && item.sku.toLowerCase().includes(q)) ||
-      (item.supplier && item.supplier.toLowerCase().includes(q));
+  return {
+    id: item.id,
 
-    const matchesCritical =
-      !criticalOnly ||
-      item.status === "Critical" ||
-      item.status === "Out of Stock";
-    return matchesSearch && matchesCritical;
-  });
+    medicine: item.medicine,
 
-  const filteredExpiry = expiryItemsList.filter((item) => {
-    const q = searchQuery.toLowerCase();
-    const matchesSearch =
-      (item.brandName && item.brandName.toLowerCase().includes(q)) ||
-      (item.genericName && item.genericName.toLowerCase().includes(q)) ||
-      (item.medicine && item.medicine.toLowerCase().includes(q)) ||
-      (item.batchNo && item.batchNo.toLowerCase().includes(q)) ||
-      (item.supplier && item.supplier.toLowerCase().includes(q));
+    brandName: item.brandName,
 
-    const matchesCritical =
-      !criticalOnly ||
-      item.status === "Expired" ||
-      item.status === "Expiring Soon";
-    return matchesSearch && matchesCritical;
-  });
+    genericName: item.genericName,
 
-  // Pagination state
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-  const [isPageLoading, setIsPageLoading] = useState(false);
+    batchNo: item.batchNo || "-",
 
-  // Reset page on tab or filter change
-  useEffect(() => {
-    setPage(1);
-  }, [activeTab, searchQuery, criticalOnly]);
+    expiryDate: item.expiryDate || "-",
 
-  const activeItemsList =
-    activeTab === "low-stock" ? filteredLowStock : filteredExpiry;
-  const totalItems = activeItemsList.length;
-  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
-  const startIndex = (page - 1) * pageSize;
-  const paginatedItems = activeItemsList.slice(
-    startIndex,
-    startIndex + pageSize,
+    quantity: item.quantity,
+
+    mrp: item.amount || "-",
+
+    shelfLocation: item.shelfLocation || "-",
+
+    supplier: item.supplier || "-",
+
+    branch: item.branch,
+
+    branchId: item.branchId,
+
+    status: expiryStatus,
+
+    manufacturer: item.manufacturer,
+
+    sku: item.sku,
+
+    packSize: item.packSize,
+
+    strength: item.strength,
+  };
+});
+
+
+// ============================================================
+// BRANCH FILTER
+// ============================================================
+
+const selectedBranchValue =
+  typeof selectedBranch === "object" && selectedBranch !== null
+    ? selectedBranch.id ||
+      selectedBranch._id ||
+      selectedBranch.name ||
+      selectedBranch.branchId
+    : selectedBranch;
+
+const isAllBranches =
+  !selectedBranchValue ||
+  selectedBranchValue === "All Branches" ||
+  selectedBranchValue === "all";
+
+
+// ============================================================
+// LOW STOCK BRANCH FILTER
+// ============================================================
+
+const baseLowStockList = dbLowStockItems;
+
+const lowStockItemsList = isAllBranches
+  ? baseLowStockList
+  : baseLowStockList.filter((item) => {
+      return (
+        item.branch === selectedBranchValue ||
+        item.branchId === selectedBranchValue
+      );
+    });
+
+
+// ============================================================
+// EXPIRY BRANCH FILTER
+// ============================================================
+
+const baseExpiryList = dbExpiryItems;
+
+const expiryItemsList = isAllBranches
+  ? baseExpiryList
+  : baseExpiryList.filter((item) => {
+      return (
+        item.branch === selectedBranchValue ||
+        item.branchId === selectedBranchValue
+      );
+    });
+
+
+// ============================================================
+// DEBUG - SEE EXACT DATA USED BY UI
+// ============================================================
+
+console.log("======================================");
+console.log("RAW INVENTORY:", rawInventory);
+console.log("NORMALIZED INVENTORY:", normalizedInventory);
+console.log("LOW STOCK ITEMS:", lowStockItemsList);
+console.log("EXPIRY ITEMS:", expiryItemsList);
+console.log("======================================");
+
+
+// ============================================================
+// DYNAMIC 4 KPI STAT CARDS
+// ============================================================
+
+const lowStockAlertsCount = lowStockItemsList.length;
+
+const expiringCount = expiryItemsList.filter(
+  (item) => item.status === "Expiring Soon",
+).length;
+
+const expiredCount = expiryItemsList.filter(
+  (item) => item.status === "Expired",
+).length;
+
+const deficitSum = lowStockItemsList.reduce((acc, item) => {
+  const numPrice = parseFloat(
+    String(item.amount || "")
+      .replace(/[^0-9.]/g, ""),
   );
+
+  const safePrice = Number.isFinite(numPrice)
+    ? numPrice
+    : 0;
+
+  const deficitQty = Math.max(
+    0,
+    item.reorderLevel - item.currentStock,
+  );
+
+  return acc + deficitQty * safePrice;
+}, 0);
+
+
+const dynamicStockStatusKpis = [
+  {
+    id: "kpi-1",
+    label: "Low Stock Alerts",
+    value: lowStockAlertsCount.toLocaleString(),
+    subtext: "Quantity < 50 items",
+    variant: "amber",
+  },
+
+  {
+    id: "kpi-2",
+    label: "Expiring in 30 Days",
+    value: expiringCount.toLocaleString(),
+    subtext: "Requires monitoring",
+    variant: "blue",
+  },
+
+  {
+    id: "kpi-3",
+    label: "Expired Items",
+    value: expiredCount.toLocaleString(),
+    subtext: "Action required",
+    variant: "red",
+  },
+
+  {
+    id: "kpi-4",
+    label: "Reorder Deficit",
+    value: `₹${deficitSum.toLocaleString("en-IN", {
+      maximumFractionDigits: 0,
+    })}`,
+    subtext: "Procurement value",
+    variant: "teal",
+  },
+];
+
+
+// ============================================================
+// SEARCH HELPER
+// ============================================================
+
+const normalizeSearchValue = (value) =>
+  String(value ?? "").toLowerCase();
+
+const searchValue = normalizeSearchValue(searchQuery).trim();
+
+
+// ============================================================
+// FILTER LOW STOCK
+// ============================================================
+
+const filteredLowStock = lowStockItemsList.filter((item) => {
+  const matchesSearch =
+    !searchValue ||
+    normalizeSearchValue(item.brandName).includes(searchValue) ||
+    normalizeSearchValue(item.genericName).includes(searchValue) ||
+    normalizeSearchValue(item.medicine).includes(searchValue) ||
+    normalizeSearchValue(item.sku).includes(searchValue) ||
+    normalizeSearchValue(item.supplier).includes(searchValue) ||
+    normalizeSearchValue(item.batchNo).includes(searchValue);
+
+  const matchesCritical =
+    !criticalOnly ||
+    item.status === "Critical" ||
+    item.status === "Out of Stock";
+
+  return matchesSearch && matchesCritical;
+});
+
+
+// ============================================================
+// FILTER EXPIRY
+// ============================================================
+
+const filteredExpiry = expiryItemsList.filter((item) => {
+  const matchesSearch =
+    !searchValue ||
+    normalizeSearchValue(item.brandName).includes(searchValue) ||
+    normalizeSearchValue(item.genericName).includes(searchValue) ||
+    normalizeSearchValue(item.medicine).includes(searchValue) ||
+    normalizeSearchValue(item.batchNo).includes(searchValue) ||
+    normalizeSearchValue(item.supplier).includes(searchValue) ||
+    normalizeSearchValue(item.sku).includes(searchValue);
+
+  const matchesCritical =
+    !criticalOnly ||
+    item.status === "Expired" ||
+    item.status === "Expiring Soon";
+
+  return matchesSearch && matchesCritical;
+});
+
+
+// ============================================================
+// PAGINATION STATE
+// ============================================================
+
+const [page, setPage] = useState(1);
+
+const [pageSize, setPageSize] = useState(10);
+
+const [isPageLoading, setIsPageLoading] = useState(false);
+
+
+// ============================================================
+// RESET PAGE WHEN FILTERS CHANGE
+// ============================================================
+
+useEffect(() => {
+  setPage(1);
+}, [
+  activeTab,
+  searchQuery,
+  criticalOnly,
+  selectedBranch,
+  pageSize,
+]);
+
+
+// ============================================================
+// ACTIVE LIST
+// ============================================================
+
+const activeItemsList =
+  activeTab === "low-stock"
+    ? filteredLowStock
+    : filteredExpiry;
+
+
+// ============================================================
+// PAGINATION
+// ============================================================
+
+const totalItems = activeItemsList.length;
+
+const totalPages = Math.max(
+  1,
+  Math.ceil(totalItems / pageSize),
+);
+
+const safePage = Math.min(
+  page,
+  totalPages,
+);
+
+const startIndex =
+  (safePage - 1) * pageSize;
+
+const paginatedItems = activeItemsList.slice(
+  startIndex,
+  startIndex + pageSize,
+);
 
   const handlePageChange = (newPage) => {
     setIsPageLoading(true);
@@ -474,10 +783,9 @@ export default function StockStatusScreen({
                 setAutoReorderAutomation(nextVal);
                 if (onShowToast) {
                   onShowToast(
-                    `[PATCH /api/inventory/auto-reorder] Auto-PO Generation: ${
-                      nextVal
-                        ? "ENABLED (Threshold-based PO generation)"
-                        : "DISABLED"
+                    `[PATCH /api/inventory/auto-reorder] Auto-PO Generation: ${nextVal
+                      ? "ENABLED (Threshold-based PO generation)"
+                      : "DISABLED"
                     }`,
                   );
                 }

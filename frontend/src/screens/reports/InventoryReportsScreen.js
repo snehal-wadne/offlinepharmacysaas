@@ -75,132 +75,235 @@ export default function InventoryReportsScreen({
 
   useEffect(() => {
     let isMounted = true;
+
     async function loadReport() {
       try {
         setLoading(true);
+
         const branchDisplayName =
           typeof selectedBranch === "object" && selectedBranch !== null
             ? selectedBranch.name
             : selectedBranch || "All Branches";
-        const res = await fetchInventoryReport({ branchId: selectedBranch });
+
+        const res = await fetchInventoryReport({
+          branchId: selectedBranch,
+        });
+
         if (!isMounted) return;
-        if (res && res.success && res.data) {
-          const summary = res.data.summary || {};
-          setKpis([
-            {
-              id: "rep-inv-1",
-              label: "Total Stock Valuation",
-              value: `₹${Number(summary.totalValuationMrp || 0).toLocaleString("en-IN")}`,
-              subtext:
-                branchDisplayName === "All Branches"
-                  ? "Across all branches"
-                  : branchDisplayName,
-              variant: "teal",
-            },
-            {
-              id: "rep-inv-2",
-              label: "Total Units in Stock",
-              value: `${Number(summary.totalUnitsInStock || 0).toLocaleString("en-IN")}`,
-              subtext: `${summary.totalBatches || 0} active batches`,
-              variant: "teal",
-            },
-            {
-              id: "rep-inv-3",
-              label: "Low Stock Batches",
-              value: `${summary.lowStockBatches || 0}`,
-              subtext: "Quantity < 50 units",
-              variant: "amber",
-            },
-            {
-              id: "rep-inv-4",
-              label: "Expired / Near Expiry",
-              value: `${Number(summary.expiredBatches || 0) + Number(summary.nearExpiryBatches || 0)}`,
-              subtext: `${summary.expiredBatches || 0} expired, ${summary.nearExpiryBatches || 0} near expiry`,
-              variant: "red",
-            },
-          ]);
 
-          const items = Array.isArray(res.data.items) ? res.data.items : [];
-          if (items.length > 0) {
-            // Group by category/brand for valuation
-            const catMap = {};
-            let totalVal = 0;
-            items.forEach((item) => {
-              const catName =
-                item.category || item.manufacturer || "General Medicines";
-              const val = Number(
-                item.valuationMrp ||
-                  Number(item.stock || 0) * Number(item.mrp || 0),
-              );
-              totalVal += val;
-              if (!catMap[catName]) {
-                catMap[catName] = { count: 0, val: 0 };
-              }
-              catMap[catName].count += 1;
-              catMap[catName].val += val;
-            });
+        console.log("Inventory Report API Response:", res);
 
-            const computedCats = Object.entries(catMap).map(([name, data]) => {
-              const holding =
-                totalVal > 0 ? ((data.val / totalVal) * 100).toFixed(1) : "0.0";
-              return {
-                category: name,
-                totalItems: data.count,
-                valuation: `₹${Math.round(data.val).toLocaleString("en-IN")}`,
-                turnover: `${(Math.random() * 2 + 3).toFixed(1)}x`,
-                holdingPercent: `${holding}%`,
-                status:
-                  Number(holding) > 30
-                    ? "Optimal"
-                    : Number(holding) > 15
-                      ? "Moderate"
-                      : "Slow Moving",
-              };
-            });
-            setCategoryData(computedCats);
+        // ============================================================
+        // API RESPONSE
+        // ============================================================
 
-            // Compute fast moving items
-            const sortedByStock = [...items]
-              .sort((a, b) => Number(b.stock || 0) - Number(a.stock || 0))
-              .slice(0, 10);
-            const computedFast = sortedByStock.map((it) => {
-              const stock = Number(it.stock || 0);
-              const estSold = Math.max(1, Math.round(stock * 0.4));
-              const revenue = estSold * Number(it.mrp || 0);
-              const runway = Math.max(
-                3,
-                Math.round(stock / (estSold / 30 || 1)),
-              );
-              return {
-                sku: it.sku || "SKU-00",
-                medicine: it.name || "Medicine",
-                unitsSoldMonthly: estSold,
-                monthlyRevenue: `₹${Math.round(revenue).toLocaleString("en-IN")}`,
-                daysOfStockLeft: runway,
-                reorderUrgency:
-                  runway <= 10 ? "High" : runway <= 25 ? "Medium" : "Low",
-              };
-            });
-            setFastMovingItems(computedFast);
-          } else {
-            setCategoryData([]);
-            setFastMovingItems([]);
-          }
-        } else {
+        const summary = res?.data?.data.summary || {};
+        const items = Array.isArray(res?.data?.data.items)
+          ? res.data.data.items
+          : [];
+
+        console.log("Summary:", summary);
+        console.log("Items:", items);
+        console.log("Item count:", items.length);
+
+        // ============================================================
+        // KPI DATA
+        // ============================================================
+
+        setKpis([
+          {
+            id: "rep-inv-1",
+            label: "Total Stock Valuation",
+            value: `₹${Number(
+              summary.totalValuationMrp || 0
+            ).toLocaleString("en-IN")}`,
+            subtext:
+              branchDisplayName === "All Branches"
+                ? "Across all branches"
+                : branchDisplayName,
+            variant: "teal",
+          },
+
+          {
+            id: "rep-inv-2",
+            label: "Total Units in Stock",
+            value: Number(
+              summary.totalUnitsInStock || 0
+            ).toLocaleString("en-IN"),
+            subtext: `${summary.totalBatches || 0} active batches`,
+            variant: "teal",
+          },
+
+          {
+            id: "rep-inv-3",
+            label: "Low Stock Batches",
+            value: `${summary.lowStockBatches || 0}`,
+            subtext: "Quantity < 50 units",
+            variant: "amber",
+          },
+
+          {
+            id: "rep-inv-4",
+            label: "Expired / Near Expiry",
+            value:
+              Number(summary.expiredBatches || 0) +
+              Number(summary.nearExpiryBatches || 0),
+            subtext: `${summary.expiredBatches || 0} expired, ${summary.nearExpiryBatches || 0
+              } near expiry`,
+            variant: "red",
+          },
+        ]);
+
+        // ============================================================
+        // NO ITEMS
+        // ============================================================
+
+        if (items.length === 0) {
           setCategoryData([]);
           setFastMovingItems([]);
-          setKpis(INITIAL_KPIS);
+          return;
         }
+
+        // ============================================================
+        // CATEGORY VALUATION
+        // ============================================================
+
+        const catMap = {};
+        let totalVal = 0;
+
+        items.forEach((item) => {
+          const catName =
+            item.category ||
+            item.manufacturer ||
+            "General Medicines";
+
+          const val = Number(
+            item.valuationMrp ??
+            Number(item.stock || 0) * Number(item.mrp || 0)
+          );
+
+          totalVal += val;
+
+          if (!catMap[catName]) {
+            catMap[catName] = {
+              count: 0,
+              val: 0,
+            };
+          }
+
+          catMap[catName].count += 1;
+          catMap[catName].val += val;
+        });
+
+        const computedCats = Object.entries(catMap).map(
+          ([name, data]) => {
+            const holding =
+              totalVal > 0
+                ? ((data.val / totalVal) * 100).toFixed(1)
+                : "0.0";
+
+            return {
+              category: name,
+              totalItems: data.count,
+
+              valuation: `₹${Math.round(
+                data.val
+              ).toLocaleString("en-IN")}`,
+
+              // Temporary value until real turnover data
+              // is provided by backend.
+              turnover: "0.0x",
+
+              holdingPercent: `${holding}%`,
+
+              status:
+                Number(holding) > 30
+                  ? "Optimal"
+                  : Number(holding) > 15
+                    ? "Moderate"
+                    : "Slow Moving",
+            };
+          }
+        );
+
+        setCategoryData(computedCats);
+
+        // ============================================================
+        // FAST MOVING ITEMS
+        // ============================================================
+
+        const sortedByStock = [...items]
+          .sort(
+            (a, b) =>
+              Number(b.stock || 0) -
+              Number(a.stock || 0)
+          )
+          .slice(0, 10);
+
+        const computedFast = sortedByStock.map((it) => {
+          const stock = Number(it.stock || 0);
+
+          // Temporary estimate.
+          // Replace with actual sales data from backend.
+          const estSold = Math.max(
+            1,
+            Math.round(stock * 0.4)
+          );
+
+          const revenue =
+            estSold * Number(it.mrp || 0);
+
+          const runway = Math.max(
+            3,
+            Math.round(
+              stock / (estSold / 30 || 1)
+            )
+          );
+
+          return {
+            sku: it.sku || "SKU-00",
+
+            medicine:
+              it.name || "Medicine",
+
+            unitsSoldMonthly: estSold,
+
+            monthlyRevenue: `₹${Math.round(
+              revenue
+            ).toLocaleString("en-IN")}`,
+
+            daysOfStockLeft: runway,
+
+            reorderUrgency:
+              runway <= 10
+                ? "High"
+                : runway <= 25
+                  ? "Medium"
+                  : "Low",
+          };
+        });
+
+        setFastMovingItems(computedFast);
       } catch (err) {
-        console.warn("Backend inventory report error:", err.message);
+        console.warn(
+          "Backend inventory report error:",
+          err?.message || err
+        );
+
+        if (!isMounted) return;
+
         setCategoryData([]);
         setFastMovingItems([]);
         setKpis(INITIAL_KPIS);
       } finally {
-        if (isMounted) setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     }
+
     loadReport();
+
     return () => {
       isMounted = false;
     };
@@ -435,12 +538,11 @@ export default function InventoryReportsScreen({
               </tr>
             </thead>
             <tbody>
-              ${
-                categoryData.length === 0
-                  ? '<tr><td colspan="6" class="text-center" style="padding: 20px; color: #94a3b8;">No category data available</td></tr>'
-                  : categoryData
-                      .map(
-                        (cat) => `
+              ${categoryData.length === 0
+          ? '<tr><td colspan="6" class="text-center" style="padding: 20px; color: #94a3b8;">No category data available</td></tr>'
+          : categoryData
+            .map(
+              (cat) => `
                 <tr>
                   <td>${cat.category}</td>
                   <td class="text-center">${cat.totalItems}</td>
@@ -452,9 +554,9 @@ export default function InventoryReportsScreen({
                   </td>
                 </tr>
               `,
-                      )
-                      .join("")
-              }
+            )
+            .join("")
+        }
             </tbody>
           </table>
 
@@ -471,12 +573,11 @@ export default function InventoryReportsScreen({
               </tr>
             </thead>
             <tbody>
-              ${
-                fastMovingItems.length === 0
-                  ? '<tr><td colspan="6" class="text-center" style="padding: 20px; color: #94a3b8;">No fast-moving medicine data available</td></tr>'
-                  : fastMovingItems
-                      .map(
-                        (item) => `
+              ${fastMovingItems.length === 0
+          ? '<tr><td colspan="6" class="text-center" style="padding: 20px; color: #94a3b8;">No fast-moving medicine data available</td></tr>'
+          : fastMovingItems
+            .map(
+              (item) => `
                 <tr>
                   <td class="text-center font-semibold">${item.sku}</td>
                   <td>${item.medicine}</td>
@@ -488,9 +589,9 @@ export default function InventoryReportsScreen({
                   </td>
                 </tr>
               `,
-                      )
-                      .join("")
-              }
+            )
+            .join("")
+        }
             </tbody>
           </table>
 
