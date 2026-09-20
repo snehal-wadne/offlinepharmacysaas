@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,6 +11,8 @@ import { router } from 'expo-router';
 
 import type { PlanName } from './types';
 import { fetchSubscriptionPlans } from '../../api/superadminApi';
+import { useIsMobile } from '../../utils/responsive';
+import { notify } from '../../utils/alert';
 
 const PLANS: {
   name: PlanName;
@@ -102,6 +103,7 @@ const PLANS: {
 
 export default function SubscriptionPlansPage() {
   const [plans, setPlans] = useState(PLANS);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     fetchSubscriptionPlans()
@@ -124,7 +126,7 @@ export default function SubscriptionPlansPage() {
   }, []);
 
   const exportPlan = async (plan: PlanName) => {
-    Alert.alert('Plan Export', `Plan ${plan} details printed.`);
+    notify('Plan Export', `Plan ${plan} details printed.`);
   };
 
   const usePlan = (plan: PlanName) => {
@@ -137,7 +139,7 @@ export default function SubscriptionPlansPage() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, isMobile && styles.contentMobile]}
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.header}>
@@ -229,6 +231,10 @@ const styles = StyleSheet.create({
   content: {
     padding: 24,
     paddingBottom: 45,
+  },
+  contentMobile: {
+    padding: 14,
+    paddingBottom: 32,
   },
   header: {
     marginBottom: 22,

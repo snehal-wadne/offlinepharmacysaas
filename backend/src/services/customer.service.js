@@ -5,6 +5,13 @@
  */
 
 const { pool } = require('../db/connection');
+const {
+  getCustomerLedgerEntriesByCustomer,
+  createCustomerLedgerEntry,
+} = require('../repositories/customer-ledger.repository');
+const {
+  getNextBusinessNumber,
+} = require('../repositories/number-sequence.repository');
 
 const normalizeCustomerStatus = (s) => {
   if (!s) return 'ACTIVE';
@@ -245,6 +252,179 @@ const updateCustomer = async (organisationId, customerId, updateData) => {
   return res.rows[0];
 };
 
+/**
+ * Resolve a customer identifier (UUID, customer_number, or exact name)
+ * to the actual customer row, scoped to the organisation.
+ */
+const resolveCustomer = async (organisationId, customerId, client = pool) => {
+  const res = await client.query(
+    `SELECT id, organisation_id, full_name, outstanding_balance, credit_limit
+     FROM customers
+     WHERE (id::text = $1 OR customer_number = $1 OR LOWER(full_name) = LOWER($1))
+       AND organisation_id = $2
+     LIMIT 1;`,
+    [customerId, organisationId],
+  );
+  return res.rows[0] || null;
+};
+
+const getCustomerLedger = async (
+  organisationId,
+  customerId,
+  { limit = 100, offset = 0 } = {},
+) => {
+  if (!organisationId || !customerId) {
+    throw new Error('organisationId and customerId are required');
+  }
+
+  const customer = await resolveCustomer(organisationId, customerId);
+  if (!customer) {
+    const err = new Error(`Customer ${customerId} not found`);
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const entries = await getCustomerLedgerEntriesByCustomer(
+    organisationId,
+    customer.id,
+    limit,
+    offset,
+  );
+
+  return { customer, entries };
+};
+
+/**
+ * Record a standalone payment against a customer's outstanding balance
+ * (i.e. not tied to a specific invoice checkout). Used by the "Settle
+ * Due" credit-ledger action.
+ */
+const settleCustomerDue = async (
+  organisationId,
+  branchId,
+  customerId,
+  { amount, paymentMethod = 'CASH', notes = null, receivedBy = null } = {},
+) => {
+  if (!organisationId || !branchId || !customerId) {
+    throw new Error('organisationId, branchId and customerId are required');
+  }
+
+  const paidAmount = Number(amount);
+  if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
+    const err = new Error('A settlement amount greater than 0 is required.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const validMethods = ['CASH', 'UPI', 'BANK_TRANSFER', 'CARD', 'CHEQUE'];
+  const method = validMethods.includes(String(paymentMethod).toUpperCase())
+    ? String(paymentMethod).toUpperCase()
+    : 'CASH';
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const customerRes = await client.query(
+      `SELECT id, organisation_id, full_name, outstanding_balance
+       FROM customers
+       WHERE (id::text = $1 OR customer_number = $1 OR LOWER(full_name) = LOWER($1))
+         AND organisation_id = $2
+       FOR UPDATE;`,
+      [customerId, organisationId],
+    );
+    const customer = customerRes.rows[0];
+    if (!customer) {
+      const err = new Error(`Customer ${customerId} not found`);
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const receiptNumber = await getNextBusinessNumber({
+      organisationId,
+      branchId,
+      sequenceType: 'RECEIPT',
+      client,
+    });
+
+    const paymentRes = await client.query(
+      `INSERT INTO payments (
+         organisation_id, branch_id, customer_id, receipt_number,
+         total_amount, status, notes, received_by
+       )
+       VALUES ($1, $2, $3, $4, $5, 'COMPLETED', $6, $7)
+       RETURNING id, receipt_number, payment_date;`,
+      [
+        organisationId,
+        branchId,
+        customer.id,
+        receiptNumber,
+        paidAmount,
+        notes || `Credit account settlement for ${customer.full_name}`,
+        receivedBy,
+      ],
+    );
+    const payment = paymentRes.rows[0];
+
+    await client.query(
+      `INSERT INTO payment_transactions (
+         payment_id, payment_method, amount, transaction_reference
+       )
+       VALUES ($1, $2, $3, $4);`,
+      [payment.id, method, paidAmount, `SETTLE-${Date.now().toString().slice(-6)}`],
+    );
+
+    const newOutstanding = Math.max(
+      0,
+      Number(customer.outstanding_balance || 0) - paidAmount,
+    );
+
+    await client.query(
+      `UPDATE customers
+       SET outstanding_balance = $1, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2;`,
+      [newOutstanding, customer.id],
+    );
+
+    const priorLedgerRes = await client.query(
+      `SELECT balance_after
+       FROM customer_ledger_entries
+       WHERE organisation_id = $1 AND customer_id = $2
+       ORDER BY entry_date DESC, created_at DESC, id DESC
+       LIMIT 1
+       FOR UPDATE;`,
+      [organisationId, customer.id],
+    );
+    const priorBalance = Number(priorLedgerRes.rows[0]?.balance_after ?? customer.outstanding_balance ?? 0);
+
+    const ledgerEntry = await createCustomerLedgerEntry({
+      organisationId,
+      customerId: customer.id,
+      branchId,
+      entryType: 'PAYMENT',
+      referenceType: 'PAYMENT',
+      referenceId: payment.id,
+      creditAmount: paidAmount,
+      balanceAfter: Math.max(0, priorBalance - paidAmount),
+      description: `Credit account settlement (${payment.receipt_number}) via ${method}`,
+      client,
+    });
+
+    await client.query('COMMIT');
+
+    return {
+      payment: { ...payment, amount: paidAmount, method },
+      ledgerEntry,
+      outstandingBalance: newOutstanding,
+    };
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+};
+
 const deleteCustomer = async (organisationId, customerId) => {
   if (!organisationId || !customerId) {
     throw new Error('organisationId and customerId are required');
@@ -267,4 +447,6 @@ module.exports = {
   createCustomer,
   updateCustomer,
   deleteCustomer,
+  getCustomerLedger,
+  settleCustomerDue,
 };

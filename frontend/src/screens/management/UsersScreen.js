@@ -15,7 +15,8 @@ import {
   USER_ROLES_FILTER,
   SYSTEM_ROLES_LIST,
 } from "../../constants/uiConstants";
-import { fetchUsers } from "../../api/userApi";
+import { fetchUsers, createUser, updateUser, updateUserStatus } from "../../api/userApi";
+import { fetchRoles } from "../../api/roleApi";
 import { fetchBranches } from "../../api/branchApi";
 import { SkeletonTableRow } from "../../components/common/SkeletonLoader";
 import PaginationControls from "../../components/common/PaginationControls";
@@ -35,19 +36,21 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
   // Users & Branches State
   const [users, setUsers] = useState([]);
   const [branches, setBranches] = useState([]);
+  const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // Fetch users and branches on mount
+  // Fetch users, branches and roles on mount
   useEffect(() => {
     let isMounted = true;
     async function loadData() {
       setLoading(true);
       try {
-        const [usersRes, branchesRes] = await Promise.allSettled([
+        const [usersRes, branchesRes, rolesRes] = await Promise.allSettled([
           fetchUsers(),
           fetchBranches(),
+          fetchRoles(),
         ]);
 
         if (
@@ -74,25 +77,26 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
 
         if (
           isMounted &&
+          rolesRes.status === "fulfilled" &&
+          rolesRes.value?.success
+        ) {
+          setRoles(rolesRes.value.data);
+        } else if (isMounted) {
+          setRoles([]);
+        }
+
+        if (
+          isMounted &&
           usersRes.status === "fulfilled" &&
           usersRes.value?.success
         ) {
-          const rawU = Array.isArray(usersRes.value.data?.data)
-            ? usersRes.value.data.data
-            : Array.isArray(usersRes.value.data)
-              ? usersRes.value.data
-              : [];
+          const rawU = Array.isArray(usersRes.value.data)
+            ? usersRes.value.data
+            : [];
           const mapped = rawU.map((u) => {
-            const roleName = u.user_roles?.[0]?.roles?.name || "Pharmacist";
-            const assignedBranchNames = (u.branch_assignments || [])
-              .map((ba) => ba.branches?.name)
-              .filter(Boolean);
-            const primaryBranch = assignedBranchNames[0] || "Main Branch";
-            const fullName =
-              [u.first_name, u.last_name].filter(Boolean).join(" ") ||
-              u.name ||
-              u.email?.split("@")[0] ||
-              "Staff User";
+            const roleName = u.role || "Pharmacist";
+            const primaryBranch = u.primaryBranch || "Main Branch";
+            const fullName = u.name || u.email?.split("@")[0] || "Staff User";
             const initials =
               fullName
                 .split(" ")
@@ -104,30 +108,26 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
 
             return {
               id: u.id,
-              employeeId: u.id ? u.id.slice(0, 8).toUpperCase() : "EMP-01",
+              employeeId: u.staffId || (u.id ? u.id.slice(0, 8).toUpperCase() : "EMP-01"),
               name: fullName,
               email: u.email || "",
               phone: u.phone || "",
               role: roleName,
+              roleId: u.role_id || null,
+              branchId: u.branchId || null,
               primaryBranch,
-              assignedBranches:
-                assignedBranchNames.length > 0
-                  ? assignedBranchNames
-                  : [primaryBranch],
-              status:
-                u.is_active !== false && u.status !== "Inactive"
-                  ? "Active"
-                  : "Inactive",
+              assignedBranches: [primaryBranch],
+              status: u.status === "ACTIVE" ? "Active" : "Inactive",
               avatarInitials: initials,
-              joinedDate: u.created_at
-                ? new Date(u.created_at).toLocaleDateString("en-IN", {
+              joinedDate: u.createdAt
+                ? new Date(u.createdAt).toLocaleDateString("en-IN", {
                     month: "short",
                     day: "numeric",
                     year: "numeric",
                   })
                 : "Active",
               lastActive: "Active recently",
-              regNumber: u.reg_number || "N/A",
+              regNumber: "N/A",
               accessLevel: roleName.toLowerCase().includes("admin")
                 ? "Admin"
                 : "Standard",
@@ -146,6 +146,7 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
         if (isMounted) {
           setUsers([]);
           setBranches([]);
+          setRoles([]);
         }
       } finally {
         if (isMounted) setLoading(false);
@@ -173,6 +174,7 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
     phone: "",
     employeeId: "",
     role: "Pharmacist",
+    roleId: null,
     primaryBranch: "Main Branch",
     assignedBranches: ["Main Branch"],
     status: "Active",
@@ -252,19 +254,19 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
   const handleOpenAddModal = () => {
     setIsEditing(false);
     setActiveUserId(null);
-    const nextEmpNum = 60 + users.length + 1;
     setFormData({
       name: "",
       email: "",
       phone: "",
-      employeeId: `FIT-EMP-0${nextEmpNum}`,
+      employeeId: "",
       role: "Pharmacist",
-      primaryBranch: "FIT Main Campus Hospital Pharmacy",
-      assignedBranches: ["FIT Main Campus Hospital Pharmacy"],
+      roleId: null,
+      primaryBranch: branches[0]?.name || "Main Branch",
+      assignedBranches: [branches[0]?.name || "Main Branch"],
       status: "Active",
       regNumber: "",
       shift: "General Shift (09:00 - 18:00)",
-      accessPin: "4892",
+      accessPin: "",
       sendInviteEmail: true,
     });
     setFormErrors({});
@@ -281,9 +283,10 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
       phone: user.phone,
       employeeId: user.employeeId,
       role: user.role,
-      primaryBranch: user.primaryBranch || "FIT Main Campus Hospital Pharmacy",
+      roleId: user.roleId || null,
+      primaryBranch: user.primaryBranch || branches[0]?.name || "Main Branch",
       assignedBranches: user.assignedBranches || [
-        user.primaryBranch || "FIT Main Campus Hospital Pharmacy",
+        user.primaryBranch || branches[0]?.name || "Main Branch",
       ],
       status: user.status,
       regNumber: user.regNumber || "",
@@ -301,8 +304,10 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
     setDetailModalVisible(true);
   };
 
+  const [savingUser, setSavingUser] = useState(false);
+
   // Save User (Add or Edit)
-  const handleSaveUser = () => {
+  const handleSaveUser = async () => {
     const errors = {};
     if (!formData.name.trim()) errors.name = "Full name is required";
     if (!formData.email.trim()) {
@@ -317,105 +322,110 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
       return;
     }
 
-    if (isEditing) {
-      setUsers((prev) =>
-        prev.map((u) =>
-          u.id === activeUserId
-            ? {
-                ...u,
-                name: formData.name.trim(),
-                email: formData.email.trim(),
-                phone: formData.phone.trim(),
-                role: formData.role,
-                primaryBranch: formData.primaryBranch,
-                assignedBranches:
-                  formData.assignedBranches.length > 0
-                    ? formData.assignedBranches
-                    : [formData.primaryBranch],
-                status: formData.status,
-                regNumber: formData.regNumber.trim(),
-                shift: formData.shift,
-              }
-            : u,
-        ),
-      );
-      if (selectedUser && selectedUser.id === activeUserId) {
-        setSelectedUser((prev) => ({
-          ...prev,
+    const branchId =
+      branches.find((b) => b.name === formData.primaryBranch)?.id || null;
+    const roleId =
+      formData.roleId || roles.find((r) => r.name === formData.role)?.id || null;
+
+    try {
+      setSavingUser(true);
+      if (isEditing) {
+        const res = await updateUser(activeUserId, {
+          name: formData.name.trim(),
+          phone: formData.phone.trim(),
+          roleId,
+          branchId,
+        });
+        if (!res?.success) throw new Error(res?.error || "Failed to update staff member");
+
+        setUsers((prev) =>
+          prev.map((u) =>
+            u.id === activeUserId
+              ? {
+                  ...u,
+                  name: formData.name.trim(),
+                  phone: formData.phone.trim(),
+                  role: formData.role,
+                  roleId,
+                  primaryBranch: formData.primaryBranch,
+                  assignedBranches: [formData.primaryBranch],
+                }
+              : u,
+          ),
+        );
+        if (onShowToast) {
+          onShowToast(`✓ Updated profile for "${formData.name.trim()}"`);
+        }
+      } else {
+        const res = await createUser({
           name: formData.name.trim(),
           email: formData.email.trim(),
           phone: formData.phone.trim(),
+          roleId,
+          branchId,
+        });
+        if (!res?.success) throw new Error(res?.error || "Failed to invite staff member");
+
+        const created = res.data;
+        const names = formData.name.trim().split(" ");
+        const initials =
+          names.length > 1
+            ? `${names[0][0]}${names[names.length - 1][0]}`.toUpperCase()
+            : formData.name.slice(0, 2).toUpperCase();
+
+        const newUser = {
+          id: created.id,
+          employeeId: created.staffId,
+          name: created.name,
+          email: created.email,
+          phone: created.phone || "",
           role: formData.role,
+          roleId,
+          assignedBranches: [formData.primaryBranch],
           primaryBranch: formData.primaryBranch,
-          assignedBranches: formData.assignedBranches,
-          status: formData.status,
-          regNumber: formData.regNumber.trim(),
+          status: "Active",
+          avatarInitials: initials || "ST",
+          joinedDate: "Just now",
+          lastActive: "Invited (Pending Activation)",
+          regNumber: formData.regNumber.trim() || "N/A",
+          accessLevel: formData.role === "Administrator" ? "Admin" : "Standard",
           shift: formData.shift,
-        }));
-      }
-      if (onShowToast) {
-        onShowToast(`✓ Updated profile for "${formData.name.trim()}"`);
-      }
-    } else {
-      const names = formData.name.trim().split(" ");
-      const initials =
-        names.length > 1
-          ? `${names[0][0]}${names[names.length - 1][0]}`.toUpperCase()
-          : formData.name.slice(0, 2).toUpperCase();
+        };
 
-      const newUser = {
-        id: `USR-1${15 + users.length}`,
-        employeeId:
-          formData.employeeId.trim() || `FIT-EMP-0${60 + users.length}`,
-        name: formData.name.trim(),
-        email: formData.email.trim(),
-        phone: formData.phone.trim(),
-        role: formData.role,
-        assignedBranches:
-          formData.assignedBranches.length > 0
-            ? formData.assignedBranches
-            : [formData.primaryBranch],
-        primaryBranch: formData.primaryBranch,
-        status: formData.status,
-        avatarInitials: initials || "ST",
-        joinedDate: "Just now",
-        lastActive: "Invited (Pending Activation)",
-        regNumber:
-          formData.regNumber.trim() ||
-          (formData.role.includes("Pharmacist") ? "PCI-MH-PENDING" : "N/A"),
-        accessLevel:
-          formData.role === "Administrator"
-            ? "Admin"
-            : formData.role === "Chief Pharmacist"
-              ? "High"
-              : formData.role === "Store Manager"
-                ? "Medium-High"
-                : "Standard",
-        shift: formData.shift,
-      };
-
-      setUsers((prev) => [newUser, ...prev]);
-      if (onShowToast) {
-        onShowToast(
-          `✓ Invited ${newUser.name} (${newUser.role}) to Flora Institute of Technology!`,
-        );
+        setUsers((prev) => [newUser, ...prev]);
+        if (onShowToast) {
+          onShowToast(`✓ Invited ${newUser.name} (${newUser.role})!`);
+        }
       }
+      setModalVisible(false);
+    } catch (err) {
+      if (onShowToast) onShowToast(`⚠️ ${err.message}`);
+    } finally {
+      setSavingUser(false);
     }
-
-    setModalVisible(false);
   };
 
   // Toggle user Active / Inactive status
-  const handleToggleStatus = (user) => {
+  const handleToggleStatus = async (user) => {
     const nextStatus = user.status === "Active" ? "Inactive" : "Active";
-    setUsers((prev) =>
-      prev.map((u) => (u.id === user.id ? { ...u, status: nextStatus } : u)),
-    );
-    if (selectedUser && selectedUser.id === user.id) {
-      setSelectedUser((prev) => ({ ...prev, status: nextStatus }));
-    }
-    if (onShowToast) {
-      onShowToast(`Staff member "${user.name}" marked as ${nextStatus}`);
+    try {
+      const res = await updateUserStatus(
+        user.id,
+        nextStatus === "Active" ? "ACTIVE" : "INACTIVE",
+      );
+      if (!res?.success) throw new Error(res?.error || "Failed to update status");
+
+      setUsers((prev) =>
+        prev.map((u) => (u.id === user.id ? { ...u, status: nextStatus } : u)),
+      );
+      if (selectedUser && selectedUser.id === user.id) {
+        setSelectedUser((prev) => ({ ...prev, status: nextStatus }));
+      }
+      if (onShowToast) {
+        onShowToast(`Staff member "${user.name}" marked as ${nextStatus}`);
+      }
+    } catch (err) {
+      if (onShowToast) onShowToast(`⚠️ ${err.message}`);
     }
   };
 
@@ -1290,20 +1300,18 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                     <Text style={styles.reqStar}>*</Text>
                   </Text>
                   <View style={styles.roleSelectionGrid}>
-                    {[
-                      "Administrator",
-                      "Chief Pharmacist",
-                      "Pharmacist",
-                      "Store Manager",
-                      "Billing / Cashier",
-                      "Inventory Clerk",
-                      "Auditor / Compliance",
-                    ].map((r) => {
-                      const isSelected = formData.role === r;
+                    {roles.map((r) => {
+                      const isSelected = formData.roleId === r.id;
                       return (
                         <Pressable
-                          key={r}
-                          onPress={() => setFormData({ ...formData, role: r })}
+                          key={r.id}
+                          onPress={() =>
+                            setFormData({
+                              ...formData,
+                              role: r.name,
+                              roleId: r.id,
+                            })
+                          }
                           style={[
                             styles.roleChip,
                             isSelected && styles.roleChipSelected,
@@ -1315,7 +1323,7 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                               isSelected && styles.roleChipTextSelected,
                             ]}
                           >
-                            {r}
+                            {r.name}
                           </Text>
                         </Pressable>
                       );
@@ -1568,10 +1576,15 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
               </Pressable>
               <Pressable
                 onPress={handleSaveUser}
-                style={styles.modalSaveButton}
+                style={[styles.modalSaveButton, savingUser && { opacity: 0.6 }]}
+                disabled={savingUser}
               >
                 <Text style={styles.modalSaveText}>
-                  {isEditing ? "Save Changes" : "Send Invitation"}
+                  {savingUser
+                    ? "Saving..."
+                    : isEditing
+                      ? "Save Changes"
+                      : "Send Invitation"}
                 </Text>
               </Pressable>
             </View>

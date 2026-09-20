@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,16 @@ import {
   Modal,
 } from 'react-native';
 import { SkeletonItemCard } from '../../components/common/SkeletonLoader';
+import {
+  fetchSubscriptionPlans,
+  fetchCurrentSubscription,
+} from '../../api/subscriptionApi';
+import {
+  createPaymentOrder,
+  verifyPayment,
+} from '../../api/superadminApi';
+import { apiGet } from '../../api/apiClient';
+import { openRazorpayCheckout } from '../../utils/razorpayCheckout';
 
 const INDIAN_STATES = [
   { code: '27', name: 'Maharashtra (Home State)', isIntraState: true },
@@ -25,76 +35,63 @@ const INDIAN_STATES = [
   { code: '08', name: 'Rajasthan', isIntraState: false },
 ];
 
-const SUBSCRIPTION_PLANS = [
-  {
-    id: 'plan-starter',
-    name: 'Single Pharmacy Starter',
-    monthlyPrice: 999,
-    annualPrice: 9990,
-    features: [
-      '1 Pharmacy Store Branch',
-      'Up to 3 Staff / Cashier Logins',
-      'Real-time Inventory & Batch Tracking',
-      'GST Billing & Barcode Thermal Printing',
-      'Customer Ledger & Credit Balances',
-      'Standard Daily Sales Reports',
-    ],
-    badge: null,
-    highlight: false,
-  },
-  {
-    id: 'plan-growth',
-    name: 'Multi-Branch Growth ERP',
-    monthlyPrice: 2499,
-    annualPrice: 24990,
-    features: [
-      'Up to 5 Store Branches / Warehouses',
-      'Inter-Branch Stock Transfers',
-      'Unlimited Users & Custom Role Permissions',
-      'Automated Low-Stock & Expiry Alerts',
-      'Centralized Purchase Orders & Goods Receiving',
-      'Priority WhatsApp & Phone Support',
-      'Automated GST GSTR-1 Data Export',
-    ],
-    badge: 'MOST POPULAR',
-    highlight: true,
-  },
-  {
-    id: 'plan-enterprise',
-    name: 'Hospital Chain Enterprise',
-    monthlyPrice: 4999,
-    annualPrice: 49990,
-    features: [
-      'Unlimited Branches & Central Warehouses',
-      'Custom Dedicated Database Deployment',
-      'Automated NIC e-Invoicing & e-Way Bill API',
-      'HL7 / Hospital HIS & Lab Integration',
-      '24/7 Dedicated Account Manager & SLA',
-      'Custom ERP Feature Development',
-    ],
-    badge: 'ENTERPRISE',
-    highlight: false,
-  },
-];
+const mapBackendPlan = (p) => ({
+  id: p.id,
+  name: p.name,
+  tierCode: p.tier_code,
+  price: Number(p.price),
+  billingInterval: p.billing_interval,
+  features: Array.isArray(p.features) ? p.features : [],
+  badge: p.is_popular ? 'MOST POPULAR' : null,
+  highlight: Boolean(p.is_popular),
+});
 
 export default function SubscriptionPlansScreen({ onNavigate, onShowToast, isMultiBranch = true }) {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
 
-  // Billing Cycle: 'monthly' or 'annual'
-  const [billingCycle, setBillingCycle] = useState('monthly');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [plans, setPlans] = useState([]);
+  const [currentSubscription, setCurrentSubscription] = useState(null);
+  const [organisationId, setOrganisationId] = useState(null);
 
-  // Currently active subscription (Mock state)
-  const [activePlan, setActivePlan] = useState('plan-growth');
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [plansRes, subRes, meRes] = await Promise.all([
+        fetchSubscriptionPlans(true),
+        fetchCurrentSubscription(),
+        apiGet('/api/auth/me'),
+      ]);
+
+      if (plansRes?.success) {
+        setPlans(plansRes.data.map(mapBackendPlan));
+      }
+      if (subRes?.success) {
+        setCurrentSubscription(subRes.data);
+      }
+      if (meRes?.success) {
+        setOrganisationId(meRes.user?.organisationId || null);
+      }
+    } catch (err) {
+      if (onShowToast) onShowToast('⚠️ Failed to load subscription plans');
+    } finally {
+      setLoading(false);
+    }
+  }, [onShowToast]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   // Checkout Modal State
   const [checkoutModalOpen, setCheckoutModalOpen] = useState(false);
   const [selectedPlanForCheckout, setSelectedPlanForCheckout] = useState(null);
+  const [checkingOut, setCheckingOut] = useState(false);
 
   // Customer Checkout Details
-  const [customerGstin, setCustomerGstin] = useState('27AABCF1234F1Z5');
-  const [businessName, setBusinessName] = useState('Flora Pharmacy & Diagnostics');
+  const [customerGstin, setCustomerGstin] = useState('');
+  const [businessName, setBusinessName] = useState('');
   const [selectedStateCode, setSelectedStateCode] = useState('27');
   const [paymentMethod, setPaymentMethod] = useState('upi'); // 'upi' | 'card' | 'netbanking'
 
@@ -102,20 +99,14 @@ export default function SubscriptionPlansScreen({ onNavigate, onShowToast, isMul
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
   const [generatedInvoice, setGeneratedInvoice] = useState(null);
 
-
   // Open Checkout
   const handleSelectPlan = (plan) => {
     setSelectedPlanForCheckout(plan);
     setCheckoutModalOpen(true);
   };
 
-  // Tax calculations for current checkout selection
-  const basePrice = selectedPlanForCheckout
-    ? billingCycle === 'annual'
-      ? selectedPlanForCheckout.annualPrice
-      : selectedPlanForCheckout.monthlyPrice
-    : 0;
-
+  // Real tax preview for the selected plan (server computes the authoritative amount at order-creation time)
+  const basePrice = selectedPlanForCheckout ? selectedPlanForCheckout.price : 0;
   const GST_RATE = 18.0; // 18% Government Mandated for SaaS SAC 998313
   const isIntraState = selectedStateCode === '27'; // Home state is Maharashtra (Code 27)
   const gstAmount = (basePrice * GST_RATE) / 100;
@@ -124,38 +115,81 @@ export default function SubscriptionPlansScreen({ onNavigate, onShowToast, isMul
   const igstAmount = isIntraState ? 0 : gstAmount;
   const totalAmount = basePrice + gstAmount;
 
-  // Confirm and process checkout
-  const handleConfirmSubscription = () => {
-    const invoice = {
-      invoiceNumber: `INV-PF-${Date.now().toString().slice(-6)}`,
-      date: new Date().toLocaleDateString('en-IN', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-      }),
-      planName: selectedPlanForCheckout.name,
-      billingCycle: billingCycle === 'annual' ? 'Annual (12 Months)' : 'Monthly',
-      basePrice,
-      gstRate: '18%',
-      sacCode: '998313 (IT & Cloud SaaS ERP Services)',
-      cgstAmount,
-      sgstAmount,
-      igstAmount,
-      totalAmount,
-      customerGstin: customerGstin.trim() || 'Unregistered / B2C',
-      businessName,
-      state: INDIAN_STATES.find((s) => s.code === selectedStateCode)?.name || 'Maharashtra',
-      paymentMethod: paymentMethod.toUpperCase(),
-      status: 'PAID (Tax Invoice)',
-    };
+  // Confirm and process checkout: creates a real Razorpay order, opens live
+  // checkout, and verifies + activates the subscription on success.
+  const handleConfirmSubscription = async () => {
+    if (!selectedPlanForCheckout || !organisationId) return;
 
-    setActivePlan(selectedPlanForCheckout.id);
-    setGeneratedInvoice(invoice);
-    setCheckoutModalOpen(false);
-    setInvoiceModalOpen(true);
+    try {
+      setCheckingOut(true);
+      const orderRes = await createPaymentOrder({
+        organisationId,
+        subscriptionId: currentSubscription?.id,
+        planId: selectedPlanForCheckout.id,
+        billingCycle: selectedPlanForCheckout.billingInterval === 'MONTH' ? 'MONTHLY' : 'YEARLY',
+      });
 
-    if (onShowToast) {
-      onShowToast(`✓ Subscription confirmed! 18% GST added. Total: ₹${totalAmount.toFixed(2)}`);
+      if (!orderRes?.success) {
+        throw new Error(orderRes?.error || 'Failed to create payment order');
+      }
+      const order = orderRes.data;
+
+      await openRazorpayCheckout({
+        keyId: order.keyId,
+        orderId: order.razorpayOrderId,
+        amount: order.amount,
+        pharmacyName: businessName || undefined,
+        description: `${selectedPlanForCheckout.name} Subscription`,
+        notes: { organisationId, planId: selectedPlanForCheckout.id },
+        onSuccess: async (response) => {
+          const verifyRes = await verifyPayment({
+            razorpay_order_id: response.razorpay_order_id,
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_signature: response.razorpay_signature,
+          });
+          if (!verifyRes?.success) {
+            throw new Error(verifyRes?.error || 'Payment verification failed');
+          }
+
+          const invoice = {
+            invoiceNumber: order.paymentReference,
+            date: new Date().toLocaleDateString('en-IN', {
+              day: '2-digit',
+              month: 'short',
+              year: 'numeric',
+            }),
+            planName: selectedPlanForCheckout.name,
+            billingCycle: selectedPlanForCheckout.billingInterval,
+            basePrice: order.baseAmount,
+            gstRate: '18%',
+            sacCode: '998313 (IT & Cloud SaaS ERP Services)',
+            cgstAmount,
+            sgstAmount,
+            igstAmount,
+            totalAmount: order.totalAmount,
+            customerGstin: customerGstin.trim() || 'Unregistered / B2C',
+            businessName,
+            state: INDIAN_STATES.find((s) => s.code === selectedStateCode)?.name || 'Maharashtra',
+            status: 'PAID (Tax Invoice)',
+          };
+
+          setGeneratedInvoice(invoice);
+          setCheckoutModalOpen(false);
+          setInvoiceModalOpen(true);
+          await loadData();
+
+          if (onShowToast) {
+            onShowToast(`✓ Subscription activated! Total paid: ₹${order.totalAmount}`);
+          }
+        },
+        onError: (err) => {
+          if (onShowToast) onShowToast(`⚠️ Payment failed: ${err?.message || 'Unknown error'}`);
+        },
+      });
+    } catch (err) {
+      if (onShowToast) onShowToast(`⚠️ ${err.message}`);
+    } finally {
+      setCheckingOut(false);
     }
   };
 
@@ -193,66 +227,32 @@ export default function SubscriptionPlansScreen({ onNavigate, onShowToast, isMul
       </View>
 
       {/* Active Subscription Status Banner */}
-      <View style={styles.activePlanBanner}>
-        <View style={styles.activePlanLeft}>
-          <View style={styles.activeIcon}>
-            <Text style={styles.activeIconText}>⭐</Text>
-          </View>
-          <View>
-            <Text style={styles.activePlanTitle}>
-              Current Active Subscription: Multi-Branch Growth ERP
-            </Text>
-            <Text style={styles.activePlanSub}>
-              Active for 5 Branches • Renews on 28th of next month • Billed with 18% GST (SAC 998313)
-            </Text>
-          </View>
-        </View>
-        <View style={styles.activePlanStatusBadge}>
-          <Text style={styles.activePlanStatusText}>ACTIVE SUBSCRIBER</Text>
-        </View>
-      </View>
-
-      {/* Billing Cycle Toggle (Monthly vs Annual with 20% Discount) */}
-      <View style={styles.billingToggleWrapper}>
-        <View style={styles.billingToggleContainer}>
-          <Pressable
-            onPress={() => setBillingCycle('monthly')}
-            style={[
-              styles.billingToggleButton,
-              billingCycle === 'monthly' && styles.billingToggleButtonActive,
-            ]}
-          >
-            <Text
-              style={[
-                styles.billingToggleText,
-                billingCycle === 'monthly' && styles.billingToggleTextActive,
-              ]}
-            >
-              Monthly Billing
-            </Text>
-          </Pressable>
-
-          <Pressable
-            onPress={() => setBillingCycle('annual')}
-            style={[
-              styles.billingToggleButton,
-              billingCycle === 'annual' && styles.billingToggleButtonActive,
-            ]}
-          >
-            <Text
-              style={[
-                styles.billingToggleText,
-                billingCycle === 'annual' && styles.billingToggleTextActive,
-              ]}
-            >
-              Annual Billing
-            </Text>
-            <View style={styles.saveBadge}>
-              <Text style={styles.saveBadgeText}>SAVE 20%</Text>
+      {currentSubscription && (
+        <View style={styles.activePlanBanner}>
+          <View style={styles.activePlanLeft}>
+            <View style={styles.activeIcon}>
+              <Text style={styles.activeIconText}>⭐</Text>
             </View>
-          </Pressable>
+            <View>
+              <Text style={styles.activePlanTitle}>
+                Current Active Subscription: {currentSubscription.plan_name}
+              </Text>
+              <Text style={styles.activePlanSub}>
+                {currentSubscription.status === 'ACTIVE' ? 'Active' : currentSubscription.status}
+                {currentSubscription.current_period_end
+                  ? ` • Renews on ${new Date(currentSubscription.current_period_end).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`
+                  : ''}
+                {' '}• Billed with 18% GST (SAC 998313)
+              </Text>
+            </View>
+          </View>
+          <View style={styles.activePlanStatusBadge}>
+            <Text style={styles.activePlanStatusText}>
+              {(currentSubscription.status || 'ACTIVE').replace(/_/g, ' ')}
+            </Text>
+          </View>
         </View>
-      </View>
+      )}
 
       {/* 3 Subscription Plan Cards Grid */}
       <View style={styles.planCardsGrid}>
@@ -260,12 +260,14 @@ export default function SubscriptionPlansScreen({ onNavigate, onShowToast, isMul
           Array.from({ length: 3 }).map((_, i) => (
             <SkeletonItemCard key={i} />
           ))
+        ) : plans.length === 0 ? (
+          <Text style={styles.pageSubtitle}>No subscription plans are configured yet.</Text>
         ) : (
-          SUBSCRIPTION_PLANS.map((plan) => {
-            const price = billingCycle === 'annual' ? plan.annualPrice : plan.monthlyPrice;
-          const isCurrentActive = activePlan === plan.id;
-          const planGst = (price * 0.18).toFixed(2);
-          const planTotalWithGst = (price * 1.18).toFixed(2);
+          plans.map((plan) => {
+            const price = plan.price;
+            const isCurrentActive = currentSubscription?.plan_id === plan.id;
+            const planGst = (price * 0.18).toFixed(2);
+            const planTotalWithGst = (price * 1.18).toFixed(2);
 
           return (
             <View
@@ -276,9 +278,11 @@ export default function SubscriptionPlansScreen({ onNavigate, onShowToast, isMul
                 isCurrentActive && styles.planCardActiveOutline,
               ]}
             >
-              {plan.badge && (
+              {(plan.badge || isCurrentActive) && (
                 <View style={styles.planBadge}>
-                  <Text style={styles.planBadgeText}>{plan.badge}</Text>
+                  <Text style={styles.planBadgeText}>
+                    {isCurrentActive ? 'CURRENT PLAN' : plan.badge}
+                  </Text>
                 </View>
               )}
 
@@ -287,7 +291,7 @@ export default function SubscriptionPlansScreen({ onNavigate, onShowToast, isMul
                 <Text style={styles.currencySymbol}>₹</Text>
                 <Text style={styles.priceNumber}>{price.toLocaleString('en-IN')}</Text>
                 <Text style={styles.priceInterval}>
-                  /{billingCycle === 'annual' ? 'yr' : 'mo'}
+                  /{plan.billingInterval === 'MONTH' ? 'mo' : 'yr'}
                 </Text>
               </View>
 
@@ -381,7 +385,7 @@ export default function SubscriptionPlansScreen({ onNavigate, onShowToast, isMul
                 <View>
                   <Text style={styles.summaryPlanName}>{selectedPlanForCheckout?.name}</Text>
                   <Text style={styles.summaryPlanBilling}>
-                    Billing Cycle: {billingCycle === 'annual' ? 'Annual (Save 20%)' : 'Monthly'}
+                    Billing Cycle: {selectedPlanForCheckout?.billingInterval === 'MONTH' ? 'Monthly' : 'Annual'}
                   </Text>
                 </View>
                 <Text style={styles.summaryPlanPrice}>
@@ -544,11 +548,14 @@ export default function SubscriptionPlansScreen({ onNavigate, onShowToast, isMul
 
               <Pressable
                 onPress={handleConfirmSubscription}
-                style={styles.confirmPayBtn}
+                style={[styles.confirmPayBtn, checkingOut && { opacity: 0.6 }]}
+                disabled={checkingOut}
                 accessibilityRole="button"
               >
                 <Text style={styles.confirmPayBtnText}>
-                  Pay ₹{totalAmount.toFixed(2)} & Activate
+                  {checkingOut
+                    ? 'Processing...'
+                    : `Pay ₹${totalAmount.toFixed(2)} & Activate`}
                 </Text>
               </Pressable>
             </View>

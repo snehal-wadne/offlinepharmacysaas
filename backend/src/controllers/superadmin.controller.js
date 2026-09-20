@@ -17,6 +17,8 @@ const platformPaymentRepo = require("../repositories/platform-payment.repository
 const platformBusinessRepo = require("../repositories/platform-business.repository");
 const platformTaxRepo = require("../repositories/platform-tax.repository");
 const platformDashboardRepo = require("../repositories/platform-dashboard.repository");
+const subscriptionInvoiceRepo = require("../repositories/subscription-invoice.repository");
+const { renderInvoicePdf } = require("../services/invoice-pdf.service");
 
 class SuperadminController {
   /**
@@ -190,6 +192,52 @@ class SuperadminController {
       }
       return res.status(200).json({ success: true, data: pharmacy });
     } catch (err) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  }
+
+  /**
+   * GET /api/superadmin/pharmacies/:id/invoices
+   */
+  async listPharmacyInvoices(req, res) {
+    try {
+      const { id } = req.params;
+      const pharmacy = await platformPharmacyRepo.getPharmacyDetailById(id);
+      if (!pharmacy) {
+        return res
+          .status(404)
+          .json({ success: false, error: "Pharmacy not found." });
+      }
+      const invoices = await subscriptionInvoiceRepo.listInvoicesByOrgId(
+        pharmacy.id,
+      );
+      return res.status(200).json({ success: true, data: invoices });
+    } catch (err) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  }
+
+  /**
+   * GET /api/superadmin/invoices/:invoiceId/pdf
+   */
+  async downloadInvoicePdf(req, res) {
+    try {
+      const { invoiceId } = req.params;
+      const invoice = await subscriptionInvoiceRepo.getInvoiceById(invoiceId);
+      if (!invoice) {
+        return res
+          .status(404)
+          .json({ success: false, error: "Invoice not found." });
+      }
+      const pdfBuffer = await renderInvoicePdf(invoice);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${invoice.invoice_number}.pdf"`,
+      );
+      return res.status(200).send(pdfBuffer);
+    } catch (err) {
+      console.error("Invoice PDF generation error:", err);
       return res.status(500).json({ success: false, error: err.message });
     }
   }

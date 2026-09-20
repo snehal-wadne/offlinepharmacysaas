@@ -7,6 +7,7 @@
 const customerService = require("../services/customer.service");
 const {
   getAuthorizedOrgId,
+  getAuthorizedBranchId,
   sanitizeTenantPayload,
 } = require("../utils/tenant-context");
 
@@ -132,10 +133,67 @@ const deleteCustomer = async (req, res) => {
   }
 };
 
+const getCustomerLedger = async (req, res) => {
+  try {
+    const organisationId = await getAuthorizedOrgId(req);
+    const { id } = req.params;
+    const { limit, offset } = req.query;
+
+    const result = await customerService.getCustomerLedger(
+      organisationId,
+      id,
+      {
+        limit: limit ? parseInt(limit, 10) : 100,
+        offset: offset ? parseInt(offset, 10) : 0,
+      },
+    );
+
+    res.status(200).json({ success: true, data: result });
+  } catch (error) {
+    console.error(`Error fetching ledger for customer ${req.params.id}:`, error);
+    res.status(error.statusCode || 500).json({
+      success: false,
+      error: error.message || "Failed to fetch customer ledger",
+    });
+  }
+};
+
+const settleCustomerDue = async (req, res) => {
+  try {
+    const organisationId = await getAuthorizedOrgId(req);
+    const branchId = await getAuthorizedBranchId(req, organisationId, {
+      required: true,
+    });
+    const { id } = req.params;
+    const { amount, paymentMethod, notes } = req.body;
+
+    const result = await customerService.settleCustomerDue(
+      organisationId,
+      branchId,
+      id,
+      { amount, paymentMethod, notes, receivedBy: req.user?.id || null },
+    );
+
+    res.status(201).json({
+      success: true,
+      message: "Payment recorded and applied to the customer's account.",
+      data: result,
+    });
+  } catch (error) {
+    console.error(`Error settling dues for customer ${req.params.id}:`, error);
+    res.status(error.statusCode || 400).json({
+      success: false,
+      error: error.message || "Failed to settle customer dues",
+    });
+  }
+};
+
 module.exports = {
   getCustomers,
   getCustomersSummary,
   createCustomer,
   updateCustomer,
   deleteCustomer,
+  getCustomerLedger,
+  settleCustomerDue,
 };

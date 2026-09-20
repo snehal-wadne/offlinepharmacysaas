@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useIsMobile } from '../../utils/responsive';
 import {
   Pressable,
   ScrollView,
@@ -14,6 +15,7 @@ import type { Pharmacy, PharmacyStatus, PlanName } from './types';
 
 export default function PharmaciesTenantsPage() {
   const { pharmacies } = useSuperAdmin();
+  const isMobile = useIsMobile();
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<
@@ -62,10 +64,10 @@ export default function PharmaciesTenantsPage() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, isMobile && styles.contentMobile]}
       horizontal={false}
     >
-      <View style={styles.header}>
+      <View style={[styles.header, isMobile && styles.headerMobile]}>
         <View>
           <Text style={styles.title}>Pharmacies / Tenants</Text>
           <Text style={styles.subtitle}>
@@ -481,11 +483,20 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingBottom: 50,
   },
+  contentMobile: {
+    padding: 14,
+    paddingBottom: 32,
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 24,
+  },
+  headerMobile: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: 12,
   },
   title: {
     color: '#172033',

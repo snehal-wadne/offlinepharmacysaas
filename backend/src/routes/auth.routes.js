@@ -17,6 +17,9 @@ const { authenticate } = require("../middlewares/auth.middleware");
 
 router.get("/me", authenticate, authController.getMe);
 router.get("/users", authenticate, authController.getUsers);
+router.post("/users", authenticate, authController.createStaffUser);
+router.put("/users/:id", authenticate, authController.updateStaffUser);
+router.patch("/users/:id/status", authenticate, authController.updateStaffStatus);
 router.post("/login", authController.login);
 router.post("/register", authController.register);
 router.post("/google", authController.googleLogin);

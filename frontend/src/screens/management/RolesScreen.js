@@ -11,10 +11,43 @@ import {
   Platform,
 } from "react-native";
 import InventoryStatCard from "../../components/inventory/InventoryStatCard";
-import { SYSTEM_ROLES_LIST } from "../../constants/uiConstants";
 import { fetchUsers } from "../../api/userApi";
+import { fetchRoles, createRole, updateRole } from "../../api/roleApi";
 import { SkeletonItemCard } from "../../components/common/SkeletonLoader";
 import PaginationControls from "../../components/common/PaginationControls";
+
+const ROLE_COLOR_PALETTE = [
+  "#0F766E",
+  "#2563EB",
+  "#7C3AED",
+  "#D97706",
+  "#0284C7",
+  "#DC2626",
+  "#475569",
+];
+
+const colorForRole = (roleId) => {
+  let hash = 0;
+  for (let i = 0; i < (roleId || "").length; i++) {
+    hash = (hash * 31 + roleId.charCodeAt(i)) % ROLE_COLOR_PALETTE.length;
+  }
+  return ROLE_COLOR_PALETTE[Math.abs(hash)];
+};
+
+const mapBackendRole = (role, staffCount = 0) => ({
+  id: role.id,
+  name: role.name,
+  code: role.role_identifier,
+  description: role.description || "",
+  isSystem: role.is_system_role,
+  clearanceLevel: (role.clearance_level || "STANDARD_POS")
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase()),
+  badgeColor: colorForRole(role.id),
+  userCount: staffCount,
+  permissionCount: role.permission_count ?? (role.permissions || []).length,
+});
 
 export default function RolesScreen({ onShowToast, onNavigate }) {
   const { width } = useWindowDimensions();
@@ -26,44 +59,56 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
   const [selectedTypeFilter, setSelectedTypeFilter] = useState("All"); // 'All' | 'System' | 'Custom'
 
   // Roles & Staff State
-  const [roles, setRoles] = useState(SYSTEM_ROLES_LIST);
+  const [roles, setRoles] = useState([]);
   const [staffList, setStaffList] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
   useEffect(() => {
     let isMounted = true;
-    async function loadStaff() {
+    async function loadData() {
       try {
-        const res = await fetchUsers();
-        if (isMounted && res && res.success) {
-          const raw = Array.isArray(res.data?.data)
-            ? res.data.data
-            : Array.isArray(res.data)
-              ? res.data
-              : [];
-          setStaffList(
-            raw.map((u) => ({
+        setLoading(true);
+        const [usersRes, rolesRes] = await Promise.all([
+          fetchUsers(),
+          fetchRoles(),
+        ]);
+
+        const staff = usersRes?.success
+          ? usersRes.data.map((u) => ({
               id: u.id,
-              name:
-                [u.first_name, u.last_name].filter(Boolean).join(" ") ||
-                u.email ||
-                "Staff",
+              name: u.name || u.email || "Staff",
               email: u.email || "",
-              role: u.user_roles?.[0]?.roles?.name || "Staff",
-              roleId: u.user_roles?.[0]?.roles?.id,
-              branch:
-                u.branch_assignments?.[0]?.branches?.name || "Main Branch",
-              status: u.is_active !== false ? "Active" : "Inactive",
-            })),
-          );
-        }
+              role: u.role || "Staff",
+              roleId: u.role_id,
+              branch: u.primaryBranch || "Main Branch",
+              status: u.status === "ACTIVE" ? "Active" : "Inactive",
+            }))
+          : [];
+
+        if (!isMounted) return;
+        setStaffList(staff);
+
+        const backendRoles = rolesRes?.success ? rolesRes.data : [];
+        setRoles(
+          backendRoles.map((r) =>
+            mapBackendRole(
+              r,
+              staff.filter((s) => s.roleId === r.id).length,
+            ),
+          ),
+        );
       } catch (e) {
-        if (isMounted) setStaffList([]);
+        if (isMounted) {
+          setStaffList([]);
+          setRoles([]);
+        }
+      } finally {
+        if (isMounted) setLoading(false);
       }
     }
-    loadStaff();
+    loadData();
     return () => {
       isMounted = false;
     };
@@ -144,7 +189,9 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
     setModalVisible(true);
   };
 
-  const handleSaveRole = () => {
+  const [savingRole, setSavingRole] = useState(false);
+
+  const handleSaveRole = async () => {
     const errors = {};
     if (!formData.name.trim()) errors.name = "Role title is required";
     if (!formData.code.trim()) errors.code = "Role code identifier is required";
@@ -156,44 +203,49 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
       return;
     }
 
-    if (isEditing) {
-      setRoles((prev) =>
-        prev.map((r) =>
-          r.id === activeRoleId
-            ? {
-                ...r,
-                name: formData.name.trim(),
-                code: formData.code.trim().toUpperCase(),
-                description: formData.description.trim(),
-                badgeColor: formData.badgeColor,
-                clearanceLevel: formData.clearanceLevel,
-              }
-            : r,
-        ),
-      );
-      if (onShowToast) {
-        onShowToast(`✓ Role "${formData.name}" updated successfully.`);
-      }
-    } else {
-      const newRole = {
-        id: `role-custom-${Date.now()}`,
-        name: formData.name.trim(),
-        code: formData.code.trim().toUpperCase(),
-        description: formData.description.trim(),
-        userCount: 0,
-        isSystem: false,
-        badgeColor: formData.badgeColor,
-        clearanceLevel: formData.clearanceLevel,
-        assignedUsersList: [],
-        permissions: {},
-      };
-      setRoles((prev) => [...prev, newRole]);
-      if (onShowToast) {
-        onShowToast(`✓ Custom role "${formData.name}" created successfully.`);
-      }
-    }
+    const clearanceLevelCode = formData.clearanceLevel
+      .toUpperCase()
+      .replace(/\s+/g, "_");
 
-    setModalVisible(false);
+    try {
+      setSavingRole(true);
+      if (isEditing) {
+        const res = await updateRole(activeRoleId, {
+          name: formData.name.trim(),
+          roleIdentifier: formData.code.trim().toUpperCase(),
+          description: formData.description.trim(),
+          clearanceLevel: clearanceLevelCode,
+        });
+        if (!res?.success) throw new Error(res?.error || "Failed to update role");
+        setRoles((prev) =>
+          prev.map((r) =>
+            r.id === activeRoleId
+              ? mapBackendRole(res.data, r.userCount)
+              : r,
+          ),
+        );
+        if (onShowToast) {
+          onShowToast(`✓ Role "${formData.name}" updated successfully.`);
+        }
+      } else {
+        const res = await createRole({
+          name: formData.name.trim(),
+          roleIdentifier: formData.code.trim().toUpperCase(),
+          description: formData.description.trim(),
+          clearanceLevel: clearanceLevelCode,
+        });
+        if (!res?.success) throw new Error(res?.error || "Failed to create role");
+        setRoles((prev) => [...prev, mapBackendRole(res.data, 0)]);
+        if (onShowToast) {
+          onShowToast(`✓ Custom role "${formData.name}" created successfully.`);
+        }
+      }
+      setModalVisible(false);
+    } catch (err) {
+      if (onShowToast) onShowToast(`⚠️ ${err.message}`);
+    } finally {
+      setSavingRole(false);
+    }
   };
 
   const handleOpenStaffModal = (role) => {
@@ -664,9 +716,17 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
                 <Text style={styles.cancelBtnText}>Cancel</Text>
               </Pressable>
 
-              <Pressable onPress={handleSaveRole} style={styles.saveRoleBtn}>
+              <Pressable
+                onPress={handleSaveRole}
+                style={[styles.saveRoleBtn, savingRole && { opacity: 0.6 }]}
+                disabled={savingRole}
+              >
                 <Text style={styles.saveRoleBtnText}>
-                  {isEditing ? "Save Changes" : "Create Role"}
+                  {savingRole
+                    ? "Saving..."
+                    : isEditing
+                      ? "Save Changes"
+                      : "Create Role"}
                 </Text>
               </Pressable>
             </View>

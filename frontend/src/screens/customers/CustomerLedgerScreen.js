@@ -12,7 +12,11 @@ import {
 } from "react-native";
 import InventoryStatCard from "../../components/inventory/InventoryStatCard";
 import { LEDGER_AGING_FILTER } from "../../constants/uiConstants";
-import { fetchCustomers } from "../../api/customerApi";
+import {
+  fetchCustomers,
+  fetchCustomerLedger,
+  settleCustomerDue,
+} from "../../api/customerApi";
 import {
   SkeletonTableRow,
   SkeletonItemCard,
@@ -129,9 +133,51 @@ export default function CustomerLedgerScreen({ onShowToast, onNavigate }) {
     return matchesSearch && matchesAging;
   });
 
-  const handleOpenStatement = (acc) => {
+  const [statementLoading, setStatementLoading] = useState(false);
+
+  const handleOpenStatement = async (acc) => {
     setActiveAccount(acc);
     setStatementModalVisible(true);
+    setStatementLoading(true);
+    try {
+      const res = await fetchCustomerLedger(acc.rawId);
+      if (res?.success) {
+        const statements = (res.data.entries || []).map((e) => ({
+          id: e.id,
+          date: new Date(e.entry_date).toLocaleDateString("en-GB", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+          }),
+          type:
+            e.entry_type === "INVOICE"
+              ? "Debit (Invoice)"
+              : e.entry_type === "RETURN"
+                ? "Credit (Return)"
+                : e.entry_type === "ADJUSTMENT"
+                  ? Number(e.debit_amount) > 0
+                    ? "Debit (Adjustment)"
+                    : "Credit (Adjustment)"
+                  : "Credit (Payment)",
+          refNo: e.reference_type,
+          description: e.description || "",
+          debit:
+            Number(e.debit_amount) > 0
+              ? `₹${Number(e.debit_amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`
+              : "-",
+          credit:
+            Number(e.credit_amount) > 0
+              ? `₹${Number(e.credit_amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`
+              : "-",
+          runningBalance: `₹${Number(e.balance_after).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`,
+        }));
+        setActiveAccount((prev) => (prev ? { ...prev, statements } : prev));
+      }
+    } catch (err) {
+      console.warn("[CustomerLedger] Failed to fetch statement:", err.message);
+    } finally {
+      setStatementLoading(false);
+    }
   };
 
   const handleOpenSettle = (acc) => {
@@ -144,7 +190,9 @@ export default function CustomerLedgerScreen({ onShowToast, onNavigate }) {
     setSettleModalVisible(true);
   };
 
-  const handleProcessSettlement = () => {
+  const [settling, setSettling] = useState(false);
+
+  const handleProcessSettlement = async () => {
     if (!settleAccount) return;
     const cleanAmountStr = String(settleAmount || "").replace(/[^0-9.]/g, "");
     const paidVal = parseFloat(cleanAmountStr);
@@ -155,49 +203,70 @@ export default function CustomerLedgerScreen({ onShowToast, onNavigate }) {
       return;
     }
 
-    const updatedAccounts = ledgerAccounts.map((acc) => {
-      if (acc.id === settleAccount.id) {
-        const balanceStr = String(acc.currentBalance || acc.currentDue || "0");
-        const currentVal = parseFloat(balanceStr.replace(/[^0-9.]/g, "")) || 0;
-        const newBalanceVal = Math.max(0, currentVal - paidVal);
-        const limitStr = String(acc.creditLimit || "0").replace(/[^0-9.]/g, "");
-        const limitVal = parseFloat(limitStr) || 1;
-        const newUtilPct = Math.min(
-          100,
-          Math.round((newBalanceVal / limitVal) * 100),
-        );
+    const methodMap = {
+      "UPI / QR": "UPI",
+      Cash: "CASH",
+      Card: "CARD",
+      Cheque: "CHEQUE",
+      "Bank Transfer": "BANK_TRANSFER",
+    };
 
-        return {
-          ...acc,
-          currentBalance: `₹${newBalanceVal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`,
-          currentDue: `₹${newBalanceVal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`,
-          lastPaymentDate: new Date().toLocaleDateString("en-GB", {
-            day: "2-digit",
-            month: "short",
-            year: "numeric",
-          }),
-          lastPaymentAmount: `₹${paidVal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`,
-          creditStatus:
-            newBalanceVal === 0
-              ? "Healthy"
-              : newUtilPct > 90
-                ? "Limit Exceeded"
-                : "Active Account",
-          agingBucket: newBalanceVal === 0 ? "Settled" : acc.agingBucket,
-          utilizationPercent: `${newUtilPct}%`,
-        };
-      }
-      return acc;
-    });
+    try {
+      setSettling(true);
+      const res = await settleCustomerDue(settleAccount.rawId, {
+        amount: paidVal,
+        paymentMethod: methodMap[settleMode] || "CASH",
+      });
+      if (!res?.success) throw new Error(res?.error || "Failed to record payment");
 
-    setLedgerAccounts(updatedAccounts);
-    setSettleModalVisible(false);
-
-    const rcptNum = `RCP-${Date.now().toString().slice(-4)}`;
-    if (onShowToast) {
-      onShowToast(
-        `✓ Processed ₹${paidVal.toLocaleString("en-IN")} payment for ${settleAccount.name} via ${settleMode}! Voucher #${rcptNum} generated.`,
+      const newBalanceVal = Number(res.data.outstandingBalance);
+      const limitStr = String(settleAccount.creditLimit || "0").replace(
+        /[^0-9.]/g,
+        "",
       );
+      const limitVal = parseFloat(limitStr) || 1;
+      const newUtilPct = Math.min(
+        100,
+        Math.round((newBalanceVal / limitVal) * 100),
+      );
+
+      setLedgerAccounts((prev) =>
+        prev.map((acc) =>
+          acc.id === settleAccount.id
+            ? {
+                ...acc,
+                balanceRaw: newBalanceVal,
+                currentBalance: `₹${newBalanceVal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`,
+                currentDue: `₹${newBalanceVal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`,
+                lastPaymentDate: new Date().toLocaleDateString("en-GB", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                }),
+                lastPaymentAmount: `₹${paidVal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`,
+                creditStatus:
+                  newBalanceVal === 0
+                    ? "Healthy"
+                    : newUtilPct > 90
+                      ? "Limit Exceeded"
+                      : "Active Account",
+                agingBucket: newBalanceVal === 0 ? "Settled" : acc.agingBucket,
+                utilizationPercent: `${newUtilPct}%`,
+              }
+            : acc,
+        ),
+      );
+      setSettleModalVisible(false);
+
+      if (onShowToast) {
+        onShowToast(
+          `✓ Processed ₹${paidVal.toLocaleString("en-IN")} payment for ${settleAccount.name} via ${settleMode}! Receipt #${res.data.payment.receipt_number} generated.`,
+        );
+      }
+    } catch (err) {
+      if (onShowToast) onShowToast(`⚠️ ${err.message}`);
+    } finally {
+      setSettling(false);
     }
   };
 
@@ -1167,9 +1236,12 @@ export default function CustomerLedgerScreen({ onShowToast, onNavigate }) {
                 </Pressable>
                 <Pressable
                   onPress={handleProcessSettlement}
-                  style={styles.submitModalBtn}
+                  style={[styles.submitModalBtn, settling && { opacity: 0.6 }]}
+                  disabled={settling}
                 >
-                  <Text style={styles.submitModalBtnText}>Process Payment</Text>
+                  <Text style={styles.submitModalBtnText}>
+                    {settling ? "Processing..." : "Process Payment"}
+                  </Text>
                 </Pressable>
               </View>
             </Pressable>

@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -11,6 +10,9 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 
 import { useSuperAdmin } from './store';
+import { useIsMobile } from '../../utils/responsive';
+import { notify } from '../../utils/alert';
+import { fetchPharmacyInvoices, downloadInvoicePdf } from '../../api/superadminApi';
 
 type ConfirmationParams = {
   mode?: string;
@@ -24,6 +26,7 @@ type ConfirmationParams = {
 export default function ConfirmationPage() {
   const params = useLocalSearchParams<ConfirmationParams>();
   const { getPharmacy } = useSuperAdmin();
+  const isMobile = useIsMobile();
 
   const pharmacyId = getValue(params.pharmacyId);
   const pharmacy = pharmacyId ? getPharmacy(pharmacyId) : undefined;
@@ -46,9 +49,9 @@ export default function ConfirmationPage() {
       if (typeof navigator !== 'undefined' && navigator.clipboard) {
         navigator.clipboard.writeText(text);
       }
-      Alert.alert('Copied', `${label} copied to clipboard.`);
+      notify('Copied', `${label} copied to clipboard.`);
     } catch {
-      Alert.alert('Copy', text);
+      notify('Copy', text);
     }
   };
 
@@ -65,7 +68,21 @@ export default function ConfirmationPage() {
         : 'Your pharmacy is now onboarded.';
 
   const exportBill = async () => {
-    Alert.alert('Bill Export', `Invoice for ${pharmacyName} is ready.`);
+    if (!pharmacyId) {
+      notify('Bill Export', 'No pharmacy is associated with this confirmation yet.');
+      return;
+    }
+    try {
+      const res = await fetchPharmacyInvoices(pharmacyId);
+      const latestInvoice = res?.data?.[0];
+      if (!latestInvoice) {
+        notify('Bill Export', 'Invoice is still being generated. Please try again shortly.');
+        return;
+      }
+      await downloadInvoicePdf(latestInvoice.id, `${latestInvoice.invoice_number}.pdf`);
+    } catch (err: any) {
+      notify('Download Failed', err?.message || 'Could not download the invoice.');
+    }
   };
 
   const viewPharmacy = () => {
@@ -83,7 +100,7 @@ export default function ConfirmationPage() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, isMobile && styles.contentMobile]}
     >
       <View style={styles.breadcrumb}>
         <Text style={styles.breadcrumbText}>Pharmacies</Text>
@@ -95,8 +112,8 @@ export default function ConfirmationPage() {
 
       <StepProgress />
 
-      <View style={styles.successLayout}>
-        <View style={styles.successSection}>
+      <View style={[styles.successLayout, isMobile && styles.successLayoutMobile]}>
+        <View style={[styles.successSection, isMobile && styles.fullWidthCard]}>
           <View style={styles.successCircleOuter}>
             <View style={styles.successCircleInner}>
               <Text style={styles.checkMark}>✓</Text>
@@ -122,7 +139,7 @@ export default function ConfirmationPage() {
           </View>
         </View>
 
-        <View style={styles.credentialsCard}>
+        <View style={[styles.credentialsCard, isMobile && styles.fullWidthCard]}>
           <View style={styles.cardHeading}>
             <View style={styles.shield}>
               <Text style={styles.shieldText}>♢</Text>
@@ -282,6 +299,10 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingBottom: 50,
   },
+  contentMobile: {
+    padding: 14,
+    paddingBottom: 32,
+  },
   breadcrumb: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -360,10 +381,18 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 40,
   },
+  successLayoutMobile: {
+    minHeight: 0,
+    gap: 24,
+  },
   successSection: {
     flex: 1,
     minWidth: 350,
     alignItems: 'center',
+  },
+  fullWidthCard: {
+    minWidth: '100%',
+    maxWidth: '100%',
   },
   successCircleOuter: {
     width: 125,

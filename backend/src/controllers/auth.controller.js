@@ -156,6 +156,56 @@ const getUsers = async (req, res) => {
   }
 };
 
+const createStaffUser = async (req, res) => {
+  try {
+    const organisationId = req.user?.organisation_id || req.user?.organisationId;
+    if (!organisationId) {
+      return res.status(400).json({ success: false, error: "Organisation context required." });
+    }
+    const result = await authService.createStaffUser({
+      organisationId,
+      ...req.body,
+    });
+    res.status(201).json(result);
+  } catch (error) {
+    res.status(error.statusCode || 400).json({ success: false, error: error.message });
+  }
+};
+
+const updateStaffUser = async (req, res) => {
+  try {
+    const organisationId = req.user?.organisation_id || req.user?.organisationId;
+    if (!organisationId) {
+      return res.status(400).json({ success: false, error: "Organisation context required." });
+    }
+    const result = await authService.updateStaffUser(
+      organisationId,
+      req.params.id,
+      req.body,
+    );
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(error.statusCode || 400).json({ success: false, error: error.message });
+  }
+};
+
+const updateStaffStatus = async (req, res) => {
+  try {
+    const organisationId = req.user?.organisation_id || req.user?.organisationId;
+    if (!organisationId) {
+      return res.status(400).json({ success: false, error: "Organisation context required." });
+    }
+    const result = await authService.updateStaffStatus(
+      organisationId,
+      req.params.id,
+      req.body?.status,
+    );
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(error.statusCode || 400).json({ success: false, error: error.message });
+  }
+};
+
 module.exports = {
   getMe,
   getUsers,
@@ -166,4 +216,7 @@ module.exports = {
   googleOnboard,
   forgotPassword,
   resetPassword,
+  createStaffUser,
+  updateStaffUser,
+  updateStaffStatus,
 };

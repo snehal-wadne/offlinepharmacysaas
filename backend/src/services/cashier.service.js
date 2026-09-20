@@ -12,6 +12,61 @@ const { pool } = require("../db/connection");
 const {
   getNextBusinessNumber,
 } = require("../repositories/number-sequence.repository");
+const {
+  createCustomerLedgerEntry,
+} = require("../repositories/customer-ledger.repository");
+
+/**
+ * Append a customer ledger entry inside an already-open transaction.
+ *
+ * The running balance is read from the same transaction client so it
+ * reflects entries already inserted earlier in this same transaction
+ * (pool-based reads would miss uncommitted rows).
+ */
+async function appendLedgerEntry(
+  client,
+  {
+    organisationId,
+    customerId,
+    branchId,
+    entryType,
+    referenceType,
+    referenceId,
+    debitAmount = 0,
+    creditAmount = 0,
+    description = null,
+  },
+) {
+  if (!customerId) {
+    return null;
+  }
+
+  const priorRes = await client.query(
+    `SELECT balance_after
+     FROM customer_ledger_entries
+     WHERE organisation_id = $1 AND customer_id = $2
+     ORDER BY entry_date DESC, created_at DESC, id DESC
+     LIMIT 1
+     FOR UPDATE;`,
+    [organisationId, customerId],
+  );
+  const priorBalance = Number(priorRes.rows[0]?.balance_after || 0);
+  const balanceAfter = priorBalance + Number(debitAmount) - Number(creditAmount);
+
+  return createCustomerLedgerEntry({
+    organisationId,
+    customerId,
+    branchId,
+    entryType,
+    referenceType,
+    referenceId,
+    debitAmount,
+    creditAmount,
+    balanceAfter,
+    description,
+    client,
+  });
+}
 
 class CashierService {
   /**
@@ -976,6 +1031,33 @@ class CashierService {
         [paymentId, invoice.id, grandTotal],
       );
 
+      // 5b. Record ledger history: invoice debit, then payment credit.
+      // The POS flow always collects full payment at checkout, so the
+      // net balance change is zero, but the transaction history is
+      // preserved for the customer statement.
+      if (customerId) {
+        await appendLedgerEntry(client, {
+          organisationId,
+          customerId,
+          branchId,
+          entryType: "INVOICE",
+          referenceType: "INVOICE",
+          referenceId: invoice.id,
+          debitAmount: grandTotal,
+          description: `Invoice ${invoiceNumber}`,
+        });
+        await appendLedgerEntry(client, {
+          organisationId,
+          customerId,
+          branchId,
+          entryType: "PAYMENT",
+          referenceType: "PAYMENT",
+          referenceId: paymentId,
+          creditAmount: grandTotal,
+          description: `Payment received for ${invoiceNumber} (${receiptNumber})`,
+        });
+      }
+
       // 6. Update Customer Statistics
       if (customerId) {
         await client
@@ -1401,6 +1483,22 @@ class CashierService {
       );
 
       const returnRecord = returnRes.rows[0];
+
+      // Ledger: a return credits the customer (refund/store credit owed
+      // back to them), regardless of the physical refund method.
+      const ledgerCustomerId = origInvoice.customer_id || customerId;
+      if (ledgerCustomerId && totalRefund > 0) {
+        await appendLedgerEntry(client, {
+          organisationId,
+          customerId: ledgerCustomerId,
+          branchId,
+          entryType: "RETURN",
+          referenceType: "RETURN",
+          referenceId: returnRecord.id,
+          creditAmount: totalRefund,
+          description: `Return ${returnNumber} against invoice ${invoiceNo}`,
+        });
+      }
 
       // Get first invoice item id as fallback
       const invItemRes = await client.query(

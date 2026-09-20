@@ -9,6 +9,7 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 
 import type { PlanName } from './types';
+import { useIsMobile } from '../../utils/responsive';
 
 const PLANS: {
   name: PlanName;
@@ -116,6 +117,7 @@ export default function ChoosePlanPage() {
   const [selectedPlan, setSelectedPlan] = useState<PlanName>(
     isPlanName(params.plan) ? params.plan : 'Professional',
   );
+  const isMobile = useIsMobile();
 
   const continueToPayment = () => {
     router.push({
@@ -140,7 +142,7 @@ export default function ChoosePlanPage() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, isMobile && styles.contentMobile]}
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.breadcrumb}>
@@ -343,6 +345,10 @@ const styles = StyleSheet.create({
   content: {
     padding: 24,
     paddingBottom: 45,
+  },
+  contentMobile: {
+    padding: 14,
+    paddingBottom: 32,
   },
   breadcrumb: {
     flexDirection: 'row',

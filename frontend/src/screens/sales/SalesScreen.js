@@ -53,15 +53,45 @@ const getFefoBatches = (prod) => {
           },
         ];
   return [...prodBatches].sort(
-    (a, b) => parseExpiryDate(a.expiry) - parseExpiryDate(b.expiry)
+    (a, b) => parseExpiryDate(a.expiry) - parseExpiryDate(b.expiry),
   );
 };
+
+const SALES_DRAFT_STORAGE_KEY = "pharmaflow.sales-draft";
+const EMPTY_CUSTOMER = {
+  id: "WALK-IN",
+  name: "Walk-in Customer",
+  phone: "",
+  currentBalance: "₹0.00",
+};
+
+function readSalesDraft() {
+  if (typeof window === "undefined") return {};
+  try {
+    return JSON.parse(
+      window.sessionStorage.getItem(SALES_DRAFT_STORAGE_KEY) || "{}",
+    );
+  } catch {
+    return {};
+  }
+}
+
+function clearSalesDraft() {
+  if (typeof window !== "undefined") {
+    window.sessionStorage.removeItem(SALES_DRAFT_STORAGE_KEY);
+  }
+}
 
 export default function SalesScreen({
   onNavigate,
   onShowToast,
   isMultiBranch = true,
 }) {
+  const savedDraft = useRef(null);
+  if (savedDraft.current === null) {
+    savedDraft.current = readSalesDraft();
+  }
+  const draft = savedDraft.current;
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const isCompact = width < 1080;
@@ -108,32 +138,35 @@ export default function SalesScreen({
     }
   }, [posCustomers]);
 
-  const [selectedCustomer, setSelectedCustomer] = useState({
-    id: "WALK-IN",
-    name: "Walk-in Customer",
-    phone: "",
-    currentBalance: "₹0.00",
-  });
-  const [customCustomerInput, setCustomCustomerInput] = useState("");
+  const [selectedCustomer, setSelectedCustomer] = useState(
+    draft.selectedCustomer || EMPTY_CUSTOMER,
+  );
+  const [customCustomerInput, setCustomCustomerInput] = useState(
+    draft.customCustomerInput || "",
+  );
   const [customerModalVisible, setCustomerModalVisible] = useState(false);
   const [customerSearchQuery, setCustomerSearchQuery] = useState("");
 
   // Active Billing Cart State
-  const [cart, setCart] = useState([]);
+  const [cart, setCart] = useState(draft.cart || []);
 
   // Interactive Batch Dropdown State (Product ID whose batch selector is currently expanded)
   const [openBatchDropdownId, setOpenBatchDropdownId] = useState(null);
 
   // Discounts
-  const [billDiscountInput, setBillDiscountInput] = useState("0");
-  const [appliedDiscount, setAppliedDiscount] = useState(0);
+  const [billDiscountInput, setBillDiscountInput] = useState(
+    draft.billDiscountInput || "0",
+  );
+  const [appliedDiscount, setAppliedDiscount] = useState(
+    Number(draft.appliedDiscount || 0),
+  );
 
   // Payment Mode
-  const [paymentMode, setPaymentMode] = useState("Cash"); // 'Cash' | 'Card' | 'UPI' | 'Split'
+  const [paymentMode, setPaymentMode] = useState(draft.paymentMode || "Cash"); // 'Cash' | 'Card' | 'UPI' | 'Split'
   const [checkoutModalVisible, setCheckoutModalVisible] = useState(false);
-  const [cashTendered, setCashTendered] = useState("");
+  const [cashTendered, setCashTendered] = useState(draft.cashTendered || "");
   const [storeUpiId, setStoreUpiId] = useState("falahpharmacy@okhdfcbank");
-  const [upiRefNumber, setUpiRefNumber] = useState("");
+  const [upiRefNumber, setUpiRefNumber] = useState(draft.upiRefNumber || "");
   const [isEditingUpiId, setIsEditingUpiId] = useState(false);
   const [fullScreenQrVisible, setFullScreenQrVisible] = useState(false);
   const [scannerPurpose, setScannerPurpose] = useState("product"); // 'product' | 'utr'
@@ -152,6 +185,42 @@ export default function SalesScreen({
 
   // Top Draft notification banner
   const [topToastBanner, setTopToastBanner] = useState("");
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const hasDraft =
+      cart.length > 0 ||
+      customCustomerInput ||
+      selectedCustomer.id !== "WALK-IN" ||
+      appliedDiscount > 0 ||
+      upiRefNumber;
+    if (!hasDraft) {
+      clearSalesDraft();
+      return;
+    }
+    window.sessionStorage.setItem(
+      SALES_DRAFT_STORAGE_KEY,
+      JSON.stringify({
+        cart,
+        selectedCustomer,
+        customCustomerInput,
+        billDiscountInput,
+        appliedDiscount,
+        paymentMode,
+        cashTendered,
+        upiRefNumber,
+      }),
+    );
+  }, [
+    cart,
+    selectedCustomer,
+    customCustomerInput,
+    billDiscountInput,
+    appliedDiscount,
+    paymentMode,
+    cashTendered,
+    upiRefNumber,
+  ]);
 
   // Load Resumed Draft whenever activeResumedDraft is set
   useEffect(() => {
@@ -374,6 +443,7 @@ export default function SalesScreen({
       currentBalance: "₹0.00",
     });
     setTopToastBanner("");
+    clearSalesDraft();
   };
 
   // PAY NOW / COMPLETE SALE
@@ -407,7 +477,10 @@ export default function SalesScreen({
             ? selectedCustomer?.id
             : null,
         paymentMode,
-        upiRefNumber: paymentMode === "UPI" ? (upiRefNumber.trim() || `UPI-${Date.now().toString().slice(-6)}`) : null,
+        upiRefNumber:
+          paymentMode === "UPI"
+            ? upiRefNumber.trim() || `UPI-${Date.now().toString().slice(-6)}`
+            : null,
         items: [...cart],
         subtotal: totals.subtotal,
         discountPercent: appliedDiscount || 0,
@@ -419,7 +492,9 @@ export default function SalesScreen({
         changeDue: Math.max(0, tendered - totals.grandTotal),
         cashier: "Cashier 01",
         branch: "Main Branch",
-        attachedPrescription: attachedPrescription ? { ...attachedPrescription } : null,
+        attachedPrescription: attachedPrescription
+          ? { ...attachedPrescription }
+          : null,
       };
 
       const newInvoice = await finalizeSale(saleData);
@@ -440,6 +515,7 @@ export default function SalesScreen({
         phone: "",
         currentBalance: "₹0.00",
       });
+      clearSalesDraft();
 
       if (onShowToast) {
         onShowToast(
@@ -490,7 +566,10 @@ export default function SalesScreen({
     }
   };
 
-  const paginatedData = filteredProducts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const paginatedData = filteredProducts.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage,
+  );
 
   if (loading) {
     return (
@@ -793,15 +872,34 @@ export default function SalesScreen({
                                 style={styles.batchCardItem}
                               >
                                 <View style={styles.batchCardTop}>
-                                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                                  <View
+                                    style={{
+                                      flexDirection: "row",
+                                      alignItems: "center",
+                                      gap: 6,
+                                    }}
+                                  >
                                     <View style={styles.batchBadgeTag}>
                                       <Text style={styles.batchBadgeTagText}>
                                         {b.batch}
                                       </Text>
                                     </View>
                                     {bIdx === 0 && (
-                                      <View style={{ backgroundColor: "#DCFCE7", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                                        <Text style={{ fontSize: 9.5, fontWeight: "800", color: "#15803D" }}>
+                                      <View
+                                        style={{
+                                          backgroundColor: "#DCFCE7",
+                                          paddingHorizontal: 6,
+                                          paddingVertical: 2,
+                                          borderRadius: 4,
+                                        }}
+                                      >
+                                        <Text
+                                          style={{
+                                            fontSize: 9.5,
+                                            fontWeight: "800",
+                                            color: "#15803D",
+                                          }}
+                                        >
                                           FEFO Pick
                                         </Text>
                                       </View>
@@ -851,7 +949,10 @@ export default function SalesScreen({
                 totalItems={filteredProducts.length}
                 itemsPerPage={itemsPerPage}
                 onPageChange={setCurrentPage}
-                onItemsPerPageChange={(n) => { setItemsPerPage(n); setCurrentPage(1); }}
+                onItemsPerPageChange={(n) => {
+                  setItemsPerPage(n);
+                  setCurrentPage(1);
+                }}
               />
             </View>
           </View>
@@ -908,10 +1009,20 @@ export default function SalesScreen({
             {/* Prescription Attachment Section (RX-03) */}
             <View style={styles.rxAttachmentBox}>
               <View style={styles.rxHeaderRow}>
-                <Text style={styles.fieldLabelText}>DOCTOR'S PRESCRIPTION (RX)</Text>
+                <Text style={styles.fieldLabelText}>
+                  DOCTOR'S PRESCRIPTION (RX)
+                </Text>
                 {attachedPrescription && (
                   <Pressable onPress={() => setAttachedPrescription(null)}>
-                    <Text style={{ fontSize: 11, color: "#DC2626", fontWeight: "700" }}>Remove ✕</Text>
+                    <Text
+                      style={{
+                        fontSize: 11,
+                        color: "#DC2626",
+                        fontWeight: "700",
+                      }}
+                    >
+                      Remove ✕
+                    </Text>
                   </Pressable>
                 )}
               </View>
@@ -924,7 +1035,10 @@ export default function SalesScreen({
                       {attachedPrescription.fileName}
                     </Text>
                     <Text style={styles.rxAttachedDoctor}>
-                      Dr. {attachedPrescription.doctorName || "Physician"} {attachedPrescription.doctorReg ? `(Reg #${attachedPrescription.doctorReg})` : ""}
+                      Dr. {attachedPrescription.doctorName || "Physician"}{" "}
+                      {attachedPrescription.doctorReg
+                        ? `(Reg #${attachedPrescription.doctorReg})`
+                        : ""}
                     </Text>
                   </View>
                   <View style={styles.rxVerifiedBadge}>
@@ -939,7 +1053,9 @@ export default function SalesScreen({
                   accessibilityLabel="Attach Doctor Prescription"
                 >
                   <Text style={styles.rxAttachBtnIcon}>📎</Text>
-                  <Text style={styles.rxAttachBtnText}>Attach Prescription (PDF / Image)</Text>
+                  <Text style={styles.rxAttachBtnText}>
+                    Attach Prescription (PDF / Image)
+                  </Text>
                 </Pressable>
               )}
             </View>
@@ -1186,7 +1302,9 @@ export default function SalesScreen({
             {paymentMode === "UPI" && (
               <View style={styles.upiQrBox}>
                 <View style={styles.upiQrTopHeader}>
-                  <Text style={styles.upiQrTitle}>Customer UPI Payment Scanner</Text>
+                  <Text style={styles.upiQrTitle}>
+                    Customer UPI Payment Scanner
+                  </Text>
                   <Text style={styles.upiQrAmount}>
                     ₹{totals.grandTotal.toFixed(2)}
                   </Text>
@@ -1196,14 +1314,16 @@ export default function SalesScreen({
                 <View style={styles.upiQrImageCard}>
                   <OfflineQRCode
                     value={`upi://pay?pa=${encodeURIComponent(
-                      storeUpiId.trim() || "falahpharmacy@okhdfcbank"
+                      storeUpiId.trim() || "falahpharmacy@okhdfcbank",
                     )}&pn=Falah%20Pharmacy&am=${totals.grandTotal.toFixed(
-                      2
+                      2,
                     )}&cu=INR&tn=POS-BILL`}
                     size={220}
                   />
                   <View style={styles.scanTargetBadge}>
-                    <Text style={styles.scanTargetBadgeText}>⚡ Scan to Pay ₹{totals.grandTotal.toFixed(2)}</Text>
+                    <Text style={styles.scanTargetBadgeText}>
+                      ⚡ Scan to Pay ₹{totals.grandTotal.toFixed(2)}
+                    </Text>
                   </View>
                 </View>
 
@@ -1213,7 +1333,9 @@ export default function SalesScreen({
                     style={styles.upiMiniActionBtn}
                     onPress={() => setFullScreenQrVisible(true)}
                   >
-                    <Text style={styles.upiMiniActionText}>🔍 Fullscreen Standee</Text>
+                    <Text style={styles.upiMiniActionText}>
+                      🔍 Fullscreen Standee
+                    </Text>
                   </Pressable>
                   <Pressable
                     style={styles.upiMiniActionBtn}
@@ -1222,7 +1344,9 @@ export default function SalesScreen({
                       setScannerModalVisible(true);
                     }}
                   >
-                    <Text style={styles.upiMiniActionText}>📷 Scan Customer Screen</Text>
+                    <Text style={styles.upiMiniActionText}>
+                      📷 Scan Customer Screen
+                    </Text>
                   </Pressable>
                 </View>
 
@@ -1282,7 +1406,9 @@ export default function SalesScreen({
 
                 <View style={styles.upiHelpBanner}>
                   <Text style={styles.upiHelpText}>
-                    💡 Customer scans QR code above. Verify payment on your phone/soundbox, then click &apos;Confirm Payment &amp; Print&apos;.
+                    💡 Customer scans QR code above. Verify payment on your
+                    phone/soundbox, then click &apos;Confirm Payment &amp;
+                    Print&apos;.
                   </Text>
                 </View>
               </View>
@@ -1373,12 +1499,35 @@ export default function SalesScreen({
               </Text>
 
               {completedInvoice.attachedPrescription && (
-                <View style={{ backgroundColor: "#F0FDFA", padding: 8, borderRadius: 6, marginVertical: 6, borderWidth: 1, borderColor: "#CCFBF1" }}>
-                  <Text style={{ fontSize: 11, fontWeight: "700", color: "#0F766E" }}>
-                    ✓ Rx Attached: {completedInvoice.attachedPrescription.fileName}
+                <View
+                  style={{
+                    backgroundColor: "#F0FDFA",
+                    padding: 8,
+                    borderRadius: 6,
+                    marginVertical: 6,
+                    borderWidth: 1,
+                    borderColor: "#CCFBF1",
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      fontWeight: "700",
+                      color: "#0F766E",
+                    }}
+                  >
+                    ✓ Rx Attached:{" "}
+                    {completedInvoice.attachedPrescription.fileName}
                   </Text>
-                  <Text style={{ fontSize: 10, color: "#475569", marginTop: 2 }}>
-                    Doctor: Dr. {completedInvoice.attachedPrescription.doctorName || "Physician"} {completedInvoice.attachedPrescription.doctorReg ? `• Reg #${completedInvoice.attachedPrescription.doctorReg}` : ""}
+                  <Text
+                    style={{ fontSize: 10, color: "#475569", marginTop: 2 }}
+                  >
+                    Doctor: Dr.{" "}
+                    {completedInvoice.attachedPrescription.doctorName ||
+                      "Physician"}{" "}
+                    {completedInvoice.attachedPrescription.doctorReg
+                      ? `• Reg #${completedInvoice.attachedPrescription.doctorReg}`
+                      : ""}
                   </Text>
                 </View>
               )}
@@ -1397,7 +1546,9 @@ export default function SalesScreen({
                   value={`INVOICE:${completedInvoice.invoiceNo}|TOTAL:₹${completedInvoice.total}|DATE:${completedInvoice.date}`}
                   size={120}
                 />
-                <Text style={styles.receiptQrSubtitle}>Digital E-Invoice Verification</Text>
+                <Text style={styles.receiptQrSubtitle}>
+                  Digital E-Invoice Verification
+                </Text>
               </View>
 
               <Text style={styles.receiptThanksText}>
@@ -1531,9 +1682,9 @@ export default function SalesScreen({
             <View style={styles.qrStandeeImageWrapper}>
               <OfflineQRCode
                 value={`upi://pay?pa=${encodeURIComponent(
-                  storeUpiId.trim() || "falahpharmacy@okhdfcbank"
+                  storeUpiId.trim() || "falahpharmacy@okhdfcbank",
                 )}&pn=Falah%20Pharmacy&am=${totals.grandTotal.toFixed(
-                  2
+                  2,
                 )}&cu=INR&tn=POS-STANDEE`}
                 size={280}
               />
@@ -1592,15 +1743,19 @@ export default function SalesScreen({
           <View style={[styles.customerModalCard, { maxWidth: 480 }]}>
             <View style={styles.modalHeader}>
               <View>
-                <Text style={styles.modalTitle}>Attach Doctor's Prescription</Text>
-                <Text style={styles.modalSubtitle}>Upload digital Rx document for regulatory compliance (RX-03)</Text>
+                <Text style={styles.modalTitle}>
+                  Attach Doctor's Prescription
+                </Text>
+                <Text style={styles.modalSubtitle}>
+                  Upload digital Rx document for regulatory compliance (RX-03)
+                </Text>
               </View>
               <Pressable onPress={() => setRxModalVisible(false)}>
                 <Text style={styles.closeBtnText}>✕</Text>
               </Pressable>
             </View>
 
-            {Platform.OS === 'web' && (
+            {Platform.OS === "web" && (
               <input
                 type="file"
                 ref={rxFileInputRef}
@@ -1626,7 +1781,9 @@ export default function SalesScreen({
               </View>
 
               <View>
-                <Text style={styles.fieldLabelText}>MEDICAL COUNCIL REGISTRATION NO.</Text>
+                <Text style={styles.fieldLabelText}>
+                  MEDICAL COUNCIL REGISTRATION NO.
+                </Text>
                 <TextInput
                   style={styles.customerSearchInput}
                   placeholder="e.g. MMC-2018-99412"
@@ -1637,13 +1794,17 @@ export default function SalesScreen({
               </View>
 
               <View>
-                <Text style={styles.fieldLabelText}>SELECT PRESCRIPTION FILE (IMAGE OR PDF)</Text>
+                <Text style={styles.fieldLabelText}>
+                  SELECT PRESCRIPTION FILE (IMAGE OR PDF)
+                </Text>
                 <Pressable
                   onPress={() => {
-                    if (Platform.OS === 'web' && rxFileInputRef.current) {
+                    if (Platform.OS === "web" && rxFileInputRef.current) {
                       rxFileInputRef.current.click();
                     } else if (onShowToast) {
-                      onShowToast("File picker available on web/mobile browser");
+                      onShowToast(
+                        "File picker available on web/mobile browser",
+                      );
                     }
                   }}
                   style={{
@@ -1658,42 +1819,92 @@ export default function SalesScreen({
                   }}
                 >
                   <Text style={{ fontSize: 24, marginBottom: 4 }}>📄</Text>
-                  <Text style={{ fontSize: 13, fontWeight: "700", color: "#0F766E" }}>
-                    {rxFileName ? `Selected: ${rxFileName}` : "Click to Browse File / Select Document"}
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: "700",
+                      color: "#0F766E",
+                    }}
+                  >
+                    {rxFileName
+                      ? `Selected: ${rxFileName}`
+                      : "Click to Browse File / Select Document"}
                   </Text>
-                  <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>
+                  <Text
+                    style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}
+                  >
                     Supports JPG, PNG, PDF (Max 15MB)
                   </Text>
                 </Pressable>
               </View>
 
-              <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 10, marginTop: 10 }}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "flex-end",
+                  gap: 10,
+                  marginTop: 10,
+                }}
+              >
                 <Pressable
                   onPress={() => setRxModalVisible(false)}
-                  style={{ paddingHorizontal: 14, paddingVertical: 9, borderRadius: 6, borderWidth: 1, borderColor: "#CBD5E1" }}
+                  style={{
+                    paddingHorizontal: 14,
+                    paddingVertical: 9,
+                    borderRadius: 6,
+                    borderWidth: 1,
+                    borderColor: "#CBD5E1",
+                  }}
                 >
-                  <Text style={{ color: "#475569", fontWeight: "600", fontSize: 13 }}>Cancel</Text>
+                  <Text
+                    style={{
+                      color: "#475569",
+                      fontWeight: "600",
+                      fontSize: 13,
+                    }}
+                  >
+                    Cancel
+                  </Text>
                 </Pressable>
                 <Pressable
                   onPress={() => {
                     if (!rxFileName && !rxDoctorName.trim()) {
-                      if (onShowToast) onShowToast("Please enter doctor name or upload prescription file.");
+                      if (onShowToast)
+                        onShowToast(
+                          "Please enter doctor name or upload prescription file.",
+                        );
                       return;
                     }
                     setAttachedPrescription({
                       fileName: rxFileName || "Prescription_Doc.pdf",
-                      doctorName: rxDoctorName.trim() || "Prescribing Physician",
+                      doctorName:
+                        rxDoctorName.trim() || "Prescribing Physician",
                       doctorReg: rxDoctorReg.trim(),
                       attachedAt: new Date().toLocaleTimeString(),
                     });
                     setRxModalVisible(false);
                     if (onShowToast) {
-                      onShowToast(`✓ Prescription attached for Dr. ${rxDoctorName.trim() || "Physician"}`);
+                      onShowToast(
+                        `✓ Prescription attached for Dr. ${rxDoctorName.trim() || "Physician"}`,
+                      );
                     }
                   }}
-                  style={{ backgroundColor: "#0F766E", paddingHorizontal: 16, paddingVertical: 9, borderRadius: 6 }}
+                  style={{
+                    backgroundColor: "#0F766E",
+                    paddingHorizontal: 16,
+                    paddingVertical: 9,
+                    borderRadius: 6,
+                  }}
                 >
-                  <Text style={{ color: "#FFFFFF", fontWeight: "700", fontSize: 13 }}>Attach to Invoice</Text>
+                  <Text
+                    style={{
+                      color: "#FFFFFF",
+                      fontWeight: "700",
+                      fontSize: 13,
+                    }}
+                  >
+                    Attach to Invoice
+                  </Text>
                 </Pressable>
               </View>
             </View>
