@@ -39,65 +39,230 @@ export default function CustomerLedgerScreen({ onShowToast, onNavigate }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  useEffect(() => {
-    let isMounted = true;
-    async function loadLedger() {
-      try {
-        setLoading(true);
-        const res = await fetchCustomers();
-        if (isMounted && res && res.success && Array.isArray(res.data)) {
-          const mapped = res.data.map((c) => {
-            const creditLimit = Number(c.creditLimit || c.credit_limit || 0);
-            const bal = Number(
-              c.outstandingBalance || c.outstanding_balance || 0,
-            );
-            const status =
-              bal > creditLimit && creditLimit > 0
-                ? "Limit Exceeded"
-                : bal > 0
-                  ? "Active Account"
-                  : "Healthy";
-            return {
-              id: c.customerNumber || c.customer_number || c.id,
-              rawId: c.id,
-              name: c.name,
-              phone: c.phone || "",
-              branch: c.branchName || "Main Branch",
-              creditLimit: `₹${creditLimit.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`,
-              currentBalance: `₹${bal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`,
-              currentDue: `₹${bal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`,
-              balanceRaw: bal,
-              agingBucket: bal > 0 ? "1-30 Days" : "Current",
-              creditStatus: status,
-              lastPaymentDate: "Recent",
-              lastPaymentAmount: "₹0.00",
-              lastInvoiceNo: "INV-RECENT",
-              lastInvoiceDate: "Recent",
-              utilizationPercent:
-                creditLimit > 0
-                  ? `${Math.min(100, Math.round((bal / creditLimit) * 100))}%`
-                  : "0%",
-            };
-          });
-          setLedgerAccounts(mapped);
-        } else if (isMounted) {
-          setLedgerAccounts([]);
-        }
-      } catch (err) {
-        console.warn(
-          "[CustomerLedger] Failed to fetch customer accounts:",
-          err.message,
+ useEffect(() => {
+  let isMounted = true;
+
+  async function loadLedger() {
+    try {
+      setLoading(true);
+
+      const res = await fetchCustomers();
+
+      console.log("[CustomerLedger] API response:", res);
+
+      // =========================================================
+      // BACKEND RESPONSE
+      //
+      // {
+      //   success: true,
+      //   data: {
+      //     success: true,
+      //     count: 16,
+      //     data: [...]
+      //   }
+      // }
+      //
+      // Therefore customer array = res.data.data
+      // =========================================================
+
+      const customers = Array.isArray(res?.data?.data)
+        ? res.data.data
+        : Array.isArray(res?.data)
+          ? res.data
+          : Array.isArray(res)
+            ? res
+            : [];
+
+      console.log(
+        "[CustomerLedger] Extracted customers:",
+        customers
+      );
+
+      console.log(
+        "[CustomerLedger] Customer count:",
+        customers.length
+      );
+
+      if (!isMounted) return;
+
+      const mapped = customers.map((c) => {
+        const creditLimit = Number(
+          c?.creditLimit ??
+          c?.credit_limit ??
+          0
         );
-        if (isMounted) setLedgerAccounts([]);
-      } finally {
-        if (isMounted) setLoading(false);
+
+        const balance = Number(
+          c?.outstandingBalance ??
+          c?.outstanding_balance ??
+          0
+        );
+
+        let creditStatus = "Healthy";
+
+        if (creditLimit > 0 && balance > creditLimit) {
+          creditStatus = "Limit Exceeded";
+        } else if (balance > 0) {
+          creditStatus = "Active Account";
+        }
+
+        const utilization =
+          creditLimit > 0
+            ? Math.round((balance / creditLimit) * 100)
+            : 0;
+
+        return {
+          // Internal/customer identifiers
+          id:
+            c?.customerNumber ||
+            c?.customer_number ||
+            c?.id ||
+            "",
+
+          rawId: c?.id || "",
+
+          customerNumber:
+            c?.customerNumber ||
+            c?.customer_number ||
+            "",
+
+          // Customer information
+          name: c?.name || "Unknown Customer",
+
+          phone: c?.phone || "",
+
+          branch:
+            c?.branchName ||
+            c?.branch ||
+            "Main Branch",
+
+          city: c?.city || "",
+
+          address: c?.address || "",
+
+          age: c?.age ?? "",
+
+          gender: c?.gender || "",
+
+          category: c?.category || "",
+
+          // Doctor
+          doctorName: c?.doctorName || "",
+
+          doctorSpecialty:
+            c?.doctorSpecialty ||
+            c?.doctor_specialty ||
+            "",
+
+          // Prescription
+          activeRxNo: c?.activeRxNo || "",
+
+          // Financial values
+          creditLimitValue: creditLimit,
+
+          creditLimit: `₹${creditLimit.toLocaleString(
+            "en-IN",
+            {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            }
+          )}`,
+
+          balanceRaw: balance,
+
+          currentBalance: `₹${balance.toLocaleString(
+            "en-IN",
+            {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            }
+          )}`,
+
+          currentDue: `₹${balance.toLocaleString(
+            "en-IN",
+            {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            }
+          )}`,
+
+          // Aging
+          agingBucket:
+            balance > 0
+              ? "1-30 Days"
+              : "Current",
+
+          // Credit status
+          creditStatus,
+
+          // Utilization
+          utilizationPercent: `${Math.min(
+            100,
+            Math.max(0, utilization)
+          )}%`,
+
+          // Backend fields
+          loyaltyPoints: Number(
+            c?.loyaltyPoints ?? 0
+          ),
+
+          totalSpent: Number(
+            c?.totalSpent ?? 0
+          ),
+
+          outstandingBalance: balance,
+
+          // These fields are not present in current
+          // customer-list backend response.
+          // Keep them empty instead of fake values.
+          lastPaymentDate: "",
+          lastPaymentAmount: "₹0.00",
+          lastInvoiceNo: "",
+          lastInvoiceDate: "",
+
+          // Statement data if backend eventually provides it
+          statements: Array.isArray(c?.statements)
+            ? c.statements
+            : [],
+        };
+      });
+
+      console.log(
+        "[CustomerLedger] MAPPED LEDGER ACCOUNTS:",
+        mapped
+      );
+
+      console.log(
+        "[CustomerLedger] MAPPED COUNT:",
+        mapped.length
+      );
+
+      setLedgerAccounts(mapped);
+
+      // Reset pagination after loading fresh data
+      setCurrentPage(1);
+    } catch (err) {
+      console.error(
+        "[CustomerLedger] Failed to fetch customer accounts:",
+        err
+      );
+
+      if (isMounted) {
+        setLedgerAccounts([]);
+      }
+    } finally {
+      if (isMounted) {
+        setLoading(false);
       }
     }
-    loadLedger();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  }
+
+  loadLedger();
+
+  return () => {
+    isMounted = false;
+  };
+}, []);
 
   // Modal 1: Statement Modal (RX-06, RX-07)
   const [statementModalVisible, setStatementModalVisible] = useState(false);

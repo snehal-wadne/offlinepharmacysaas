@@ -30,6 +30,35 @@ const STATUS_PILLS = {
   Cancelled: { bg: "#FEE2E2", text: "#B91C1C" },
 };
 
+const normalizeTransferStatus = (status) => {
+  if (!status) return "Draft";
+
+  const value = String(status).trim().toUpperCase();
+
+  switch (value) {
+    case "DRAFT":
+      return "Draft";
+
+    case "IN_TRANSIT":
+    case "IN-TRANSIT":
+    case "IN TRANSIT":
+    case "DISPATCHED":
+      return "In Transit";
+
+    case "COMPLETED":
+    case "COMPLETE":
+    case "RECEIVED":
+      return "Completed";
+
+    case "CANCELLED":
+    case "CANCELED":
+      return "Cancelled";
+
+    default:
+      return status;
+  }
+};
+
 export default function StockTransferScreen({ onShowToast }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
@@ -130,8 +159,8 @@ export default function StockTransferScreen({ onShowToast }) {
 
     const unsubscribe = subscribeFn
       ? subscribeFn(() => {
-          if (isMounted) loadTransfers();
-        })
+        if (isMounted) loadTransfers();
+      })
       : null;
 
     return () => {
@@ -143,12 +172,14 @@ export default function StockTransferScreen({ onShowToast }) {
   const loadTransfers = async () => {
     try {
       setLoading(true);
+
       const tenantCtx =
         typeof localPersistenceService?.getTenantContext === "function"
           ? localPersistenceService.getTenantContext()
           : { isDemo: true, branchId: "Main Branch" };
 
       let localTxs = [];
+
       if (typeof localPersistenceService?.getLocalTransfers === "function") {
         localTxs = await localPersistenceService.getLocalTransfers(
           tenantCtx.organisationId,
@@ -156,16 +187,91 @@ export default function StockTransferScreen({ onShowToast }) {
         );
       }
 
+      let rawTransfers = [];
+
       if (Array.isArray(localTxs) && localTxs.length > 0) {
-        setTransfers(localTxs);
+        rawTransfers = localTxs;
       } else {
         const apiRes = await fetchStockTransfers();
-        if (apiRes && apiRes.data && Array.isArray(apiRes.data)) {
-          setTransfers(apiRes.data);
-        } else {
-          setTransfers([]);
-        }
+
+        rawTransfers =
+          Array.isArray(apiRes?.data)
+            ? apiRes.data
+            : Array.isArray(apiRes?.data?.data)
+              ? apiRes.data.data
+              : [];
       }
+
+      const mappedTransfers = rawTransfers.map((tr) => ({
+        ...tr,
+
+        // ID
+        id:
+          tr.id ||
+          tr._id ||
+          tr.transferNumber ||
+          tr.transferId ||
+          "N/A",
+
+        // Branches
+        fromBranch:
+          tr.fromBranch?.name ||
+          tr.fromBranch?.branchName ||
+          tr.fromBranchName ||
+          tr.sourceBranch?.name ||
+          tr.sourceBranchName ||
+          tr.fromBranch ||
+          "N/A",
+
+        toBranch:
+          tr.toBranch?.name ||
+          tr.toBranch?.branchName ||
+          tr.toBranchName ||
+          tr.destinationBranch?.name ||
+          tr.destinationBranchName ||
+          tr.toBranch ||
+          "N/A",
+
+        // Date
+        transferDate:
+          tr.transferDate ||
+          tr.createdAt ||
+          tr.date ||
+          tr.createdDate ||
+          "N/A",
+
+        // Items
+        items:
+          tr.itemsCount ||
+          (Array.isArray(tr.items) ? tr.items.length : 0),
+
+        // Quantity
+        totalQuantity:
+          tr.totalQuantity ||
+          tr.quantity ||
+          (Array.isArray(tr.items)
+            ? tr.items.reduce(
+              (sum, item) => sum + Number(item.quantity || 0),
+              0,
+            )
+            : 0),
+
+        // Status
+        status: normalizeTransferStatus(tr.status),
+
+        // Created by
+        createdBy:
+          tr.createdBy?.name ||
+          tr.createdBy?.fullName ||
+          tr.createdByName ||
+          tr.createdBy ||
+          "Unknown",
+
+        // Keep sync information if available
+        syncStatus: tr.syncStatus || "SYNCED",
+      }));
+
+      setTransfers(mappedTransfers);
     } catch (err) {
       console.warn("[StockTransferScreen] loadTransfers error:", err);
       setTransfers([]);
@@ -176,19 +282,26 @@ export default function StockTransferScreen({ onShowToast }) {
 
   // Filtered Transfers
   const filteredTransfers = transfers.filter((tr) => {
+    const query = searchQuery.trim().toLowerCase();
+
     const matchesSearch =
-      tr.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      tr.fromBranch.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      tr.toBranch.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      tr.createdBy.toLowerCase().includes(searchQuery.toLowerCase());
+      !query ||
+      String(tr.id || "").toLowerCase().includes(query) ||
+      String(tr.fromBranch || "").toLowerCase().includes(query) ||
+      String(tr.toBranch || "").toLowerCase().includes(query) ||
+      String(tr.createdBy || "").toLowerCase().includes(query);
 
     const matchesStatus =
-      selectedStatus === "All Statuses" || tr.status === selectedStatus;
+      selectedStatus === "All Statuses" ||
+      tr.status === selectedStatus;
 
     const matchesFrom =
-      fromBranch === "All Branches" || tr.fromBranch === fromBranch;
+      fromBranch === "All Branches" ||
+      tr.fromBranch === fromBranch;
 
-    const matchesTo = toBranch === "All Branches" || tr.toBranch === toBranch;
+    const matchesTo =
+      toBranch === "All Branches" ||
+      tr.toBranch === toBranch;
 
     return matchesSearch && matchesStatus && matchesFrom && matchesTo;
   });
@@ -437,7 +550,7 @@ export default function StockTransferScreen({ onShowToast }) {
       }
 
       if (typeof syncEngine?.sync === "function") {
-        syncEngine.sync().catch(() => {});
+        syncEngine.sync().catch(() => { });
       }
     } catch (err) {
       console.warn("[StockTransferScreen] Persistence note:", err.message);
@@ -957,7 +1070,7 @@ export default function StockTransferScreen({ onShowToast }) {
                             style={[
                               styles.medDropdownItem,
                               selectedMedicine?.id === p.id &&
-                                styles.medDropdownItemActive,
+                              styles.medDropdownItemActive,
                             ]}
                             onPress={() => {
                               setSelectedMedicine(p);
@@ -1122,7 +1235,7 @@ export default function StockTransferScreen({ onShowToast }) {
                                   style={[
                                     styles.branchOptionName,
                                     isSelected &&
-                                      styles.branchOptionNameFromActive,
+                                    styles.branchOptionNameFromActive,
                                   ]}
                                   numberOfLines={1}
                                 >
@@ -1213,9 +1326,9 @@ export default function StockTransferScreen({ onShowToast }) {
                                   style={[
                                     styles.branchOptionName,
                                     isSelected &&
-                                      styles.branchOptionNameToActive,
+                                    styles.branchOptionNameToActive,
                                     isDisabled &&
-                                      styles.branchOptionNameDisabled,
+                                    styles.branchOptionNameDisabled,
                                   ]}
                                   numberOfLines={1}
                                 >
@@ -1298,14 +1411,14 @@ export default function StockTransferScreen({ onShowToast }) {
                       style={[
                         styles.transferPresetBtn,
                         transferQty === preset &&
-                          styles.transferPresetBtnActive,
+                        styles.transferPresetBtnActive,
                       ]}
                     >
                       <Text
                         style={[
                           styles.transferPresetText,
                           transferQty === preset &&
-                            styles.transferPresetTextActive,
+                          styles.transferPresetTextActive,
                         ]}
                       >
                         +{preset}
@@ -1336,7 +1449,7 @@ export default function StockTransferScreen({ onShowToast }) {
                       {Math.max(
                         0,
                         selectedMedicine.quantity -
-                          (parseInt(transferQty, 10) || 0),
+                        (parseInt(transferQty, 10) || 0),
                       )}{" "}
                       units (-{parseInt(transferQty, 10) || 0})
                     </Text>

@@ -73,30 +73,102 @@ export default function CustomersPatientsScreen({ onShowToast, onNavigate }) {
     loadCustomersData();
   }, []);
 
-  const loadCustomersData = async () => {
-    try {
-      setLoading(true);
-      const [resCust, resSum] = await Promise.all([
-        fetchCustomers(),
-        fetchCustomerSummary().catch(() => null),
-      ]);
+const loadCustomersData = async () => {
+  try {
+    setLoading(true);
 
-      if (resCust && resCust.data && Array.isArray(resCust.data)) {
-        setCustomers(resCust.data);
-      } else {
-        setCustomers([]);
-      }
+    const [resCust, resSum] = await Promise.all([
+      fetchCustomers(),
+      fetchCustomerSummary().catch(() => null),
+    ]);
 
-      if (resSum && resSum.data) {
-        setSummaryData(resSum.data);
-      }
-    } catch (err) {
-      console.warn("Failed to fetch customers from API:", err.message);
-      setCustomers([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+    console.log("[CustomersScreen] Customers raw response:", resCust);
+    console.log("[CustomersScreen] Summary raw response:", resSum);
+
+    // ------------------------------------------------------------
+    // CUSTOMER LIST
+    //
+    // Backend:
+    // {
+    //   count: 16,
+    //   data: [...],
+    //   success: true
+    // }
+    //
+    // Axios response:
+    // {
+    //   data: {
+    //     count: 16,
+    //     data: [...],
+    //     success: true
+    //   }
+    // }
+    // ------------------------------------------------------------
+
+    const customerData = Array.isArray(resCust?.data?.data)
+      ? resCust.data.data
+      : Array.isArray(resCust?.data)
+        ? resCust.data
+        : Array.isArray(resCust)
+          ? resCust
+          : [];
+
+    console.log(
+      "[CustomersScreen] Customers received:",
+      customerData
+    );
+
+    console.log(
+      "[CustomersScreen] Customer count:",
+      customerData.length
+    );
+
+    setCustomers(customerData);
+
+    // ------------------------------------------------------------
+    // CUSTOMER SUMMARY
+    //
+    // Backend:
+    // {
+    //   data: {
+    //     totalCustomers: 16,
+    //     chronicCarePatients: 7,
+    //     activeCreditAccounts: 15,
+    //     totalOutstanding: 10470,
+    //     loyaltyPointsPool: 3453
+    //   }
+    // }
+    //
+    // Axios response:
+    // resSum.data = {
+    //   data: {
+    //     ...
+    //   }
+    // }
+    // ------------------------------------------------------------
+
+    const summary = resSum?.data?.data
+      ? resSum.data.data
+      : resSum?.data || null;
+
+    console.log(
+      "[CustomersScreen] Summary received:",
+      summary
+    );
+
+    setSummaryData(summary);
+  } catch (err) {
+    console.warn(
+      "[CustomersScreen] Failed to fetch customers from API:",
+      err?.message || err
+    );
+
+    setCustomers([]);
+    setSummaryData(null);
+  } finally {
+    setLoading(false);
+  }
+};
 
   // Dynamic KPI Cards
   const totalCount = summaryData?.totalCustomers || customers.length;

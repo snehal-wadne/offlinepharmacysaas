@@ -58,82 +58,275 @@ export default function GoodsReceivingScreen({
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  const loadGRNs = async () => {
+ const loadGRNs = async () => {
+  try {
+    setLoading(true);
+
+    // ============================================================
+    // 1. LOAD LOCAL GRNs
+    // ============================================================
+
+    let localRecords = [];
+
     try {
-      let localRecords = [];
       if (
-        typeof localPersistenceService?.getLocalPurchaseReceipts === "function"
+        typeof localPersistenceService?.getLocalPurchaseReceipts ===
+        "function"
       ) {
-        localRecords = await localPersistenceService.getLocalPurchaseReceipts();
+        localRecords =
+          (await localPersistenceService.getLocalPurchaseReceipts()) || [];
       }
-
-      let serverRecords = [];
-      try {
-        const rawBranch =
-          typeof selectedBranch === "object" && selectedBranch !== null
-            ? selectedBranch.id || selectedBranch.name
-            : selectedBranch;
-        const branchParam =
-          rawBranch &&
-          rawBranch !== "All Branches" &&
-          rawBranch !== "all" &&
-          rawBranch !== "No Active Branch"
-            ? rawBranch
-            : undefined;
-        const response = await fetchGoodsReceipts({ branchId: branchParam });
-        if (response && response.data && response.data.length > 0) {
-          serverRecords = response.data.map((grn) => ({
-            realId: grn.id,
-            id: grn.receiptNumber || grn.receipt_number || grn.id,
-            poReference: grn.purchaseNumber || grn.poReference || "Direct GRN",
-            supplier: grn.supplierName || grn.supplier || "Supplier",
-            receivedDate:
-              grn.receivedDate ||
-              grn.received_date ||
-              (grn.created_at
-                ? new Date(grn.created_at).toLocaleDateString()
-                : "Recent"),
-            receivedBy: grn.receivedBy || "Staff",
-            itemsCount: grn.itemsCount || (grn.items ? grn.items.length : 0),
-            packagesCount: grn.packageCount || grn.package_count || 1,
-            invoiceNo:
-              grn.supplierInvoiceNumber || grn.supplier_invoice_number || "N/A",
-            status:
-              grn.status === "VERIFIED"
-                ? "Verified"
-                : grn.status === "DISCREPANCY"
-                  ? "Discrepancy"
-                  : "Pending Inspection",
-            branch: grn.branchName || grn.branch || "Main Branch",
-            syncStatus: "SYNCED",
-          }));
-        }
-      } catch (err) {
-        // Server unreachable or offline
-      }
-
-      // Merge local and server records without overwriting pending local transactions
-      const combined = [...localRecords];
-      const existingIds = new Set(localRecords.map((r) => r.id || r.realId));
-      for (const s of serverRecords) {
-        if (!existingIds.has(s.id) && !existingIds.has(s.realId)) {
-          combined.push(s);
-          existingIds.add(s.id);
-        }
-      }
-
-      if (combined.length > 0) {
-        setGrnList(combined);
-      } else {
-        setGrnList([]);
-      }
-    } catch (err) {
-      console.warn("[GoodsReceivingScreen] Error loading GRN list:", err);
-      setGrnList([]);
-    } finally {
-      setLoading(false);
+    } catch (localErr) {
+      console.warn(
+        "[GoodsReceivingScreen] Failed to load local GRNs:",
+        localErr?.message
+      );
+      localRecords = [];
     }
-  };
+
+    // ============================================================
+    // 2. LOAD SERVER GRNs
+    // ============================================================
+
+    let serverRecords = [];
+
+    try {
+      const rawBranch =
+        typeof selectedBranch === "object" && selectedBranch !== null
+          ? selectedBranch.id || selectedBranch.name
+          : selectedBranch;
+
+      const branchParam =
+        rawBranch &&
+        rawBranch !== "All Branches" &&
+        rawBranch !== "all" &&
+        rawBranch !== "No Active Branch"
+          ? rawBranch
+          : undefined;
+
+      const response = await fetchGoodsReceipts({
+        branchId: branchParam,
+      });
+
+      console.log(
+        "[GoodsReceivingScreen] Raw GRN API response:",
+        response
+      );
+
+      // ============================================================
+      // IMPORTANT:
+      //
+      // Axios-style response:
+      //
+      // response
+      //   └── data
+      //       └── data  <-- ACTUAL ARRAY
+      //
+      // So we MUST use response.data.data
+      // ============================================================
+
+      const apiRecords = Array.isArray(response?.data?.data)
+        ? response.data.data
+        : Array.isArray(response?.data)
+          ? response.data
+          : Array.isArray(response)
+            ? response
+            : [];
+
+      console.log(
+        "[GoodsReceivingScreen] GRN records from backend:",
+        apiRecords
+      );
+
+      console.log(
+        "[GoodsReceivingScreen] GRN count:",
+        apiRecords.length
+      );
+
+      // ============================================================
+      // 3. NORMALIZE BACKEND DATA FOR UI
+      // ============================================================
+
+      serverRecords = apiRecords.map((grn) => {
+        const status =
+          grn.status === "VERIFIED"
+            ? "Verified"
+            : grn.status === "DISCREPANCY"
+              ? "Discrepancy"
+              : "Pending Inspection";
+
+        return {
+          // Backend UUID
+          realId: grn.id,
+
+          // GRN number
+          id:
+            grn.receipt_number ||
+            grn.receiptNumber ||
+            grn.id ||
+            "GRN",
+
+          // Purchase Order reference
+          poReference:
+            grn.purchase_number ||
+            grn.purchaseNumber ||
+            grn.poReference ||
+            "Direct GRN",
+
+          // Supplier
+          supplier:
+            grn.supplier_name ||
+            grn.supplierName ||
+            grn.supplier ||
+            "Supplier",
+
+          // Received date
+          receivedDate: grn.received_date
+            ? new Date(grn.received_date).toLocaleDateString("en-GB", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+              })
+            : grn.receivedDate
+              ? grn.receivedDate
+              : grn.created_at
+                ? new Date(grn.created_at).toLocaleDateString("en-GB", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  })
+                : "Recent",
+
+          // Received by
+          receivedBy:
+            grn.received_by_name ||
+            grn.receivedByName ||
+            grn.received_by ||
+            grn.receivedBy ||
+            "Staff",
+
+          // Backend currently gives package_count,
+          // but does NOT give itemsCount in the sample response.
+          itemsCount:
+            grn.itemsCount ??
+            (Array.isArray(grn.items) ? grn.items.length : 0),
+
+          // Package count
+          packagesCount:
+            grn.package_count ??
+            grn.packageCount ??
+            1,
+
+          // Supplier invoice
+          invoiceNo:
+            grn.supplier_invoice_number ||
+            grn.supplierInvoiceNumber ||
+            grn.invoiceNo ||
+            "N/A",
+
+          // Status
+          status,
+
+          // Branch
+          branch:
+            grn.branch_name ||
+            grn.branchName ||
+            grn.branch ||
+            "Main Branch",
+
+          // Notes
+          notes: grn.notes || "",
+
+          // Backend IDs
+          purchaseId:
+            grn.purchase_id ||
+            grn.purchaseId ||
+            null,
+
+          supplierId:
+            grn.supplier_id ||
+            grn.supplierId ||
+            null,
+
+          branchId:
+            grn.branch_id ||
+            grn.branchId ||
+            null,
+
+          organisationId:
+            grn.organisation_id ||
+            grn.organisationId ||
+            null,
+
+          // Keep original backend status
+          rawStatus: grn.status || null,
+
+          // Server record
+          syncStatus: "SYNCED",
+        };
+      });
+
+      console.log(
+        "[GoodsReceivingScreen] Normalized GRN records:",
+        serverRecords
+      );
+    } catch (err) {
+      console.warn(
+        "[GoodsReceivingScreen] Failed to fetch GRNs from backend:",
+        err?.message || err
+      );
+
+      serverRecords = [];
+    }
+
+    // ============================================================
+    // 4. MERGE LOCAL + SERVER RECORDS
+    // ============================================================
+
+    const combined = [...localRecords];
+
+    const existingIds = new Set(
+      localRecords
+        .map((record) => record?.id || record?.realId)
+        .filter(Boolean)
+    );
+
+    for (const serverRecord of serverRecords) {
+      const serverId =
+        serverRecord.id || serverRecord.realId;
+
+      const alreadyExists = existingIds.has(serverId);
+
+      if (!alreadyExists) {
+        combined.push(serverRecord);
+
+        if (serverId) {
+          existingIds.add(serverId);
+        }
+      }
+    }
+
+    console.log(
+      "[GoodsReceivingScreen] Final GRN list:",
+      combined
+    );
+
+    // ============================================================
+    // 5. UPDATE UI
+    // ============================================================
+
+    setGrnList(combined);
+  } catch (err) {
+    console.warn(
+      "[GoodsReceivingScreen] Error loading GRN list:",
+      err
+    );
+
+    setGrnList([]);
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
     let isMounted = true;
