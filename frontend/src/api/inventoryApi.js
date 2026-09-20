@@ -4,7 +4,11 @@
  * Communicates with backend REST API for inventory management and stock adjustments.
  */
 
+HEAD
 import { apiGet, apiPost, apiPut, apiDelete } from "./apiClient";
+
+import { apiGet, apiPost, apiPut, apiPatch, apiDelete } from './apiClient';
+c62f8144320cdef4d275f34c3bc9112e38baec4e
 
 /**
  * GET /api/inventory
@@ -79,6 +83,7 @@ export async function fetchItemBarcode(id) {
 }
 
 /**
+ HEAD
  * GET /api/stock-transfers
  */
 export async function fetchStockTransfers(params = {}) {
@@ -95,3 +100,17 @@ export async function fetchStockTransfers(params = {}) {
 export async function createStockTransferApi(data) {
   return apiPost("/api/stock-transfers", data);
 }
+
+ /* PATCH /api/inventory/:id/status
+ */
+export async function updateItemStatusApi(id, isActive) {
+  return apiPatch(`/inventory/${id}/status`, { isActive });
+}
+
+/**
+ * PATCH /api/inventory/:id/rx
+ */
+export async function updateItemRxApi(id, isRxRequired) {
+  return apiPatch(`/inventory/${id}/rx`, { isRxRequired });
+}
+c62f8144320cdef4d275f34c3bc9112e38baec4e

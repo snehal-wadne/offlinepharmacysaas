@@ -18,6 +18,7 @@ import PaginationControls from '../../components/common/PaginationControls';
 import OfflineQRCode from '../../components/common/OfflineQRCode';
 import BarcodeScannerModal from '../../components/common/BarcodeScannerModal';
 import { generateOfflineQRCode } from '../../utils/qrGenerator';
+import { fetchCashierProducts } from '../../api/cashierApi';
 
 export default function PosBillingScreen({
   onNavigate,
@@ -25,7 +26,17 @@ export default function PosBillingScreen({
   isMultiBranch = true,
 }) {
   const offlineSync = useOfflineSync();
+HEAD
   const productsList = Array.isArray(offlineSync?.products) ? offlineSync.products : [];
+
+  const [liveProducts, setLiveProducts] = useState([]);
+  const productsList =
+    liveProducts.length > 0
+      ? liveProducts
+      : offlineSync?.products && offlineSync.products.length > 0
+        ? offlineSync.products
+        : MOCK_POS_PRODUCTS;
+ c62f8144320cdef4d275f34c3bc9112e38baec4e
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const isCompact = width < 1100;
@@ -37,6 +48,7 @@ export default function PosBillingScreen({
 
   useEffect(() => {
     let isMounted = true;
+     HEAD
     async function loadCustomers() {
       try {
         const res = await fetchCustomers();
@@ -45,12 +57,29 @@ export default function PosBillingScreen({
         }
       } catch (err) {
         console.warn('Failed to load customers for POS:', err.message);
+
+    async function loadCatalog() {
+      try {
+        const data = await fetchCashierProducts();
+        if (isMounted && Array.isArray(data) && data.length > 0) {
+          setLiveProducts(data);
+        }
+      } catch (err) {
+        console.warn("[PosBilling] Live catalog fallback:", err?.message);
+        c62f8144320cdef4d275f34c3bc9112e38baec4e
       } finally {
         if (isMounted) setLoading(false);
       }
     }
+HEAD
     loadCustomers();
     return () => { isMounted = false; };
+
+    loadCatalog();
+    return () => {
+      isMounted = false;
+    };
+c62f8144320cdef4d275f34c3bc9112e38baec4e
   }, []);
 
   // Active Tab on Mobile: 'catalog' | 'cart'
@@ -128,6 +157,10 @@ export default function PosBillingScreen({
     "Hydration",
   ];
   const filteredProducts = productsList.filter((prod) => {
+    // Exclude deactivated or inactive items
+    if (prod.isActive === false || prod.is_active === false || prod.status === 'Inactive' || prod.status === 'Disabled') {
+      return false;
+    }
     const q = searchQuery.toLowerCase();
     const matchSearch =
       prod.name.toLowerCase().includes(q) ||
