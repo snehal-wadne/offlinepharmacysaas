@@ -74,6 +74,67 @@ const ROUTE_PERMISSIONS = {
   "audit-log": "audit:view",
 };
 
+const APP_ROUTE_KEYS = [
+  "dashboard",
+  "sales",
+  "new-sale",
+  "pos-billing",
+  "cash-register",
+  "held-bills",
+  "sales-returns",
+  "returns",
+  "stock-adjustments",
+  "stock-transfer",
+  "inventory",
+  "stock-status",
+  "low-stock-expiry",
+  "current-stock",
+  "purchases",
+  "goods-receiving",
+  "suppliers",
+  "customers-patients",
+  "customers",
+  "add-customer",
+  "customer-details",
+  "customer-ledger",
+  "customer-payments",
+  "branches",
+  "users",
+  "roles",
+  "roles-permissions",
+  "page-permissions",
+  "audit-log",
+  "inventory-reports",
+  "purchase-reports",
+  "expiry-reports",
+  "tax-settings",
+  "subscription-plans",
+];
+
+const getRouteFromLocation = () => {
+  if (typeof window === "undefined") return "dashboard";
+
+  const path = window.location.pathname.replace(/^\/+|\/+$/g, "");
+  const routeKey = path.split("/")[0];
+  return APP_ROUTE_KEYS.includes(routeKey) ? routeKey : "dashboard";
+};
+
+const updateBrowserRoute = (routeKey, replace = false) => {
+  if (
+    typeof window === "undefined" ||
+    !APP_ROUTE_KEYS.includes(routeKey) ||
+    window.location.pathname.startsWith("/superadmin")
+  ) {
+    return;
+  }
+
+  const nextPath = `/${routeKey}`;
+  if (window.location.pathname !== nextPath) {
+    const method = replace ? "replaceState" : "pushState";
+    window.history[method]({}, "", nextPath);
+  }
+};
+
 const hasPermission = (user, permission) => {
   if (!permission) return true;
   if (!user) return false;
@@ -103,7 +164,7 @@ export default function AppNavigator() {
   const isMobile = width < 768;
 
   // Active Route State (Default: 'dashboard')
-  const [currentRoute, setCurrentRoute] = useState("dashboard");
+  const [currentRoute, setCurrentRoute] = useState(getRouteFromLocation);
   const [selectedBranch, setSelectedBranch] = useState(null);
   const [selectedCustomerId, setSelectedCustomerId] = useState(null);
   const [toastMessage, setToastMessage] = useState("");
@@ -119,6 +180,21 @@ export default function AppNavigator() {
   const [authStatus, setAuthStatus] = useState("INITIALIZING");
   const [currentUser, setCurrentUser] = useState(null);
   const [googleOnboardingData, setGoogleOnboardingData] = useState(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const handleBrowserNavigation = () => {
+      setCurrentRoute(getRouteFromLocation());
+    };
+
+    window.addEventListener("popstate", handleBrowserNavigation);
+    updateBrowserRoute(currentRoute, true);
+
+    return () => {
+      window.removeEventListener("popstate", handleBrowserNavigation);
+    };
+  }, []);
 
   const resolveBranchContext = (user) => {
     if (!user || user.hasBranch === false) return null;
@@ -189,6 +265,7 @@ export default function AppNavigator() {
 
         if (user && user.hasBranch === false) {
           setCurrentRoute("branches");
+          updateBrowserRoute("branches", true);
           setSelectedBranch(null);
         } else if (user) {
           setSelectedBranch(resolveBranchContext(user));
@@ -331,6 +408,7 @@ export default function AppNavigator() {
     ) {
       showToast("Please create your initial pharmacy branch first.");
       setCurrentRoute("branches");
+      updateBrowserRoute("branches", true);
       setMobileMenuOpen(false);
       return;
     }
@@ -340,6 +418,7 @@ export default function AppNavigator() {
     }
 
     setCurrentRoute(routeKey);
+    updateBrowserRoute(routeKey);
     setMobileMenuOpen(false);
   };
 
@@ -352,6 +431,7 @@ export default function AppNavigator() {
     setIsMultiBranch(multi);
     if (!multi && currentRoute === "stock-transfer") {
       setCurrentRoute("stock-adjustments");
+      updateBrowserRoute("stock-adjustments", true);
     }
     showToast(
       multi
@@ -710,6 +790,7 @@ export default function AppNavigator() {
           setAuthStatus("AUTHENTICATED");
           if (user && user.hasBranch === false) {
             setCurrentRoute("branches");
+            updateBrowserRoute("branches", true);
             setSelectedBranch(null);
           } else {
             setSelectedBranch(resolveBranchContext(user));
