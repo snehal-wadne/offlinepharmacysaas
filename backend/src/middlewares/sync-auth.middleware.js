@@ -38,6 +38,43 @@ const authenticateUser = async (req) => {
   }
 
   if (!token) {
+    if (
+      process.env.NODE_ENV !== "production" &&
+      process.env.ALLOW_DEV_AUTH === "true"
+    ) {
+      const rawOrgId =
+        req.headers["x-organisation-id"] ||
+        req.headers["x-tenant-id"] ||
+        req.query?.organisationId ||
+        req.body?.organisationId;
+
+      let fallbackUserRes = null;
+      if (rawOrgId && isUuid(rawOrgId)) {
+        fallbackUserRes = await pool.query(
+          `SELECT u.id, u.name, u.email, u.status, u.is_platform_superadmin
+           FROM users u
+           JOIN organisation_memberships om ON om.user_id = u.id AND om.status = 'ACTIVE'
+           WHERE om.organisation_id = $1 AND u.status = 'ACTIVE'
+           ORDER BY u.created_at ASC
+           LIMIT 1;`,
+          [rawOrgId],
+        );
+      }
+
+      if (!fallbackUserRes || fallbackUserRes.rows.length === 0) {
+        fallbackUserRes = await pool.query(`
+          SELECT id, name, email, status, is_platform_superadmin
+          FROM users
+          WHERE status = 'ACTIVE'
+          ORDER BY created_at ASC
+          LIMIT 1;
+        `);
+      }
+
+      if (fallbackUserRes.rows.length > 0) {
+        return { user: fallbackUserRes.rows[0] };
+      }
+    }
     return { error: "Missing authentication token", statusCode: 401 };
   }
 

@@ -4,25 +4,29 @@
  * Checks connectivity with the backend and synchronizes queued mutations.
  */
 
-import { API_URL } from '../config';
-import { getPendingQueue, removeSyncedMutations } from './syncQueue';
+import { API_URL } from "../config";
+import { getAuthHeaders } from "../api/apiClient";
+import { getPendingQueue, removeSyncedMutations } from "./syncQueue";
 
 /**
  * Checks if the backend server is reachable
  */
 export const checkServerConnectivity = async () => {
   // First check browser navigator.onLine
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
     return false;
   }
 
-  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-  const timeoutId = controller ? setTimeout(() => controller.abort(), 2000) : null;
+  const controller =
+    typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timeoutId = controller
+    ? setTimeout(() => controller.abort(), 2000)
+    : null;
 
   try {
     const res = await fetch(`${API_URL}/health`, {
-      method: 'GET',
-      headers: { 'Accept': 'application/json' },
+      method: "GET",
+      headers: { Accept: "application/json" },
       signal: controller ? controller.signal : undefined,
     });
     if (timeoutId) clearTimeout(timeoutId);
@@ -46,7 +50,8 @@ export const flushOfflineQueue = async () => {
   if (!isConnected) {
     return {
       success: false,
-      message: 'Server is currently offline. Mutations remain safely queued locally.',
+      message:
+        "Server is currently offline. Mutations remain safely queued locally.",
       processedCount: 0,
       remainingCount: queue.length,
     };
@@ -58,10 +63,12 @@ export const flushOfflineQueue = async () => {
       mutations: queue,
     };
 
-    const res = await fetch(`${API_URL}/sync/batch`, {
-      method: 'POST',
+    const authHeaders = await getAuthHeaders();
+    const res = await fetch(`${API_URL}/api/sync/batch`, {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
+        ...authHeaders,
       },
       body: JSON.stringify(payload),
     });

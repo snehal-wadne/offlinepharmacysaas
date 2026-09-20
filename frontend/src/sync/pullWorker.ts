@@ -17,6 +17,7 @@ import { CustomerRepository } from '../db/repositories/customerRepository';
 import { API_URL } from '../config';
 import { PullChangesResponse, ServerChangeItem } from './types';
 import { logSyncEvent } from './syncLogger';
+import { getAccessToken } from '../api/supabaseClient';
 
 export class PullWorker {
   private db: PharmaFlowDatabase;
@@ -63,12 +64,18 @@ export class PullWorker {
         branchId
       )}&limit=50`;
 
+      let token = this.authToken;
+      if (!token) {
+        token = await getAccessToken().catch(() => null);
+      }
+
       const headers: Record<string, string> = {
         'x-organisation-id': organisationId,
         'x-branch-id': branchId,
       };
-      if (this.authToken) {
-        headers['Authorization'] = `Bearer ${this.authToken}`;
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+        headers['x-sync-auth'] = token;
       }
 
       const response = await fetch(url, { method: 'GET', headers });

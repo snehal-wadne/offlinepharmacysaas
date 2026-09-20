@@ -28,6 +28,7 @@ import { classifySyncError, calculateBackoff } from './errorClassification';
 import { logSyncEvent } from './syncLogger';
 import { ConnectivityService, connectivityService as defaultConnService } from './connectivityService';
 import { PullWorker, pullWorker as defaultPullWorker } from './pullWorker';
+import { getAccessToken } from '../api/supabaseClient';
 
 const syncLogger = console;
 const DEFAULT_BATCH_SIZE = 25;
@@ -259,11 +260,17 @@ export class SyncEngine {
       let transportError: any = null;
 
       try {
+        let token = this.authToken;
+        if (!token) {
+          token = await getAccessToken().catch(() => null);
+        }
+
         const headers: Record<string, string> = {
           'Content-Type': 'application/json',
         };
-        if (this.authToken) {
-          headers['Authorization'] = `Bearer ${this.authToken}`;
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+          headers['x-sync-auth'] = token;
         }
         if (this.activeOrganisationId) {
           headers['x-organisation-id'] = this.activeOrganisationId;
