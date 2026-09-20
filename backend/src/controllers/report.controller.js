@@ -4,13 +4,18 @@
  * Exposes endpoints for financial metrics, GSTR-1 data, and inventory analytics.
  */
 
-const reportService = require('../services/report.service');
+const reportService = require("../services/report.service");
+const {
+  getAuthorizedOrgId,
+  getAuthorizedBranchId,
+} = require("../utils/tenant-context");
 
 class ReportController {
   async getSalesSummary(req, res) {
     try {
-      const organisationId = req.user?.organisationId || req.query.organisationId;
-      const { branchId, startDate, endDate } = req.query;
+      const organisationId = await getAuthorizedOrgId(req);
+      const branchId = await getAuthorizedBranchId(req, organisationId);
+      const { startDate, endDate } = req.query;
 
       const report = await reportService.getSalesSummary({
         organisationId,
@@ -24,8 +29,8 @@ class ReportController {
         data: report,
       });
     } catch (err) {
-      console.error('Error generating sales report:', err.message);
-      return res.status(500).json({
+      console.error("Error generating sales report:", err.message);
+      return res.status(err.statusCode || 500).json({
         success: false,
         message: err.message,
       });
@@ -34,8 +39,9 @@ class ReportController {
 
   async getGstReport(req, res) {
     try {
-      const organisationId = req.user?.organisationId || req.query.organisationId;
-      const { branchId, month, year } = req.query;
+      const organisationId = await getAuthorizedOrgId(req);
+      const branchId = await getAuthorizedBranchId(req, organisationId);
+      const { month, year } = req.query;
 
       const report = await reportService.getGstReport({
         organisationId,
@@ -49,8 +55,8 @@ class ReportController {
         data: report,
       });
     } catch (err) {
-      console.error('Error generating GST report:', err.message);
-      return res.status(500).json({
+      console.error("Error generating GST report:", err.message);
+      return res.status(err.statusCode || 500).json({
         success: false,
         message: err.message,
       });
@@ -59,8 +65,9 @@ class ReportController {
 
   async getCashierReconciliation(req, res) {
     try {
-      const organisationId = req.user?.organisationId || req.query.organisationId;
-      const { branchId, limit } = req.query;
+      const organisationId = await getAuthorizedOrgId(req);
+      const branchId = await getAuthorizedBranchId(req, organisationId);
+      const { limit } = req.query;
 
       const report = await reportService.getCashierReconciliationReport({
         organisationId,
@@ -74,8 +81,11 @@ class ReportController {
         data: report,
       });
     } catch (err) {
-      console.error('Error generating cashier reconciliation report:', err.message);
-      return res.status(500).json({
+      console.error(
+        "Error generating cashier reconciliation report:",
+        err.message,
+      );
+      return res.status(err.statusCode || 500).json({
         success: false,
         message: err.message,
       });
@@ -84,8 +94,8 @@ class ReportController {
 
   async getExpiryReport(req, res) {
     try {
-      const organisationId = req.user?.organisationId || req.query.organisationId;
-      const { branchId } = req.query;
+      const organisationId = await getAuthorizedOrgId(req);
+      const branchId = await getAuthorizedBranchId(req, organisationId);
 
       const report = await reportService.getExpiryReport({
         organisationId,
@@ -97,8 +107,8 @@ class ReportController {
         data: report,
       });
     } catch (err) {
-      console.error('Error generating expiry report:', err.message);
-      return res.status(500).json({
+      console.error("Error generating expiry report:", err.message);
+      return res.status(err.statusCode || 500).json({
         success: false,
         message: err.message,
       });
@@ -107,8 +117,9 @@ class ReportController {
 
   async getFastMoving(req, res) {
     try {
-      const organisationId = req.user?.organisationId || req.query.organisationId;
-      const { branchId, limit } = req.query;
+      const organisationId = await getAuthorizedOrgId(req);
+      const branchId = await getAuthorizedBranchId(req, organisationId);
+      const { limit } = req.query;
 
       const report = await reportService.getFastMovingReport({
         organisationId,
@@ -122,8 +133,8 @@ class ReportController {
         data: report,
       });
     } catch (err) {
-      console.error('Error generating fast-moving report:', err.message);
-      return res.status(500).json({
+      console.error("Error generating fast-moving report:", err.message);
+      return res.status(err.statusCode || 500).json({
         success: false,
         message: err.message,
       });
@@ -132,11 +143,11 @@ class ReportController {
 
   async getInventoryReport(req, res) {
     try {
-      const organisationId = req.user?.organisationId || req.query.organisationId || (await reportService.pool?.query('SELECT id FROM organisations LIMIT 1;'))?.rows[0]?.id;
-      const { branchId } = req.query;
+      const organisationId = await getAuthorizedOrgId(req);
+      const branchId = await getAuthorizedBranchId(req, organisationId);
 
       const report = await reportService.getInventoryReport({
-        organisationId: organisationId || '389edc41-8dca-4b2e-bade-981c496ca0ae',
+        organisationId,
         branchId,
       });
 
@@ -145,8 +156,8 @@ class ReportController {
         data: report,
       });
     } catch (err) {
-      console.error('Error generating inventory report:', err.message);
-      return res.status(500).json({
+      console.error("Error generating inventory report:", err.message);
+      return res.status(err.statusCode || 500).json({
         success: false,
         message: err.message,
       });
@@ -155,11 +166,12 @@ class ReportController {
 
   async getProfitLossReport(req, res) {
     try {
-      const organisationId = req.user?.organisationId || req.query.organisationId || (await reportService.pool?.query('SELECT id FROM organisations LIMIT 1;'))?.rows[0]?.id;
-      const { branchId, startDate, endDate } = req.query;
+      const organisationId = await getAuthorizedOrgId(req);
+      const branchId = await getAuthorizedBranchId(req, organisationId);
+      const { startDate, endDate } = req.query;
 
       const report = await reportService.getProfitLossReport({
-        organisationId: organisationId || '389edc41-8dca-4b2e-bade-981c496ca0ae',
+        organisationId,
         branchId,
         startDate,
         endDate,
@@ -170,8 +182,8 @@ class ReportController {
         data: report,
       });
     } catch (err) {
-      console.error('Error generating profit-loss report:', err.message);
-      return res.status(500).json({
+      console.error("Error generating profit-loss report:", err.message);
+      return res.status(err.statusCode || 500).json({
         success: false,
         message: err.message,
       });

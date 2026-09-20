@@ -15,6 +15,7 @@
 
 import { PharmaFlowDatabase, db as defaultDb } from '../db/pharmaflowDb';
 import { ProductRecord, CustomerRecord, InventoryBatchRecord } from '../db/types';
+import { getAccessToken } from '../api/supabaseClient';
 
 export interface BootstrapOptions {
   organisationId: string;
@@ -74,15 +75,20 @@ export class BootstrapService {
       throw new Error('Bootstrap requires a valid branchId');
     }
 
+    let token = authToken;
+    if (!token) {
+      token = await getAccessToken().catch(() => null);
+    }
+
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'x-organisation-id': organisationId,
       'x-branch-id': branchId,
     };
 
-    if (authToken) {
-      headers['Authorization'] = `Bearer ${authToken}`;
-      headers['x-sync-auth'] = authToken;
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+      headers['x-sync-auth'] = token;
     }
 
     const url = `${baseUrl}/api/sync/bootstrap?organisationId=${encodeURIComponent(

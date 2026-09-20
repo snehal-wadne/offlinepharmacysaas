@@ -5,22 +5,16 @@
  */
 
 const taxService = require("../services/tax.service");
-
-const getOrgId = (req) => {
-  return (
-    req.user?.organisation_id ||
-    req.user?.organisationId ||
-    req.headers["x-organisation-id"] ||
-    req.query?.organisationId ||
-    req.body?.organisationId ||
-    null
-  );
-};
+const {
+  getAuthorizedOrgId,
+  getAuthorizedBranchId,
+  sanitizeTenantPayload,
+} = require("../utils/tenant-context");
 
 class TaxController {
   async getTaxes(req, res) {
     try {
-      const organisationId = getOrgId(req);
+      const organisationId = await getAuthorizedOrgId(req);
       const taxes = await taxService.getTaxes(organisationId);
 
       return res.status(200).json({
@@ -30,7 +24,7 @@ class TaxController {
       });
     } catch (err) {
       console.error("Error fetching taxes:", err.message);
-      return res.status(500).json({
+      return res.status(err.statusCode || 500).json({
         success: false,
         message: err.message,
       });
@@ -39,11 +33,9 @@ class TaxController {
 
   async createTax(req, res) {
     try {
-      const organisationId = getOrgId(req);
-      const tax = await taxService.createTax({
-        ...req.body,
-        organisationId,
-      });
+      const organisationId = await getAuthorizedOrgId(req);
+      const taxData = sanitizeTenantPayload(req.body, { organisationId });
+      const tax = await taxService.createTax(taxData);
 
       return res.status(201).json({
         success: true,
@@ -52,7 +44,7 @@ class TaxController {
       });
     } catch (err) {
       console.error("Error creating tax:", err.message);
-      return res.status(400).json({
+      return res.status(err.statusCode || 400).json({
         success: false,
         message: err.message,
       });
@@ -61,8 +53,12 @@ class TaxController {
 
   async getBranchGst(req, res) {
     try {
-      const organisationId = getOrgId(req);
-      const { branchId } = req.params;
+      const organisationId = await getAuthorizedOrgId(req);
+      const branchId = await getAuthorizedBranchId(
+        { ...req, query: { branchId: req.params.branchId } },
+        organisationId,
+        { required: true },
+      );
 
       const settings = await taxService.getBranchGstSettings(
         organisationId,
@@ -74,7 +70,7 @@ class TaxController {
       });
     } catch (err) {
       console.error("Error fetching branch GST settings:", err.message);
-      return res.status(500).json({
+      return res.status(err.statusCode || 500).json({
         success: false,
         message: err.message,
       });
@@ -83,14 +79,19 @@ class TaxController {
 
   async updateBranchGst(req, res) {
     try {
-      const organisationId = getOrgId(req);
-      const { branchId } = req.params;
+      const organisationId = await getAuthorizedOrgId(req);
+      const branchId = await getAuthorizedBranchId(
+        { ...req, query: { branchId: req.params.branchId } },
+        organisationId,
+        { required: true },
+      );
 
-      const updated = await taxService.updateBranchGstSettings({
-        ...req.body,
+      const updateData = sanitizeTenantPayload(req.body, {
         organisationId,
         branchId,
       });
+
+      const updated = await taxService.updateBranchGstSettings(updateData);
 
       return res.status(200).json({
         success: true,
@@ -99,7 +100,7 @@ class TaxController {
       });
     } catch (err) {
       console.error("Error updating branch GST settings:", err.message);
-      return res.status(400).json({
+      return res.status(err.statusCode || 400).json({
         success: false,
         message: err.message,
       });
@@ -108,9 +109,14 @@ class TaxController {
 
   async updateTax(req, res) {
     try {
-      const organisationId = getOrgId(req);
+      const organisationId = await getAuthorizedOrgId(req);
       const { id } = req.params;
-      const updated = await taxService.updateTax(organisationId, id, req.body);
+      const updateData = sanitizeTenantPayload(req.body);
+      const updated = await taxService.updateTax(
+        organisationId,
+        id,
+        updateData,
+      );
 
       return res.status(200).json({
         success: true,
@@ -119,7 +125,7 @@ class TaxController {
       });
     } catch (err) {
       console.error("Error updating tax:", err.message);
-      return res.status(400).json({
+      return res.status(err.statusCode || 400).json({
         success: false,
         message: err.message,
       });
@@ -128,7 +134,7 @@ class TaxController {
 
   async setTaxStatus(req, res) {
     try {
-      const organisationId = getOrgId(req);
+      const organisationId = await getAuthorizedOrgId(req);
       const { id } = req.params;
       const { isActive, isApplied } = req.body;
       const statusToSet = isActive !== undefined ? isActive : isApplied;
@@ -145,7 +151,7 @@ class TaxController {
       });
     } catch (err) {
       console.error("Error setting tax status:", err.message);
-      return res.status(400).json({
+      return res.status(err.statusCode || 400).json({
         success: false,
         message: err.message,
       });
@@ -154,7 +160,7 @@ class TaxController {
 
   async deleteTax(req, res) {
     try {
-      const organisationId = getOrgId(req);
+      const organisationId = await getAuthorizedOrgId(req);
       const { id } = req.params;
       const deleted = await taxService.deleteTax(organisationId, id);
 
@@ -165,7 +171,7 @@ class TaxController {
       });
     } catch (err) {
       console.error("Error deleting tax:", err.message);
-      return res.status(400).json({
+      return res.status(err.statusCode || 400).json({
         success: false,
         message: err.message,
       });

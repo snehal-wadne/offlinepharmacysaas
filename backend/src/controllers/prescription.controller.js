@@ -4,25 +4,32 @@
  * Exposes endpoints for managing prescriptions and clinical patient linkages.
  */
 
-const prescriptionService = require('../services/prescription.service');
+const prescriptionService = require("../services/prescription.service");
+const {
+  getAuthorizedOrgId,
+  sanitizeTenantPayload,
+} = require("../utils/tenant-context");
 
 class PrescriptionController {
   async createPrescription(req, res) {
     try {
-      const organisationId = req.user?.organisationId || req.body.organisationId;
-      const prescription = await prescriptionService.createPrescription({
-        ...req.body,
+      const organisationId = await getAuthorizedOrgId(req);
+      const prescriptionData = sanitizeTenantPayload(req.body, {
         organisationId,
+        createdBy: req.user?.id,
       });
+
+      const prescription =
+        await prescriptionService.createPrescription(prescriptionData);
 
       return res.status(201).json({
         success: true,
-        message: 'Prescription created successfully',
+        message: "Prescription created successfully",
         data: prescription,
       });
     } catch (err) {
-      console.error('Error creating prescription:', err.message);
-      return res.status(400).json({
+      console.error("Error creating prescription:", err.message);
+      return res.status(err.statusCode || 400).json({
         success: false,
         message: err.message,
       });
@@ -31,7 +38,7 @@ class PrescriptionController {
 
   async getPrescriptions(req, res) {
     try {
-      const organisationId = req.user?.organisationId || req.query.organisationId;
+      const organisationId = await getAuthorizedOrgId(req);
       const { customerId, search, status, limit, offset } = req.query;
 
       const prescriptions = await prescriptionService.getPrescriptions({
@@ -49,8 +56,8 @@ class PrescriptionController {
         data: prescriptions,
       });
     } catch (err) {
-      console.error('Error fetching prescriptions:', err.message);
-      return res.status(500).json({
+      console.error("Error fetching prescriptions:", err.message);
+      return res.status(err.statusCode || 500).json({
         success: false,
         message: err.message,
       });
@@ -59,14 +66,17 @@ class PrescriptionController {
 
   async getPrescriptionById(req, res) {
     try {
-      const organisationId = req.user?.organisationId || req.query.organisationId;
+      const organisationId = await getAuthorizedOrgId(req);
       const { id } = req.params;
 
-      const prescription = await prescriptionService.getPrescriptionById(organisationId, id);
+      const prescription = await prescriptionService.getPrescriptionById(
+        organisationId,
+        id,
+      );
       if (!prescription) {
         return res.status(404).json({
           success: false,
-          message: 'Prescription not found',
+          message: "Prescription not found",
         });
       }
 
@@ -75,8 +85,8 @@ class PrescriptionController {
         data: prescription,
       });
     } catch (err) {
-      console.error('Error fetching prescription details:', err.message);
-      return res.status(500).json({
+      console.error("Error fetching prescription details:", err.message);
+      return res.status(err.statusCode || 500).json({
         success: false,
         message: err.message,
       });
@@ -85,15 +95,19 @@ class PrescriptionController {
 
   async updatePrescriptionStatus(req, res) {
     try {
-      const organisationId = req.user?.organisationId || req.body.organisationId;
+      const organisationId = await getAuthorizedOrgId(req);
       const { id } = req.params;
       const { status } = req.body;
 
-      const updated = await prescriptionService.updatePrescriptionStatus(organisationId, id, status);
+      const updated = await prescriptionService.updatePrescriptionStatus(
+        organisationId,
+        id,
+        status,
+      );
       if (!updated) {
         return res.status(404).json({
           success: false,
-          message: 'Prescription not found to update',
+          message: "Prescription not found to update",
         });
       }
 
@@ -103,8 +117,8 @@ class PrescriptionController {
         data: updated,
       });
     } catch (err) {
-      console.error('Error updating prescription status:', err.message);
-      return res.status(400).json({
+      console.error("Error updating prescription status:", err.message);
+      return res.status(err.statusCode || 400).json({
         success: false,
         message: err.message,
       });

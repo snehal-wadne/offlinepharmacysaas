@@ -179,7 +179,10 @@ export default function AppNavigator() {
       if (response.ok) {
         const resData = await response.json();
         const user = resData.data?.user || resData.user;
-        setCurrentUser(user);
+        const userWithToken = user
+          ? { ...user, token: session.access_token }
+          : null;
+        setCurrentUser(userWithToken);
         setGoogleOnboardingData(null);
         setAuthError("");
         setAuthSession({ organisationId: user?.organisationId });
@@ -699,7 +702,9 @@ export default function AppNavigator() {
         }}
         onLoginSuccess={(user, token) => {
           setAuthSession({ organisationId: user?.organisationId });
-          setCurrentUser(user);
+          setCurrentUser(
+            user ? { ...user, token: token || user?.token } : null,
+          );
           setGoogleOnboardingData(null);
           setAuthError("");
           setAuthStatus("AUTHENTICATED");

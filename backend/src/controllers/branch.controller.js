@@ -6,11 +6,14 @@
  */
 
 const branchService = require("../services/branch.service");
+const {
+  getAuthorizedOrgId,
+  sanitizeTenantPayload,
+} = require("../utils/tenant-context");
 
 const getBranches = async (req, res) => {
   try {
-    const organisationId =
-      req.user?.organisationId || req.query.organisationId || null;
+    const organisationId = await getAuthorizedOrgId(req);
     const branches = await branchService.getBranches(organisationId);
     res.status(200).json({
       success: true,
@@ -19,7 +22,7 @@ const getBranches = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching branches:", error);
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
       message: error.message || "Failed to fetch branches",
     });
@@ -29,8 +32,7 @@ const getBranches = async (req, res) => {
 const getBranchById = async (req, res) => {
   try {
     const { id } = req.params;
-    const organisationId =
-      req.user?.organisationId || req.query.organisationId || null;
+    const organisationId = await getAuthorizedOrgId(req);
     const branch = await branchService.getBranchById(id, organisationId);
     res.status(200).json({
       success: true,
@@ -38,7 +40,9 @@ const getBranchById = async (req, res) => {
     });
   } catch (error) {
     console.error(`Error fetching branch ${req.params.id}:`, error);
-    const statusCode = error.message.includes("not found") ? 404 : 500;
+    const statusCode = error.message.includes("not found")
+      ? 404
+      : error.statusCode || 500;
     res.status(statusCode).json({
       success: false,
       message: error.message || "Failed to fetch branch",
@@ -48,11 +52,8 @@ const getBranchById = async (req, res) => {
 
 const createBranch = async (req, res) => {
   try {
-    const branchData = {
-      ...req.body,
-      organisationId:
-        req.user?.organisationId || req.body.organisationId || null,
-    };
+    const organisationId = await getAuthorizedOrgId(req);
+    const branchData = sanitizeTenantPayload(req.body, { organisationId });
     const newBranch = await branchService.createBranch(branchData);
     res.status(201).json({
       success: true,
@@ -60,7 +61,7 @@ const createBranch = async (req, res) => {
     });
   } catch (error) {
     console.error("Error creating branch:", error);
-    res.status(400).json({
+    res.status(error.statusCode || 400).json({
       success: false,
       message: error.message || "Failed to create branch",
     });
@@ -70,11 +71,11 @@ const createBranch = async (req, res) => {
 const updateBranch = async (req, res) => {
   try {
     const { id } = req.params;
-    const organisationId =
-      req.user?.organisationId || req.query.organisationId || null;
+    const organisationId = await getAuthorizedOrgId(req);
+    const updateData = sanitizeTenantPayload(req.body);
     const updatedBranch = await branchService.updateBranch(
       id,
-      req.body,
+      updateData,
       organisationId,
     );
     res.status(200).json({
@@ -83,7 +84,9 @@ const updateBranch = async (req, res) => {
     });
   } catch (error) {
     console.error(`Error updating branch ${req.params.id}:`, error);
-    const statusCode = error.message.includes("not found") ? 404 : 400;
+    const statusCode = error.message.includes("not found")
+      ? 404
+      : error.statusCode || 400;
     res.status(statusCode).json({
       success: false,
       message: error.message || "Failed to update branch",
@@ -94,8 +97,7 @@ const updateBranch = async (req, res) => {
 const deleteBranch = async (req, res) => {
   try {
     const { id } = req.params;
-    const organisationId =
-      req.user?.organisationId || req.query.organisationId || null;
+    const organisationId = await getAuthorizedOrgId(req);
     const deletedBranch = await branchService.deleteBranch(id, organisationId);
     res.status(200).json({
       success: true,
@@ -104,7 +106,9 @@ const deleteBranch = async (req, res) => {
     });
   } catch (error) {
     console.error(`Error deleting branch ${req.params.id}:`, error);
-    const statusCode = error.message.includes("not found") ? 404 : 400;
+    const statusCode = error.message.includes("not found")
+      ? 404
+      : error.statusCode || 400;
     res.status(statusCode).json({
       success: false,
       message: error.message || "Failed to delete branch",

@@ -4,26 +4,32 @@
  * Handles HTTP requests for inter-branch inventory transfer workflows.
  */
 
-const stockTransferService = require('../services/stock-transfer.service');
+const stockTransferService = require("../services/stock-transfer.service");
+const {
+  getAuthorizedOrgId,
+  getAuthorizedBranchId,
+  sanitizeTenantPayload,
+} = require("../utils/tenant-context");
 
 class StockTransferController {
   async createTransfer(req, res) {
     try {
-      const organisationId = req.user?.organisationId || req.body.organisationId;
-      const transfer = await stockTransferService.createTransfer({
-        ...req.body,
+      const organisationId = await getAuthorizedOrgId(req);
+      const transferData = sanitizeTenantPayload(req.body, {
         organisationId,
         createdBy: req.user?.id,
       });
 
+      const transfer = await stockTransferService.createTransfer(transferData);
+
       return res.status(201).json({
         success: true,
-        message: 'Stock transfer requested successfully',
+        message: "Stock transfer requested successfully",
         data: transfer,
       });
     } catch (err) {
-      console.error('Error creating stock transfer:', err.message);
-      return res.status(400).json({
+      console.error("Error creating stock transfer:", err.message);
+      return res.status(err.statusCode || 400).json({
         success: false,
         message: err.message,
       });
@@ -32,8 +38,9 @@ class StockTransferController {
 
   async getTransfers(req, res) {
     try {
-      const organisationId = req.user?.organisationId || req.query.organisationId;
-      const { branchId, limit, offset } = req.query;
+      const organisationId = await getAuthorizedOrgId(req);
+      const branchId = await getAuthorizedBranchId(req, organisationId);
+      const { limit, offset } = req.query;
 
       const transfers = await stockTransferService.getTransfers({
         organisationId,
@@ -48,8 +55,8 @@ class StockTransferController {
         data: transfers,
       });
     } catch (err) {
-      console.error('Error fetching stock transfers:', err.message);
-      return res.status(500).json({
+      console.error("Error fetching stock transfers:", err.message);
+      return res.status(err.statusCode || 500).json({
         success: false,
         message: err.message,
       });
@@ -58,14 +65,17 @@ class StockTransferController {
 
   async getTransferById(req, res) {
     try {
-      const organisationId = req.user?.organisationId || req.query.organisationId;
+      const organisationId = await getAuthorizedOrgId(req);
       const { id } = req.params;
 
-      const transfer = await stockTransferService.getTransferById(organisationId, id);
+      const transfer = await stockTransferService.getTransferById(
+        organisationId,
+        id,
+      );
       if (!transfer) {
         return res.status(404).json({
           success: false,
-          message: 'Stock transfer not found',
+          message: "Stock transfer not found",
         });
       }
 
@@ -74,8 +84,8 @@ class StockTransferController {
         data: transfer,
       });
     } catch (err) {
-      console.error('Error fetching stock transfer details:', err.message);
-      return res.status(500).json({
+      console.error("Error fetching stock transfer details:", err.message);
+      return res.status(err.statusCode || 500).json({
         success: false,
         message: err.message,
       });
@@ -84,7 +94,7 @@ class StockTransferController {
 
   async updateTransferStatus(req, res) {
     try {
-      const organisationId = req.user?.organisationId || req.body.organisationId;
+      const organisationId = await getAuthorizedOrgId(req);
       const { id } = req.params;
       const { status } = req.body;
 
@@ -92,7 +102,7 @@ class StockTransferController {
         organisationId,
         id,
         status,
-        req.user?.id
+        req.user?.id,
       );
 
       return res.status(200).json({
@@ -101,8 +111,8 @@ class StockTransferController {
         data: updated,
       });
     } catch (err) {
-      console.error('Error updating stock transfer status:', err.message);
-      return res.status(400).json({
+      console.error("Error updating stock transfer status:", err.message);
+      return res.status(err.statusCode || 400).json({
         success: false,
         message: err.message,
       });

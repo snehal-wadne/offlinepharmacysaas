@@ -371,7 +371,7 @@ class AuthService {
       // E. Generate sequential Branch Code & Insert Initial Branch (if requested)
       let branch = null;
       const shouldCreateBranch =
-        userData?.createInitialBranch === true && Boolean(cleanBranchName);
+        userData?.createInitialBranch !== false && Boolean(cleanBranchName);
 
       if (shouldCreateBranch) {
         const branchCode = await getNextBusinessNumber({

@@ -34,7 +34,17 @@ class CashierService {
       );
     }
 
-    if (!branchId) {
+    if (branchId) {
+      const bCheck = await pool.query(
+        "SELECT id FROM branches WHERE id = $1 AND organisation_id = $2 AND status = 'ACTIVE' LIMIT 1;",
+        [branchId, organisationId],
+      );
+      if (bCheck.rows.length === 0) {
+        throw new Error(
+          `Branch ${branchId} not found or does not belong to this organisation.`,
+        );
+      }
+    } else {
       const branchRes = await pool.query(
         "SELECT id, name FROM branches WHERE organisation_id = $1 AND status = 'ACTIVE' ORDER BY created_at ASC LIMIT 1;",
         [organisationId],
@@ -55,6 +65,16 @@ class CashierService {
         [organisationId],
       );
       cashierId = userRes.rows[0]?.id;
+    }
+
+    if (customerId) {
+      const cCheck = await pool.query(
+        "SELECT id FROM customers WHERE id = $1 AND organisation_id = $2 AND status = 'ACTIVE' LIMIT 1;",
+        [customerId, organisationId],
+      );
+      if (cCheck.rows.length === 0) {
+        customerId = null;
+      }
     }
 
     if (!customerId) {
@@ -82,7 +102,18 @@ class CashierService {
   // 1. CASH REGISTER SESSIONS
   // ==========================================
 
-  async getCurrentSession() {
+  async getCurrentSession(organisationId, branchId = null) {
+    if (!organisationId) {
+      throw new Error(
+        "Organisation context is required for cashier session lookup.",
+      );
+    }
+    const params = [organisationId];
+    let branchClause = "";
+    if (branchId) {
+      params.push(branchId);
+      branchClause = `AND crs.branch_id = $${params.length}`;
+    }
     const query = `
       SELECT 
         crs.id,
@@ -114,12 +145,14 @@ class CashierService {
       FROM cash_register_sessions crs
       LEFT JOIN users u ON u.id = crs.cashier_id
       LEFT JOIN branches b ON b.id = crs.branch_id
-      WHERE crs.status = 'OPEN'
+      WHERE crs.organisation_id = $1
+        AND crs.status = 'OPEN'
+        ${branchClause}
       ORDER BY crs.opened_at DESC
       LIMIT 1;
     `;
 
-    const res = await pool.query(query);
+    const res = await pool.query(query, params);
     const session = res.rows[0] || null;
 
     return {
@@ -561,7 +594,10 @@ class CashierService {
     }
   }
 
-  async getCashMovements(sessionId = null) {
+  async getCashMovements(organisationId, sessionId = null) {
+    if (!organisationId) {
+      throw new Error("organisationId is required for cash movements lookup.");
+    }
     let query = `
       SELECT 
         cm.id,
@@ -573,10 +609,11 @@ class CashierService {
         u.name AS "cashier"
       FROM cash_movements cm
       LEFT JOIN users u ON u.id = cm.cashier_id
+      WHERE cm.organisation_id = $1
     `;
-    const params = [];
+    const params = [organisationId];
     if (sessionId) {
-      query += ` WHERE cm.cash_register_session_id = $1 `;
+      query += ` AND cm.cash_register_session_id = $2 `;
       params.push(sessionId);
     }
     query += ` ORDER BY cm.created_at DESC LIMIT 50;`;
@@ -601,14 +638,22 @@ class CashierService {
   // 2. PRODUCTS & BARCODE LOOKUP
   // ==========================================
 
-  async searchProducts({ search = "", barcode = "", branchId = null }) {
+  async searchProducts({
+    organisationId,
+    search = "",
+    barcode = "",
+    branchId = null,
+  }) {
+    if (!organisationId) {
+      throw new Error("organisationId is required for product search.");
+    }
     const term = (barcode || search || "").trim();
     const isAllBranches =
       !branchId || branchId === "all" || branchId === "All Branches";
 
     let branchJoin = "";
-    const values = [];
-    const whereClauses = [];
+    const values = [organisationId];
+    const whereClauses = ["p.organisation_id = $1"];
 
     if (!isAllBranches) {
       values.push(branchId);
@@ -647,13 +692,9 @@ class CashierService {
       FROM products p
       LEFT JOIN inventory_batches ib ON ib.product_id = p.id AND ib.quantity > 0
       ${branchJoin}
+      WHERE ${whereClauses.join(" AND ")}
+      ORDER BY p.medicine_name ASC, ib.expiry_date ASC LIMIT 50;
     `;
-
-    if (whereClauses.length > 0) {
-      query += ` WHERE ${whereClauses.join(" AND ")}`;
-    }
-
-    query += ` ORDER BY p.medicine_name ASC, ib.expiry_date ASC LIMIT 50;`;
 
     const res = await pool.query(query, values);
 
@@ -984,7 +1025,19 @@ class CashierService {
     }
   }
 
-  async getRecentSales(limit = 20) {
+  async getRecentSales(organisationId, branchId = null, limit = 20) {
+    if (!organisationId) {
+      throw new Error("organisationId is required for recent sales lookup.");
+    }
+    const params = [organisationId];
+    let branchClause = "";
+    if (branchId) {
+      params.push(branchId);
+      branchClause = `AND i.branch_id = $${params.length}`;
+    }
+    params.push(limit);
+    const limitIdx = params.length;
+
     const query = `
       SELECT 
         i.id,
@@ -1004,11 +1057,13 @@ class CashierService {
       FROM invoices i
       LEFT JOIN customers c ON c.id = i.customer_id
       LEFT JOIN users u ON u.id = i.created_by
+      WHERE i.organisation_id = $1
+        ${branchClause}
       ORDER BY i.created_at DESC
-      LIMIT $1;
+      LIMIT $${limitIdx};
     `;
 
-    const res = await pool.query(query, [limit]);
+    const res = await pool.query(query, params);
     const sales = res.rows.map((r) => ({
       ...r,
       subtotal: parseFloat(r.subtotal) || 0,
@@ -1023,7 +1078,10 @@ class CashierService {
     };
   }
 
-  async getSaleByInvoiceNo(invoiceNo) {
+  async getSaleByInvoiceNo(organisationId, invoiceNo) {
+    if (!organisationId) {
+      throw new Error("organisationId is required for invoice lookup.");
+    }
     const invoiceRes = await pool.query(
       `
       SELECT 
@@ -1039,10 +1097,10 @@ class CashierService {
         c.phone AS "customerPhone"
       FROM invoices i
       LEFT JOIN customers c ON c.id = i.customer_id
-      WHERE i.invoice_number = $1
+      WHERE i.invoice_number = $1 AND i.organisation_id = $2
       LIMIT 1;
     `,
-      [invoiceNo],
+      [invoiceNo, organisationId],
     );
 
     if (invoiceRes.rows.length === 0) {
@@ -1095,7 +1153,17 @@ class CashierService {
   // 4. HELD / PARKED BILLS
   // ==========================================
 
-  async getHeldBills() {
+  async getHeldBills(organisationId, branchId = null) {
+    if (!organisationId) {
+      throw new Error("organisationId is required for held bills lookup.");
+    }
+    const params = [organisationId];
+    let branchClause = "";
+    if (branchId) {
+      params.push(branchId);
+      branchClause = `AND hb.branch_id = $${params.length}`;
+    }
+
     const query = `
       SELECT 
         hb.id,
@@ -1112,10 +1180,12 @@ class CashierService {
         hb.created_at AS "savedAt",
         to_char(hb.created_at, 'DD Mon YYYY, HH12:MI AM') AS "heldAt"
       FROM held_bills hb
-      WHERE hb.status = 'HOLD'
+      WHERE hb.organisation_id = $1
+        AND hb.status = 'HOLD'
+        ${branchClause}
       ORDER BY hb.created_at DESC;
     `;
-    const res = await pool.query(query);
+    const res = await pool.query(query, params);
     const bills = res.rows.map((r) => ({
       ...r,
       total: parseFloat(r.total) || 0,
@@ -1218,21 +1288,33 @@ class CashierService {
     }
   }
 
-  async deleteHeldBill(holdId) {
+  async deleteHeldBill(organisationId, holdId) {
+    if (!organisationId) {
+      throw new Error("organisationId is required to delete a held bill.");
+    }
     const res = await pool.query(
       `
       UPDATE held_bills
-      SET status = 'RESUMED', updated_at = CURRENT_TIMESTAMP
-      WHERE id::text = $1 OR hold_token = $1
+      SET status = 'RESUMED', updated_at = NOW()
+      WHERE (id::text = $1 OR hold_token = $1)
+        AND organisation_id = $2
       RETURNING *;
     `,
-      [holdId],
+      [holdId, organisationId],
     );
+
+    if (res.rows.length === 0) {
+      const err = new Error(
+        `Held bill ${holdId} not found in this organisation.`,
+      );
+      err.statusCode = 404;
+      throw err;
+    }
 
     return {
       success: true,
       message: "Held bill resumed/removed from active queue",
-      data: res.rows[0] || null,
+      data: res.rows[0],
     };
   }
 
@@ -1240,8 +1322,8 @@ class CashierService {
   // 5. SALES RETURNS
   // ==========================================
 
-  async searchReturnInvoice(invoiceNo) {
-    return this.getSaleByInvoiceNo(invoiceNo);
+  async searchReturnInvoice(organisationId, invoiceNo) {
+    return this.getSaleByInvoiceNo(organisationId, invoiceNo);
   }
 
   async processReturn(returnData) {
@@ -1269,13 +1351,13 @@ class CashierService {
     try {
       await client.query("BEGIN");
 
-      // Find original invoice
+      // Find original invoice scoped to this organisation
       const invRes = await client.query(
-        "SELECT id, customer_id FROM invoices WHERE invoice_number = $1 LIMIT 1;",
-        [invoiceNo],
+        "SELECT id, customer_id FROM invoices WHERE invoice_number = $1 AND organisation_id = $2 LIMIT 1;",
+        [invoiceNo, organisationId],
       );
       if (invRes.rows.length === 0) {
-        throw new Error(`Invoice ${invoiceNo} not found.`);
+        throw new Error(`Invoice ${invoiceNo} not found in this organisation.`);
       }
       const origInvoice = invRes.rows[0];
 
@@ -1386,7 +1468,17 @@ class CashierService {
     }
   }
 
-  async getReturnHistory() {
+  async getReturnHistory(organisationId, branchId = null) {
+    if (!organisationId) {
+      throw new Error("organisationId is required for return history lookup.");
+    }
+    const params = [organisationId];
+    let branchClause = "";
+    if (branchId) {
+      params.push(branchId);
+      branchClause = `AND r.branch_id = $${params.length}`;
+    }
+
     const query = `
       SELECT 
         r.id,
@@ -1401,10 +1493,12 @@ class CashierService {
       FROM returns r
       LEFT JOIN invoices i ON i.id = r.invoice_id
       LEFT JOIN users u ON u.id = r.created_by
+      WHERE r.organisation_id = $1
+        ${branchClause}
       ORDER BY r.return_date DESC
       LIMIT 50;
     `;
-    const res = await pool.query(query);
+    const res = await pool.query(query, params);
     return {
       success: true,
       count: res.rows.length,
