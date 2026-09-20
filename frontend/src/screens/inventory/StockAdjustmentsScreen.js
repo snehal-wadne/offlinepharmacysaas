@@ -28,9 +28,11 @@ import {
   updateItemRxApi,
 } from "../../api/inventoryApi";
 import { fetchBranches } from "../../api/branchApi";
+import { fetchCashierProducts } from "../../api/cashierApi";
 import { API_URL } from "../../config";
 import { localPersistenceService } from "../../db";
 import { syncEngine } from "../../sync";
+import { usePos } from "../../context/PosContext";
 import BulkImportModal from "../../components/inventory/BulkImportModal";
 
 export default function StockAdjustmentsScreen({
@@ -41,6 +43,24 @@ export default function StockAdjustmentsScreen({
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
   const isMobile = width < 768;
+
+  // Shared POS product catalog so a newly added/edited medicine is
+  // searchable in New Sale immediately, without waiting for a reload.
+  const { setProducts: setPosProducts } = usePos();
+  const refreshPosCatalog = async () => {
+    try {
+      const rawBranch =
+        typeof selectedBranch === "object" && selectedBranch !== null
+          ? selectedBranch.id || selectedBranch.name
+          : selectedBranch;
+      const freshProducts = await fetchCashierProducts("", "", rawBranch);
+      if (Array.isArray(freshProducts) && freshProducts.length > 0) {
+        setPosProducts(freshProducts);
+      }
+    } catch (err) {
+      console.warn("Failed to refresh POS catalog:", err.message);
+    }
+  };
 
   // Stock Items State for Adjustments Table with isActive and rxRequired flags
   const [stockItems, setStockItems] = useState([]);
@@ -99,9 +119,14 @@ export default function StockAdjustmentsScreen({
               ? rawBranch
               : undefined;
           const invRes = await fetchInventory({ branchId: branchParam });
-          if (invRes && invRes.data && Array.isArray(invRes.data)) {
+          const invList = Array.isArray(invRes?.data?.data)
+            ? invRes.data.data
+            : Array.isArray(invRes?.data)
+              ? invRes.data
+              : null;
+          if (invRes && invRes.success && invList) {
             setStockItems(
-              invRes.data.map((item, idx) => ({
+              invList.map((item, idx) => ({
                 ...item,
                 isActive: item.isActive !== undefined ? item.isActive : true,
                 rxRequired:
@@ -309,6 +334,7 @@ export default function StockAdjustmentsScreen({
     shelfLocation: "",
   });
   const [formErrors, setFormErrors] = useState({});
+  const [branchDropdownOpen, setBranchDropdownOpen] = useState(false);
 
   // Default the Add Medicine form to the currently active branch (a real
   // branch id/name), instead of leaving it on a placeholder that doesn't
@@ -421,7 +447,7 @@ export default function StockAdjustmentsScreen({
         return;
       }
       const currentBranch =
-        item.branchId || "FIT Main Campus Hospital Pharmacy";
+        item.branchName || item.branchId || "FIT Main Campus Hospital Pharmacy";
       setFromBranch(currentBranch);
 
       const destCandidate =
@@ -713,7 +739,7 @@ export default function StockAdjustmentsScreen({
       expiryDate: item.expiryDate || "2028-12-31",
       mrp: item.amount || "₹25.00",
       shelfLocation: item.shelfLocation || "Rack A1-S1",
-      branchName: item.branchId || "Main Store",
+      branchName: item.branchName || item.branchId || "Main Store",
       pharmacyName: "Falah Pharmacy",
     };
     setBarcodeItemData(initialData);
@@ -1128,7 +1154,7 @@ export default function StockAdjustmentsScreen({
           return;
         }
 
-        const updatedItem = res.data || payload;
+        const updatedItem = res.data?.data || payload;
 
         setStockItems((prev) =>
           prev.map((item) =>
@@ -1147,6 +1173,7 @@ export default function StockAdjustmentsScreen({
         if (onShowToast) {
           onShowToast(`✓ Updated product "${payload.brandName}" in database!`);
         }
+        refreshPosCatalog();
       } else {
         const res = await saveInventoryEntry(payload);
 
@@ -1161,7 +1188,7 @@ export default function StockAdjustmentsScreen({
           return;
         }
 
-        const newItem = res.data || {
+        const newItem = res.data?.data || {
           ...payload,
           id: `adj-stk-${Date.now()}`,
           updatedBy: "Manager",
@@ -1178,6 +1205,7 @@ export default function StockAdjustmentsScreen({
             `✓ Added "${newItem.brandName}" to database products table!`,
           );
         }
+        refreshPosCatalog();
       }
     } catch (err) {
       console.error("[StockAdjustments] Add/update medicine failed:", err);
@@ -1516,9 +1544,9 @@ export default function StockAdjustmentsScreen({
                   </View>
                   {isMultiBranch && (
                     <View style={styles.mobileGridItem}>
-                      <Text style={styles.mobileItemLabel}>Branch ID</Text>
+                      <Text style={styles.mobileItemLabel}>Branch</Text>
                       <Text style={styles.mobileItemValue}>
-                        {item.branchId}
+                        {item.branchName || item.branchId}
                       </Text>
                     </View>
                   )}
@@ -1705,7 +1733,7 @@ export default function StockAdjustmentsScreen({
                         { width: 85, textAlign: "center" },
                       ]}
                     >
-                      {item.branchId}
+                      {item.branchName || item.branchId}
                     </Text>
                   )}
 
@@ -2016,37 +2044,25 @@ export default function StockAdjustmentsScreen({
                 Branch <Text style={styles.reqStar}>*</Text>
               </Text>
               {branchesList.length > 0 ? (
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.branchChipRow}
-                  contentContainerStyle={{ gap: 8, paddingVertical: 2 }}
+                <Pressable
+                  onPress={() => setBranchDropdownOpen(true)}
+                  style={[
+                    styles.branchDropdownButton,
+                    formErrors.branchId && styles.formInputError,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Select Branch"
                 >
-                  {branchesList.map((b) => {
-                    const bValue = b.id || b.name;
-                    const isSelected = formData.branchId === bValue;
-                    return (
-                      <Pressable
-                        key={`form-branch-${bValue}`}
-                        onPress={() => handleFormChange("branchId", bValue)}
-                        style={[
-                          styles.branchChip,
-                          isSelected && styles.branchChipActive,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.branchChipText,
-                            isSelected && styles.branchChipTextActive,
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {b.name || b.id}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
+                  <Text
+                    style={styles.branchDropdownButtonText}
+                    numberOfLines={1}
+                  >
+                    {branchesList.find(
+                      (b) => (b.id || b.name) === formData.branchId,
+                    )?.name || "Select a branch"}
+                  </Text>
+                  <Text style={styles.chevronIcon}>▾</Text>
+                </Pressable>
               ) : (
                 <Text style={styles.formHelperText}>
                   No active branches found — create one under Management &gt;
@@ -2059,6 +2075,55 @@ export default function StockAdjustmentsScreen({
             </View>
           ) : null}
         </View>
+
+        {/* Branch Selection Modal (avoids clipping inside the scroll view) */}
+        <Modal
+          visible={branchDropdownOpen}
+          animationType="fade"
+          transparent={true}
+          onRequestClose={() => setBranchDropdownOpen(false)}
+        >
+          <Pressable
+            style={styles.modalBackdrop}
+            onPress={() => setBranchDropdownOpen(false)}
+          >
+            <Pressable style={styles.branchModalCard} onPress={() => {}}>
+              <Text style={styles.branchModalTitle}>Select Branch</Text>
+              <ScrollView style={{ maxHeight: 320 }}>
+                {branchesList.map((b) => {
+                  const bValue = b.id || b.name;
+                  const isSelected = formData.branchId === bValue;
+                  return (
+                    <Pressable
+                      key={`form-branch-${bValue}`}
+                      onPress={() => {
+                        handleFormChange("branchId", bValue);
+                        setBranchDropdownOpen(false);
+                      }}
+                      style={[
+                        styles.branchDropdownItem,
+                        isSelected && styles.branchDropdownItemActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.branchDropdownItemText,
+                          isSelected && styles.branchDropdownItemTextActive,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {b.name || b.id}
+                      </Text>
+                      {isSelected && (
+                        <Text style={styles.branchDropdownCheck}>✓</Text>
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </Pressable>
+          </Pressable>
+        </Modal>
 
         {/* Blue Submit / Update Button */}
         <View style={styles.formFooter}>
@@ -3603,6 +3668,68 @@ const styles = StyleSheet.create({
   },
   branchChipTextActive: {
     color: "#FFFFFF",
+  },
+  branchModalCard: {
+    width: "100%",
+    maxWidth: 380,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    padding: 12,
+  },
+  branchModalTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#0F172A",
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
+  branchDropdownButton: {
+    height: 40,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  branchDropdownButtonText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#0F172A",
+    flex: 1,
+    marginRight: 8,
+  },
+  chevronIcon: {
+    fontSize: 12,
+    color: "#64748B",
+  },
+  branchDropdownItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  branchDropdownItemActive: {
+    backgroundColor: "#F0FDFA",
+  },
+  branchDropdownItemText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#334155",
+    flex: 1,
+    marginRight: 8,
+  },
+  branchDropdownItemTextActive: {
+    color: "#0F766E",
+  },
+  branchDropdownCheck: {
+    color: "#0F766E",
+    fontWeight: "700",
   },
   formHelperText: {
     fontSize: 11.5,

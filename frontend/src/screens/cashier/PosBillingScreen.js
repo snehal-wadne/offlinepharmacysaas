@@ -26,21 +26,19 @@ export default function PosBillingScreen({
   isMultiBranch = true,
 }) {
   const offlineSync = useOfflineSync();
-HEAD
-  const productsList = Array.isArray(offlineSync?.products) ? offlineSync.products : [];
 
   const [liveProducts, setLiveProducts] = useState([]);
   const productsList =
     liveProducts.length > 0
       ? liveProducts
-      : offlineSync?.products && offlineSync.products.length > 0
+      : Array.isArray(offlineSync?.products)
         ? offlineSync.products
-        : MOCK_POS_PRODUCTS;
- c62f8144320cdef4d275f34c3bc9112e38baec4e
+        : [];
+
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const isCompact = width < 1100;
-  
+
   const [loading, setLoading] = useState(true);
   const [customersList, setCustomersList] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -48,7 +46,7 @@ HEAD
 
   useEffect(() => {
     let isMounted = true;
-     HEAD
+
     async function loadCustomers() {
       try {
         const res = await fetchCustomers();
@@ -57,6 +55,8 @@ HEAD
         }
       } catch (err) {
         console.warn('Failed to load customers for POS:', err.message);
+      }
+    }
 
     async function loadCatalog() {
       try {
@@ -66,20 +66,17 @@ HEAD
         }
       } catch (err) {
         console.warn("[PosBilling] Live catalog fallback:", err?.message);
-        c62f8144320cdef4d275f34c3bc9112e38baec4e
       } finally {
         if (isMounted) setLoading(false);
       }
     }
-HEAD
-    loadCustomers();
-    return () => { isMounted = false; };
 
+    loadCustomers();
     loadCatalog();
+
     return () => {
       isMounted = false;
     };
-c62f8144320cdef4d275f34c3bc9112e38baec4e
   }, []);
 
   // Active Tab on Mobile: 'catalog' | 'cart'

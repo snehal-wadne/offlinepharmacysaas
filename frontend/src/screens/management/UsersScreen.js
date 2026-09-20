@@ -80,7 +80,12 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
           rolesRes.status === "fulfilled" &&
           rolesRes.value?.success
         ) {
-          setRoles(rolesRes.value.data);
+          const rawR = Array.isArray(rolesRes.value.data?.data)
+            ? rolesRes.value.data.data
+            : Array.isArray(rolesRes.value.data)
+              ? rolesRes.value.data
+              : [];
+          setRoles(rawR);
         } else if (isMounted) {
           setRoles([]);
         }

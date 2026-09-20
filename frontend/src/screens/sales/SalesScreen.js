@@ -12,6 +12,7 @@ import {
   Image,
 } from "react-native";
 import { usePos } from "../../context/PosContext";
+import { fetchCashierProducts } from "../../api/cashierApi";
 import BarcodeScannerModal from "../../components/common/BarcodeScannerModal";
 import { SkeletonItemCard } from "../../components/common/SkeletonLoader";
 import PaginationControls from "../../components/common/PaginationControls";
@@ -86,6 +87,7 @@ export default function SalesScreen({
   onNavigate,
   onShowToast,
   isMultiBranch = true,
+  selectedBranch = null,
 }) {
   const savedDraft = useRef(null);
   if (savedDraft.current === null) {
@@ -108,6 +110,7 @@ export default function SalesScreen({
   // Shared POS Context
   const {
     products,
+    setProducts,
     customers: posCustomers,
     isOfflineReady,
     activeResumedDraft,
@@ -123,6 +126,58 @@ export default function SalesScreen({
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const searchInputRef = useRef(null);
+
+  // Refresh the catalog straight from the backend every time this screen is
+  // opened (and whenever the active branch changes). The shared PosContext
+  // only fetches once per branch, so a medicine added in Stock Adjustments
+  // while New Sale stayed mounted elsewhere would otherwise never appear
+  // until a full page reload.
+  useEffect(() => {
+    let cancelled = false;
+    const branchId =
+      typeof selectedBranch === "object" && selectedBranch !== null
+        ? selectedBranch.id
+        : selectedBranch;
+    (async () => {
+      try {
+        const fresh = await fetchCashierProducts("", "", branchId || "");
+        if (!cancelled && Array.isArray(fresh) && fresh.length > 0) {
+          setProducts(fresh);
+        }
+      } catch (err) {
+        console.warn("Failed to refresh POS catalog:", err.message);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedBranch]);
+
+  // Live server-side search: the cached catalog can be capped/stale (e.g. a
+  // medicine just added in Stock Adjustments), so once the cashier types a
+  // real query, also ask the backend and merge in anything it finds.
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (q.length < 2) return;
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const found = await fetchCashierProducts(q);
+        if (cancelled || !Array.isArray(found) || found.length === 0) return;
+        setProducts((prev) => {
+          const known = new Set(prev.map((p) => p.id));
+          const additions = found.filter((p) => !known.has(p.id));
+          return additions.length > 0 ? [...prev, ...additions] : prev;
+        });
+      } catch (err) {
+        console.warn("Live product search failed:", err.message);
+      }
+    }, 350);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [searchQuery]);
 
   // Barcode Scanner Modal State
   const [scannerModalVisible, setScannerModalVisible] = useState(false);
@@ -533,7 +588,7 @@ export default function SalesScreen({
   };
 
   // Handle barcode scanned from camera or gun
-  const handleBarcodeScanned = (scannedCode) => {
+  const handleBarcodeScanned = async (scannedCode) => {
     if (scannerPurpose === "utr") {
       const cleanUtr = scannedCode.trim();
       setUpiRefNumber(cleanUtr);
@@ -559,10 +614,33 @@ export default function SalesScreen({
       if (onShowToast) {
         onShowToast(`📷 Scanned [${scannedCode}]: Added ${match.name}`);
       }
-    } else {
-      if (onShowToast) {
-        onShowToast(`⚠️ No product found with barcode "${scannedCode}".`);
+      return;
+    }
+
+    // Not in the cached catalog yet (e.g. medicine just added) — ask the
+    // backend directly by barcode/SKU before giving up.
+    try {
+      const found = await fetchCashierProducts("", scannedCode.trim());
+      const serverMatch = Array.isArray(found) ? found[0] : null;
+      if (serverMatch) {
+        setProducts((prev) =>
+          prev.some((p) => p.id === serverMatch.id)
+            ? prev
+            : [...prev, serverMatch],
+        );
+        handleAddToCart(serverMatch);
+        setScannerModalVisible(false);
+        if (onShowToast) {
+          onShowToast(`📷 Scanned [${scannedCode}]: Added ${serverMatch.name}`);
+        }
+        return;
       }
+    } catch (err) {
+      console.warn("Barcode server lookup failed:", err.message);
+    }
+
+    if (onShowToast) {
+      onShowToast(`⚠️ No product found with barcode "${scannedCode}".`);
     }
   };
 

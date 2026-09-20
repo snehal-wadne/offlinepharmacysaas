@@ -260,36 +260,6 @@ export default function AppNavigator() {
     };
   }, []);
 
-  const resolveBranchContext = (user) => {
-    if (!user || user.hasBranch === false) return null;
-    if (user.branch && typeof user.branch === "object" && user.branch.id) {
-      return {
-        id: user.branch.id,
-        name: user.branch.name || user.branch.branchCode || "Main Branch",
-      };
-    }
-    if (user.branchId) {
-      return {
-        id: user.branchId,
-        name: user.branchName || user.branch || "Main Branch",
-      };
-    }
-    if (user.branch && typeof user.branch === "object" && user.branch.name) {
-      return { id: null, name: user.branch.name };
-    }
-    if (typeof user.branch === "string" && user.branch.trim()) {
-      return { id: null, name: user.branch.trim() };
-    }
-    if (
-      user.branchName &&
-      typeof user.branchName === "string" &&
-      user.branchName.trim()
-    ) {
-      return { id: null, name: user.branchName.trim() };
-    }
-    return null;
-  };
-
   const restoreAuthSession = async (session) => {
     if (!session?.access_token) {
       setCurrentUser(null);
@@ -332,7 +302,10 @@ export default function AppNavigator() {
           updateBrowserRoute("branches", true);
           setSelectedBranch(null);
         } else if (user) {
-          setSelectedBranch(resolveBranchContext(user));
+          // Default to "All Branches" on every fresh load instead of
+          // auto-pinning to the user's assigned branch; they pick a branch
+          // explicitly from the header dropdown when they need one.
+          setSelectedBranch(null);
         }
 
         setAuthStatus("AUTHENTICATED");
@@ -884,7 +857,9 @@ export default function AppNavigator() {
             updateBrowserRoute("branches", true);
             setSelectedBranch(null);
           } else {
-            setSelectedBranch(resolveBranchContext(user));
+            // Default to "All Branches" on login; the user picks a branch
+            // explicitly from the header dropdown when they need one.
+            setSelectedBranch(null);
           }
           showToast(`Welcome back, ${user.display_name || user.name}!`);
         }}

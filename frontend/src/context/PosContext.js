@@ -65,10 +65,14 @@ export function PosProvider({
     let isMounted = true;
     async function hydratePosData() {
       try {
+        // selectedBranch is the header's explicit choice (null/"All Branches"
+        // means show every branch) — it must NOT silently fall back to the
+        // user's own assigned branch, or "All Branches" would keep scoping
+        // to a single branch behind the scenes.
         const rawBranch =
-          (typeof selectedBranch === "object" && selectedBranch !== null
+          typeof selectedBranch === "object" && selectedBranch !== null
             ? selectedBranch.id
-            : selectedBranch) || currentUser?.branchId;
+            : selectedBranch;
         const branchParam =
           rawBranch &&
           rawBranch !== "All Branches" &&

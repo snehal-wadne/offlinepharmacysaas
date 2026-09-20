@@ -223,7 +223,7 @@ const getItemBarcode = async (req, res) => {
 
 const updateItemStatus = async (req, res) => {
   try {
-    const organisationId = await getOrgId(req);
+    const organisationId = await getAuthorizedOrgId(req);
     const { id } = req.params;
     const { isActive } = req.body;
     const updated = await inventoryService.updateItemStatus(organisationId, id, isActive);
@@ -243,7 +243,7 @@ const updateItemStatus = async (req, res) => {
 
 const updateItemRx = async (req, res) => {
   try {
-    const organisationId = await getOrgId(req);
+    const organisationId = await getAuthorizedOrgId(req);
     const { id } = req.params;
     const { isRxRequired } = req.body;
     const updated = await inventoryService.updateItemRx(organisationId, id, isRxRequired);

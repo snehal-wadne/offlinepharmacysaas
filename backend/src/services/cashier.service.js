@@ -706,28 +706,35 @@ class CashierService {
     const isAllBranches =
       !branchId || branchId === "all" || branchId === "All Branches";
 
-    let branchJoin = "";
+    let batchBranchCondition = "";
     const values = [organisationId];
     const whereClauses = ["p.organisation_id = $1"];
 
     if (!isAllBranches) {
-      values.push(branchId);
-      branchJoin = "LEFT JOIN branches b ON b.id = ib.branch_id";
-      whereClauses.push(
-        `(ib.branch_id::text = $${values.length} OR b.name ILIKE $${values.length})`,
+      // Resolve the branch (accepts either a UUID or a branch name) up front
+      // so the batch filter below is a plain id comparison.
+      const branchRes = await pool.query(
+        `SELECT id FROM branches WHERE organisation_id = $1 AND (id::text = $2 OR name ILIKE $2) LIMIT 1;`,
+        [organisationId, branchId],
       );
+      const resolvedBranchId = branchRes.rows[0]?.id || branchId;
+      values.push(resolvedBranchId);
+      // Restrict which batch rows can match in the ON clause (not WHERE) so
+      // products with no stock at the selected branch still appear, with
+      // zero stock, instead of being dropped entirely by the LEFT JOIN.
+      batchBranchCondition = `AND ib.branch_id::text = $${values.length}`;
     }
 
     if (term) {
       values.push(`%${term}%`);
-      whereClauses.push(`(p.sku ILIKE $${values.length} 
-         OR p.medicine_name ILIKE $${values.length} 
-         OR p.brand_name ILIKE $${values.length} 
+      whereClauses.push(`(p.sku ILIKE $${values.length}
+         OR p.medicine_name ILIKE $${values.length}
+         OR p.brand_name ILIKE $${values.length}
          OR ib.batch_number ILIKE $${values.length})`);
     }
 
     let query = `
-      SELECT 
+      SELECT
         p.id,
         p.medicine_name AS name,
         p.brand_name AS "brandName",
@@ -746,10 +753,9 @@ class CashierService {
         COALESCE(ib.mrp, 0.00) AS mrp,
         ROUND((COALESCE(ib.mrp, 0.00) * 0.9)::numeric, 2) AS "sellingPrice"
       FROM products p
-      LEFT JOIN inventory_batches ib ON ib.product_id = p.id AND ib.quantity > 0
-      ${branchJoin}
+      LEFT JOIN inventory_batches ib ON ib.product_id = p.id AND ib.quantity > 0 ${batchBranchCondition}
       WHERE ${whereClauses.join(" AND ")} AND COALESCE(p.is_active, true) = true
-      ORDER BY p.medicine_name ASC, ib.expiry_date ASC LIMIT 50;
+      ORDER BY p.medicine_name ASC, ib.expiry_date ASC LIMIT 500;
     `;
 
     const res = await pool.query(query, values);

@@ -52,7 +52,10 @@ const getInventory = async ({
         p.pack_size AS "packSize",
         p.manufacturer,
         p.sku,
+        p.is_active AS "isActive",
+        p.is_rx_required AS "isRxRequired",
         s.name AS "supplierName",
+        ib.branch_id AS "branchId",
         b.name AS "branchName",
         u.name AS "updatedBy"
       FROM inventory_batches ib
@@ -85,15 +88,16 @@ const getInventory = async ({
         : null,
       quantity: Number(row.quantity),
       amount: `₹${parseFloat(row.mrp || 0).toFixed(2)}`,
-      branchId: row.branchName || "Main Store",
+      branchId: row.branchId,
+      branchName: row.branchName || "Main Store",
       shelfLocation: row.shelfLocation || "",
       updatedBy: row.updatedBy || "Manager",
       lastUpdated: row.updated_at
         ? new Date(row.updated_at).toISOString().split("T")[0]
         : new Date().toISOString().split("T")[0],
       status: Number(row.quantity) < 50 ? "Low Stock" : "In Stock",
-      isActive: true,
-      rxRequired: false,
+      isActive: row.isActive !== false,
+      rxRequired: Boolean(row.isRxRequired),
     }));
   } catch (err) {
     console.error("Inventory query failed on PostgreSQL:", err.message);
@@ -270,6 +274,13 @@ const saveOrUpdateInventory = async (organisationId, itemData) => {
     batchRecord = inserted.rows[0];
   }
 
+  const productFlags = await pool.query(
+    `SELECT is_active AS "isActive", is_rx_required AS "isRxRequired" FROM products WHERE id = $1;`,
+    [productId],
+  );
+  const isActive = productFlags.rows[0]?.isActive !== false;
+  const rxRequired = Boolean(productFlags.rows[0]?.isRxRequired);
+
   // Record activity in stock_movements table
   const movementType = id ? "Adjustment" : "Purchase";
   const qtyDisplay = numQty >= 0 ? `+${numQty}` : `${numQty}`;
@@ -301,8 +312,8 @@ const saveOrUpdateInventory = async (organisationId, itemData) => {
     updatedBy: "Manager",
     lastUpdated: new Date().toISOString().split("T")[0],
     status: numQty < 50 ? "Low Stock" : "In Stock",
-    isActive: true,
-    rxRequired: false,
+    isActive,
+    rxRequired,
   };
 };
 
