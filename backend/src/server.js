@@ -8,6 +8,7 @@
 
 const express = require("express");
 const cors = require("cors");
+const managerRoutes = require('./routes/Manager.routes');
 require("dotenv").config();
 
 const {
@@ -36,8 +37,8 @@ app.use(
   cors(
     corsOrigins.length > 0
       ? {
-          origin: corsOrigins,
-        }
+        origin: corsOrigins,
+      }
       : {},
   ),
 );
@@ -184,6 +185,7 @@ app.post("/api/login", authController.login);
 app.post("/api/login/google", authController.googleLogin);
 app.post("/api/auth/google", authController.googleLogin);
 app.post("/api/auth/google-onboard", authController.googleOnboard);
+app.use('/api', managerRoutes);
 
 /**
  * Server Startup
@@ -226,7 +228,7 @@ const startServer = () => {
         );
       }
     })
-    .catch(() => {});
+    .catch(() => { });
 
   // Pre-load and verify Supabase Auth JWKS
   const { fetchJwksKeys } = require("./utils/supabase");

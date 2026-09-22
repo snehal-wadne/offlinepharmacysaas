@@ -27,12 +27,41 @@ const getBranchById = async (branchId, organisationId) => {
   return branch;
 };
 
+const FACILITY_TYPE_MAP = {
+  "Hospital Pharmacy": "HOSPITAL_PHARMACY",
+  "Retail Dispensary": "RETAIL_DISPENSARY",
+  "Central Warehouse": "CENTRAL_WAREHOUSE",
+
+  // Also accept already-normalized DB values
+  HOSPITAL_PHARMACY: "HOSPITAL_PHARMACY",
+  RETAIL_DISPENSARY: "RETAIL_DISPENSARY",
+  CENTRAL_WAREHOUSE: "CENTRAL_WAREHOUSE",
+};
+
 const createBranch = async (branchData) => {
   if (!branchData.organisationId) {
     throw new Error("organisationId is required");
   }
-  return await branchRepository.createBranch(branchData);
-};
+
+  const normalizedFacilityType =
+    FACILITY_TYPE_MAP[branchData.facilityType];
+
+  if (!normalizedFacilityType) {
+    const error = new Error(
+      `Invalid facilityType. Allowed values: HOSPITAL_PHARMACY, RETAIL_DISPENSARY, CENTRAL_WAREHOUSE`
+    );
+
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const normalizedBranchData = {
+    ...branchData,
+    facilityType: normalizedFacilityType,
+  };
+
+  return await branchRepository.createBranch(normalizedBranchData);
+};  
 
 const updateBranch = async (branchId, updates, organisationId) => {
   if (!organisationId || !branchId) {
