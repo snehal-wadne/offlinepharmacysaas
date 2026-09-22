@@ -13,7 +13,12 @@ import {
 import InventoryStatCard from "../../components/inventory/InventoryStatCard";
 import { BRANCH_TYPES } from "../../constants/uiConstants";
 import { API_URL } from "../../config";
-import { apiGet, apiPost, apiPut, apiDelete } from "../../api/apiClient";
+import {
+  fetchBranches,
+  createBranch,
+  updateBranch,
+  updateBranchStatus,
+} from "../../api/branchApi";
 import { SkeletonItemCard } from "../../components/common/SkeletonLoader";
 import PaginationControls from "../../components/common/PaginationControls";
 
@@ -48,73 +53,116 @@ export default function BranchesScreen({
   const itemsPerPage = 10;
 
   // Load branches from database via authenticated apiClient
-  useEffect(() => {
-    let active = true;
-    const fetchBranches = async () => {
-      setLoading(true);
-      try {
-        const res = await apiGet("/api/branches");
-        if (res.success && res.data) {
-          const rawList = Array.isArray(res.data.data)
-            ? res.data.data
-            : Array.isArray(res.data)
-              ? res.data
-              : [];
-          if (rawList.length > 0) {
-            const mapped = rawList.map((dbB, idx) => ({
-              id: dbB.id || `BR-0${idx + 1}`,
-              name: dbB.name,
-              type: dbB.facility_type || "Retail Dispensary",
-              code: dbB.branch_code || `BR-0${idx + 1}`,
-              contactPerson: dbB.contact_person || "Pharmacist",
-              phone: dbB.phone || "",
-              email: dbB.email || "",
-              address: dbB.address || "",
-              city: dbB.city || "",
-              state: dbB.state || "",
-              pincode: dbB.postal_code || "",
-              gstin: dbB.gst_number || "",
-              drugLicenseNo: dbB.drug_license_no || "",
-              invoicePrefix: dbB.invoice_prefix || `BR-0${idx + 1}-`,
-              currency: "INR (₹)",
-              defaultTaxRate: "12%",
-              staffCount: 1,
-              monthlyRevenue: "₹0.00",
-              status:
-                dbB.status === "INACTIVE" || dbB.status === "Inactive"
-                  ? "Inactive"
-                  : "Active",
-              isMainHub: idx === 0,
-              openingHours: "08:00 AM - 10:00 PM",
-            }));
-            if (active) {
-              setBranches(mapped);
-            }
-          } else {
-            if (active) {
-              setBranches([]);
-            }
-          }
-        } else {
-          if (active) {
-            setBranches([]);
-          }
-        }
-      } catch (err) {
-        console.warn("Failed to load branches from API:", err.message);
-        if (active) {
-          setBranches([]);
-        }
-      } finally {
-        if (active) setLoading(false);
-      }
-    };
-    fetchBranches();
-    return () => {
-      active = false;
-    };
-  }, []);
+ useEffect(() => {
+  let active = true;
 
+  const loadBranches = async () => {
+    setLoading(true);
+
+    try {
+      const res = await fetchBranches();
+
+      if (!active) return;
+
+      if (!res?.success) {
+        throw new Error(res?.error || "Failed to load branches");
+      }
+
+      // Handle possible API response shapes:
+      // { success: true, data: { data: [...] } }
+      // { success: true, data: [...] }
+      const rawList = Array.isArray(res.data?.data)
+        ? res.data.data
+        : Array.isArray(res.data)
+          ? res.data
+          : [];
+
+      const mapped = rawList.map((dbB, idx) => ({
+        // Basic branch information
+        id: dbB.id || `BR-0${idx + 1}`,
+        name: dbB.name || "",
+
+        // DB stores enum values like:
+        // RETAIL_DISPENSARY
+        // HOSPITAL_PHARMACY
+        // CENTRAL_WAREHOUSE
+        //
+        // UI can continue displaying friendly labels.
+        type:
+          dbB.facility_type === "HOSPITAL_PHARMACY"
+            ? "Hospital Pharmacy"
+            : dbB.facility_type === "CENTRAL_WAREHOUSE"
+              ? "Central Warehouse"
+              : "Retail Dispensary",
+
+        code: dbB.branch_code || `BR-0${idx + 1}`,
+
+        // Contact
+        contactPerson: dbB.contact_person || "",
+        phone: dbB.phone || dbB.contact_phone || "",
+        email: dbB.contact_email || "",
+
+        // Address
+        address: dbB.address || "",
+        city: dbB.city || "",
+        state: dbB.state || "",
+        pincode: dbB.postal_code || "",
+
+        // Branch details
+        gstin: dbB.gst_number || "",
+        drugLicenseNo:
+          dbB.drug_license_number || "",
+        invoicePrefix:
+          dbB.invoice_prefix || `BR-0${idx + 1}-`,
+
+        // Existing UI fields
+        currency: "INR (₹)",
+        defaultTaxRate: "12%",
+
+        // Dashboard placeholders
+        staffCount: 1,
+        monthlyRevenue: "₹0.00",
+
+        // DB status -> UI status
+        status:
+          dbB.status === "INACTIVE"
+            ? "Inactive"
+            : "Active",
+
+        // First branch is treated as main hub
+        isMainHub: idx === 0,
+
+        // DB column is operating_hours
+        openingHours:
+          dbB.operating_hours ||
+          "08:00 AM - 10:00 PM",
+      }));
+
+      if (active) {
+        setBranches(mapped);
+      }
+    } catch (err) {
+      console.warn(
+        "Failed to load branches from API:",
+        err?.message || err
+      );
+
+      if (active) {
+        setBranches([]);
+      }
+    } finally {
+      if (active) {
+        setLoading(false);
+      }
+    }
+  };
+
+  loadBranches();
+
+  return () => {
+    active = false;
+  };
+}, []);
   // Add / Edit Modal State
   const [modalVisible, setModalVisible] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -221,112 +269,244 @@ export default function BranchesScreen({
     setModalVisible(true);
   };
 
-  const handleSaveBranch = async () => {
-    const errors = {};
-    if (!formData.name.trim()) errors.name = "Branch name is required";
-    if (!formData.code.trim()) errors.code = "Branch Code is required";
-    if (!formData.phone.trim()) errors.phone = "Contact phone is required";
-    if (!formData.address.trim()) errors.address = "Branch address is required";
+ const handleSaveBranch = async () => {
+  const errors = {};
 
-    if (Object.keys(errors).length > 0) {
-      setFormErrors(errors);
-      return;
+  if (!formData.name.trim()) {
+    errors.name = "Branch name is required";
+  }
+
+  if (!formData.code.trim()) {
+    errors.code = "Branch Code is required";
+  }
+
+  if (!formData.phone.trim()) {
+    errors.phone = "Contact phone is required";
+  }
+
+  if (!formData.address.trim()) {
+    errors.address = "Branch address is required";
+  }
+
+  if (Object.keys(errors).length > 0) {
+    setFormErrors(errors);
+    return;
+  }
+
+  try {
+    const payload = {
+      name: formData.name.trim(),
+      branchCode: formData.code.trim(),
+      facilityType: formData.type,
+
+      contactPerson: formData.contactPerson?.trim() || "",
+      phone: formData.phone.trim(),
+      email: formData.email?.trim() || "",
+
+      address: formData.address.trim(),
+      city: formData.city?.trim() || "",
+      state: formData.state?.trim() || "",
+      postalCode: formData.pincode?.trim() || "",
+
+      gstNumber: formData.gstin?.trim() || "",
+      drugLicenseNo: formData.drugLicenseNo?.trim() || "",
+      invoicePrefix: formData.invoicePrefix?.trim() || "",
+
+      defaultTaxRate: formData.defaultTaxRate || "12%",
+      openingHours:
+        formData.openingHours || "08:00 AM - 10:00 PM",
+
+      status:
+        formData.status === "Active"
+          ? "ACTIVE"
+          : "INACTIVE",
+    };
+
+    if (isEditing) {
+      // =========================
+      // UPDATE
+      // =========================
+      const res = await updateBranch(
+        activeBranchId,
+        payload
+      );
+
+      if (!res.success) {
+        throw new Error(
+          res.error || "Failed to update branch"
+        );
+      }
+
+      const updatedBranch = res.data?.data || res.data;
+
+      setBranches((prev) =>
+        prev.map((branch) =>
+          branch.id === activeBranchId
+            ? {
+                ...branch,
+                ...formData,
+                ...(updatedBranch?.id
+                  ? { id: updatedBranch.id }
+                  : {}),
+              }
+            : branch
+        )
+      );
+
+      if (onShowToast) {
+        onShowToast(
+          `✓ Successfully updated branch "${formData.name}"`
+        );
+      }
+    } else {
+      // =========================
+      // CREATE
+      // =========================
+      const res = await createBranch(payload);
+
+      if (!res.success) {
+        throw new Error(
+          res.error || "Failed to create branch"
+        );
+      }
+
+      const created = res.data?.data || res.data;
+
+      const newBranch = {
+        id:
+          created?.id ||
+          `BR-0${branches.length + 1}`,
+
+        name: created?.name || formData.name,
+        code:
+          created?.branch_code ||
+          created?.branchCode ||
+          formData.code,
+
+        type:
+          created?.facility_type ||
+          created?.facilityType ||
+          formData.type,
+
+        contactPerson:
+          created?.contact_person ||
+          created?.contactPerson ||
+          formData.contactPerson,
+
+        phone: created?.phone || formData.phone,
+        email: created?.email || formData.email,
+
+        address:
+          created?.address || formData.address,
+
+        city: created?.city || formData.city,
+        state: created?.state || formData.state,
+
+        pincode:
+          created?.postal_code ||
+          created?.postalCode ||
+          formData.pincode,
+
+        gstin:
+          created?.gst_number ||
+          created?.gstNumber ||
+          formData.gstin,
+
+        drugLicenseNo:
+          created?.drug_license_no ||
+          created?.drugLicenseNo ||
+          formData.drugLicenseNo,
+
+        invoicePrefix:
+          created?.invoice_prefix ||
+          created?.invoicePrefix ||
+          formData.invoicePrefix,
+
+        defaultTaxRate:
+          created?.default_tax_rate ||
+          created?.defaultTaxRate ||
+          formData.defaultTaxRate,
+
+        openingHours:
+          created?.opening_hours ||
+          created?.openingHours ||
+          formData.openingHours,
+
+        status:
+          created?.status === "INACTIVE"
+            ? "Inactive"
+            : "Active",
+
+        currency: "INR (₹)",
+        staffCount: 1,
+        monthlyRevenue: "₹0.00",
+        isMainHub: branches.length === 0,
+      };
+
+      setBranches((prev) => [
+        newBranch,
+        ...prev,
+      ]);
+
+      if (onShowToast) {
+        onShowToast(
+          `✓ Added new branch "${newBranch.name}" to database!`
+        );
+      }
     }
 
-    try {
-      if (isEditing) {
-        // Save edit locally and attempt API call
-        setBranches((prev) =>
-          prev.map((b) =>
-            b.id === activeBranchId
-              ? {
-                  ...b,
-                  ...formData,
-                }
-              : b,
-          ),
-        );
-
-        if (String(activeBranchId).includes("-")) {
-          const res = await apiPut(`/api/branches/${activeBranchId}`, {
-            name: formData.name,
-            address: formData.address,
-            city: formData.city,
-            state: formData.state,
-            postalCode: formData.pincode,
-            phone: formData.phone,
-            status: formData.status === "Active" ? "ACTIVE" : "INACTIVE",
-          });
-          if (!res.success)
-            throw new Error(res.error || "Failed to update branch");
-        }
-
-        if (onShowToast) {
-          onShowToast(`✓ Successfully updated branch "${formData.name}"`);
-        }
-      } else {
-        const payload = {
-          name: formData.name,
-          address: formData.address,
-          city: formData.city || "Pune",
-          state: formData.state || "Maharashtra",
-          postalCode: formData.pincode || "412205",
-          phone: formData.phone,
-          status: formData.status === "Active" ? "ACTIVE" : "INACTIVE",
-        };
-
-        const res = await apiPost("/api/branches", payload);
-
-        let newId = `BR-0${branches.length + 1}`;
-        if (res.success && res.data) {
-          const created = res.data.data || res.data;
-          if (created?.id) {
-            newId = created.id;
-          }
-        } else if (!res.success) {
-          throw new Error(res.error || "Failed to create branch");
-        }
-
-        const newBranch = {
-          id: newId,
-          ...formData,
-          staffCount: 1,
-          monthlyRevenue: "₹0.00",
-          currency: "INR (₹)",
-          isMainHub: false,
-        };
-        setBranches((prev) => [newBranch, ...prev]);
-        if (onShowToast) {
-          onShowToast(`✓ Added new branch "${newBranch.name}" to database!`);
-        }
-      }
-      if (onBranchesUpdated) {
-        onBranchesUpdated();
-      }
-    } catch (err) {
-      console.warn("Error saving branch to database:", err.message);
-      if (onShowToast) onShowToast(`⚠️ Error saving branch: ${err.message}`);
+    if (onBranchesUpdated) {
+      onBranchesUpdated();
     }
 
     setModalVisible(false);
-  };
-
-  const handleToggleStatus = async (branch) => {
-    const newStatus = branch.status === "Active" ? "Inactive" : "Active";
-    const dbStatus = newStatus === "Active" ? "ACTIVE" : "INACTIVE";
-
-    setBranches((prev) =>
-      prev.map((b) => (b.id === branch.id ? { ...b, status: newStatus } : b)),
+  } catch (err) {
+    console.warn(
+      "Error saving branch to database:",
+      err.message
     );
 
-    try {
-      const res = await apiPut(`/api/branches/${branch.id}`, {
-        status: dbStatus,
-      });
-      if (!res.success) throw new Error(res.error || "Status toggle failed");
-    } catch (err) {
-      console.warn("Error updating branch status in database:", err.message);
-      if (onShowToast) onShowToast(`⚠️ Failed to toggle branch status`);
+    if (onShowToast) {
+      onShowToast(
+        `⚠️ Error saving branch: ${err.message}`
+      );
+    }
+  }
+};
+
+ const handleToggleStatus = async (branch) => {
+  const newStatus =
+    branch.status === "Active"
+      ? "Inactive"
+      : "Active";
+
+  const dbStatus =
+    newStatus === "Active"
+      ? "ACTIVE"
+      : "INACTIVE";
+
+  // Optimistic UI update
+  setBranches((prev) =>
+    prev.map((b) =>
+      b.id === branch.id
+        ? {
+            ...b,
+            status: newStatus,
+          }
+        : b
+    )
+  );
+
+  try {
+    const res = await updateBranchStatus(
+      branch.id,
+      dbStatus
+    );
+
+    if (!res.success) {
+      throw new Error(
+        res.error || "Status toggle failed"
+      );
     }
 
     if (onBranchesUpdated) {
@@ -334,9 +514,35 @@ export default function BranchesScreen({
     }
 
     if (onShowToast) {
-      onShowToast(`Branch "${branch.name}" marked as ${newStatus}`);
+      onShowToast(
+        `Branch "${branch.name}" marked as ${newStatus}`
+      );
     }
-  };
+  } catch (err) {
+    console.warn(
+      "Error updating branch status:",
+      err.message
+    );
+
+    // Rollback optimistic update
+    setBranches((prev) =>
+      prev.map((b) =>
+        b.id === branch.id
+          ? {
+              ...b,
+              status: branch.status,
+            }
+          : b
+      )
+    );
+
+    if (onShowToast) {
+      onShowToast(
+        `⚠️ Failed to toggle branch status`
+      );
+    }
+  }
+};
 
   const handleViewDetails = (branch) => {
     setSelectedBranch(branch);
@@ -1124,14 +1330,14 @@ export default function BranchesScreen({
                       style={[
                         styles.statusSelectPill,
                         formData.status === "Active" &&
-                          styles.statusSelectPillActive,
+                        styles.statusSelectPillActive,
                       ]}
                     >
                       <Text
                         style={[
                           styles.statusSelectText,
                           formData.status === "Active" &&
-                            styles.statusSelectTextActive,
+                          styles.statusSelectTextActive,
                         ]}
                       >
                         Active
@@ -1144,14 +1350,14 @@ export default function BranchesScreen({
                       style={[
                         styles.statusSelectPill,
                         formData.status === "Inactive" &&
-                          styles.statusSelectPillInactive,
+                        styles.statusSelectPillInactive,
                       ]}
                     >
                       <Text
                         style={[
                           styles.statusSelectText,
                           formData.status === "Inactive" &&
-                            styles.statusSelectTextInactive,
+                          styles.statusSelectTextInactive,
                         ]}
                       >
                         Inactive
