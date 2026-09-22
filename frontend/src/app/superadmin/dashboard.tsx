@@ -9,8 +9,10 @@ import {
 import { router } from 'expo-router';
 
 import { useSuperAdmin } from './store';
+import { useIsMobile } from '../../utils/responsive';
 
 export default function SuperAdminDashboard() {
+  const isMobile = useIsMobile();
   const {
     pharmacies,
     activePharmacies,
@@ -43,7 +45,7 @@ export default function SuperAdminDashboard() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, isMobile && styles.contentMobile]}
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.header}>
@@ -390,6 +392,10 @@ const styles = StyleSheet.create({
   content: {
     padding: 24,
     paddingBottom: 40,
+  },
+  contentMobile: {
+    padding: 14,
+    paddingBottom: 32,
   },
   header: {
     flexDirection: 'row',

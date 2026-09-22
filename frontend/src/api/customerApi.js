@@ -39,3 +39,17 @@ export async function updateCustomer(id, customerData) {
 export async function deleteCustomer(id) {
   return apiDelete(`/customers/${id}`);
 }
+
+/**
+ * GET /api/customers/:id/ledger
+ */
+export async function fetchCustomerLedger(id) {
+  return apiGet(`/customers/${id}/ledger`);
+}
+
+/**
+ * POST /api/customers/:id/settle-due
+ */
+export async function settleCustomerDue(id, { amount, paymentMethod, notes }) {
+  return apiPost(`/customers/${id}/settle-due`, { amount, paymentMethod, notes });
+}

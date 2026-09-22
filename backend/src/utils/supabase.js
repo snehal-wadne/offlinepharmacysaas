@@ -10,6 +10,12 @@
  * 3. Deterministic test token generator for automated test suites
  */
 
+if (typeof globalThis.WebSocket === "undefined") {
+  try {
+    globalThis.WebSocket = require("ws");
+  } catch (e) {}
+}
+
 const { createClient } = require("@supabase/supabase-js");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");

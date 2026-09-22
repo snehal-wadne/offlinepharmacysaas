@@ -30,8 +30,8 @@ function getInitialParams() {
 }
 
 export const RouterContext = createContext({
-  pathname: getInitialPath(),
-  params: getInitialParams(),
+  get pathname() { return getInitialPath(); },
+  params: {},
   setRoute: () => {},
 });
 
@@ -88,17 +88,29 @@ export function RouterProvider({ children }) {
   useEffect(() => {
     globalSetRoute = setRoute;
 
-    const handlePopState = () => {
+    const update = () => {
       setRoute({
         pathname: getInitialPath(),
         params: getInitialParams(),
       });
     };
 
+    const handlePopState = update;
+
     if (typeof window !== 'undefined') {
       window.addEventListener('popstate', handlePopState);
+
+      // Also intercept pushState / replaceState so programmatic navigation
+      // (router.push / router.replace) triggers a re-render
+      const origPush = window.history.pushState.bind(window.history);
+      const origReplace = window.history.replaceState.bind(window.history);
+      window.history.pushState = (...args) => { origPush(...args); update(); };
+      window.history.replaceState = (...args) => { origReplace(...args); update(); };
+
       return () => {
         window.removeEventListener('popstate', handlePopState);
+        window.history.pushState = origPush;
+        window.history.replaceState = origReplace;
       };
     }
   }, []);

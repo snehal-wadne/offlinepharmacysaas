@@ -74,6 +74,131 @@ const ROUTE_PERMISSIONS = {
   "audit-log": "audit:view",
 };
 
+const ERP_ROUTE_KEYS = new Set([
+  "dashboard",
+  "sales",
+  "new-sale",
+  "pos-billing",
+  "cash-register",
+  "cashier",
+  "held-bills",
+  "sales-returns",
+  "returns",
+  "stock-adjustments",
+  "stock-transfer",
+  "stock-status",
+  "inventory",
+  "low-stock-expiry",
+  "current-stock",
+  "purchases",
+  "goods-receiving",
+  "suppliers",
+  "customers",
+  "customers-patients",
+  "add-customer",
+  "customer-details",
+  "customer-ledger",
+  "customer-payments",
+  "branches",
+  "users",
+  "roles",
+  "roles-permissions",
+  "page-permissions",
+  "audit-log",
+  "inventory-reports",
+  "purchase-reports",
+  "expiry-reports",
+  "tax-settings",
+  "subscription-plans",
+]);
+
+const ERP_ROUTE_PATHS = {
+  dashboard: "/dashboard",
+  sales: "/sales",
+  "new-sale": "/sales/new-sale",
+  "pos-billing": "/sales/pos-billing",
+  "held-bills": "/sales/held-bills",
+  "sales-returns": "/sales/returns",
+  returns: "/sales/returns",
+  "cash-register": "/cashier/cash-register",
+  cashier: "/cashier",
+  inventory: "/inventory",
+  "stock-adjustments": "/inventory/stock-adjustments",
+  "stock-transfer": "/inventory/stock-transfer",
+  "stock-status": "/inventory/stock-status",
+  "low-stock-expiry": "/inventory/low-stock-expiry",
+  "current-stock": "/inventory/current-stock",
+  purchases: "/purchases",
+  "goods-receiving": "/purchases/goods-receiving",
+  suppliers: "/purchases/suppliers",
+  customers: "/customers",
+  "customers-patients": "/customers/patients",
+  "add-customer": "/customers/add",
+  "customer-details": "/customers/details",
+  "customer-ledger": "/customers/ledger",
+  "customer-payments": "/customers/payments",
+  branches: "/management/branches",
+  users: "/management/users",
+  roles: "/management/roles",
+  "roles-permissions": "/management/roles-permissions",
+  "page-permissions": "/management/page-permissions",
+  "audit-log": "/management/audit-log",
+  "inventory-reports": "/reports/inventory",
+  "purchase-reports": "/reports/purchases",
+  "expiry-reports": "/reports/expiry",
+  "tax-settings": "/settings/tax",
+  "subscription-plans": "/settings/subscription-plans",
+};
+
+const ERP_PATH_ROUTES = Object.entries(ERP_ROUTE_PATHS).reduce(
+  (routes, [routeKey, path]) => {
+    routes[path] = routeKey;
+    return routes;
+  },
+  {},
+);
+
+function getRouteFromLocation() {
+  if (typeof window === "undefined") return "dashboard";
+  if (window.location.pathname.startsWith("/superadmin")) return "dashboard";
+
+  const path = `/${window.location.pathname.replace(/^\/+|\/+$/g, "")}`;
+  if (ERP_PATH_ROUTES[path]) return ERP_PATH_ROUTES[path];
+
+  const routeKey = path.split("/")[1];
+  return ERP_ROUTE_KEYS.has(routeKey) ? routeKey : "dashboard";
+}
+
+function updateErpLocation(routeKey, payload) {
+  if (typeof window === "undefined" || !window.history) return;
+  if (window.location.pathname.startsWith("/superadmin")) return;
+
+  const params = payload
+    ? new URLSearchParams({ customerId: String(payload) })
+    : "";
+  const query = params.toString();
+  const url = `${ERP_ROUTE_PATHS[routeKey] || `/${routeKey}`}${
+    query ? `?${query}` : ""
+  }`;
+  window.history.pushState({ routeKey, payload }, "", url);
+}
+
+function updateBrowserRoute(routeKey, replace = false) {
+  if (
+    typeof window === "undefined" ||
+    !ERP_ROUTE_KEYS.has(routeKey) ||
+    window.location.pathname.startsWith("/superadmin")
+  ) {
+    return;
+  }
+
+  const nextPath = ERP_ROUTE_PATHS[routeKey] || `/${routeKey}`;
+  if (window.location.pathname !== nextPath) {
+    const method = replace ? "replaceState" : "pushState";
+    window.history[method]({}, "", nextPath);
+  }
+}
+
 const hasPermission = (user, permission) => {
   if (!permission) return true;
   if (!user) return false;
@@ -103,7 +228,7 @@ export default function AppNavigator() {
   const isMobile = width < 768;
 
   // Active Route State (Default: 'dashboard')
-  const [currentRoute, setCurrentRoute] = useState("dashboard");
+  const [currentRoute, setCurrentRoute] = useState(getRouteFromLocation);
   const [selectedBranch, setSelectedBranch] = useState(null);
   const [selectedCustomerId, setSelectedCustomerId] = useState(null);
   const [toastMessage, setToastMessage] = useState("");
@@ -120,35 +245,20 @@ export default function AppNavigator() {
   const [currentUser, setCurrentUser] = useState(null);
   const [googleOnboardingData, setGoogleOnboardingData] = useState(null);
 
-  const resolveBranchContext = (user) => {
-    if (!user || user.hasBranch === false) return null;
-    if (user.branch && typeof user.branch === "object" && user.branch.id) {
-      return {
-        id: user.branch.id,
-        name: user.branch.name || user.branch.branchCode || "Main Branch",
-      };
-    }
-    if (user.branchId) {
-      return {
-        id: user.branchId,
-        name: user.branchName || user.branch || "Main Branch",
-      };
-    }
-    if (user.branch && typeof user.branch === "object" && user.branch.name) {
-      return { id: null, name: user.branch.name };
-    }
-    if (typeof user.branch === "string" && user.branch.trim()) {
-      return { id: null, name: user.branch.trim() };
-    }
-    if (
-      user.branchName &&
-      typeof user.branchName === "string" &&
-      user.branchName.trim()
-    ) {
-      return { id: null, name: user.branchName.trim() };
-    }
-    return null;
-  };
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const handleBrowserNavigation = () => {
+      setCurrentRoute(getRouteFromLocation());
+    };
+
+    window.addEventListener("popstate", handleBrowserNavigation);
+    updateBrowserRoute(currentRoute, true);
+
+    return () => {
+      window.removeEventListener("popstate", handleBrowserNavigation);
+    };
+  }, []);
 
   const restoreAuthSession = async (session) => {
     if (!session?.access_token) {
@@ -189,9 +299,13 @@ export default function AppNavigator() {
 
         if (user && user.hasBranch === false) {
           setCurrentRoute("branches");
+          updateBrowserRoute("branches", true);
           setSelectedBranch(null);
         } else if (user) {
-          setSelectedBranch(resolveBranchContext(user));
+          // Default to "All Branches" on every fresh load instead of
+          // auto-pinning to the user's assigned branch; they pick a branch
+          // explicitly from the header dropdown when they need one.
+          setSelectedBranch(null);
         }
 
         setAuthStatus("AUTHENTICATED");
@@ -281,6 +395,35 @@ export default function AppNavigator() {
     };
   }, []);
 
+  useEffect(() => {
+    const handleBrowserNavigation = () => {
+      const routeKey = getRouteFromLocation();
+      const customerId =
+        typeof window !== "undefined"
+          ? new URLSearchParams(window.location.search).get("customerId")
+          : null;
+      setCurrentRoute(routeKey);
+      setSelectedCustomerId(customerId);
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("popstate", handleBrowserNavigation);
+      if (window.location.pathname === "/" || window.location.pathname === "") {
+        window.history.replaceState(
+          { routeKey: "dashboard" },
+          "",
+          "/dashboard",
+        );
+      }
+    }
+
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("popstate", handleBrowserNavigation);
+      }
+    };
+  }, []);
+
   // Pharmacy Architecture Mode: Multi-Branch (true) vs Single-Shop (false)
   const [isMultiBranch, setIsMultiBranch] = useState(true);
 
@@ -331,15 +474,15 @@ export default function AppNavigator() {
     ) {
       showToast("Please create your initial pharmacy branch first.");
       setCurrentRoute("branches");
+      updateBrowserRoute("branches", true);
       setMobileMenuOpen(false);
       return;
     }
 
-    if (payload) {
-      setSelectedCustomerId(payload);
-    }
-
+    updateErpLocation(routeKey, payload);
+    setSelectedCustomerId(payload || null);
     setCurrentRoute(routeKey);
+    updateBrowserRoute(routeKey);
     setMobileMenuOpen(false);
   };
 
@@ -352,6 +495,7 @@ export default function AppNavigator() {
     setIsMultiBranch(multi);
     if (!multi && currentRoute === "stock-transfer") {
       setCurrentRoute("stock-adjustments");
+      updateBrowserRoute("stock-adjustments", true);
     }
     showToast(
       multi
@@ -710,9 +854,12 @@ export default function AppNavigator() {
           setAuthStatus("AUTHENTICATED");
           if (user && user.hasBranch === false) {
             setCurrentRoute("branches");
+            updateBrowserRoute("branches", true);
             setSelectedBranch(null);
           } else {
-            setSelectedBranch(resolveBranchContext(user));
+            // Default to "All Branches" on login; the user picks a branch
+            // explicitly from the header dropdown when they need one.
+            setSelectedBranch(null);
           }
           showToast(`Welcome back, ${user.display_name || user.name}!`);
         }}

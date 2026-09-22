@@ -130,6 +130,10 @@ export function apiPut(endpoint, body, options = {}) {
   });
 }
 
+export function apiPatch(endpoint, body, options = {}) {
+  return apiRequest(endpoint, { method: 'PATCH', body: JSON.stringify(body), ...options });
+}
+
 export function apiDelete(endpoint, options = {}) {
   return apiRequest(endpoint, { method: "DELETE", ...options });
 }

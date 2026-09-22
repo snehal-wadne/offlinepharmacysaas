@@ -26,5 +26,11 @@ router.put('/:id', customerController.updateCustomer);
 // DELETE /api/customers/:id - Delete customer
 router.delete('/:id', customerController.deleteCustomer);
 
+// GET /api/customers/:id/ledger - Customer ledger statement
+router.get('/:id/ledger', customerController.getCustomerLedger);
+
+// POST /api/customers/:id/settle-due - Record a standalone payment against dues
+router.post('/:id/settle-due', customerController.settleCustomerDue);
+
 module.exports = router;
 

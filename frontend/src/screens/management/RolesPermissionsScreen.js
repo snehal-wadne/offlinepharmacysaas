@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -10,124 +10,164 @@ import {
   useWindowDimensions,
   Platform,
 } from "react-native";
-import {
-  SYSTEM_ROLES_LIST,
-  PAGE_PERMISSION_MODULES,
-  DEFAULT_ROLE_PAGE_PERMISSIONS,
-} from "../../constants/uiConstants";
 import { SkeletonTableRow } from "../../components/common/SkeletonLoader";
+import {
+  fetchRoles,
+  fetchPermissions,
+  updateRolePermissions,
+} from "../../api/roleApi";
 
 export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
 
-  // Selected Role (Default: Cashier as standard initial selection)
-  const [selectedRoleId, setSelectedRoleId] = useState("role-cashier");
+  const [roles, setRoles] = useState([]);
+  const [permissionDomains, setPermissionDomains] = useState({});
+  const [selectedRoleId, setSelectedRoleId] = useState(null);
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
 
-  // Search filter for pages/modules
   const [searchQuery, setSearchQuery] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  // Collapsed Module Groups state
   const [collapsedModules, setCollapsedModules] = useState({});
 
-  // Matrix State for all roles: roleId -> { [pageId]: boolean }
-  const [matrixState, setMatrixState] = useState(DEFAULT_ROLE_PAGE_PERMISSIONS);
+  // Working copy of the active role's granted permission IDs (Set).
+  const [assignedPermissionIds, setAssignedPermissionIds] = useState(new Set());
+  const [originalPermissionIds, setOriginalPermissionIds] = useState(new Set());
 
-  // Roles list
-  const [roles, setRoles] = useState(SYSTEM_ROLES_LIST);
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [rolesRes, permsRes] = await Promise.all([
+        fetchRoles(),
+        fetchPermissions(),
+      ]);
 
-  // Active Role Lookup
+      const rolesList = rolesRes?.success ? rolesRes.data : [];
+      setRoles(rolesList);
+      setPermissionDomains(permsRes?.success ? permsRes.data : {});
+
+      if (rolesList.length > 0) {
+        const initialRole = rolesList[0];
+        setSelectedRoleId(initialRole.id);
+        const ids = new Set((initialRole.permissions || []).map((p) => p.id));
+        setAssignedPermissionIds(ids);
+        setOriginalPermissionIds(ids);
+      }
+    } catch (err) {
+      if (onShowToast) onShowToast("⚠️ Failed to load roles & permissions");
+    } finally {
+      setLoading(false);
+    }
+  }, [onShowToast]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
   const activeRole = roles.find((r) => r.id === selectedRoleId) || roles[0];
-  const activeRolePermissions = matrixState[selectedRoleId] || {};
 
-  // Toggle Module Accordion Collapse
+  const handleSelectRole = (role) => {
+    setSelectedRoleId(role.id);
+    const ids = new Set((role.permissions || []).map((p) => p.id));
+    setAssignedPermissionIds(ids);
+    setOriginalPermissionIds(ids);
+    setRoleDropdownOpen(false);
+  };
+
   const toggleModuleCollapse = (moduleId) => {
-    setCollapsedModules((prev) => ({
-      ...prev,
-      [moduleId]: !prev[moduleId],
-    }));
+    setCollapsedModules((prev) => ({ ...prev, [moduleId]: !prev[moduleId] }));
   };
 
-  // Single Toggle: Allowed (true) <-> Not Allowed (false)
-  const handleTogglePagePermission = (pageId) => {
-    const currentVal = !!activeRolePermissions[pageId];
-    const newVal = !currentVal;
-
-    setMatrixState((prev) => ({
-      ...prev,
-      [selectedRoleId]: {
-        ...prev[selectedRoleId],
-        [pageId]: newVal,
-      },
-    }));
-  };
-
-  // Bulk Set Permissions for an entire Module (all true or all false)
-  const handleSetModulePermissions = (moduleObj, isAllowed) => {
-    const updated = { ...(matrixState[selectedRoleId] || {}) };
-    moduleObj.pages.forEach((page) => {
-      updated[page.pageId] = isAllowed;
+  const handleTogglePermission = (permissionId) => {
+    setAssignedPermissionIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(permissionId)) next.delete(permissionId);
+      else next.add(permissionId);
+      return next;
     });
+  };
 
-    setMatrixState((prev) => ({
-      ...prev,
-      [selectedRoleId]: updated,
-    }));
-
+  const handleSetDomainPermissions = (domainName, domainPerms, isAllowed) => {
+    setAssignedPermissionIds((prev) => {
+      const next = new Set(prev);
+      domainPerms.forEach((p) => {
+        if (isAllowed) next.add(p.id);
+        else next.delete(p.id);
+      });
+      return next;
+    });
     if (onShowToast) {
       onShowToast(
         isAllowed
-          ? `✓ Allowed all pages in "${moduleObj.moduleName}" for ${activeRole.name}`
-          : `Disallowed all pages in "${moduleObj.moduleName}" for ${activeRole.name}`,
+          ? `✓ Allowed all permissions in "${domainName}" for ${activeRole?.name}`
+          : `Disallowed all permissions in "${domainName}" for ${activeRole?.name}`,
       );
     }
   };
 
-  // Save changes
-  const handleSaveChanges = () => {
-    if (onShowToast) {
-      onShowToast(
-        `✓ Page permissions for role "${activeRole.name}" successfully saved and active!`,
-      );
-      // TODO: Persist to backend when API endpoint is available
+  const isDirty = (() => {
+    if (assignedPermissionIds.size !== originalPermissionIds.size) return true;
+    for (const id of assignedPermissionIds) {
+      if (!originalPermissionIds.has(id)) return true;
     }
-  };
+    return false;
+  })();
 
-  // Reset to role template default
-  const handleResetDefaults = () => {
-    const initialPerms = DEFAULT_ROLE_PAGE_PERMISSIONS[selectedRoleId];
-    if (initialPerms) {
-      setMatrixState((prev) => ({
-        ...prev,
-        [selectedRoleId]: { ...initialPerms },
-      }));
-      if (onShowToast) {
-        onShowToast(
-          `Reset "${activeRole.name}" permissions to system template defaults.`,
+  const handleSaveChanges = async () => {
+    if (!activeRole) return;
+    try {
+      setSaving(true);
+      const res = await updateRolePermissions(
+        activeRole.id,
+        Array.from(assignedPermissionIds),
+      );
+      if (res?.success) {
+        setOriginalPermissionIds(new Set(assignedPermissionIds));
+        setRoles((prev) =>
+          prev.map((r) =>
+            r.id === activeRole.id
+              ? { ...r, permissions: res.data, permission_count: res.data.length }
+              : r,
+          ),
         );
+        if (onShowToast) {
+          onShowToast(
+            `✓ Permissions for role "${activeRole.name}" successfully saved!`,
+          );
+        }
+      } else {
+        throw new Error(res?.error || "Failed to save permissions");
       }
+    } catch (err) {
+      if (onShowToast) onShowToast(`⚠️ ${err.message}`);
+    } finally {
+      setSaving(false);
     }
   };
 
-  // Filter modules and pages by search query
-  const filteredModules = PAGE_PERMISSION_MODULES.map((module) => {
-    const q = searchQuery.toLowerCase().trim();
-    if (!q) return module;
+  const handleResetDefaults = () => {
+    setAssignedPermissionIds(new Set(originalPermissionIds));
+    if (onShowToast) {
+      onShowToast(`Reverted unsaved changes for "${activeRole?.name}".`);
+    }
+  };
 
-    const filteredPages = module.pages.filter(
-      (p) =>
-        p.pageName.toLowerCase().includes(q) ||
-        p.description.toLowerCase().includes(q) ||
-        module.moduleName.toLowerCase().includes(q),
-    );
-
-    return {
-      ...module,
-      pages: filteredPages,
-    };
-  }).filter((m) => m.pages?.length > 0);
+  // Filter domains/permissions by search query
+  const filteredDomains = Object.entries(permissionDomains)
+    .map(([domainName, perms]) => {
+      const q = searchQuery.toLowerCase().trim();
+      if (!q) return [domainName, perms];
+      const filtered = perms.filter(
+        (p) =>
+          p.name.toLowerCase().includes(q) ||
+          (p.description || "").toLowerCase().includes(q) ||
+          domainName.toLowerCase().includes(q),
+      );
+      return [domainName, filtered];
+    })
+    .filter(([, perms]) => perms.length > 0);
 
   return (
     <ScrollView
@@ -140,35 +180,35 @@ export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
     >
       {/* 1. Header Row */}
       <View style={styles.headerRow}>
-        <Text style={styles.pageTitle}>Page Permissions</Text>
+        <Text style={styles.pageTitle}>Role Permissions</Text>
         <Text style={styles.pageSubtitle}>
-          Control which pages each role is allowed or not allowed to access.
+          Control which system capabilities each role is granted.
         </Text>
       </View>
 
       {/* 2. Top Controls: Role Selector & Search Box */}
       <View style={styles.controlsBar}>
-        {/* Role Selector */}
         <View style={styles.roleSelectorSection}>
           <Text style={styles.roleSelectorLabel}>Select Role</Text>
           <Pressable
-            onPress={() => setRoleDropdownOpen(true)}
+            onPress={() => roles.length > 0 && setRoleDropdownOpen(true)}
             style={styles.roleDropdownBtn}
             accessibilityRole="button"
             accessibilityLabel="Select Role"
           >
             <View style={styles.roleBadgeDot} />
-            <Text style={styles.roleDropdownBtnText}>{activeRole.name}</Text>
+            <Text style={styles.roleDropdownBtnText}>
+              {activeRole ? activeRole.name : loading ? "Loading..." : "No roles yet"}
+            </Text>
             <Text style={styles.roleDropdownChevron}>▾</Text>
           </Pressable>
         </View>
 
-        {/* Search Input Box */}
         <View style={styles.searchBoxWrapper}>
           <Text style={styles.searchIcon}>🔍</Text>
           <TextInput
             style={styles.searchInput}
-            placeholder="Search modules or pages..."
+            placeholder="Search permissions or modules..."
             placeholderTextColor="#94A3B8"
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -186,10 +226,9 @@ export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
 
       {/* 3. Main Permission Table / Cards */}
       <View style={styles.tableCard}>
-        {/* Table Column Headers */}
         <View style={styles.tableHeaderRow}>
           <View style={[styles.colPageInfo, styles.headerCol]}>
-            <Text style={styles.thText}>PAGE / RESOURCE</Text>
+            <Text style={styles.thText}>PERMISSION</Text>
           </View>
           <View style={[styles.colDescription, styles.headerCol]}>
             <Text style={styles.thText}>DESCRIPTION</Text>
@@ -198,56 +237,57 @@ export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
             <Text style={styles.thActionText}>STATUS</Text>
           </View>
           <View style={[styles.colToggle, styles.headerCol]}>
-            <Text style={styles.thActionText}>ALLOW ACCESS</Text>
+            <Text style={styles.thActionText}>GRANTED</Text>
           </View>
         </View>
 
-        {/* Modules & Rows */}
         {loading ? (
           <View style={{ padding: 20 }}>
             {Array.from({ length: 5 }).map((_, i) => (
               <SkeletonTableRow key={i} />
             ))}
           </View>
-        ) : filteredModules.length === 0 ? (
+        ) : !activeRole ? (
+          <View style={styles.emptySearchContainer}>
+            <Text style={styles.emptyIcon}>🛡️</Text>
+            <Text style={styles.emptyTitle}>No roles found</Text>
+            <Text style={styles.emptySubtitle}>
+              Create a role first from the Roles screen.
+            </Text>
+          </View>
+        ) : filteredDomains.length === 0 ? (
           <View style={styles.emptySearchContainer}>
             <Text style={styles.emptyIcon}>🔍</Text>
-            <Text style={styles.emptyTitle}>No matching pages found</Text>
+            <Text style={styles.emptyTitle}>No matching permissions found</Text>
             <Text style={styles.emptySubtitle}>
               Try clearing your search query &quot;{searchQuery}&quot;
             </Text>
           </View>
         ) : (
-          filteredModules.map((module) => {
-            const isCollapsed = !!collapsedModules[module.moduleId];
+          filteredDomains.map(([domainName, perms]) => {
+            const isCollapsed = !!collapsedModules[domainName];
 
             return (
-              <View key={module.moduleId} style={styles.moduleSection}>
-                {/* Module Accordion Header */}
+              <View key={domainName} style={styles.moduleSection}>
                 <Pressable
-                  onPress={() => toggleModuleCollapse(module.moduleId)}
+                  onPress={() => toggleModuleCollapse(domainName)}
                   style={styles.moduleHeaderRow}
                 >
                   <View style={styles.moduleTitleGroup}>
-                    <Text style={styles.moduleIcon}>{module.icon}</Text>
-                    <Text style={styles.moduleNameText}>
-                      {module.moduleName}
-                    </Text>
+                    <Text style={styles.moduleNameText}>{domainName}</Text>
                     <Text style={styles.modulePageCount}>
-                      ({module.pages.length}{" "}
-                      {module.pages.length === 1 ? "page" : "pages"})
+                      ({perms.length} {perms.length === 1 ? "permission" : "permissions"})
                     </Text>
                     <Text style={styles.moduleChevron}>
                       {isCollapsed ? "⌄" : "⌃"}
                     </Text>
                   </View>
 
-                  {/* Bulk Quick Action Buttons */}
                   <View style={styles.moduleActionButtons}>
                     <Pressable
                       onPress={(e) => {
                         e.stopPropagation();
-                        handleSetModulePermissions(module, true);
+                        handleSetDomainPermissions(domainName, perms, true);
                       }}
                       style={styles.moduleAllowAllBtn}
                     >
@@ -257,7 +297,7 @@ export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
                     <Pressable
                       onPress={(e) => {
                         e.stopPropagation();
-                        handleSetModulePermissions(module, false);
+                        handleSetDomainPermissions(domainName, perms, false);
                       }}
                       style={styles.moduleDisallowAllBtn}
                     >
@@ -268,35 +308,28 @@ export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
                   </View>
                 </Pressable>
 
-                {/* Module Pages Rows */}
                 {!isCollapsed &&
-                  module.pages.map((page, idx) => {
-                    const isAllowed = !!activeRolePermissions[page.pageId];
+                  perms.map((perm, idx) => {
+                    const isAllowed = assignedPermissionIds.has(perm.id);
                     const isEven = idx % 2 === 1;
 
                     return (
                       <View
-                        key={page.pageId}
+                        key={perm.id}
                         style={[styles.pageRow, isEven && styles.pageRowEven]}
                       >
-                        {/* Page Name */}
                         <View style={styles.colPageInfo}>
                           <Text style={styles.pageNameText} numberOfLines={1}>
-                            {page.pageName}
+                            {perm.name}
                           </Text>
                         </View>
 
-                        {/* Description */}
                         <View style={styles.colDescription}>
-                          <Text
-                            style={styles.descriptionText}
-                            numberOfLines={2}
-                          >
-                            {page.description}
+                          <Text style={styles.descriptionText} numberOfLines={2}>
+                            {perm.description}
                           </Text>
                         </View>
 
-                        {/* Status Badge */}
                         <View style={styles.colStatus}>
                           <View
                             style={[
@@ -319,12 +352,9 @@ export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
                           </View>
                         </View>
 
-                        {/* Single Interactive Toggle Button */}
                         <View style={styles.colToggle}>
                           <Pressable
-                            onPress={() =>
-                              handleTogglePagePermission(page.pageId)
-                            }
+                            onPress={() => handleTogglePermission(perm.id)}
                             style={[
                               styles.toggleSwitchTrack,
                               isAllowed
@@ -333,7 +363,7 @@ export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
                             ]}
                             accessibilityRole="switch"
                             accessibilityState={{ checked: isAllowed }}
-                            accessibilityLabel={`Toggle permission for ${page.pageName}. Currently ${isAllowed ? "Allowed" : "Not Allowed"}`}
+                            accessibilityLabel={`Toggle permission for ${perm.name}. Currently ${isAllowed ? "Allowed" : "Not Allowed"}`}
                           >
                             <View
                               style={[
@@ -355,41 +385,45 @@ export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
 
         {/* 4. Bottom Legend & Save Changes Bar */}
         <View style={styles.tableFooterBar}>
-          {/* Legend Area */}
           <View style={styles.legendContainer}>
             <Text style={styles.legendTitle}>ACCESS KEY:</Text>
 
-            {/* Allowed */}
             <View style={styles.legendItem}>
               <View style={styles.legendDotAllowed} />
               <Text style={styles.legendLabel}>
                 <Text style={{ fontWeight: "700", color: "#0F766E" }}>
                   Allowed
                 </Text>
-                : User role has access to view & use this page
+                : Role is granted this capability
               </Text>
             </View>
 
-            {/* Not Allowed */}
             <View style={styles.legendItem}>
               <View style={styles.legendDotDenied} />
               <Text style={styles.legendLabel}>
                 <Text style={{ fontWeight: "700", color: "#64748B" }}>
                   Not Allowed
                 </Text>
-                : Page is restricted and hidden for this role
+                : Capability is restricted for this role
               </Text>
             </View>
           </View>
 
-          {/* Action Buttons */}
           <View style={styles.footerActionsGroup}>
-            <Pressable onPress={handleResetDefaults} style={styles.resetBtn}>
-              <Text style={styles.resetBtnText}>Reset Role Defaults</Text>
-            </Pressable>
+            {isDirty && (
+              <Pressable onPress={handleResetDefaults} style={styles.resetBtn}>
+                <Text style={styles.resetBtnText}>Discard Changes</Text>
+              </Pressable>
+            )}
 
-            <Pressable onPress={handleSaveChanges} style={styles.saveBtn}>
-              <Text style={styles.saveBtnText}>Save Changes</Text>
+            <Pressable
+              onPress={handleSaveChanges}
+              style={[styles.saveBtn, (!isDirty || saving) && { opacity: 0.6 }]}
+              disabled={!isDirty || saving}
+            >
+              <Text style={styles.saveBtnText}>
+                {saving ? "Saving..." : "Save Changes"}
+              </Text>
             </Pressable>
           </View>
         </View>
@@ -415,10 +449,7 @@ export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
               return (
                 <Pressable
                   key={role.id}
-                  onPress={() => {
-                    setSelectedRoleId(role.id);
-                    setRoleDropdownOpen(false);
-                  }}
+                  onPress={() => handleSelectRole(role)}
                   style={[
                     styles.roleDropdownOption,
                     isSelected && styles.roleDropdownOptionSelected,
@@ -434,7 +465,7 @@ export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
                       {role.name}
                     </Text>
                     <Text style={styles.roleOptionDesc} numberOfLines={1}>
-                      {role.description}
+                      {role.description || `${role.permission_count || 0} permissions granted`}
                     </Text>
                   </View>
                   {isSelected && <Text style={styles.roleCheckmark}>✓</Text>}
@@ -633,9 +664,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
-  moduleIcon: {
-    fontSize: 15,
-  },
   moduleNameText: {
     fontSize: 13,
     fontWeight: "800",
@@ -734,7 +762,6 @@ const styles = StyleSheet.create({
   statusTextDenied: {
     color: "#64748B",
   },
-  /* Toggle Switch Styles */
   toggleSwitchTrack: {
     width: 48,
     height: 26,
@@ -772,7 +799,6 @@ const styles = StyleSheet.create({
   toggleThumbDenied: {
     transform: [{ translateX: 0 }],
   },
-  /* Footer & Legend */
   tableFooterBar: {
     flexDirection: "row",
     alignItems: "center",
@@ -854,7 +880,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#FFFFFF",
   },
-  /* Empty State */
   emptySearchContainer: {
     padding: 40,
     alignItems: "center",
@@ -874,7 +899,6 @@ const styles = StyleSheet.create({
     color: "#64748B",
     marginTop: 4,
   },
-  /* Modal Overlay */
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(15, 23, 42, 0.45)",

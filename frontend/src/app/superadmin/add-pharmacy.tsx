@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -9,6 +8,8 @@ import {
   View,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import { notify } from '../../utils/alert';
+import { useIsMobile } from '../../utils/responsive';
 
 type FormData = {
   name: string;
@@ -38,8 +39,24 @@ const INITIAL_FORM: FormData = {
   businessType: 'Private Limited',
 };
 
+export const ADD_PHARMACY_DRAFT_KEY = 'pharmaflow.add-pharmacy-draft';
+
 function getParam(value?: string | string[]) {
   return Array.isArray(value) ? value[0] || '' : value || '';
+}
+
+function readDraft(): Partial<FormData> {
+  if (typeof window === 'undefined') return {};
+  try {
+    return JSON.parse(window.sessionStorage.getItem(ADD_PHARMACY_DRAFT_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+export function clearAddPharmacyDraft() {
+  if (typeof window === 'undefined') return;
+  window.sessionStorage.removeItem(ADD_PHARMACY_DRAFT_KEY);
 }
 
 export default function AddPharmacyPage() {
@@ -48,19 +65,28 @@ export default function AddPharmacyPage() {
     pharmacyId?: string;
   }>();
   const mode = params.mode || 'create';
-  const [form, setForm] = useState<FormData>(() => ({
-    name: getParam(params.name),
-    adminName: getParam(params.adminName),
-    email: getParam(params.email),
-    phone: getParam(params.phone),
-    address: getParam(params.address),
-    city: getParam(params.city),
-    state: getParam(params.state),
-    pincode: getParam(params.pincode),
-    branches: getParam(params.branches) || INITIAL_FORM.branches,
-    gstNumber: getParam(params.gstNumber),
-    businessType: getParam(params.businessType) || INITIAL_FORM.businessType,
-  }));
+  const isMobile = useIsMobile();
+  const [form, setForm] = useState<FormData>(() => {
+    const draft = readDraft();
+    return {
+      name: getParam(params.name) || draft.name || INITIAL_FORM.name,
+      adminName: getParam(params.adminName) || draft.adminName || INITIAL_FORM.adminName,
+      email: getParam(params.email) || draft.email || INITIAL_FORM.email,
+      phone: getParam(params.phone) || draft.phone || INITIAL_FORM.phone,
+      address: getParam(params.address) || draft.address || INITIAL_FORM.address,
+      city: getParam(params.city) || draft.city || INITIAL_FORM.city,
+      state: getParam(params.state) || draft.state || INITIAL_FORM.state,
+      pincode: getParam(params.pincode) || draft.pincode || INITIAL_FORM.pincode,
+      branches: getParam(params.branches) || draft.branches || INITIAL_FORM.branches,
+      gstNumber: getParam(params.gstNumber) || draft.gstNumber || INITIAL_FORM.gstNumber,
+      businessType: getParam(params.businessType) || draft.businessType || INITIAL_FORM.businessType,
+    };
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.sessionStorage.setItem(ADD_PHARMACY_DRAFT_KEY, JSON.stringify(form));
+  }, [form]);
 
   const updateField = (field: keyof FormData, value: string) => {
     setForm((current) => ({
@@ -71,27 +97,27 @@ export default function AddPharmacyPage() {
 
   const validateForm = () => {
     if (!form.name.trim()) {
-      Alert.alert('Required', 'Please enter pharmacy name.');
+      notify('Required', 'Please enter pharmacy name.');
       return false;
     }
 
     if (!form.adminName.trim()) {
-      Alert.alert('Required', 'Please enter owner/contact person.');
+      notify('Required', 'Please enter owner/contact person.');
       return false;
     }
 
     if (!form.email.trim()) {
-      Alert.alert('Required', 'Please enter email address.');
+      notify('Required', 'Please enter email address.');
       return false;
     }
 
     if (!form.phone.trim()) {
-      Alert.alert('Required', 'Please enter phone number.');
+      notify('Required', 'Please enter phone number.');
       return false;
     }
 
     if (!form.address.trim()) {
-      Alert.alert('Required', 'Please enter business address.');
+      notify('Required', 'Please enter business address.');
       return false;
     }
 
@@ -124,7 +150,7 @@ export default function AddPharmacyPage() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, isMobile && styles.contentMobile]}
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.breadcrumb}>
@@ -151,7 +177,7 @@ export default function AddPharmacyPage() {
       </Text>
 
       <View style={styles.mainGrid}>
-        <View style={styles.formCard}>
+        <View style={[styles.formCard, isMobile && styles.fullWidthCard]}>
           <Text style={styles.cardTitle}>
             Pharmacy / Business Information
           </Text>
@@ -203,7 +229,7 @@ export default function AddPharmacyPage() {
             onChangeText={(value) => updateField('address', value)}
           />
 
-          <View style={styles.threeFields}>
+          <View style={[styles.threeFields, isMobile && styles.threeFieldsMobile]}>
             <View style={styles.cityField}>
               <FormField
                 label="City"
@@ -237,7 +263,7 @@ export default function AddPharmacyPage() {
           </View>
         </View>
 
-        <View style={styles.rightColumn}>
+        <View style={[styles.rightColumn, isMobile && styles.fullWidthCard]}>
           <View style={styles.formCard}>
             <Text style={styles.cardTitle}>Additional Information</Text>
 
@@ -286,7 +312,10 @@ export default function AddPharmacyPage() {
       <View style={styles.bottomActions}>
         <Pressable
           style={styles.cancelButton}
-          onPress={() => router.replace('/superadmin/pharmacies')}
+          onPress={() => {
+            clearAddPharmacyDraft();
+            router.replace('/superadmin/pharmacies');
+          }}
         >
           <Text style={styles.cancelText}>Cancel</Text>
         </Pressable>
@@ -372,6 +401,10 @@ const styles = StyleSheet.create({
   content: {
     padding: 24,
     paddingBottom: 45,
+  },
+  contentMobile: {
+    padding: 14,
+    paddingBottom: 32,
   },
   breadcrumb: {
     flexDirection: 'row',
@@ -467,6 +500,9 @@ const styles = StyleSheet.create({
     minWidth: 340,
     gap: 18,
   },
+  fullWidthCard: {
+    minWidth: '100%',
+  },
   cardTitle: {
     marginBottom: 12,
     color: '#1E293B',
@@ -509,6 +545,9 @@ const styles = StyleSheet.create({
   threeFields: {
     flexDirection: 'row',
     gap: 10,
+  },
+  threeFieldsMobile: {
+    flexDirection: 'column',
   },
   cityField: {
     flex: 1,

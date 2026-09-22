@@ -12,6 +12,61 @@ const { pool } = require("../db/connection");
 const {
   getNextBusinessNumber,
 } = require("../repositories/number-sequence.repository");
+const {
+  createCustomerLedgerEntry,
+} = require("../repositories/customer-ledger.repository");
+
+/**
+ * Append a customer ledger entry inside an already-open transaction.
+ *
+ * The running balance is read from the same transaction client so it
+ * reflects entries already inserted earlier in this same transaction
+ * (pool-based reads would miss uncommitted rows).
+ */
+async function appendLedgerEntry(
+  client,
+  {
+    organisationId,
+    customerId,
+    branchId,
+    entryType,
+    referenceType,
+    referenceId,
+    debitAmount = 0,
+    creditAmount = 0,
+    description = null,
+  },
+) {
+  if (!customerId) {
+    return null;
+  }
+
+  const priorRes = await client.query(
+    `SELECT balance_after
+     FROM customer_ledger_entries
+     WHERE organisation_id = $1 AND customer_id = $2
+     ORDER BY entry_date DESC, created_at DESC, id DESC
+     LIMIT 1
+     FOR UPDATE;`,
+    [organisationId, customerId],
+  );
+  const priorBalance = Number(priorRes.rows[0]?.balance_after || 0);
+  const balanceAfter = priorBalance + Number(debitAmount) - Number(creditAmount);
+
+  return createCustomerLedgerEntry({
+    organisationId,
+    customerId,
+    branchId,
+    entryType,
+    referenceType,
+    referenceId,
+    debitAmount,
+    creditAmount,
+    balanceAfter,
+    description,
+    client,
+  });
+}
 
 class CashierService {
   /**
@@ -651,28 +706,35 @@ class CashierService {
     const isAllBranches =
       !branchId || branchId === "all" || branchId === "All Branches";
 
-    let branchJoin = "";
+    let batchBranchCondition = "";
     const values = [organisationId];
     const whereClauses = ["p.organisation_id = $1"];
 
     if (!isAllBranches) {
-      values.push(branchId);
-      branchJoin = "LEFT JOIN branches b ON b.id = ib.branch_id";
-      whereClauses.push(
-        `(ib.branch_id::text = $${values.length} OR b.name ILIKE $${values.length})`,
+      // Resolve the branch (accepts either a UUID or a branch name) up front
+      // so the batch filter below is a plain id comparison.
+      const branchRes = await pool.query(
+        `SELECT id FROM branches WHERE organisation_id = $1 AND (id::text = $2 OR name ILIKE $2) LIMIT 1;`,
+        [organisationId, branchId],
       );
+      const resolvedBranchId = branchRes.rows[0]?.id || branchId;
+      values.push(resolvedBranchId);
+      // Restrict which batch rows can match in the ON clause (not WHERE) so
+      // products with no stock at the selected branch still appear, with
+      // zero stock, instead of being dropped entirely by the LEFT JOIN.
+      batchBranchCondition = `AND ib.branch_id::text = $${values.length}`;
     }
 
     if (term) {
       values.push(`%${term}%`);
-      whereClauses.push(`(p.sku ILIKE $${values.length} 
-         OR p.medicine_name ILIKE $${values.length} 
-         OR p.brand_name ILIKE $${values.length} 
+      whereClauses.push(`(p.sku ILIKE $${values.length}
+         OR p.medicine_name ILIKE $${values.length}
+         OR p.brand_name ILIKE $${values.length}
          OR ib.batch_number ILIKE $${values.length})`);
     }
 
     let query = `
-      SELECT 
+      SELECT
         p.id,
         p.medicine_name AS name,
         p.brand_name AS "brandName",
@@ -683,6 +745,7 @@ class CashierService {
         p.category,
         p.pack_size AS pack,
         p.is_rx_required AS "requiresPrescription",
+        p.is_active AS "isActive",
         ib.id AS "batchId",
         ib.batch_number AS batch,
         ib.expiry_date AS expiry,
@@ -690,10 +753,9 @@ class CashierService {
         COALESCE(ib.mrp, 0.00) AS mrp,
         ROUND((COALESCE(ib.mrp, 0.00) * 0.9)::numeric, 2) AS "sellingPrice"
       FROM products p
-      LEFT JOIN inventory_batches ib ON ib.product_id = p.id AND ib.quantity > 0
-      ${branchJoin}
-      WHERE ${whereClauses.join(" AND ")}
-      ORDER BY p.medicine_name ASC, ib.expiry_date ASC LIMIT 50;
+      LEFT JOIN inventory_batches ib ON ib.product_id = p.id AND ib.quantity > 0 ${batchBranchCondition}
+      WHERE ${whereClauses.join(" AND ")} AND COALESCE(p.is_active, true) = true
+      ORDER BY p.medicine_name ASC, ib.expiry_date ASC LIMIT 500;
     `;
 
     const res = await pool.query(query, values);
@@ -717,6 +779,7 @@ class CashierService {
       mrp: Number(r.mrp) || 50,
       sellingPrice: Number(r.sellingPrice) || Number(r.mrp) || 45,
       requiresPrescription: Boolean(r.requiresPrescription),
+      isActive: r.isActive !== false,
     }));
 
     return {
@@ -975,6 +1038,33 @@ class CashierService {
       `,
         [paymentId, invoice.id, grandTotal],
       );
+
+      // 5b. Record ledger history: invoice debit, then payment credit.
+      // The POS flow always collects full payment at checkout, so the
+      // net balance change is zero, but the transaction history is
+      // preserved for the customer statement.
+      if (customerId) {
+        await appendLedgerEntry(client, {
+          organisationId,
+          customerId,
+          branchId,
+          entryType: "INVOICE",
+          referenceType: "INVOICE",
+          referenceId: invoice.id,
+          debitAmount: grandTotal,
+          description: `Invoice ${invoiceNumber}`,
+        });
+        await appendLedgerEntry(client, {
+          organisationId,
+          customerId,
+          branchId,
+          entryType: "PAYMENT",
+          referenceType: "PAYMENT",
+          referenceId: paymentId,
+          creditAmount: grandTotal,
+          description: `Payment received for ${invoiceNumber} (${receiptNumber})`,
+        });
+      }
 
       // 6. Update Customer Statistics
       if (customerId) {
@@ -1401,6 +1491,22 @@ class CashierService {
       );
 
       const returnRecord = returnRes.rows[0];
+
+      // Ledger: a return credits the customer (refund/store credit owed
+      // back to them), regardless of the physical refund method.
+      const ledgerCustomerId = origInvoice.customer_id || customerId;
+      if (ledgerCustomerId && totalRefund > 0) {
+        await appendLedgerEntry(client, {
+          organisationId,
+          customerId: ledgerCustomerId,
+          branchId,
+          entryType: "RETURN",
+          referenceType: "RETURN",
+          referenceId: returnRecord.id,
+          creditAmount: totalRefund,
+          description: `Return ${returnNumber} against invoice ${invoiceNo}`,
+        });
+      }
 
       // Get first invoice item id as fallback
       const invItemRes = await client.query(

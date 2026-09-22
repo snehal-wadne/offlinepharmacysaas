@@ -1,6 +1,5 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,12 +9,71 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 
 import { useSuperAdmin } from './store';
+import { useIsMobile } from '../../utils/responsive';
+import { notify } from '../../utils/alert';
+import { fetchPharmacyInvoices, downloadInvoicePdf } from '../../api/superadminApi';
+
+type InvoiceRecord = {
+  id: string;
+  invoice_number: string;
+  total_amount: string | number;
+  issued_at: string;
+  status: string;
+};
+
+function formatInvoiceDate(value: string) {
+  try {
+    return new Date(value).toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+  } catch {
+    return value;
+  }
+}
 
 export default function PharmacyDetailsPage() {
   const { pharmacyId } = useLocalSearchParams<{ pharmacyId?: string }>();
   const { getPharmacy, updatePharmacy } = useSuperAdmin();
+  const isMobile = useIsMobile();
 
   const pharmacy = pharmacyId ? getPharmacy(pharmacyId) : undefined;
+
+  const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!pharmacy?.id) return;
+    fetchPharmacyInvoices(pharmacy.id)
+      .then((res) => {
+        if (res && res.success && Array.isArray(res.data)) {
+          setInvoices(res.data);
+        }
+      })
+      .catch((err) => console.warn('Could not load invoices:', err));
+  }, [pharmacy?.id]);
+
+  const handleDownloadInvoice = async (invoice: InvoiceRecord) => {
+    setDownloadingId(invoice.id);
+    try {
+      await downloadInvoicePdf(invoice.id, `${invoice.invoice_number}.pdf`);
+    } catch (err: any) {
+      notify('Download Failed', err?.message || 'Could not download invoice.');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  const handleDownloadAll = async () => {
+    if (invoices.length === 0) {
+      notify('No Invoices', 'There are no invoices to download yet.');
+      return;
+    }
+    for (const invoice of invoices) {
+      await handleDownloadInvoice(invoice);
+    }
+  };
 
   if (!pharmacy) {
     return (
@@ -78,7 +136,7 @@ export default function PharmacyDetailsPage() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, isMobile && styles.contentMobile]}
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.breadcrumb}>
@@ -90,7 +148,7 @@ export default function PharmacyDetailsPage() {
         <Text style={styles.breadcrumbCurrent}>{pharmacy.name} - View</Text>
       </View>
 
-      <View style={styles.topSection}>
+      <View style={[styles.topSection, isMobile && styles.topSectionMobile]}>
         <View style={styles.pharmacyHeading}>
           <View style={styles.largeAvatar}>
             <Text style={styles.largeAvatarText}>{pharmacy.initials}</Text>
@@ -172,7 +230,7 @@ export default function PharmacyDetailsPage() {
       </View>
 
       <View style={styles.detailsRow}>
-        <View style={styles.businessPanel}>
+        <View style={[styles.businessPanel, isMobile && styles.fullWidthCard]}>
           <View style={styles.panelHeader}>
             <Text style={styles.panelTitle}>Business Information</Text>
 
@@ -216,7 +274,7 @@ export default function PharmacyDetailsPage() {
           />
         </View>
 
-        <View style={styles.subscriptionPanel}>
+        <View style={[styles.subscriptionPanel, isMobile && styles.fullWidthCard]}>
           <Text style={styles.panelTitle}>Subscription Summary</Text>
 
           <DetailRow
@@ -285,7 +343,7 @@ export default function PharmacyDetailsPage() {
 
           <Pressable
             style={styles.downloadAllBtn}
-            onPress={() => Alert.alert('Export Invoices', 'All invoices downloaded successfully.')}
+            onPress={handleDownloadAll}
           >
             <Text style={styles.downloadAllText}>⇩ Download All</Text>
           </Pressable>
@@ -318,8 +376,12 @@ export default function PharmacyDetailsPage() {
               <Text style={[styles.invoiceKpiIconText, { color: '#2563EB' }]}>▣</Text>
             </View>
             <Text style={styles.invoiceKpiLabel}>Latest Invoice</Text>
-            <Text style={[styles.invoiceKpiValue, { color: '#1E293B' }]}>INV-2026-0012</Text>
-            <Text style={styles.invoiceKpiSubtitle}>Issued on 30 Aug 2026</Text>
+            <Text style={[styles.invoiceKpiValue, { color: '#1E293B' }]}>
+              {invoices[0]?.invoice_number || 'No invoices yet'}
+            </Text>
+            <Text style={styles.invoiceKpiSubtitle}>
+              {invoices[0] ? `Issued on ${formatInvoiceDate(invoices[0].issued_at)}` : '-'}
+            </Text>
           </View>
 
           <View style={styles.invoiceKpiCard}>
@@ -338,67 +400,50 @@ export default function PharmacyDetailsPage() {
         <Text style={styles.invoiceRecordHeader}>Invoice Documents</Text>
 
         <View style={styles.invoiceListGrid}>
-          <View style={styles.invoiceDocCard}>
-            <View style={styles.invoiceDocTop}>
-              <View style={styles.invoiceDocTag}>
-                <Text style={styles.invoiceDocTagText}>ANNUAL RENEWAL</Text>
-              </View>
-              <Text style={styles.invoiceDocStatus}>● PAID</Text>
-            </View>
-
-            <Text style={styles.invoiceDocNumber}>INV-2026-0012</Text>
+          {invoices.length === 0 && (
             <Text style={styles.invoiceDocDesc}>
-              {pharmacy.plan} Plan • {pharmacy.userLimit} Users • 1 Year License
+              No invoices have been generated for this pharmacy yet.
             </Text>
+          )}
 
-            <View style={styles.invoiceDocDivider} />
-
-            <View style={styles.invoiceDocBottom}>
-              <View>
-                <Text style={styles.invoiceDocDate}>Issued: 30 Aug 2026</Text>
-                <Text style={styles.invoiceDocAmount}>
-                  {getPlanAmount(pharmacy.plan)}
-                </Text>
+          {invoices.map((invoice) => (
+            <View key={invoice.id} style={styles.invoiceDocCard}>
+              <View style={styles.invoiceDocTop}>
+                <View style={styles.invoiceDocTag}>
+                  <Text style={styles.invoiceDocTagText}>SUBSCRIPTION</Text>
+                </View>
+                <Text style={styles.invoiceDocStatus}>● {invoice.status}</Text>
               </View>
 
-              <Pressable
-                style={styles.invoiceDownloadBtn}
-                onPress={() => Alert.alert('Download', 'Downloading INV-2026-0012.pdf')}
-              >
-                <Text style={styles.invoiceDownloadBtnText}>⇩ PDF</Text>
-              </Pressable>
-            </View>
-          </View>
+              <Text style={styles.invoiceDocNumber}>{invoice.invoice_number}</Text>
+              <Text style={styles.invoiceDocDesc}>
+                {pharmacy.plan} Plan • {pharmacy.userLimit} Users • 1 Year License
+              </Text>
 
-          <View style={styles.invoiceDocCard}>
-            <View style={styles.invoiceDocTop}>
-              <View style={[styles.invoiceDocTag, { backgroundColor: '#F1F5F9' }]}>
-                <Text style={[styles.invoiceDocTagText, { color: '#475569' }]}>ONBOARDING</Text>
+              <View style={styles.invoiceDocDivider} />
+
+              <View style={styles.invoiceDocBottom}>
+                <View>
+                  <Text style={styles.invoiceDocDate}>
+                    Issued: {formatInvoiceDate(invoice.issued_at)}
+                  </Text>
+                  <Text style={styles.invoiceDocAmount}>
+                    ₹{Number(invoice.total_amount).toLocaleString('en-IN')}
+                  </Text>
+                </View>
+
+                <Pressable
+                  style={styles.invoiceDownloadBtn}
+                  disabled={downloadingId === invoice.id}
+                  onPress={() => handleDownloadInvoice(invoice)}
+                >
+                  <Text style={styles.invoiceDownloadBtnText}>
+                    {downloadingId === invoice.id ? '...' : '⇩ PDF'}
+                  </Text>
+                </Pressable>
               </View>
-              <Text style={styles.invoiceDocStatus}>● PAID</Text>
             </View>
-
-            <Text style={styles.invoiceDocNumber}>INV-2025-0089</Text>
-            <Text style={styles.invoiceDocDesc}>
-              Initial Platform Onboarding & License Activation
-            </Text>
-
-            <View style={styles.invoiceDocDivider} />
-
-            <View style={styles.invoiceDocBottom}>
-              <View>
-                <Text style={styles.invoiceDocDate}>Issued: 01 Sep 2025</Text>
-                <Text style={styles.invoiceDocAmount}>₹9,999</Text>
-              </View>
-
-              <Pressable
-                style={styles.invoiceDownloadBtn}
-                onPress={() => Alert.alert('Download', 'Downloading INV-2025-0089.pdf')}
-              >
-                <Text style={styles.invoiceDownloadBtnText}>⇩ PDF</Text>
-              </Pressable>
-            </View>
-          </View>
+          ))}
         </View>
       </View>
     </ScrollView>
@@ -465,6 +510,10 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingBottom: 50,
   },
+  contentMobile: {
+    padding: 14,
+    paddingBottom: 32,
+  },
   breadcrumb: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -490,6 +539,12 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 16,
     marginBottom: 20,
+  },
+  topSectionMobile: {
+    alignItems: 'flex-start',
+  },
+  fullWidthCard: {
+    minWidth: '100%',
   },
   pharmacyHeading: {
     flexDirection: 'row',

@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -17,6 +16,9 @@ import {
   fetchPharmacies,
   fetchSubscriptionPlans,
 } from '../../api/superadminApi';
+import { openRazorpayCheckout } from '../../utils/razorpayCheckout';
+import { notify } from '../../utils/alert';
+import { useIsMobile } from '../../utils/responsive';
 
 export type PaymentStatus = 'Success' | 'Pending' | 'Failed' | 'Refunded';
 
@@ -332,6 +334,7 @@ export default function RazorPayPaymentsPage() {
     billingCycle?: string;
   }>();
 
+  const isMobile = useIsMobile();
   const [payments, setPayments] = useState<Payment[]>(PAYMENTS);
   const [isProcessingAction, setIsProcessingAction] = useState(false);
   const [search, setSearch] = useState('');
@@ -379,7 +382,8 @@ export default function RazorPayPaymentsPage() {
       const plan = plansRes?.data?.[0];
 
       if (!org) {
-        Alert.alert('Simulate Payment', 'No pharmacy found to simulate payment.');
+        notify('Simulate Payment', 'No pharmacy found to simulate payment.');
+        setIsProcessingAction(false);
         return;
       }
 
@@ -390,16 +394,33 @@ export default function RazorPayPaymentsPage() {
       });
 
       if (orderRes && orderRes.data && orderRes.data.razorpayOrderId) {
-        await verifyPayment({
-          razorpay_order_id: orderRes.data.razorpayOrderId,
-          razorpay_payment_id: `pay_sim_${Date.now()}`,
-          razorpay_signature: `sim_sig_${Date.now()}`,
+        await new Promise<void>((resolve, reject) => {
+          openRazorpayCheckout({
+            orderId: orderRes.data.razorpayOrderId,
+            amount: orderRes.data.amount,
+            currency: orderRes.data.currency || 'INR',
+            keyId: orderRes.data.keyId,
+            pharmacyName: org.name,
+            description: `Subscription payment for ${org.name}`,
+            onSuccess: async (resp) => {
+              try {
+                await verifyPayment(resp);
+                notify('Payment Succeeded', `Payment processed for ${org.name}`);
+                await loadPayments();
+                resolve();
+              } catch (e: any) {
+                reject(e);
+              }
+            },
+            onDismiss: () => {
+              notify('Payment Cancelled', 'The payment window was closed.');
+              resolve();
+            },
+          });
         });
-        Alert.alert('Payment Succeeded', `Simulated payment processed for ${org.name}`);
-        await loadPayments();
       }
     } catch (err: any) {
-      Alert.alert('Simulation Error', err.message || 'Payment simulation failed.');
+      notify('Payment Error', err.message || 'Payment failed.');
     } finally {
       setIsProcessingAction(false);
     }
@@ -412,10 +433,10 @@ export default function RazorPayPaymentsPage() {
       await processRefund(payment.id, {
         reason: 'Requested by Super Administrator',
       });
-      Alert.alert('Refund Processed', `Refund completed successfully for ${payment.pharmacyName}`);
+      notify('Refund Processed', `Refund completed successfully for ${payment.pharmacyName}`);
       await loadPayments();
     } catch (err: any) {
-      Alert.alert('Refund Failed', err.message || 'Could not process refund.');
+      notify('Refund Failed', err.message || 'Could not process refund.');
     } finally {
       setIsProcessingAction(false);
     }
@@ -533,7 +554,7 @@ export default function RazorPayPaymentsPage() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, isMobile && styles.contentMobile]}
       showsVerticalScrollIndicator={false}
       onScrollBeginDrag={() => {
         if (statusDropdownOpen) setStatusDropdownOpen(false);
@@ -1079,6 +1100,10 @@ const styles = StyleSheet.create({
   content: {
     padding: 24,
     paddingBottom: 60,
+  },
+  contentMobile: {
+    padding: 14,
+    paddingBottom: 40,
   },
   header: {
     flexDirection: 'row',

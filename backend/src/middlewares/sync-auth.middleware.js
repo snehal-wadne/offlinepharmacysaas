@@ -344,6 +344,37 @@ const requireSyncAuth = async (req, res, next) => {
         });
       }
 
+      // Resolve and attach the user's role for this organisation. Other
+      // authorization helpers (e.g. tenant-context.js's getAuthorizedBranchId)
+      // read req.user.role to decide whether to skip the per-branch
+      // assignment check for OWNER/ADMIN/MANAGER users. Without this, an
+      // otherwise-authorized admin who lacks a branch_assignments row for a
+      // specific branch (because their role grants org-wide access instead)
+      // gets incorrectly blocked as "not assigned to the requested branch".
+      if (req.user.is_platform_superadmin || org.owner_id === req.user.id) {
+        req.user.role = "OWNER";
+      } else {
+        const roleRes = await pool.query(
+          `SELECT r.role_identifier, r.name
+           FROM branch_assignments ba
+           JOIN organisation_memberships om ON om.id = ba.membership_id
+           JOIN roles r ON r.id = ba.role_id
+           WHERE om.organisation_id = $1 AND om.user_id = $2 AND om.status = 'ACTIVE'
+           ORDER BY CASE r.role_identifier
+             WHEN 'OWNER' THEN 1
+             WHEN 'ADMIN' THEN 2
+             WHEN 'MANAGER' THEN 3
+             ELSE 4
+           END
+           LIMIT 1;`,
+          [rawOrgId, req.user.id],
+        );
+        if (roleRes.rows.length > 0) {
+          req.user.role =
+            roleRes.rows[0].role_identifier || roleRes.rows[0].name;
+        }
+      }
+
       // Branch validation (if specified)
       const isSentinelBranch =
         rawBranchId === "All Branches" ||

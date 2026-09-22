@@ -24,11 +24,15 @@ import {
   deleteInventoryEntry,
   recordStockMovementApi,
   fetchItemBarcode,
+  updateItemStatusApi,
+  updateItemRxApi,
 } from "../../api/inventoryApi";
 import { fetchBranches } from "../../api/branchApi";
+import { fetchCashierProducts } from "../../api/cashierApi";
 import { API_URL } from "../../config";
 import { localPersistenceService } from "../../db";
 import { syncEngine } from "../../sync";
+import { usePos } from "../../context/PosContext";
 import BulkImportModal from "../../components/inventory/BulkImportModal";
 
 export default function StockAdjustmentsScreen({
@@ -39,6 +43,24 @@ export default function StockAdjustmentsScreen({
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
   const isMobile = width < 768;
+
+  // Shared POS product catalog so a newly added/edited medicine is
+  // searchable in New Sale immediately, without waiting for a reload.
+  const { setProducts: setPosProducts } = usePos();
+  const refreshPosCatalog = async () => {
+    try {
+      const rawBranch =
+        typeof selectedBranch === "object" && selectedBranch !== null
+          ? selectedBranch.id || selectedBranch.name
+          : selectedBranch;
+      const freshProducts = await fetchCashierProducts("", "", rawBranch);
+      if (Array.isArray(freshProducts) && freshProducts.length > 0) {
+        setPosProducts(freshProducts);
+      }
+    } catch (err) {
+      console.warn("Failed to refresh POS catalog:", err.message);
+    }
+  };
 
   // Stock Items State for Adjustments Table with isActive and rxRequired flags
   const [stockItems, setStockItems] = useState([]);
@@ -78,6 +100,52 @@ export default function StockAdjustmentsScreen({
         typeof localPersistenceService?.getTenantContext === "function"
           ? localPersistenceService.getTenantContext()
           : { isDemo: true, branchId: "Main Store" };
+
+      // Real (non-demo) tenants are backed by the server database, which is
+      // the source of truth for medicines added/edited via the form below.
+      // Only fall back to the local offline catalog for demo mode or when
+      // the backend request below fails (e.g. device is offline).
+      if (!tenantCtx.isDemo) {
+        try {
+          const rawBranch =
+            typeof selectedBranch === "object" && selectedBranch !== null
+              ? selectedBranch.id || selectedBranch.name
+              : selectedBranch;
+          const branchParam =
+            rawBranch &&
+            rawBranch !== "All Branches" &&
+            rawBranch !== "all" &&
+            rawBranch !== "No Active Branch"
+              ? rawBranch
+              : undefined;
+          const invRes = await fetchInventory({ branchId: branchParam });
+          const invList = Array.isArray(invRes?.data?.data)
+            ? invRes.data.data
+            : Array.isArray(invRes?.data)
+              ? invRes.data
+              : null;
+          if (invRes && invRes.success && invList) {
+            setStockItems(
+              invList.map((item, idx) => ({
+                ...item,
+                isActive: item.isActive !== undefined ? item.isActive : true,
+                rxRequired:
+                  item.rxRequired !== undefined
+                    ? item.rxRequired
+                    : idx % 2 === 0,
+              })),
+            );
+            return;
+          }
+          setStockItems([]);
+          return;
+        } catch (apiErr) {
+          console.warn(
+            "Failed to load inventory from server, falling back to local cache:",
+            apiErr.message,
+          );
+        }
+      }
 
       let localProds = [];
       if (typeof localPersistenceService?.getCatalogForPos === "function") {
@@ -262,10 +330,26 @@ export default function StockAdjustmentsScreen({
     sku: "",
     batchNo: "",
     quantity: "",
-    branchId: "Main Store",
+    branchId: "",
     shelfLocation: "",
   });
   const [formErrors, setFormErrors] = useState({});
+  const [branchDropdownOpen, setBranchDropdownOpen] = useState(false);
+
+  // Default the Add Medicine form to the currently active branch (a real
+  // branch id/name), instead of leaving it on a placeholder that doesn't
+  // exist in the tenant's `branches` table and fails the save server-side.
+  useEffect(() => {
+    if (!editingItemId && !formData.branchId) {
+      const activeBranchId =
+        typeof selectedBranch === "object" && selectedBranch !== null
+          ? selectedBranch.id || selectedBranch.name
+          : selectedBranch;
+      if (activeBranchId && activeBranchId !== "All Branches") {
+        setFormData((prev) => ({ ...prev, branchId: activeBranchId }));
+      }
+    }
+  }, [selectedBranch, editingItemId]);
 
   const handleFormChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -274,14 +358,19 @@ export default function StockAdjustmentsScreen({
     }
   };
 
-  const handleToggleStatus = (itemId) => {
+  const handleToggleStatus = async (itemId) => {
+    let nextActive = false;
+    let targetItem = null;
+
     setStockItems((prev) =>
       prev.map((item) => {
         if (item.id === itemId) {
-          const nextActive = !item.isActive;
+          nextActive = !item.isActive;
+          targetItem = item;
           if (onShowToast) {
             onShowToast(
-              `[PATCH /api/inventory/${item.sku}/status] ${item.brandName || item.medicineName} status: ${nextActive ? "Active (Live in billing)" : "Deactivated / Hidden"
+              `${item.brandName || item.medicineName} status: ${
+                nextActive ? "Active (Live in billing)" : "Deactivated / Hidden from Sales"
               }`,
             );
           }
@@ -290,16 +379,30 @@ export default function StockAdjustmentsScreen({
         return item;
       }),
     );
+
+    if (targetItem) {
+      const identifier = targetItem.sku || targetItem.productId || targetItem.id;
+      try {
+        await updateItemStatusApi(identifier, nextActive);
+      } catch (e) {
+        console.warn("Could not save status toggle to backend:", e.message);
+      }
+    }
   };
 
-  const handleToggleRx = (itemId) => {
+  const handleToggleRx = async (itemId) => {
+    let nextRx = false;
+    let targetItem = null;
+
     setStockItems((prev) =>
       prev.map((item) => {
         if (item.id === itemId) {
-          const nextRx = !item.rxRequired;
+          nextRx = !item.rxRequired;
+          targetItem = item;
           if (onShowToast) {
             onShowToast(
-              `[PATCH /api/inventory/${item.sku}/rx] ${item.brandName || item.medicineName}: Prescription required: ${nextRx ? "YES (Rx Needed)" : "NO (OTC)"
+              `${item.brandName || item.medicineName}: Prescription required: ${
+                nextRx ? "YES (Rx Needed)" : "NO (OTC)"
               }`,
             );
           }
@@ -308,6 +411,15 @@ export default function StockAdjustmentsScreen({
         return item;
       }),
     );
+
+    if (targetItem) {
+      const identifier = targetItem.sku || targetItem.productId || targetItem.id;
+      try {
+        await updateItemRxApi(identifier, nextRx);
+      } catch (e) {
+        console.warn("Could not save Rx toggle to backend:", e.message);
+      }
+    }
   };
 
   const handleOpenActionMenu = (item) => {
@@ -335,7 +447,7 @@ export default function StockAdjustmentsScreen({
         return;
       }
       const currentBranch =
-        item.branchId || "FIT Main Campus Hospital Pharmacy";
+        item.branchName || item.branchId || "FIT Main Campus Hospital Pharmacy";
       setFromBranch(currentBranch);
 
       const destCandidate =
@@ -379,7 +491,7 @@ export default function StockAdjustmentsScreen({
         sku: item.sku || "",
         batchNo: item.batchNo || "",
         quantity: item.quantity !== undefined ? String(item.quantity) : "",
-        branchId: item.branchId || "Main Store",
+        branchId: item.branchId || "",
         shelfLocation: item.shelfLocation || "",
       });
       if (onShowToast) {
@@ -627,7 +739,7 @@ export default function StockAdjustmentsScreen({
       expiryDate: item.expiryDate || "2028-12-31",
       mrp: item.amount || "₹25.00",
       shelfLocation: item.shelfLocation || "Rack A1-S1",
-      branchName: item.branchId || "Main Store",
+      branchName: item.branchName || item.branchId || "Main Store",
       pharmacyName: "Falah Pharmacy",
     };
     setBarcodeItemData(initialData);
@@ -986,6 +1098,9 @@ export default function StockAdjustmentsScreen({
     ) {
       errors.quantity = "Valid quantity is required";
     }
+    if (isMultiBranch && !formData.branchId) {
+      errors.branchId = "Please select a branch";
+    }
 
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
@@ -1015,14 +1130,31 @@ export default function StockAdjustmentsScreen({
       sku: formData.sku,
       batchNo: formData.batchNo,
       quantity: Number(formData.quantity),
-      branchId: isMultiBranch ? formData.branchId || "BR-01" : "Main Store",
+      branchId:
+        formData.branchId ||
+        (typeof selectedBranch === "object" && selectedBranch !== null
+          ? selectedBranch.id || selectedBranch.name
+          : selectedBranch) ||
+        undefined,
       shelfLocation: formData.shelfLocation || "A1-S1",
     };
 
     try {
       if (editingItemId) {
         const res = await updateInventoryEntry(editingItemId, payload);
-        const updatedItem = res?.data || payload;
+
+        if (!res || res.success === false) {
+          if (onShowToast) {
+            onShowToast(
+              `✗ Could not update "${payload.brandName}": ${
+                res?.error || "Server error, please try again"
+              }`,
+            );
+          }
+          return;
+        }
+
+        const updatedItem = res.data?.data || payload;
 
         setStockItems((prev) =>
           prev.map((item) =>
@@ -1041,9 +1173,22 @@ export default function StockAdjustmentsScreen({
         if (onShowToast) {
           onShowToast(`✓ Updated product "${payload.brandName}" in database!`);
         }
+        refreshPosCatalog();
       } else {
         const res = await saveInventoryEntry(payload);
-        const newItem = res?.data || {
+
+        if (!res || res.success === false) {
+          if (onShowToast) {
+            onShowToast(
+              `✗ Could not save "${payload.brandName}": ${
+                res?.error || "Server error, please try again"
+              }`,
+            );
+          }
+          return;
+        }
+
+        const newItem = res.data?.data || {
           ...payload,
           id: `adj-stk-${Date.now()}`,
           updatedBy: "Manager",
@@ -1060,37 +1205,16 @@ export default function StockAdjustmentsScreen({
             `✓ Added "${newItem.brandName}" to database products table!`,
           );
         }
+        refreshPosCatalog();
       }
     } catch (err) {
-      console.warn(
-        "API save/update failed, performing fallback in state:",
-        err.message,
-      );
-      if (editingItemId) {
-        setStockItems((prev) =>
-          prev.map((item) =>
-            item.id === editingItemId
-              ? {
-                ...item,
-                ...payload,
-              }
-              : item,
-          ),
+      console.error("[StockAdjustments] Add/update medicine failed:", err);
+      if (onShowToast) {
+        onShowToast(
+          `✗ Could not save "${payload.brandName}": ${err.message || "Unexpected error"}`,
         );
-        if (onShowToast) onShowToast(`✓ Updated "${payload.brandName}"!`);
-      } else {
-        const newItem = {
-          ...payload,
-          id: `adj-stk-${Date.now()}`,
-          updatedBy: "Manager",
-          lastUpdated: new Date().toISOString().split("T")[0],
-          status: Number(formData.quantity) < 50 ? "Low Stock" : "In Stock",
-          isActive: true,
-          rxRequired: false,
-        };
-        setStockItems((prev) => [newItem, ...prev]);
-        if (onShowToast) onShowToast(`✓ Added "${newItem.brandName}"!`);
       }
+      return;
     }
 
     setEditingItemId(null);
@@ -1106,7 +1230,7 @@ export default function StockAdjustmentsScreen({
       sku: "",
       batchNo: "",
       quantity: "",
-      branchId: "Main Store",
+      branchId: "",
       shelfLocation: "",
     });
     setFormErrors({});
@@ -1126,7 +1250,7 @@ export default function StockAdjustmentsScreen({
       sku: "",
       batchNo: "",
       quantity: "",
-      branchId: "Main Store",
+      branchId: "",
       shelfLocation: "",
     });
     setFormErrors({});
@@ -1420,9 +1544,9 @@ export default function StockAdjustmentsScreen({
                   </View>
                   {isMultiBranch && (
                     <View style={styles.mobileGridItem}>
-                      <Text style={styles.mobileItemLabel}>Branch ID</Text>
+                      <Text style={styles.mobileItemLabel}>Branch</Text>
                       <Text style={styles.mobileItemValue}>
-                        {item.branchId}
+                        {item.branchName || item.branchId}
                       </Text>
                     </View>
                   )}
@@ -1609,7 +1733,7 @@ export default function StockAdjustmentsScreen({
                         { width: 85, textAlign: "center" },
                       ]}
                     >
-                      {item.branchId}
+                      {item.branchName || item.branchId}
                     </Text>
                   )}
 
@@ -1916,17 +2040,90 @@ export default function StockAdjustmentsScreen({
 
           {isMultiBranch ? (
             <View style={styles.formFieldHalf}>
-              <Text style={styles.fieldLabel}>Branch ID</Text>
-              <TextInput
-                style={styles.formInput}
-                placeholder="e.g., BR-01 / Main Branch"
-                placeholderTextColor="#94A3B8"
-                value={formData.branchId}
-                onChangeText={(t) => handleFormChange("branchId", t)}
-              />
+              <Text style={styles.fieldLabel}>
+                Branch <Text style={styles.reqStar}>*</Text>
+              </Text>
+              {branchesList.length > 0 ? (
+                <Pressable
+                  onPress={() => setBranchDropdownOpen(true)}
+                  style={[
+                    styles.branchDropdownButton,
+                    formErrors.branchId && styles.formInputError,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Select Branch"
+                >
+                  <Text
+                    style={styles.branchDropdownButtonText}
+                    numberOfLines={1}
+                  >
+                    {branchesList.find(
+                      (b) => (b.id || b.name) === formData.branchId,
+                    )?.name || "Select a branch"}
+                  </Text>
+                  <Text style={styles.chevronIcon}>▾</Text>
+                </Pressable>
+              ) : (
+                <Text style={styles.formHelperText}>
+                  No active branches found — create one under Management &gt;
+                  Branches first.
+                </Text>
+              )}
+              {formErrors.branchId && (
+                <Text style={styles.errorText}>{formErrors.branchId}</Text>
+              )}
             </View>
           ) : null}
         </View>
+
+        {/* Branch Selection Modal (avoids clipping inside the scroll view) */}
+        <Modal
+          visible={branchDropdownOpen}
+          animationType="fade"
+          transparent={true}
+          onRequestClose={() => setBranchDropdownOpen(false)}
+        >
+          <Pressable
+            style={styles.modalBackdrop}
+            onPress={() => setBranchDropdownOpen(false)}
+          >
+            <Pressable style={styles.branchModalCard} onPress={() => {}}>
+              <Text style={styles.branchModalTitle}>Select Branch</Text>
+              <ScrollView style={{ maxHeight: 320 }}>
+                {branchesList.map((b) => {
+                  const bValue = b.id || b.name;
+                  const isSelected = formData.branchId === bValue;
+                  return (
+                    <Pressable
+                      key={`form-branch-${bValue}`}
+                      onPress={() => {
+                        handleFormChange("branchId", bValue);
+                        setBranchDropdownOpen(false);
+                      }}
+                      style={[
+                        styles.branchDropdownItem,
+                        isSelected && styles.branchDropdownItemActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.branchDropdownItemText,
+                          isSelected && styles.branchDropdownItemTextActive,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {b.name || b.id}
+                      </Text>
+                      {isSelected && (
+                        <Text style={styles.branchDropdownCheck}>✓</Text>
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </Pressable>
+          </Pressable>
+        </Modal>
 
         {/* Blue Submit / Update Button */}
         <View style={styles.formFooter}>
@@ -3447,6 +3644,98 @@ const styles = StyleSheet.create({
     color: "#DC2626",
     marginTop: 3,
     fontWeight: "500",
+  },
+  branchChipRow: {
+    maxHeight: 40,
+  },
+  branchChip: {
+    height: 36,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+  },
+  branchChipActive: {
+    backgroundColor: "#0F766E",
+    borderColor: "#0F766E",
+  },
+  branchChipText: {
+    fontSize: 12.5,
+    fontWeight: "600",
+    color: "#334155",
+  },
+  branchChipTextActive: {
+    color: "#FFFFFF",
+  },
+  branchModalCard: {
+    width: "100%",
+    maxWidth: 380,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    padding: 12,
+  },
+  branchModalTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#0F172A",
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
+  branchDropdownButton: {
+    height: 40,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  branchDropdownButtonText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#0F172A",
+    flex: 1,
+    marginRight: 8,
+  },
+  chevronIcon: {
+    fontSize: 12,
+    color: "#64748B",
+  },
+  branchDropdownItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  branchDropdownItemActive: {
+    backgroundColor: "#F0FDFA",
+  },
+  branchDropdownItemText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#334155",
+    flex: 1,
+    marginRight: 8,
+  },
+  branchDropdownItemTextActive: {
+    color: "#0F766E",
+  },
+  branchDropdownCheck: {
+    color: "#0F766E",
+    fontWeight: "700",
+  },
+  formHelperText: {
+    fontSize: 11.5,
+    color: "#94A3B8",
+    fontWeight: "500",
+    marginTop: 4,
   },
   formFooter: {
     paddingHorizontal: 20,

@@ -1,10 +1,10 @@
 import { Platform } from 'react-native';
 import { getAccessToken } from './supabaseClient';
 
-const API_BASE_URL =
-  Platform.OS === 'android'
-    ? 'http://10.0.2.2:5000/api/superadmin'
-    : 'http://localhost:5000/api/superadmin';
+const API_ROOT =
+  process.env.EXPO_PUBLIC_API_URL ||
+  (Platform.OS === 'android' ? 'http://10.0.2.2:5000' : 'http://localhost:5000');
+const API_BASE_URL = `${API_ROOT.replace(/\/$/, '')}/api/superadmin`;
 
 let customSuperadminToken: string | null = null;
 
@@ -215,4 +215,50 @@ export async function processRefund(paymentId: string, data: { amount?: number; 
     method: 'POST',
     body: JSON.stringify(data),
   });
+}
+
+// ------------------------------------------------------------
+// INVOICES
+// ------------------------------------------------------------
+
+export async function fetchPharmacyInvoices(pharmacyId: string) {
+  return apiRequest(`/pharmacies/${pharmacyId}/invoices`, { method: 'GET' });
+}
+
+/**
+ * Downloads an invoice PDF and saves it to the user's device.
+ * On web this triggers a normal browser file download.
+ */
+export async function downloadInvoicePdf(invoiceId: string, filename?: string) {
+  const url = `${API_BASE_URL}/invoices/${invoiceId}/pdf`;
+  const token = customSuperadminToken || (await getAccessToken());
+
+  const response = await fetch(url, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+
+  if (!response.ok) {
+    let message = `Failed to download invoice (status ${response.status}).`;
+    try {
+      const data = await response.json();
+      message = data.error || message;
+    } catch {}
+    throw new Error(message);
+  }
+
+  const blob = await response.blob();
+
+  if (Platform.OS === 'web' && typeof document !== 'undefined') {
+    const blobUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = filename || `${invoiceId}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(blobUrl);
+    return;
+  }
+
+  throw new Error('Invoice download is currently only supported on web.');
 }

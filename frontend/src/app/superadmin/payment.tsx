@@ -1,13 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import {
-  Alert,
-  Image,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -21,9 +17,10 @@ import {
   verifyPayment,
   fetchSubscriptionPlans,
 } from '../../api/superadminApi';
-import OfflineQRCode from '../../components/common/OfflineQRCode';
-
-type PaymentMethod = 'UPI' | 'Card' | 'Net Banking';
+import { openRazorpayCheckout } from '../../utils/razorpayCheckout';
+import { notify } from '../../utils/alert';
+import { useIsMobile } from '../../utils/responsive';
+import { clearAddPharmacyDraft } from './add-pharmacy';
 
 type PaymentParams = {
   mode?: string;
@@ -114,11 +111,8 @@ export default function PharmacyPaymentPage() {
     existingPharmacy?.branches ||
     1;
 
-  const [paymentMethod, setPaymentMethod] =
-    useState<PaymentMethod>('UPI');
-
-  const [upiId, setUpiId] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const isMobile = useIsMobile();
 
   const baseAmount = PLAN_PRICES[selectedPlan] ?? 0;
   const gstAmount = Math.round(baseAmount * 0.18);
@@ -132,7 +126,7 @@ export default function PharmacyPaymentPage() {
 
   const completePayment = async () => {
     if (existingPharmacy?.status === 'Deactivated') {
-      Alert.alert(
+      notify(
         'Pharmacy Deactivated',
         'Activate this pharmacy before processing a payment.',
       );
@@ -146,11 +140,33 @@ export default function PharmacyPaymentPage() {
         const renewRes = await renewSubscription(existingPharmacy.id, {
           billingCycle: 'ANNUAL',
         });
-        if (renewRes && renewRes.data && renewRes.data.razorpayOrderId) {
-          await verifyPayment({
-            razorpay_order_id: renewRes.data.razorpayOrderId,
-            razorpay_payment_id: `pay_sim_${Date.now()}`,
-            razorpay_signature: `sim_sig_${Date.now()}`,
+        const order = renewRes?.data;
+        if (order && order.razorpayOrderId) {
+          await new Promise<void>((resolve, reject) => {
+            openRazorpayCheckout({
+              orderId: order.razorpayOrderId,
+              amount: order.amount || totalAmount * 100,
+              currency: order.currency || 'INR',
+              keyId: order.keyId,
+              pharmacyName: existingPharmacy.name,
+              email: existingPharmacy.email,
+              phone: existingPharmacy.phone,
+              description: `Renew ${existingPharmacy.name} Subscription`,
+              onSuccess: async (resp) => {
+                try {
+                  await verifyPayment(resp);
+                  resolve();
+                } catch (e) {
+                  reject(e);
+                }
+              },
+              onDismiss: () => {
+                setIsProcessing(false);
+              },
+              onError: (err) => {
+                reject(err);
+              },
+            });
           });
         }
 
@@ -159,8 +175,8 @@ export default function PharmacyPaymentPage() {
           expiryDate: '01 Sep 2027',
         });
 
-        await refreshPharmacies().catch(() => {});
-        await refreshDashboard().catch(() => {});
+        refreshPharmacies().catch(() => {});
+        refreshDashboard().catch(() => {});
 
         setIsProcessing(false);
 
@@ -188,11 +204,33 @@ export default function PharmacyPaymentPage() {
             newPlanId: targetPlan.id,
             billingCycle: 'ANNUAL',
           });
-          if (upRes && upRes.data && upRes.data.razorpayOrderId) {
-            await verifyPayment({
-              razorpay_order_id: upRes.data.razorpayOrderId,
-              razorpay_payment_id: `pay_sim_${Date.now()}`,
-              razorpay_signature: `sim_sig_${Date.now()}`,
+          const order = upRes?.data;
+          if (order && order.razorpayOrderId) {
+            await new Promise<void>((resolve, reject) => {
+              openRazorpayCheckout({
+                orderId: order.razorpayOrderId,
+                amount: order.amount || totalAmount * 100,
+                currency: order.currency || 'INR',
+                keyId: order.keyId,
+                pharmacyName: existingPharmacy.name,
+                email: existingPharmacy.email,
+                phone: existingPharmacy.phone,
+                description: `Upgrade to ${selectedPlan} Subscription`,
+                onSuccess: async (resp) => {
+                  try {
+                    await verifyPayment(resp);
+                    resolve();
+                  } catch (e) {
+                    reject(e);
+                  }
+                },
+                onDismiss: () => {
+                  setIsProcessing(false);
+                },
+                onError: (err) => {
+                  reject(err);
+                },
+              });
             });
           }
         }
@@ -203,8 +241,8 @@ export default function PharmacyPaymentPage() {
           status: 'Active',
         });
 
-        await refreshPharmacies().catch(() => {});
-        await refreshDashboard().catch(() => {});
+        refreshPharmacies().catch(() => {});
+        refreshDashboard().catch(() => {});
 
         setIsProcessing(false);
 
@@ -248,10 +286,31 @@ export default function PharmacyPaymentPage() {
       const temporaryPassword = credentials?.temporaryPassword || '';
 
       if (paymentOrder && paymentOrder.razorpayOrderId) {
-        await verifyPayment({
-          razorpay_order_id: paymentOrder.razorpayOrderId,
-          razorpay_payment_id: `pay_sim_${Date.now()}`,
-          razorpay_signature: `sim_sig_${Date.now()}`,
+        await new Promise<void>((resolve, reject) => {
+          openRazorpayCheckout({
+            orderId: paymentOrder.razorpayOrderId,
+            amount: paymentOrder.amount || totalAmount * 100,
+            currency: paymentOrder.currency || 'INR',
+            keyId: paymentOrder.keyId,
+            pharmacyName,
+            email,
+            phone: getParam(params.phone),
+            description: `${selectedPlan} Plan Subscription`,
+            onSuccess: async (resp) => {
+              try {
+                await verifyPayment(resp);
+                resolve();
+              } catch (e) {
+                reject(e);
+              }
+            },
+            onDismiss: () => {
+              setIsProcessing(false);
+            },
+            onError: (err) => {
+              reject(err);
+            },
+          });
         });
       }
 
@@ -285,8 +344,9 @@ export default function PharmacyPaymentPage() {
       };
 
       addPharmacy(newPharmacy);
-      await refreshPharmacies().catch(() => {});
-      await refreshDashboard().catch(() => {});
+      clearAddPharmacyDraft();
+      refreshPharmacies().catch(() => {});
+      refreshDashboard().catch(() => {});
 
       setIsProcessing(false);
 
@@ -303,14 +363,15 @@ export default function PharmacyPaymentPage() {
       });
     } catch (err: any) {
       setIsProcessing(false);
-      Alert.alert('Payment Error', err.message || 'Payment processing encountered an error.');
+      console.error('Payment error:', err);
+      notify('Payment Error', err?.message || 'Payment processing encountered an error.');
     }
   };
 
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, isMobile && styles.contentMobile]}
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.breadcrumb}>
@@ -329,7 +390,7 @@ export default function PharmacyPaymentPage() {
       </Text>
 
       <View style={styles.mainGrid}>
-        <View style={styles.orderCard}>
+        <View style={[styles.orderCard, isMobile && styles.fullWidthCard]}>
           <Text style={styles.cardTitle}>Order Summary</Text>
 
           <SummaryRow
@@ -385,88 +446,17 @@ export default function PharmacyPaymentPage() {
           </View>
         </View>
 
-        <View style={styles.paymentCard}>
-          <Text style={styles.cardTitle}>Select Payment Method</Text>
+        <View style={[styles.paymentCard, isMobile && styles.fullWidthCard]}>
+          <Text style={styles.cardTitle}>Payment</Text>
 
-          <Text style={styles.label}>Mode of Payment *</Text>
-
-          <View style={styles.methodRow}>
-            <PaymentMethodButton
-              title="UPI"
-              selected={paymentMethod === 'UPI'}
-              onPress={() => setPaymentMethod('UPI')}
-            />
-
-            <PaymentMethodButton
-              title="Card"
-              selected={paymentMethod === 'Card'}
-              onPress={() => setPaymentMethod('Card')}
-            />
-
-            <PaymentMethodButton
-              title="Net Banking"
-              selected={paymentMethod === 'Net Banking'}
-              onPress={() => setPaymentMethod('Net Banking')}
-            />
+          <View style={styles.razorpayBadge}>
+            <Text style={styles.razorpayBadgeText}>Secured by Razorpay</Text>
           </View>
 
-          {paymentMethod === 'UPI' && (
-            <>
-              <Text style={styles.label}>UPI ID (Optional for custom VPA)</Text>
-
-              <TextInput
-                value={upiId}
-                onChangeText={setUpiId}
-                placeholder="billing@pharmaflow or user@okhdfcbank"
-                placeholderTextColor="#94A3B8"
-                style={styles.input}
-                autoCapitalize="none"
-              />
-
-              <View style={styles.qrBox}>
-                <View style={styles.qrPlaceholder}>
-                  <OfflineQRCode
-                    value={`upi://pay?pa=${encodeURIComponent(
-                      upiId.trim() || 'billing@pharmaflow'
-                    )}&pn=PharmaFlow%20Technologies&am=${totalAmount}&cu=INR&tn=${encodeURIComponent(
-                      `Plan ${selectedPlan} - ${pharmacyName}`
-                    )}`}
-                    size={170}
-                  />
-                </View>
-
-                <View style={styles.qrDetails}>
-                  <Text style={styles.scanTitle}>
-                    Scan to Pay {formatCurrency(totalAmount)}
-                  </Text>
-                  <Text style={styles.scanSubtitle}>
-                    Open any UPI app (GPay, PhonePe, Paytm, BHIM) and scan this QR code
-                  </Text>
-                  <View style={styles.vpaBadge}>
-                    <Text style={styles.vpaBadgeText}>
-                      VPA: {upiId.trim() || 'billing@pharmaflow'}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            </>
-          )}
-
-          {paymentMethod === 'Card' && (
-            <View style={styles.infoBox}>
-              <Text style={styles.infoText}>
-                Card payment checkout will open securely through Razorpay.
-              </Text>
-            </View>
-          )}
-
-          {paymentMethod === 'Net Banking' && (
-            <View style={styles.infoBox}>
-              <Text style={styles.infoText}>
-                Net banking checkout will open securely through Razorpay.
-              </Text>
-            </View>
-          )}
+          <Text style={styles.infoText}>
+            Clicking below opens the Razorpay checkout where you can pay using
+            UPI, Card, Net Banking, or Wallet.
+          </Text>
         </View>
       </View>
 
@@ -488,7 +478,7 @@ export default function PharmacyPaymentPage() {
           onPress={completePayment}
         >
           <Text style={styles.paidText}>
-            {isProcessing ? 'Processing...' : 'Paid'}
+            {isProcessing ? 'Processing with Razorpay...' : `Pay with Razorpay (${formatCurrency(totalAmount)}) →`}
           </Text>
         </Pressable>
       </View>
@@ -564,36 +554,6 @@ function SummaryRow({
   );
 }
 
-function PaymentMethodButton({
-  title,
-  selected,
-  onPress,
-}: {
-  title: PaymentMethod;
-  selected: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      style={[
-        styles.methodButton,
-        selected && styles.selectedMethodButton,
-      ]}
-      onPress={onPress}
-    >
-      <Text
-        style={[
-          styles.methodText,
-          selected && styles.selectedMethodText,
-        ]}
-      >
-        {selected ? '● ' : '○ '}
-        {title}
-      </Text>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -602,6 +562,10 @@ const styles = StyleSheet.create({
   content: {
     padding: 24,
     paddingBottom: 45,
+  },
+  contentMobile: {
+    padding: 14,
+    paddingBottom: 32,
   },
   breadcrumb: {
     flexDirection: 'row',
@@ -713,6 +677,10 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
     backgroundColor: '#FFFFFF',
   },
+  fullWidthCard: {
+    minWidth: '100%',
+    padding: 18,
+  },
   cardTitle: {
     marginBottom: 14,
     color: '#1E293B',
@@ -765,116 +733,23 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '900',
   },
-  label: {
-    marginTop: 14,
-    marginBottom: 7,
-    color: '#334155',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  methodRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  methodButton: {
-    paddingHorizontal: 13,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
-  },
-  selectedMethodButton: {
-    borderColor: '#059669',
-    backgroundColor: '#E3F7F0',
-  },
-  methodText: {
-    color: '#64748B',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  selectedMethodText: {
-    color: '#047857',
-  },
-  input: {
-    minHeight: 44,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
-    color: '#1E293B',
-    fontSize: 13,
-  },
-  qrBox: {
-    minHeight: 140,
-    marginTop: 18,
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  qrPlaceholder: {
-    width: 112,
-    height: 112,
-    borderRadius: 8,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 6,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  qrImage: {
-    width: 100,
-    height: 100,
-  },
-  qrDetails: {
-    flex: 1,
-  },
-  scanTitle: {
-    color: '#065F46',
-    fontSize: 14,
-    fontWeight: '900',
-  },
-  scanSubtitle: {
-    marginTop: 4,
-    color: '#047857',
-    fontSize: 12,
-    lineHeight: 16,
-  },
-  vpaBadge: {
-    marginTop: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    backgroundColor: '#DCFCE7',
+  razorpayBadge: {
     alignSelf: 'flex-start',
-  },
-  vpaBadgeText: {
-    color: '#065F46',
-    fontSize: 11,
-    fontWeight: '800',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-  },
-  infoBox: {
-    marginTop: 18,
-    padding: 15,
-    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
     backgroundColor: '#EFF6FF',
+    marginBottom: 12,
   },
-  infoText: {
+  razorpayBadgeText: {
     color: '#2563EB',
     fontSize: 12,
+    fontWeight: '800',
+  },
+  infoText: {
+    color: '#64748B',
+    fontSize: 13,
+    lineHeight: 19,
   },
   bottomActions: {
     marginTop: 20,

@@ -25,6 +25,7 @@ router.get("/pull", requireSyncAuth, syncController.pullChanges);
 router.get("/bootstrap", requireSyncAuth, syncController.bootstrap);
 
 // Connectivity probe (unauthenticated health check)
+router.get("/check", syncController.testConnection);
 router.post("/check", syncController.testConnection);
 
 module.exports = router;

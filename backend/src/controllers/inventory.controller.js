@@ -221,6 +221,46 @@ const getItemBarcode = async (req, res) => {
   }
 };
 
+const updateItemStatus = async (req, res) => {
+  try {
+    const organisationId = await getAuthorizedOrgId(req);
+    const { id } = req.params;
+    const { isActive } = req.body;
+    const updated = await inventoryService.updateItemStatus(organisationId, id, isActive);
+    res.status(200).json({
+      success: true,
+      message: 'Item status updated successfully',
+      data: updated,
+    });
+  } catch (error) {
+    console.error(`Error updating item status for ${req.params.id}:`, error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to update item status',
+    });
+  }
+};
+
+const updateItemRx = async (req, res) => {
+  try {
+    const organisationId = await getAuthorizedOrgId(req);
+    const { id } = req.params;
+    const { isRxRequired } = req.body;
+    const updated = await inventoryService.updateItemRx(organisationId, id, isRxRequired);
+    res.status(200).json({
+      success: true,
+      message: 'Item prescription requirement updated successfully',
+      data: updated,
+    });
+  } catch (error) {
+    console.error(`Error updating item Rx for ${req.params.id}:`, error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to update item prescription requirement',
+    });
+  }
+};
+
 module.exports = {
   getInventory,
   getInventorySummary,
@@ -230,4 +270,6 @@ module.exports = {
   updateInventory,
   deleteInventory,
   getItemBarcode,
+  updateItemStatus,
+  updateItemRx,
 };

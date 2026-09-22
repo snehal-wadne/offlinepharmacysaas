@@ -243,7 +243,7 @@ const listPayments = async (
       p.currency,
       p.total_amount,
       p.base_amount,
-      p.gst_amount,
+      (p.cgst_amount + p.sgst_amount + p.igst_amount) AS gst_amount,
       p.status,
       p.payment_method,
       p.paid_at,

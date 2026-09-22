@@ -86,70 +86,94 @@ const tryStartPostgresService = () => {
   return false;
 };
 
+const connectionString =
+  process.env.DATABASE_URL ||
+  process.env.SUPABASE_DATABASE_URL ||
+  process.env.SUPABASE_DB_URL;
+
+const isRemoteOrSsl = Boolean(
+  connectionString ||
+  process.env.DB_SSL === "true" ||
+  (process.env.DB_HOST && !["localhost", "127.0.0.1"].includes(process.env.DB_HOST))
+);
+
 /**
  * Main database auto-initializer function.
  */
 const autoInitDatabase = async () => {
   console.log("🔍 Checking PostgreSQL database initialization...");
 
-  const adminClient = new Client({
-    host: DB_HOST,
-    port: DB_PORT,
-    user: DB_USER,
-    password: DB_PASSWORD,
-    database: "postgres",
-  });
+  let targetPool;
 
-  try {
-    await adminClient.connect();
-  } catch (err) {
-    console.warn(
-      `⚠️ Could not connect to PostgreSQL on ${DB_HOST}:${DB_PORT} as user '${DB_USER}'.`,
-    );
-    console.warn(`Attempting service startup...`);
-    tryStartPostgresService();
+  if (connectionString) {
+    console.log("⚡ Using remote database connection (Supabase/Cloud)...");
+    targetPool = new Pool({
+      connectionString,
+      ssl: isRemoteOrSsl ? { rejectUnauthorized: false } : false,
+      connectionTimeoutMillis: 5000,
+    });
+  } else {
+    const adminClient = new Client({
+      host: DB_HOST,
+      port: DB_PORT,
+      user: DB_USER,
+      password: DB_PASSWORD,
+      database: "postgres",
+    });
 
-    // Retry once after potential service start
     try {
       await adminClient.connect();
-    } catch (retryErr) {
-      console.error(
-        `❌ Failed to connect to PostgreSQL server: ${retryErr.message}`,
+    } catch (err) {
+      console.warn(
+        `⚠️ Could not connect to PostgreSQL on ${DB_HOST}:${DB_PORT} as user '${DB_USER}'.`,
       );
-      console.error(
-        "Please verify PostgreSQL is installed and running on port 5432.",
+      console.warn(`Attempting service startup...`);
+      tryStartPostgresService();
+
+      // Retry once after potential service start
+      try {
+        await adminClient.connect();
+      } catch (retryErr) {
+        console.error(
+          `❌ Failed to connect to PostgreSQL server: ${retryErr.message}`,
+        );
+        console.error(
+          "Please verify PostgreSQL is installed and running on port 5432.",
+        );
+        throw retryErr;
+      }
+    }
+
+    try {
+      // 1. Ensure Database Exists
+      const dbCheckRes = await adminClient.query(
+        "SELECT 1 FROM pg_database WHERE datname = $1",
+        [DB_DATABASE],
       );
-      throw retryErr;
+
+      if (dbCheckRes.rows.length === 0) {
+        console.log(`📦 Database '${DB_DATABASE}' does not exist. Creating...`);
+        // Escape database name safely using double quotes
+        await adminClient.query(`CREATE DATABASE "${DB_DATABASE}";`);
+        console.log(`✓ Database '${DB_DATABASE}' created successfully.`);
+      } else {
+        console.log(`✓ Database '${DB_DATABASE}' exists.`);
+      }
+    } finally {
+      await adminClient.end();
     }
+
+    // 2. Connect to target database and verify schema
+    targetPool = new Pool({
+      host: DB_HOST,
+      port: DB_PORT,
+      user: DB_USER,
+      password: DB_PASSWORD,
+      database: DB_DATABASE,
+      ssl: isRemoteOrSsl ? { rejectUnauthorized: false } : false,
+      connectionTimeoutMillis: 5000,
+    });
   }
-
-  try {
-    // 1. Ensure Database Exists
-    const dbCheckRes = await adminClient.query(
-      "SELECT 1 FROM pg_database WHERE datname = $1",
-      [DB_DATABASE],
-    );
-
-    if (dbCheckRes.rows.length === 0) {
-      console.log(`📦 Database '${DB_DATABASE}' does not exist. Creating...`);
-      // Escape database name safely using double quotes
-      await adminClient.query(`CREATE DATABASE "${DB_DATABASE}";`);
-      console.log(`✓ Database '${DB_DATABASE}' created successfully.`);
-    } else {
-      console.log(`✓ Database '${DB_DATABASE}' exists.`);
-    }
-  } finally {
-    await adminClient.end();
-  }
-
-  // 2. Connect to target database and verify schema
-  const targetPool = new Pool({
-    host: DB_HOST,
-    port: DB_PORT,
-    user: DB_USER,
-    password: DB_PASSWORD,
-    database: DB_DATABASE,
-  });
 
   try {
     const tableCheckRes = await targetPool.query(

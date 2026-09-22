@@ -15,6 +15,7 @@ import RazorPayPaymentsPage from './razorpay-payment';
 import SuperAdminLogin from './login';
 import { fetchSuperadminMe } from '../../api/superadminApi';
 import { supabase } from '../../api/supabaseClient';
+import { useIsMobile } from '../../utils/responsive';
 
 export default function SuperAdminLayout() {
   const [loading, setLoading] = useState(true);
@@ -90,6 +91,8 @@ export default function SuperAdminLayout() {
 
 function SuperAdminShell({ adminUser, onSignOut }: { adminUser?: any; onSignOut: () => void }) {
   const pathname = usePathname();
+  const isMobile = useIsMobile();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   if (pathname === '/superadmin') {
     return <Redirect href="/superadmin/dashboard" />;
@@ -102,60 +105,77 @@ function SuperAdminShell({ adminUser, onSignOut }: { adminUser?: any; onSignOut:
     pathname.includes('payment') ||
     pathname.includes('confirmation');
 
+  const goTo = (href: string) => {
+    setSidebarOpen(false);
+    router.replace(href);
+  };
+
+  const showSidebar = !isMobile || sidebarOpen;
+
   return (
-    <View style={styles.shell}>
-      <View style={styles.sidebar}>
-        <View style={styles.brand}>
-          <Text style={styles.brandSmall}>FALAHCODE</Text>
-          <Text style={styles.brandName}>SAAS PLATFORM</Text>
-        </View>
+    <View style={[styles.shell, isMobile && styles.shellMobile]}>
+      {showSidebar && (
+        <View style={[styles.sidebar, isMobile && styles.sidebarMobile]}>
+          <View style={styles.brand}>
+            <Text style={styles.brandSmall}>FALAHCODE</Text>
+            <Text style={styles.brandName}>SAAS PLATFORM</Text>
+          </View>
 
-        <View style={styles.menu}>
-          <MenuItem
-            icon="▦"
-            label="Dashboard"
-            active={pathname.endsWith('/dashboard')}
-            onPress={() => router.replace('/superadmin/dashboard')}
-          />
-          <MenuItem
-            icon="♧"
-            label="Pharmacies"
-            active={isPharmacies}
-            onPress={() => router.replace('/superadmin/pharmacies')}
-          />
-          <MenuItem
-            icon="▤"
-            label="Subscription Plans"
-            active={pathname.endsWith('/subscription-plans')}
-            onPress={() => router.replace('/superadmin/subscription-plans')}
-          />
-          <MenuItem
-            icon="▣"
-            label="Razor Pay Page"
-            active={pathname.endsWith('/razorpay-payment')}
-            onPress={() => router.replace('/superadmin/razorpay-payment')}
-          />
-        </View>
+          <View style={styles.menu}>
+            <MenuItem
+              icon="▦"
+              label="Dashboard"
+              active={pathname.endsWith('/dashboard')}
+              onPress={() => goTo('/superadmin/dashboard')}
+            />
+            <MenuItem
+              icon="♧"
+              label="Pharmacies"
+              active={isPharmacies}
+              onPress={() => goTo('/superadmin/pharmacies')}
+            />
+            <MenuItem
+              icon="▤"
+              label="Subscription Plans"
+              active={pathname.endsWith('/subscription-plans')}
+              onPress={() => goTo('/superadmin/subscription-plans')}
+            />
+            <MenuItem
+              icon="▣"
+              label="Razor Pay Page"
+              active={pathname.endsWith('/razorpay-payment')}
+              onPress={() => goTo('/superadmin/razorpay-payment')}
+            />
+          </View>
 
-        <View style={styles.sidebarFooter}>
-          <Pressable onPress={onSignOut}>
-            <Text style={styles.logout}>⎋ Sign Out</Text>
-          </Pressable>
-          <Pressable onPress={() => { if (typeof window !== 'undefined') window.location.href = '/'; }}>
-            <Text style={[styles.logout, { color: '#627D98' }]}>↪ Back to ERP</Text>
-          </Pressable>
-          <Text style={styles.date}>▣ 01 Sep - 30 Sep</Text>
+          <View style={styles.sidebarFooter}>
+            <Pressable onPress={onSignOut}>
+              <Text style={styles.logout}>⎋ Sign Out</Text>
+            </Pressable>
+            <Pressable onPress={() => { if (typeof window !== 'undefined') window.location.href = '/'; }}>
+              <Text style={[styles.logout, { color: '#627D98' }]}>↪ Back to ERP</Text>
+            </Pressable>
+            <Text style={styles.date}>▣ 01 Sep - 30 Sep</Text>
+          </View>
         </View>
-      </View>
+      )}
+
+      {isMobile && sidebarOpen && (
+        <Pressable style={styles.sidebarOverlay} onPress={() => setSidebarOpen(false)} />
+      )}
 
       <View style={styles.main}>
         <View style={styles.topbar}>
-          <Text style={styles.menuIcon}>☰</Text>
+          <Pressable onPress={() => setSidebarOpen((open) => !open)} hitSlop={10}>
+            <Text style={styles.menuIcon}>☰</Text>
+          </Pressable>
           <View style={styles.admin}>
-            <View>
-              <Text style={styles.adminName}>{adminUser?.name || 'Super Admin'}</Text>
-              <Text style={styles.adminRole}>{adminUser?.email || 'Super Administrator'}</Text>
-            </View>
+            {!isMobile && (
+              <View>
+                <Text style={styles.adminName}>{adminUser?.name || 'Super Admin'}</Text>
+                <Text style={styles.adminRole}>{adminUser?.email || 'Super Administrator'}</Text>
+              </View>
+            )}
             <Text style={styles.avatar}>
               {(adminUser?.name || 'SA')
                 .split(' ')
@@ -205,12 +225,36 @@ function MenuItem({
 
 const styles = StyleSheet.create({
   shell: { flex: 1, flexDirection: 'row', backgroundColor: '#F8FAFC' },
+  shellMobile: { position: 'relative' },
   sidebar: {
     width: 180,
     backgroundColor: '#FFFFFF',
     borderRightWidth: 1,
     borderRightColor: '#E2E8F0',
     paddingHorizontal: 12,
+  },
+  sidebarMobile: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    zIndex: 20,
+    elevation: 20,
+    paddingTop: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 0 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+  },
+  sidebarOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(15, 23, 42, 0.4)',
+    zIndex: 10,
+    elevation: 10,
   },
   brand: { paddingHorizontal: 14, paddingTop: 18, paddingBottom: 25 },
   brandSmall: { color: '#627D98', fontSize: 9, fontWeight: '700' },

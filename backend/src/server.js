@@ -121,20 +121,71 @@ app.get("/", (req, res) => {
   });
 });
 
-app.get("/health", (req, res) => {
+app.get(["/health", "/api/health"], async (req, res) => {
+  const dbStatus = getDbStatus();
+  const startTime = Date.now();
+  let dbReachable = false;
+  let latencyMs = null;
+  let tableCount = null;
+
+  try {
+    const checkRes = await pool.query(
+      "SELECT count(*) as tbl_count FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'"
+    );
+    dbReachable = true;
+    latencyMs = Date.now() - startTime;
+    tableCount = parseInt(checkRes.rows[0].tbl_count, 10);
+  } catch (err) {
+    dbReachable = false;
+  }
+
   res.status(200).json({
     status: "OK",
     system: "Pharmacy Billing SaaS Backend",
     timestamp: new Date().toISOString(),
+    database: {
+      online: dbReachable,
+      mode: dbReachable ? "online" : "offline_local",
+      database: dbStatus.database || "falah_pharmacy",
+      tablesCount: tableCount,
+      latencyMs,
+      provider: process.env.DATABASE_URL?.includes("supabase.co") ? "Supabase" : "PostgreSQL",
+    },
   });
 });
 
-app.get("/api/health", (req, res) => {
-  res.status(200).json({
-    status: "OK",
-    system: "Pharmacy Billing SaaS Backend",
-    timestamp: new Date().toISOString(),
-  });
+app.get("/api/status", async (req, res) => {
+  const startTime = Date.now();
+  try {
+    const checkRes = await pool.query(
+      "SELECT count(*) as tbl_count FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'"
+    );
+    const latencyMs = Date.now() - startTime;
+    res.status(200).json({
+      success: true,
+      service: "Pharmacy Billing SaaS",
+      port: PORT,
+      database: {
+        online: true,
+        latencyMs,
+        tablesCount: parseInt(checkRes.rows[0].tbl_count, 10),
+        provider: process.env.DATABASE_URL?.includes("supabase.co") ? "Supabase" : "PostgreSQL",
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    res.status(200).json({
+      success: true,
+      service: "Pharmacy Billing SaaS",
+      port: PORT,
+      database: {
+        online: false,
+        error: err.message,
+        mode: "offline_local",
+      },
+      timestamp: new Date().toISOString(),
+    });
+  }
 });
 
 /**
@@ -156,11 +207,15 @@ const taxRoutes = require("./routes/tax.routes");
 const reportRoutes = require("./routes/report.routes");
 const superadminRoutes = require("./routes/superadmin.routes");
 const auditRoutes = require("./routes/audit.routes");
+const roleRoutes = require("./routes/role.routes");
+const subscriptionRoutes = require("./routes/subscription.routes");
 
 app.use("/api/purchases", purchaseRoutes);
 app.use("/purchases", purchaseRoutes);
 app.use("/api/goods-receipts", goodsReceiptRoutes);
+app.use("/goods-receipts", goodsReceiptRoutes);
 app.use("/api/suppliers", supplierRoutes);
+app.use("/suppliers", supplierRoutes);
 app.use("/api/inventory", inventoryRoutes);
 app.use("/inventory", inventoryRoutes);
 app.use("/api/cashier", cashierRoutes);
@@ -168,20 +223,28 @@ app.use("/cashier", cashierRoutes);
 app.use("/api/sync", syncRoutes);
 app.use("/sync", syncRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/auth", authRoutes);
 app.use("/api/branches", branchRoutes);
 app.use("/branches", branchRoutes);
 app.use("/api/customers", customerRoutes);
 app.use("/customers", customerRoutes);
 app.use("/api/prescriptions", prescriptionRoutes);
+app.use("/prescriptions", prescriptionRoutes);
 app.use("/api/stock-transfers", stockTransferRoutes);
+app.use("/stock-transfers", stockTransferRoutes);
 app.use("/api/taxes", taxRoutes);
 app.use("/taxes", taxRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/reports", reportRoutes);
+app.use("/api/roles", roleRoutes);
+app.use("/roles", roleRoutes);
+app.use("/api/subscriptions", subscriptionRoutes);
+app.use("/subscriptions", subscriptionRoutes);
 app.use("/api/superadmin", superadminRoutes);
 app.use("/api/audit-logs", auditRoutes);
 app.use("/audit-logs", auditRoutes);
 app.post("/api/login", authController.login);
+app.post("/login", authController.login);
 app.post("/api/login/google", authController.googleLogin);
 app.post("/api/auth/google", authController.googleLogin);
 app.post("/api/auth/google-onboard", authController.googleOnboard);

@@ -23,6 +23,25 @@ function isSuperAdminUrl() {
   return false;
 }
 
+// Patch history so pushState / replaceState also trigger our listener
+function patchHistory(callback) {
+  if (typeof window === "undefined") return () => {};
+  const origPush = window.history.pushState.bind(window.history);
+  const origReplace = window.history.replaceState.bind(window.history);
+  window.history.pushState = (...args) => {
+    origPush(...args);
+    callback();
+  };
+  window.history.replaceState = (...args) => {
+    origReplace(...args);
+    callback();
+  };
+  return () => {
+    window.history.pushState = origPush;
+    window.history.replaceState = origReplace;
+  };
+}
+
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -68,11 +87,35 @@ export default function App() {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
+      const updateDocumentTitle = () => {
+        const path = window.location.pathname || "/";
+        const pageName = path
+          .split("/")
+          .filter(Boolean)
+          .pop()
+          ?.replace(/[-_]/g, " ")
+          .replace(/\b\w/g, (letter) => letter.toUpperCase());
+        document.title = pageName
+          ? `PharmaFlow | ${pageName}`
+          : "PharmaFlow ERP";
+      };
+
       const handleLocationChange = () => {
         setIsSuperAdmin(isSuperAdminUrl());
+        updateDocumentTitle();
       };
+
+      // Listen to back/forward browser navigation
       window.addEventListener("popstate", handleLocationChange);
-      return () => window.removeEventListener("popstate", handleLocationChange);
+      updateDocumentTitle();
+
+      // Also patch pushState / replaceState (used by the expo-router shim)
+      const unpatch = patchHistory(handleLocationChange);
+
+      return () => {
+        window.removeEventListener("popstate", handleLocationChange);
+        unpatch();
+      };
     }
   }, []);
 

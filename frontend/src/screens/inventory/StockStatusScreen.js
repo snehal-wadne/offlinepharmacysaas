@@ -154,8 +154,8 @@ const normalizedInventory = rawInventory.map((item, index) => {
     manufacturer: item.manufacturer || "",
 
     branch:
-      item.branchId ||
       item.branchName ||
+      item.branch ||
       "Main Branch",
 
     branchId: item.branchId || "",

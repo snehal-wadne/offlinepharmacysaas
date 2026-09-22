@@ -1104,6 +1104,278 @@ class AuthService {
     const res = await pool.query(query, [organisationId]);
     return res.rows;
   }
+
+  /**
+   * Invite / create a new staff member inside an organisation.
+   *
+   * Provisions a Supabase Auth identity (temporary password, so the
+   * invited staff member can reset it), a users row, an organisation
+   * membership, and (when a branch is supplied) a primary branch
+   * assignment with the given role.
+   */
+  async createStaffUser({
+    organisationId,
+    name,
+    email,
+    phone = null,
+    roleId = null,
+    branchId = null,
+    professionalRegistrationNumber = null,
+    workingShift = null,
+  }) {
+    const cleanName = (name || "").trim();
+    const cleanEmail = (email || "").trim().toLowerCase();
+
+    if (!organisationId) {
+      throw new Error("organisationId is required.");
+    }
+    if (!cleanName || !cleanEmail) {
+      throw new Error("Staff name and email are required.");
+    }
+
+    const existingUser = await pool.query(
+      "SELECT id FROM users WHERE LOWER(email) = $1 LIMIT 1;",
+      [cleanEmail],
+    );
+    if (existingUser.rows.length > 0) {
+      const err = new Error("An account with this email address already exists.");
+      err.statusCode = 409;
+      throw err;
+    }
+
+    if (roleId) {
+      const roleCheck = await pool.query(
+        "SELECT id FROM roles WHERE id = $1 AND organisation_id = $2;",
+        [roleId, organisationId],
+      );
+      if (roleCheck.rows.length === 0) {
+        const err = new Error("Role does not belong to this organisation.");
+        err.statusCode = 400;
+        throw err;
+      }
+    }
+
+    if (branchId) {
+      const branchCheck = await pool.query(
+        "SELECT id FROM branches WHERE id = $1 AND organisation_id = $2;",
+        [branchId, organisationId],
+      );
+      if (branchCheck.rows.length === 0) {
+        const err = new Error("Branch does not belong to this organisation.");
+        err.statusCode = 400;
+        throw err;
+      }
+    }
+
+    // Provision a Supabase Auth identity with a temporary password.
+    const tempPassword = crypto.randomBytes(9).toString("base64url");
+    let supabaseAuthId = null;
+    let createdInSupabase = false;
+
+    if (supabaseAdmin?.auth?.admin?.createUser) {
+      const { data: supaUser, error: supaErr } =
+        await supabaseAdmin.auth.admin.createUser({
+          email: cleanEmail,
+          password: tempPassword,
+          email_confirm: true,
+          user_metadata: { name: cleanName },
+        });
+      if (!supaErr && supaUser?.user?.id) {
+        supabaseAuthId = supaUser.user.id;
+        createdInSupabase = true;
+      }
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      const passwordHash = await bcrypt.hash(tempPassword, 10);
+      const staffId = await getNextBusinessNumber({
+        organisationId,
+        sequenceType: "STAFF",
+        client,
+      });
+
+      const insertUserRes = await client.query(
+        `INSERT INTO users (
+           name, email, password_hash, phone, supabase_auth_id, staff_id,
+           professional_registration_number, working_shift, status
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'ACTIVE')
+         RETURNING id, name, email, phone, staff_id, status, created_at;`,
+        [
+          cleanName,
+          cleanEmail,
+          passwordHash,
+          phone,
+          supabaseAuthId,
+          staffId,
+          professionalRegistrationNumber,
+          workingShift,
+        ],
+      );
+      const user = insertUserRes.rows[0];
+
+      const membershipRes = await client.query(
+        `INSERT INTO organisation_memberships (organisation_id, user_id, status, joined_at)
+         VALUES ($1, $2, 'ACTIVE', CURRENT_TIMESTAMP)
+         RETURNING id;`,
+        [organisationId, user.id],
+      );
+      const membershipId = membershipRes.rows[0].id;
+
+      if (branchId && roleId) {
+        await client.query(
+          `INSERT INTO branch_assignments (membership_id, branch_id, role_id, is_primary)
+           VALUES ($1, $2, $3, TRUE);`,
+          [membershipId, branchId, roleId],
+        );
+      }
+
+      await client.query("COMMIT");
+
+      return {
+        success: true,
+        message: "Staff member created successfully.",
+        data: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          phone: user.phone,
+          staffId: user.staff_id,
+          status: user.status,
+          createdAt: user.created_at,
+        },
+      };
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => {});
+      if (createdInSupabase && supabaseAuthId && supabaseAdmin?.auth?.admin?.deleteUser) {
+        await supabaseAdmin.auth.admin
+          .deleteUser(supabaseAuthId)
+          .catch(() => {});
+      }
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Update a staff member's profile, role, and branch assignment.
+   */
+  async updateStaffUser(organisationId, userId, { name, phone, roleId, branchId }) {
+    const membership = await pool.query(
+      `SELECT id FROM organisation_memberships WHERE organisation_id = $1 AND user_id = $2;`,
+      [organisationId, userId],
+    );
+    if (membership.rows.length === 0) {
+      const err = new Error("Staff member not found in this organisation.");
+      err.statusCode = 404;
+      throw err;
+    }
+    const membershipId = membership.rows[0].id;
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      const updateRes = await client.query(
+        `UPDATE users
+         SET name = COALESCE($1, name),
+             phone = COALESCE($2, phone),
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $3
+         RETURNING id, name, email, phone, staff_id, status;`,
+        [name || null, phone || null, userId],
+      );
+      const user = updateRes.rows[0];
+
+      if (roleId && branchId) {
+        const branchCheck = await client.query(
+          "SELECT id FROM branches WHERE id = $1 AND organisation_id = $2;",
+          [branchId, organisationId],
+        );
+        if (branchCheck.rows.length === 0) {
+          throw new Error("Branch does not belong to this organisation.");
+        }
+        const roleCheck = await client.query(
+          "SELECT id FROM roles WHERE id = $1 AND organisation_id = $2;",
+          [roleId, organisationId],
+        );
+        if (roleCheck.rows.length === 0) {
+          throw new Error("Role does not belong to this organisation.");
+        }
+
+        await client.query(
+          `INSERT INTO branch_assignments (membership_id, branch_id, role_id, is_primary)
+           VALUES ($1, $2, $3, TRUE)
+           ON CONFLICT (membership_id, branch_id)
+           DO UPDATE SET role_id = EXCLUDED.role_id, is_primary = TRUE;`,
+          [membershipId, branchId, roleId],
+        );
+      }
+
+      await client.query("COMMIT");
+      return { success: true, message: "Staff member updated successfully.", data: user };
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Activate or deactivate a staff member's access.
+   *
+   * Implemented as a status change (not a hard delete) because
+   * historical records (invoices, sessions, audit logs) reference
+   * users via RESTRICT foreign keys.
+   */
+  async updateStaffStatus(organisationId, userId, status) {
+    const normalizedStatus = String(status || "").toUpperCase();
+    if (!["ACTIVE", "INACTIVE"].includes(normalizedStatus)) {
+      const err = new Error("status must be ACTIVE or INACTIVE.");
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const membership = await pool.query(
+      `SELECT id FROM organisation_memberships WHERE organisation_id = $1 AND user_id = $2;`,
+      [organisationId, userId],
+    );
+    if (membership.rows.length === 0) {
+      const err = new Error("Staff member not found in this organisation.");
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        `UPDATE organisation_memberships SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2;`,
+        [normalizedStatus, membership.rows[0].id],
+      );
+      const userRes = await client.query(
+        `UPDATE users SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2
+         RETURNING id, name, email, status;`,
+        [normalizedStatus, userId],
+      );
+      await client.query("COMMIT");
+      return {
+        success: true,
+        message: `Staff member ${normalizedStatus === "ACTIVE" ? "activated" : "deactivated"} successfully.`,
+        data: userRes.rows[0],
+      };
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
 }
 
 module.exports = new AuthService();

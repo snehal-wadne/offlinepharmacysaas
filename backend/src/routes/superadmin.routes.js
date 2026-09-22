@@ -63,6 +63,12 @@ router.post("/pharmacies", (req, res) =>
 router.patch("/pharmacies/:id/status", (req, res) =>
   superadminController.updatePharmacyStatus(req, res),
 );
+router.get("/pharmacies/:id/invoices", (req, res) =>
+  superadminController.listPharmacyInvoices(req, res),
+);
+router.get("/invoices/:invoiceId/pdf", (req, res) =>
+  superadminController.downloadInvoicePdf(req, res),
+);
 router.post("/pharmacies/:id/renew", (req, res) =>
   superadminController.renewPharmacySubscription(req, res),
 );
