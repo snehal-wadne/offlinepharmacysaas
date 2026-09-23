@@ -6,7 +6,7 @@
 
 const express = require("express");
 const router = express.Router();
-const roleController = require("../controllers/role.controller");
+const roleController = require("../controllers/Role.controller");
 const { authenticate } = require("../middlewares/auth.middleware");
 
 router.use(authenticate);
