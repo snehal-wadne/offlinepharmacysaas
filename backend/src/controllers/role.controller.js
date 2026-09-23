@@ -15,7 +15,7 @@ const isAdmin = (req) =>
 
 const requireAdmin = (req, res) => {
   if (!isAdmin(req)) {
-    res.status(403).json({
+    res.status(403).json({ 
       success: false,
       error: "Only administrators can manage roles and permissions.",
     });
