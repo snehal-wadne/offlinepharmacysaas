@@ -517,6 +517,8 @@ const getHeldBills = async (req, res) => {
   try {
     const { organisationId, branchId } = await resolveAuthContext(req);
     const result = await cashierService.getHeldBills(organisationId, branchId);
+    console.log(result);
+    
     res.status(200).json(result);
   } catch (error) {
     console.error("Error getting held bills:", error);
