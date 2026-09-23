@@ -147,7 +147,7 @@ export default function SalesReturnsScreen({
     (sum, ret) => sum + (ret.amount || 0),
     0,
   );
-  console.log(selectedInvoice);
+  console.log(selectedInvoice); 
 
   // Calculate return refund total
   const calculateRefundTotal = () => {
