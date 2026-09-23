@@ -15,7 +15,7 @@ import {
   fetchRoles,
   fetchPermissions,
   updateRolePermissions,
-} from "../../api/roleApi";
+} from "../../api/RoleApi";
 
 export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
   const { width } = useWindowDimensions();
@@ -44,9 +44,9 @@ export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
         fetchPermissions(),
       ]);
 
-      const rolesList = rolesRes?.success ? rolesRes.data : [];
+      const rolesList = rolesRes?.success ? rolesRes.data.data : [];
       setRoles(rolesList);
-      setPermissionDomains(permsRes?.success ? permsRes.data : {});
+      setPermissionDomains(permsRes?.success ? permsRes.data.data : {});
 
       if (rolesList.length > 0) {
         const initialRole = rolesList[0];
@@ -66,7 +66,7 @@ export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
     loadData();
   }, [loadData]);
 
-  const activeRole = roles.find((r) => r.id === selectedRoleId) || roles[0];
+  const activeRole = roles && roles?.find((r) => r.id === selectedRoleId) || roles[0];
 
   const handleSelectRole = (role) => {
     setSelectedRoleId(role.id);

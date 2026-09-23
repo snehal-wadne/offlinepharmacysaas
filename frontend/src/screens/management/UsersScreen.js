@@ -16,11 +16,11 @@ import {
   SYSTEM_ROLES_LIST,
 } from "../../constants/uiConstants";
 import { fetchUsers, createUser, updateUser, updateUserStatus } from "../../api/userApi";
-import { fetchRoles } from "../../api/roleApi";
 import { fetchBranches } from "../../api/branchApi";
 import { SkeletonTableRow } from "../../components/common/SkeletonLoader";
 import PaginationControls from "../../components/common/PaginationControls";
 import { exportToCSV } from "../../utils/exportUtils";
+import { fetchRoles } from "../../api/RoleApi";
 
 export default function UsersScreen({ onShowToast, onNavigate }) {
   const { width } = useWindowDimensions();
@@ -52,7 +52,7 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
           fetchBranches(),
           fetchRoles(),
         ]);
-
+        console.log(usersRes);
         if (
           isMounted &&
           branchesRes.status === "fulfilled" &&
@@ -74,7 +74,7 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
         } else if (isMounted) {
           setBranches([]);
         }
-
+        console.log(usersRes);
         if (
           isMounted &&
           rolesRes.status === "fulfilled" &&
@@ -95,8 +95,10 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
           usersRes.status === "fulfilled" &&
           usersRes.value?.success
         ) {
-          const rawU = Array.isArray(usersRes.value.data)
-            ? usersRes.value.data
+
+
+          const rawU = Array.isArray(usersRes.value.data.data)
+            ? usersRes.value.data.data
             : [];
           const mapped = rawU.map((u) => {
             const roleName = u.role || "Pharmacist";
@@ -126,10 +128,10 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
               avatarInitials: initials,
               joinedDate: u.createdAt
                 ? new Date(u.createdAt).toLocaleDateString("en-IN", {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  })
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                })
                 : "Active",
               lastActive: "Active recently",
               regNumber: "N/A",
@@ -347,14 +349,14 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
           prev.map((u) =>
             u.id === activeUserId
               ? {
-                  ...u,
-                  name: formData.name.trim(),
-                  phone: formData.phone.trim(),
-                  role: formData.role,
-                  roleId,
-                  primaryBranch: formData.primaryBranch,
-                  assignedBranches: [formData.primaryBranch],
-                }
+                ...u,
+                name: formData.name.trim(),
+                phone: formData.phone.trim(),
+                role: formData.role,
+                roleId,
+                primaryBranch: formData.primaryBranch,
+                assignedBranches: [formData.primaryBranch],
+              }
               : u,
           ),
         );
@@ -1495,7 +1497,7 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                         style={[
                           styles.modalToggleMainText,
                           formData.status === "Active" &&
-                            styles.statusLabelActive,
+                          styles.statusLabelActive,
                         ]}
                       >
                         {formData.status === "Active"
@@ -1762,7 +1764,7 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                       <Text style={styles.detailLabel}>Clearance Scope:</Text>
                       <Text style={styles.detailValue}>
                         {selectedUser.assignedBranches &&
-                        selectedUser.assignedBranches.includes("All Branches")
+                          selectedUser.assignedBranches.includes("All Branches")
                           ? "Campus-Wide Master Access"
                           : "Specific Assigned Pharmacy Outlets"}
                       </Text>

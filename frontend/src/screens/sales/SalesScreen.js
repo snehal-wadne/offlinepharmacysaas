@@ -12,7 +12,7 @@ import {
   Image,
 } from "react-native";
 import { usePos } from "../../context/PosContext";
-import { fetchCashierProducts } from "../../api/cashierApi";
+import { fetchCashierProducts, saveHeldBill } from "../../api/cashierApi";
 import BarcodeScannerModal from "../../components/common/BarcodeScannerModal";
 import { SkeletonItemCard } from "../../components/common/SkeletonLoader";
 import PaginationControls from "../../components/common/PaginationControls";
@@ -453,10 +453,11 @@ export default function SalesScreen({
   };
 
   // HOLD BILL (Email Draft Concept)
-  const handleHoldBillAction = () => {
+const handleHoldBillAction = async () => {
     if (cart.length === 0) {
-      if (onShowToast)
+      if (onShowToast) {
         onShowToast("⚠️ Cannot hold an empty bill. Add medicines first.");
+      }
       return;
     }
 
@@ -466,39 +467,62 @@ export default function SalesScreen({
       selectedCustomer.phone ||
       (customCustomerInput.includes("+") ? customCustomerInput : "");
 
-    const billData = {
+    const billPayload = {
       customerName: custName,
       customerPhone: custPhone,
-      items: [...cart],
+      items: cart,
       subtotal: totals.subtotal,
       tax: totals.includedTax,
       discountPercent: appliedDiscount,
       total: totals.grandTotal,
       note: activeResumedDraft
-        ? `Draft updated from New Sale`
-        : `Saved as draft from New Sale`,
+        ? "Draft updated from New Sale"
+        : "Saved as draft from New Sale",
+      ...(activeResumedDraft?.holdId || activeResumedDraft?.billNo
+        ? { holdId: activeResumedDraft.holdId || activeResumedDraft.billNo }
+        : {}),
     };
 
-    const savedDraftId = holdBill(
-      billData,
-      activeResumedDraft?.holdId || activeResumedDraft?.billNo,
-    );
+    try {
+      // 1. Call Backend API
+      const responseData = await saveHeldBill(billPayload);
+      
+      const savedDraftId =
+        responseData?.holdId || responseData?.id || responseData?.billNo || "DRAFT";
 
-    if (onShowToast) {
-      onShowToast(`✓ Bill saved as draft #${savedDraftId} in Hold Bills!`);
+      // 2. Sync locally if holdBill state/context helper exists
+      if (typeof holdBill === "function") {
+        holdBill(
+          billPayload,
+          activeResumedDraft?.holdId || activeResumedDraft?.billNo
+        );
+      }
+
+      // 3. Show Success Toast
+      if (onShowToast) {
+        onShowToast(`✓ Bill saved as draft #${savedDraftId} in Hold Bills!`);
+      }
+
+      // 4. Reset Local UI State
+      setCart([]);
+      setCustomCustomerInput("");
+      setSelectedCustomer({
+        id: "WALK-IN",
+        name: "Walk-in Customer",
+        phone: "",
+        currentBalance: "₹0.00",
+      });
+      setTopToastBanner("");
+      
+      if (typeof clearSalesDraft === "function") {
+        clearSalesDraft();
+      }
+    } catch (error) {
+      console.error("Error holding bill:", error);
+      if (onShowToast) {
+        onShowToast(`❌ Failed to hold bill: ${error.message || "Server Error"}`);
+      }
     }
-
-    // Reset local state
-    setCart([]);
-    setCustomCustomerInput("");
-    setSelectedCustomer({
-      id: "WALK-IN",
-      name: "Walk-in Customer",
-      phone: "",
-      currentBalance: "₹0.00",
-    });
-    setTopToastBanner("");
-    clearSalesDraft();
   };
 
   // PAY NOW / COMPLETE SALE

@@ -110,11 +110,12 @@ export default function SalesReturnsScreen({
 
   // Filter invoices list
   const filteredInvoices = invoices.filter((inv) => {
-    const q = searchInvoice.toLowerCase().trim();
+
+    const q = searchInvoice && searchInvoice?.toLowerCase().trim();
     const matchSearch =
       !q ||
-      inv.invoiceNo.toLowerCase().includes(q) ||
-      inv.customer.toLowerCase().includes(q) ||
+      inv?.invoiceNo?.toLowerCase().includes(q) ||
+      inv?.customer?.toLowerCase().includes(q) ||
       (inv.phone && String(inv.phone).includes(q));
 
     let matchDate = true;
@@ -146,12 +147,13 @@ export default function SalesReturnsScreen({
     (sum, ret) => sum + (ret.amount || 0),
     0,
   );
+  console.log(selectedInvoice);
 
   // Calculate return refund total
   const calculateRefundTotal = () => {
     if (!selectedInvoice || !selectedInvoice.items) return 0;
     let total = 0;
-    (selectedInvoice.items || []).forEach((it, idx) => {
+    (selectedInvoice || []).forEach((it, idx) => {
       const q = returnQtys[idx] || 0;
       const unitPrice = it.price || it.sellingPrice || 0;
       total += unitPrice * q;
@@ -237,6 +239,7 @@ export default function SalesReturnsScreen({
         inv.invoiceNo.toLowerCase().includes(code) ||
         (inv.phone && inv.phone.includes(code)),
     );
+    console.log(foundInvoice);
 
     if (foundInvoice) {
       setSelectedInvoice(foundInvoice);
@@ -302,6 +305,8 @@ export default function SalesReturnsScreen({
     try {
       setIsSearchingServer(true);
       const res = await searchReturnInvoice(q);
+      console.log(res);
+
       if (res && res.invoiceNo) {
         setSelectedInvoice(res);
         if (isMobile) setMobileView("details");
@@ -512,7 +517,7 @@ export default function SalesReturnsScreen({
                 style={[
                   styles.dateFilterBtn,
                   (dateDropdownOpen || selectedDateFilter !== "All Dates") &&
-                    styles.dateFilterBtnActive,
+                  styles.dateFilterBtnActive,
                 ]}
                 accessibilityRole="button"
                 accessibilityLabel="Filter invoices by date range"
@@ -522,7 +527,7 @@ export default function SalesReturnsScreen({
                   style={[
                     styles.dateFilterText,
                     selectedDateFilter !== "All Dates" &&
-                      styles.dateFilterTextActive,
+                    styles.dateFilterTextActive,
                   ]}
                 >
                   {selectedDateFilter}
@@ -789,7 +794,7 @@ export default function SalesReturnsScreen({
                                   style={[
                                     styles.selectInvoiceBtnText,
                                     isSelected &&
-                                      styles.selectInvoiceBtnTextActive,
+                                    styles.selectInvoiceBtnTextActive,
                                   ]}
                                 >
                                   {isSelected
@@ -1251,7 +1256,7 @@ export default function SalesReturnsScreen({
                   style={[
                     styles.dispBtn,
                     stockDisposition === "Quarantine" &&
-                      styles.dispBtnActiveRed,
+                    styles.dispBtnActiveRed,
                   ]}
                 >
                   <Text style={styles.dispBtnTitle}>

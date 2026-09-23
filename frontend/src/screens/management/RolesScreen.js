@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import InventoryStatCard from "../../components/inventory/InventoryStatCard";
 import { fetchUsers } from "../../api/userApi";
-import { fetchRoles, createRole, updateRole } from "../../api/roleApi";
+import { fetchRoles, createRole, updateRole } from "../../api/RoleApi";
 import { SkeletonItemCard } from "../../components/common/SkeletonLoader";
 import PaginationControls from "../../components/common/PaginationControls";
 
@@ -74,23 +74,24 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
           fetchUsers(),
           fetchRoles(),
         ]);
+        console.log(rolesRes);
+
 
         const staff = usersRes?.success
-          ? usersRes.data.map((u) => ({
-              id: u.id,
-              name: u.name || u.email || "Staff",
-              email: u.email || "",
-              role: u.role || "Staff",
-              roleId: u.role_id,
-              branch: u.primaryBranch || "Main Branch",
-              status: u.status === "ACTIVE" ? "Active" : "Inactive",
-            }))
+          ? usersRes.data.data.map((u) => ({
+            id: u.id,
+            name: u.name || u.email || "Staff",
+            email: u.email || "",
+            role: u.role || "Staff",
+            roleId: u.role_id,
+            branch: u.primaryBranch || "Main Branch",
+            status: u.status === "ACTIVE" ? "Active" : "Inactive",
+          }))
           : [];
 
         if (!isMounted) return;
         setStaffList(staff);
-
-        const backendRoles = rolesRes?.success ? rolesRes.data : [];
+        const backendRoles = rolesRes?.success ? rolesRes.data.data : [];
         setRoles(
           backendRoles.map((r) =>
             mapBackendRole(
@@ -99,6 +100,8 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
             ),
           ),
         );
+        console.log(roles);
+
       } catch (e) {
         if (isMounted) {
           setStaffList([]);
@@ -139,9 +142,9 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
   const filteredRoles = roles.filter((role) => {
     const q = searchQuery.toLowerCase().trim();
     const matchesSearch =
-      role.name.toLowerCase().includes(q) ||
-      role.code.toLowerCase().includes(q) ||
-      role.description.toLowerCase().includes(q);
+      role.name?.toLowerCase().includes(q) ||
+      role.code?.toLowerCase().includes(q) ||
+      role.description?.toLowerCase().includes(q);
 
     const matchesType =
       selectedTypeFilter === "All" ||
@@ -769,7 +772,7 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
 
             <ScrollView style={styles.modalBody}>
               {selectedRoleForStaff?.assignedStaffList &&
-              selectedRoleForStaff.assignedStaffList.length > 0 ? (
+                selectedRoleForStaff.assignedStaffList.length > 0 ? (
                 selectedRoleForStaff.assignedStaffList.map((staff, idx) => (
                   <View key={staff.id || idx} style={styles.staffListItem}>
                     <View style={styles.staffAvatar}>

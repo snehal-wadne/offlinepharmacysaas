@@ -183,6 +183,14 @@ export async function resumeHeldBill(holdId) {
   return res.data?.data || res.data;
 }
 
+export async function saveHeldBill(billData) {
+  const res = await apiPost('/cashier/held-bills', billData);
+  if (!res.success) {
+    throw new Error(res.error || 'Failed to save held bill');
+  }
+  return res.data;
+}
+
 // ==========================================
 // 5. SALES RETURNS
 // ==========================================
