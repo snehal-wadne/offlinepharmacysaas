@@ -34,6 +34,7 @@ import { localPersistenceService } from "../../db";
 import { syncEngine } from "../../sync";
 import { usePos } from "../../context/PosContext";
 import BulkImportModal from "../../components/inventory/BulkImportModal";
+import BarcodeScannerModal from "../../components/common/BarcodeScannerModal";
 
 export default function StockAdjustmentsScreen({
   onShowToast,
@@ -68,6 +69,11 @@ export default function StockAdjustmentsScreen({
   const [editingItemId, setEditingItemId] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [bulkImportModalOpen, setBulkImportModalOpen] = useState(false);
+  // Barcode scanner and scanned product details
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannedProducts, setScannedProducts] = useState([]);
+  const [scannedCode, setScannedCode] = useState("");
+  const [scanError, setScanError] = useState("");
 
   useEffect(() => {
     let isMounted = true;
@@ -742,13 +748,17 @@ export default function StockAdjustmentsScreen({
       branchName: item.branchName || item.branchId || "Main Store",
       pharmacyName: "Falah Pharmacy",
     };
-    setBarcodeItemData(initialData);
-
-    try {
+   setBarcodeItemData(initialData);
+   try {
       const res = await fetchItemBarcode(item.id || item.sku);
-      if (res && res.success && res.data) {
-        setBarcodeItemData(res.data);
-      }
+      if (res?.success && res.data) {
+  const apiData = res.data;
+
+  setBarcodeItemData({
+    ...initialData,
+    svgBarcode: apiData.svgBarcode || null,
+  });
+}
     } catch (err) {
       console.warn("Using local item data for barcode modal:", err.message);
     } finally {
@@ -756,7 +766,7 @@ export default function StockAdjustmentsScreen({
     }
   };
 
-  console.log("Products data: ", stockItems);
+
 
   const handlePrintBarcodeLabel = () => {
     if (!barcodeItemData) return;
@@ -1414,7 +1424,31 @@ export default function StockAdjustmentsScreen({
                 Import CSV
               </Text>
             </Pressable>
-          </View>
+            {/* Scan Barcode Button */}
+      <Pressable
+        onPress={() => setScannerOpen(true)}
+        style={[
+          styles.filterTogglePill,
+          {
+            backgroundColor: "#2563EB",
+            borderColor: "#2563EB",
+            flexDirection: "row",
+            alignItems: "center",
+          },
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel="Scan product barcode"
+      >
+        <Text
+          style={[
+            styles.filterToggleText,
+            { color: "#FFFFFF", fontWeight: "700" },
+          ]}
+        >
+          Scan Barcode
+        </Text>
+      </Pressable>
+                </View>
         </View>
 
         {loading || isPageLoading ? (
@@ -3324,6 +3358,168 @@ export default function StockAdjustmentsScreen({
         onShowToast={onShowToast}
         selectedBranch={selectedBranch}
       />
+      <BarcodeScannerModal
+  visible={scannerOpen}
+  onClose={() => setScannerOpen(false)}
+  onScan={(code) => {
+    const enteredCode = String(code || "").trim().toLowerCase();
+
+    const matches = stockItems.filter((item) =>
+      [
+        item.barcode,
+        item.barcodeNumber,
+        item.barcode_number,
+        item.sku,
+      ].some(
+        (value) =>
+          value != null &&
+          String(value).trim().toLowerCase() === enteredCode,
+      ),
+    );
+
+    setScannerOpen(false);
+    setScannedCode(code);
+    setScannedProducts(matches);
+    setScanError(
+      matches.length === 0
+        ? `Product not found: ${code}`
+        : "",
+    );
+  }}
+  mode="product"
+  title="Scan Product Barcode"
+/>
+
+{/* Scanned Product Details */}
+<Modal
+  visible={scannedProducts.length > 0 || Boolean(scanError)}
+  transparent
+  animationType="fade"
+  onRequestClose={() => {
+    setScannedProducts([]);
+    setScanError("");
+  }}
+>
+  <View
+    style={{
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.5)",
+      justifyContent: "center",
+      alignItems: "center",
+      padding: 20,
+    }}
+  >
+    <View
+      style={{
+        backgroundColor: "#FFFFFF",
+        borderRadius: 16,
+        padding: 20,
+        width: "100%",
+        maxWidth: 500,
+        maxHeight: "80%",
+      }}
+    >
+      <Text
+        style={{
+          fontSize: 20,
+          fontWeight: "700",
+          marginBottom: 6,
+          color: "#111827",
+        }}
+      >
+        {scanError ? "Product Not Found" : "Product Details"}
+      </Text>
+
+      <Text style={{ color: "#6B7280", marginBottom: 16 }}>
+        Scanned code: {scannedCode}
+      </Text>
+
+      <ScrollView>
+        {scanError ? (
+          <Text style={{ color: "#DC2626" }}>{scanError}</Text>
+        ) : (
+          scannedProducts.map((item, index) => (
+            <View
+              key={String(item.id || `${item.sku}-${index}`)}
+              style={{
+                borderWidth: 1,
+                borderColor: "#E5E7EB",
+                borderRadius: 12,
+                padding: 15,
+                marginBottom: 12,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 18,
+                  fontWeight: "700",
+                  color: "#0F766E",
+                  marginBottom: 12,
+                }}
+              >
+                {item.medicineName || item.brandName || item.name || "Medicine"}
+              </Text>
+
+              {[
+                ["Barcode", item.barcode || item.barcodeNumber || item.barcode_number || "—"],
+                ["SKU", item.sku || "—"],
+                ["Batch", item.batchNo || item.batchNumber || "—"],
+                ["Available Stock", item.quantity ?? "—"],
+                ["MRP", item.mrp ?? item.amount ?? "—"],
+                ["Expiry", item.expiryDate || item.expiry_date || "—"],
+                ["Shelf Location", item.shelfLocation || "—"],
+              ].map(([label, value]) => (
+                <View
+                  key={label}
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    paddingVertical: 7,
+                    borderBottomWidth: 1,
+                    borderBottomColor: "#F3F4F6",
+                  }}
+                >
+                  <Text style={{ color: "#6B7280", flex: 1 }}>
+                    {label}
+                  </Text>
+                  <Text
+                    style={{
+                      color: "#111827",
+                      fontWeight: "600",
+                      flex: 1,
+                      textAlign: "right",
+                    }}
+                  >
+                    {String(value)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ))
+        )}
+      </ScrollView>
+
+      <Pressable
+        onPress={() => {
+          setScannedProducts([]);
+          setScanError("");
+          setScannedCode("");
+        }}
+        style={{
+          backgroundColor: "#0F766E",
+          borderRadius: 10,
+          padding: 13,
+          alignItems: "center",
+          marginTop: 16,
+        }}
+      >
+        <Text style={{ color: "#FFFFFF", fontWeight: "700" }}>
+          Close
+        </Text>
+      </Pressable>
+    </View>
+  </View>
+</Modal>
     </ScrollView>
   );
 }
