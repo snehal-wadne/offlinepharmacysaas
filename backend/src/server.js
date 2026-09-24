@@ -9,6 +9,7 @@
 const express = require("express");
 const cors = require("cors");
 const managerRoutes = require('./routes/Manager.routes');
+const mainDashboardRoutes = require("./routes/mainDashboard.routes");
 require("dotenv").config();
 
 const {
@@ -249,6 +250,7 @@ app.post("/api/login/google", authController.googleLogin);
 app.post("/api/auth/google", authController.googleLogin);
 app.post("/api/auth/google-onboard", authController.googleOnboard);
 app.use('/api', managerRoutes);
+app.use("/api/dashboard", mainDashboardRoutes);
 
 /**
  * Server Startup
