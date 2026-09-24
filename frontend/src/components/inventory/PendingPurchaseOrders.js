@@ -54,7 +54,7 @@ export default function PendingPurchaseOrders({
 
                 {/* Right Info: Amount & Time */}
                 <View style={styles.orderRight}>
-                  <Text style={styles.amount}>{order.amount || order.formattedAmount || '₹0.00'}</Text>
+                  <Text style={styles.amount}>₹{order.totalAmount || order.formattedAmount || '₹0.00'}</Text>
                   <Text style={styles.timeAgo}>{order.timeAgo || ''}</Text>
                 </View>
               </Pressable>
