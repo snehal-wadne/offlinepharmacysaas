@@ -15,7 +15,7 @@ export async function fetchPurchases(params = {}) {
   const query = new URLSearchParams();
   const rawBranch =
     typeof params.branchId === "object" && params.branchId !== null
-      ? params.branchId.id || params.branchId.name
+      ? params.branchId.id
       : params.branchId;
   if (
     rawBranch &&
@@ -64,7 +64,7 @@ export async function fetchGoodsReceipts(params = {}) {
   const query = new URLSearchParams();
   const rawBranch =
     typeof params.branchId === "object" && params.branchId !== null
-      ? params.branchId.id || params.branchId.name
+      ? params.branchId.id
       : params.branchId;
   if (
     rawBranch &&

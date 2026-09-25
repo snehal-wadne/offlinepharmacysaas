@@ -181,6 +181,9 @@ export default function SalesScreen({
 
   // Barcode Scanner Modal State
   const [scannerModalVisible, setScannerModalVisible] = useState(false);
+  // Persistent scan result (medicine details + live stock) shown inside the
+  // scanner modal — stays until cleared, does not auto-hide.
+  const [scanResultCard, setScanResultCard] = useState(null);
 
   // Customer Selection State (Dexie-backed)
   const [customers, setCustomers] = useState(
@@ -608,9 +611,24 @@ export default function SalesScreen({
         p.name.toLowerCase().includes(code),
     );
 
+    // Scanning stays open on a match — the cashier can see the medicine's
+    // details + live stock (and keep scanning more items) instead of the
+    // modal closing after a split second.
     if (match) {
       handleAddToCart(match);
-      setScannerModalVisible(false);
+      const cartQty =
+        (cart.find(
+          (item) => item.id === match.id || item.name === match.name,
+        )?.qty || 0) + 1;
+      setScanResultCard({
+        status: "found",
+        name: match.name,
+        generic: match.generic,
+        stock: match.stock,
+        batch: match.batch,
+        price: match.sellingPrice,
+        qty: cartQty,
+      });
       if (onShowToast) {
         onShowToast(`📷 Scanned [${scannedCode}]: Added ${match.name}`);
       }
@@ -629,7 +647,15 @@ export default function SalesScreen({
             : [...prev, serverMatch],
         );
         handleAddToCart(serverMatch);
-        setScannerModalVisible(false);
+        setScanResultCard({
+          status: "found",
+          name: serverMatch.name,
+          generic: serverMatch.generic,
+          stock: serverMatch.stock,
+          batch: serverMatch.batch,
+          price: serverMatch.sellingPrice,
+          qty: 1,
+        });
         if (onShowToast) {
           onShowToast(`📷 Scanned [${scannedCode}]: Added ${serverMatch.name}`);
         }
@@ -639,6 +665,7 @@ export default function SalesScreen({
       console.warn("Barcode server lookup failed:", err.message);
     }
 
+    setScanResultCard({ status: "notfound", code: scannedCode.trim() });
     if (onShowToast) {
       onShowToast(`⚠️ No product found with barcode "${scannedCode}".`);
     }
@@ -776,7 +803,10 @@ export default function SalesScreen({
                 </Pressable>
               ) : null}
               <Pressable
-                onPress={() => setScannerModalVisible(true)}
+                onPress={() => {
+                  setScanResultCard(null);
+                  setScannerModalVisible(true);
+                }}
                 style={styles.scanBtnInSearch}
                 accessibilityLabel="Scan barcode or QR"
               >
@@ -1799,6 +1829,7 @@ export default function SalesScreen({
         onClose={() => {
           setScannerModalVisible(false);
           setScannerPurpose("product");
+          setScanResultCard(null);
         }}
         onScan={handleBarcodeScanned}
         title={
@@ -1807,6 +1838,7 @@ export default function SalesScreen({
             : "Scan Medicine Barcode"
         }
         mode="product"
+        resultCard={scannerPurpose === "utr" ? null : scanResultCard}
       />
       {/* ========================================================================= */}
       {/* ATTACH PRESCRIPTION MODAL (RX-03)                                         */}

@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Platform,
   Animated,
+  ScrollView,
 } from 'react-native';
 
 export default function BarcodeScannerModal({
@@ -17,6 +18,12 @@ export default function BarcodeScannerModal({
   title = 'Barcode & QR Code Scanner',
   mode = 'all', // 'invoice' | 'product' | 'all'
   sampleInvoices = ['INV-1025', 'INV-1024', 'INV-1023', 'INV-1022', 'INV-1021'],
+  // Optional rich, persistent result card the caller renders after
+  // processing a scan (e.g. matched medicine name + live stock). Unlike
+  // the transient "Scanned Successfully" line below, this stays on screen
+  // until the caller clears it or a new scan overwrites it — it never
+  // auto-hides on a timer.
+  resultCard = null,
 }) {
   const [manualCode, setManualCode] = useState('');
   const [cameraActive, setCameraActive] = useState(false);
@@ -28,6 +35,10 @@ export default function BarcodeScannerModal({
   const streamRef = useRef(null);
   const scanIntervalRef = useRef(null);
   const laserAnim = useRef(new Animated.Value(0)).current;
+  // Dedupe continuous camera detections of the same code (the scan loop
+  // polls every 350ms, so a barcode held in frame would otherwise re-fire
+  // onScan many times a second now that the modal stays open after a scan).
+  const lastFiredRef = useRef({ code: null, time: 0 });
 
   // Sound feedback upon scan
   const triggerScanBeep = () => {
@@ -75,9 +86,21 @@ export default function BarcodeScannerModal({
   }, [visible, laserAnim]);
 
   // Execute scan callback
-  const executeScan = (code) => {
+  const executeScan = (code, { skipDedupe = false } = {}) => {
     if (!code || !code.trim()) return;
     const clean = code.trim();
+
+    if (!skipDedupe) {
+      const now = Date.now();
+      const last = lastFiredRef.current;
+      if (last.code === clean && now - last.time < 2500) {
+        // Same code still in front of the camera — ignore the repeat fire
+        // instead of re-adding/re-processing it every 350ms.
+        return;
+      }
+      lastFiredRef.current = { code: clean, time: now };
+    }
+
     triggerScanBeep();
     setLastScanned(clean);
     setManualCode('');
@@ -118,6 +141,7 @@ export default function BarcodeScannerModal({
         scanIntervalRef.current = null;
       }
       setCameraActive(false);
+      lastFiredRef.current = { code: null, time: 0 };
       return;
     }
 
@@ -260,7 +284,7 @@ export default function BarcodeScannerModal({
       if (e.key === 'Enter') {
         if (buffer.length >= 3) {
           e.preventDefault();
-          executeScan(buffer.trim());
+          executeScan(buffer.trim(), { skipDedupe: true });
         }
         buffer = '';
       } else if (e.key.length === 1) {
@@ -327,6 +351,16 @@ export default function BarcodeScannerModal({
             </Pressable>
           </View>
 
+          {/* Scrollable body — camera, result card & manual/preset inputs.
+              Keeps the header and the "Close Scanner" footer button always
+              visible/reachable on short mobile viewports instead of the
+              growing content (e.g. the result card) pushing the footer
+              off-screen with no way to scroll down to it. */}
+          <ScrollView
+            style={styles.modalBody}
+            contentContainerStyle={styles.modalBodyContent}
+            showsVerticalScrollIndicator={false}
+          >
           {/* Universal Unified Scanner Feature Banner */}
           <View style={styles.unifiedFeatureBanner}>
             <Text style={styles.unifiedFeatureIcon}>⚡</Text>
@@ -408,13 +442,84 @@ export default function BarcodeScannerModal({
             </Pressable>
           </View>
 
-          {/* Feedback Banner when scanned */}
+          {/* Feedback Banner when scanned (raw code — always shown) */}
           {lastScanned && (
             <View style={styles.scannedNoticeBox}>
               <Text style={styles.scannedNoticeText}>
                 ✓ Scanned Successfully:{' '}
                 <Text style={styles.scannedCodeText}>{lastScanned}</Text>
               </Text>
+            </View>
+          )}
+
+          {/* Persistent Result Card — stays on screen (no auto-hide timer)
+              until the caller clears it or a new scan replaces it. */}
+          {resultCard && (
+            <View
+              style={[
+                styles.resultCardBox,
+                resultCard.status === 'notfound' && styles.resultCardBoxWarn,
+              ]}
+            >
+              {resultCard.status === 'notfound' ? (
+                <>
+                  <Text style={styles.resultCardTitle}>
+                    ❓ No medicine found for "{resultCard.code}"
+                  </Text>
+                  <Text style={styles.resultCardSubtitle}>
+                    Try the manual search below, or check the SKU on the
+                    printed label.
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <View style={styles.resultCardHeaderRow}>
+                    <Text style={styles.resultCardTitle} numberOfLines={2}>
+                      ✓ {resultCard.name}
+                    </Text>
+                    {resultCard.qty ? (
+                      <Text style={styles.resultCardQtyBadge}>
+                        {resultCard.qty} in cart
+                      </Text>
+                    ) : null}
+                  </View>
+                  {resultCard.generic ? (
+                    <Text style={styles.resultCardSubtitle}>
+                      {resultCard.generic}
+                    </Text>
+                  ) : null}
+                  <View style={styles.resultCardStatsRow}>
+                    <View style={styles.resultCardStat}>
+                      <Text style={styles.resultCardStatLabel}>Stock</Text>
+                      <Text
+                        style={[
+                          styles.resultCardStatValue,
+                          Number(resultCard.stock || 0) < 50 &&
+                            styles.resultCardStatValueLow,
+                        ]}
+                      >
+                        {Number(resultCard.stock || 0)} units
+                      </Text>
+                    </View>
+                    {resultCard.price != null ? (
+                      <View style={styles.resultCardStat}>
+                        <Text style={styles.resultCardStatLabel}>Price</Text>
+                        <Text style={styles.resultCardStatValue}>
+                          ₹{Number(resultCard.price).toFixed(2)}
+                        </Text>
+                      </View>
+                    ) : null}
+                    {resultCard.batch ? (
+                      <View style={styles.resultCardStat}>
+                        <Text style={styles.resultCardStatLabel}>Batch</Text>
+                        <Text style={styles.resultCardStatValue}>
+                          {resultCard.batch}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                </>
+              )}
             </View>
           )}
 
@@ -432,11 +537,11 @@ export default function BarcodeScannerModal({
                 placeholderTextColor="#94A3B8"
                 value={manualCode}
                 onChangeText={setManualCode}
-                onSubmitEditing={() => executeScan(manualCode)}
+                onSubmitEditing={() => executeScan(manualCode, { skipDedupe: true })}
                 autoFocus={true}
               />
               <Pressable
-                onPress={() => executeScan(manualCode)}
+                onPress={() => executeScan(manualCode, { skipDedupe: true })}
                 style={styles.scanActionBtn}
               >
                 <Text style={styles.scanActionBtnText}>Scan</Text>
@@ -457,7 +562,7 @@ export default function BarcodeScannerModal({
                   {sampleInvoices.map((inv) => (
                     <Pressable
                       key={inv}
-                      onPress={() => executeScan(inv)}
+                      onPress={() => executeScan(inv, { skipDedupe: true })}
                       style={styles.presetChipInvoice}
                     >
                       <Text style={styles.presetChipInvoiceText}>{inv}</Text>
@@ -474,7 +579,7 @@ export default function BarcodeScannerModal({
                   {sampleProducts.map((p) => (
                     <Pressable
                       key={p.code}
-                      onPress={() => executeScan(p.code)}
+                      onPress={() => executeScan(p.code, { skipDedupe: true })}
                       style={styles.presetChipProduct}
                     >
                       <Text style={styles.presetChipProductText}>
@@ -486,6 +591,7 @@ export default function BarcodeScannerModal({
               </View>
             ) : null}
           </View>
+          </ScrollView>
 
           {/* Footer */}
           <View style={styles.modalFooter}>
@@ -520,6 +626,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 20,
     elevation: 10,
+    flexShrink: 1,
+    overflow: 'hidden',
+  },
+  modalBody: {
+    flexShrink: 1,
+  },
+  modalBodyContent: {
+    flexGrow: 1,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -770,6 +884,68 @@ const styles = StyleSheet.create({
     color: '#047857',
   },
 
+  // Persistent Scan Result Card
+  resultCardBox: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1.5,
+    borderColor: '#6EE7B7',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+  },
+  resultCardBoxWarn: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FCD34D',
+  },
+  resultCardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  resultCardTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+    flex: 1,
+  },
+  resultCardQtyBadge: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#0F766E',
+    backgroundColor: '#CCFBF1',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  resultCardSubtitle: {
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  resultCardStatsRow: {
+    flexDirection: 'row',
+    gap: 16,
+    marginTop: 8,
+  },
+  resultCardStat: {},
+  resultCardStatLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+    textTransform: 'uppercase',
+  },
+  resultCardStatValue: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginTop: 1,
+  },
+  resultCardStatValueLow: {
+    color: '#B91C1C',
+  },
+
   // Manual Input
   manualInputGroup: {
     marginBottom: 12,
@@ -874,6 +1050,10 @@ const styles = StyleSheet.create({
   modalFooter: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
   },
   doneBtn: {
     backgroundColor: '#F1F5F9',

@@ -16,6 +16,7 @@ export type ErrorCategory =
   | 'AUTHORIZATION'
   | 'VALIDATION'
   | 'BUSINESS_CONFLICT'
+  | 'FATAL'
   | 'UNKNOWN';
 
 export interface SyncEngineState {

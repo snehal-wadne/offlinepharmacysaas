@@ -93,7 +93,7 @@ export default function GoodsReceivingScreen({
     try {
       const rawBranch =
         typeof selectedBranch === "object" && selectedBranch !== null
-          ? selectedBranch.id || selectedBranch.name
+          ? selectedBranch.id
           : selectedBranch;
 
       const branchParam =
