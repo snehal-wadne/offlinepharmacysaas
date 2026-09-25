@@ -19,6 +19,10 @@ import {
 import PaginationControls from "../../components/common/PaginationControls";
 import { fetchInventory } from "../../api/inventoryApi";
 import BulkImportModal from "../../components/inventory/BulkImportModal";
+import {
+  reorderStock,
+  writeOffStock,
+} from "../../api/stockStatusApi";
 
 const STOCK_STATUS_BADGES = {
   "In Stock": { bg: "#DCFCE7", text: "#15803D" },
@@ -101,150 +105,199 @@ export default function StockStatusScreen({
   console.log(rawInventory);
 
   // Live DB Batch Expiry Timeline Mapping
- // ============================================================
-// NORMALIZE RAW INVENTORY DATA
-// ============================================================
+  // ============================================================
+  // NORMALIZE RAW INVENTORY DATA
+  // ============================================================
 
-const normalizedInventory = rawInventory.map((item, index) => {
-  const quantity = Number(item.quantity ?? 0);
+  const normalizedInventory = rawInventory.map((item, index) => {
+    const quantity = Number(item.quantity ?? 0);
 
-  return {
-    id:
-      item.id ||
-      item._id ||
-      item.inventoryId ||
-      item.variationId ||
-      `inventory-${index}`,
+    return {
+      id:
+        item.id ||
+        item._id ||
+        item.inventoryId ||
+        item.variationId ||
+        `inventory-${index}`,
 
-    medicine:
-      item.medicineName ||
-      item.genericName ||
-      item.productName ||
-      "Unknown Medicine",
+      medicine:
+        item.medicineName ||
+        item.genericName ||
+        item.productName ||
+        "Unknown Medicine",
 
-    brandName: item.brandName || "",
+      brandName: item.brandName || "",
 
-    genericName:
-      item.genericName ||
-      item.medicineName ||
-      item.productName ||
-      "",
+      genericName:
+        item.genericName ||
+        item.medicineName ||
+        item.productName ||
+        "",
 
-    sku: item.sku || "",
+      sku: item.sku || "",
 
-    quantity,
+      quantity,
 
-    amount: item.amount ?? "",
+      amount: item.amount ?? "",
 
-    batchNo: item.batchNo || "",
+      batchNo: item.batchNo || "",
 
-    expiryDate:
-      item.expiryDate ||
-      item.expiry_date ||
-      item.batchExpiryDate ||
-      "",
+      expiryDate:
+        item.expiryDate ||
+        item.expiry_date ||
+        item.batchExpiryDate ||
+        "",
 
-    shelfLocation: item.shelfLocation || "",
+      shelfLocation: item.shelfLocation || "",
 
-    supplier:
-      item.supplierName ||
-      item.manufacturer ||
-      "",
+      supplier:
+        item.supplierName ||
+        item.manufacturer ||
+        "",
 
-    manufacturer: item.manufacturer || "",
+      manufacturer: item.manufacturer || "",
 
-    branch:
-      item.branchName ||
-      item.branch ||
-      "Main Branch",
+      branch:
+        item.branchName ||
+        item.branch ||
+        "Main Branch",
 
-    branchId: item.branchId || "",
+      branchId: item.branchId || "",
 
-    status: item.status || "",
+      status: item.status || "",
 
-    lastUpdated:
-      item.lastUpdated ||
-      item.updatedAt ||
-      "",
+      lastUpdated:
+        item.lastUpdated ||
+        item.updatedAt ||
+        "",
 
-    isActive: item.isActive,
+      isActive: item.isActive,
 
-    packSize: item.packSize || "",
+      packSize: item.packSize || "",
 
-    strength: item.strength || "",
+      strength: item.strength || "",
 
-    rxRequired: item.rxRequired,
+      rxRequired: item.rxRequired,
 
-    productId: item.productId || "",
+      productId: item.productId || "",
 
-    updatedBy: item.updatedBy || "",
-  };
-});
-
-
-// ============================================================
-// EXPIRY STATUS CALCULATION
-// ============================================================
-
-const getExpiryStatus = (expiryDate) => {
-  if (!expiryDate) {
-    return "Safe";
-  }
-
-  const expiry = new Date(expiryDate);
-
-  if (Number.isNaN(expiry.getTime())) {
-    return "Safe";
-  }
-
-  const today = new Date();
-
-  // Remove time part
-  const todayDate = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate(),
-  );
-
-  const expiryOnlyDate = new Date(
-    expiry.getFullYear(),
-    expiry.getMonth(),
-    expiry.getDate(),
-  );
-
-  const differenceInMs =
-    expiryOnlyDate.getTime() - todayDate.getTime();
-
-  const differenceInDays = Math.ceil(
-    differenceInMs / (1000 * 60 * 60 * 24),
-  );
-
-  if (differenceInDays < 0) {
-    return "Expired";
-  }
-
-  if (differenceInDays <= 30) {
-    return "Expiring Soon";
-  }
-
-  return "Safe";
-};
+      updatedBy: item.updatedBy || "",
+    };
+  });
 
 
-// ============================================================
-// LOW STOCK ITEMS
-// ============================================================
+  // ============================================================
+  // EXPIRY STATUS CALCULATION
+  // ============================================================
 
-const dbLowStockItems = normalizedInventory
-  .filter((item) => item.quantity < 50)
-  .map((item) => {
-    let status = "Low Stock";
-
-    if (item.quantity === 0) {
-      status = "Out of Stock";
-    } else if (item.quantity < 15) {
-      status = "Critical";
+  const getExpiryStatus = (expiryDate) => {
+    if (!expiryDate) {
+      return "Safe";
     }
+
+    const expiry = new Date(expiryDate);
+
+    if (Number.isNaN(expiry.getTime())) {
+      return "Safe";
+    }
+
+    const today = new Date();
+
+    // Remove time part
+    const todayDate = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate(),
+    );
+
+    const expiryOnlyDate = new Date(
+      expiry.getFullYear(),
+      expiry.getMonth(),
+      expiry.getDate(),
+    );
+
+    const differenceInMs =
+      expiryOnlyDate.getTime() - todayDate.getTime();
+
+    const differenceInDays = Math.ceil(
+      differenceInMs / (1000 * 60 * 60 * 24),
+    );
+
+    if (differenceInDays < 0) {
+      return "Expired";
+    }
+
+    if (differenceInDays <= 30) {
+      return "Expiring Soon";
+    }
+
+    return "Safe";
+  };
+
+
+  // ============================================================
+  // LOW STOCK ITEMS
+  // ============================================================
+
+  const dbLowStockItems = normalizedInventory
+    .filter((item) => item.quantity < 50)
+    .map((item) => {
+      let status = "Low Stock";
+
+      if (item.quantity === 0) {
+        status = "Out of Stock";
+      } else if (item.quantity < 15) {
+        status = "Critical";
+      }
+
+      return {
+        id: item.id,
+
+        medicine: item.medicine,
+
+        brandName: item.brandName,
+
+        genericName: item.genericName,
+
+        sku: item.sku,
+
+        currentStock: item.quantity,
+
+        minimumStock: 15,
+
+        reorderLevel: 50,
+
+        supplier: item.supplier,
+
+        branch: item.branch,
+
+        branchId: item.branchId,
+
+        status,
+
+        amount: item.amount,
+
+        batchNo: item.batchNo,
+
+        expiryDate: item.expiryDate,
+
+        shelfLocation: item.shelfLocation,
+
+        manufacturer: item.manufacturer,
+
+        packSize: item.packSize,
+
+        strength: item.strength,
+      };
+    });
+
+
+  // ============================================================
+  // EXPIRY ITEMS
+  // ============================================================
+
+  const dbExpiryItems = normalizedInventory.map((item) => {
+    const expiryStatus = getExpiryStatus(item.expiryDate);
 
     return {
       id: item.id,
@@ -255,31 +308,27 @@ const dbLowStockItems = normalizedInventory
 
       genericName: item.genericName,
 
-      sku: item.sku,
+      batchNo: item.batchNo || "-",
 
-      currentStock: item.quantity,
+      expiryDate: item.expiryDate || "-",
 
-      minimumStock: 15,
+      quantity: item.quantity,
 
-      reorderLevel: 50,
+      mrp: item.amount || "-",
 
-      supplier: item.supplier,
+      shelfLocation: item.shelfLocation || "-",
+
+      supplier: item.supplier || "-",
 
       branch: item.branch,
 
       branchId: item.branchId,
 
-      status,
-
-      amount: item.amount,
-
-      batchNo: item.batchNo,
-
-      expiryDate: item.expiryDate,
-
-      shelfLocation: item.shelfLocation,
+      status: expiryStatus,
 
       manufacturer: item.manufacturer,
+
+      sku: item.sku,
 
       packSize: item.packSize,
 
@@ -288,78 +337,33 @@ const dbLowStockItems = normalizedInventory
   });
 
 
-// ============================================================
-// EXPIRY ITEMS
-// ============================================================
+  // ============================================================
+  // BRANCH FILTER
+  // ============================================================
 
-const dbExpiryItems = normalizedInventory.map((item) => {
-  const expiryStatus = getExpiryStatus(item.expiryDate);
-
-  return {
-    id: item.id,
-
-    medicine: item.medicine,
-
-    brandName: item.brandName,
-
-    genericName: item.genericName,
-
-    batchNo: item.batchNo || "-",
-
-    expiryDate: item.expiryDate || "-",
-
-    quantity: item.quantity,
-
-    mrp: item.amount || "-",
-
-    shelfLocation: item.shelfLocation || "-",
-
-    supplier: item.supplier || "-",
-
-    branch: item.branch,
-
-    branchId: item.branchId,
-
-    status: expiryStatus,
-
-    manufacturer: item.manufacturer,
-
-    sku: item.sku,
-
-    packSize: item.packSize,
-
-    strength: item.strength,
-  };
-});
-
-
-// ============================================================
-// BRANCH FILTER
-// ============================================================
-
-const selectedBranchValue =
-  typeof selectedBranch === "object" && selectedBranch !== null
-    ? selectedBranch.id ||
+  const selectedBranchValue =
+    typeof selectedBranch === "object" && selectedBranch !== null
+      ? selectedBranch.id ||
       selectedBranch._id ||
       selectedBranch.name ||
       selectedBranch.branchId
-    : selectedBranch;
+      : selectedBranch;
 
-const isAllBranches =
-  !selectedBranchValue ||
-  selectedBranchValue === "All Branches" ||
-  selectedBranchValue === "all";
+  const isAllBranches =
+    !selectedBranchValue ||
+    selectedBranchValue === "All Branches" ||
+    selectedBranchValue === "all";
 
 
-// ============================================================
-// LOW STOCK BRANCH FILTER
-// ============================================================
+  // ============================================================
+  // LOW STOCK BRANCH FILTER
+  // ============================================================
 
-const baseLowStockList = dbLowStockItems;
+  const baseLowStockList = dbLowStockItems;
 
-const lowStockItemsList = isAllBranches
-  ? baseLowStockList
-  : baseLowStockList.filter((item) => {
+  const lowStockItemsList = isAllBranches
+    ? baseLowStockList
+    : baseLowStockList.filter((item) => {
       return (
         item.branch === selectedBranchValue ||
         item.branchId === selectedBranchValue
@@ -367,15 +371,15 @@ const lowStockItemsList = isAllBranches
     });
 
 
-// ============================================================
-// EXPIRY BRANCH FILTER
-// ============================================================
+  // ============================================================
+  // EXPIRY BRANCH FILTER
+  // ============================================================
 
-const baseExpiryList = dbExpiryItems;
+  const baseExpiryList = dbExpiryItems;
 
-const expiryItemsList = isAllBranches
-  ? baseExpiryList
-  : baseExpiryList.filter((item) => {
+  const expiryItemsList = isAllBranches
+    ? baseExpiryList
+    : baseExpiryList.filter((item) => {
       return (
         item.branch === selectedBranchValue ||
         item.branchId === selectedBranchValue
@@ -383,203 +387,203 @@ const expiryItemsList = isAllBranches
     });
 
 
-// ============================================================
-// DEBUG - SEE EXACT DATA USED BY UI
-// ============================================================
+  // ============================================================
+  // DEBUG - SEE EXACT DATA USED BY UI
+  // ============================================================
 
-console.log("======================================");
-console.log("RAW INVENTORY:", rawInventory);
-console.log("NORMALIZED INVENTORY:", normalizedInventory);
-console.log("LOW STOCK ITEMS:", lowStockItemsList);
-console.log("EXPIRY ITEMS:", expiryItemsList);
-console.log("======================================");
+  console.log("======================================");
+  console.log("RAW INVENTORY:", rawInventory);
+  console.log("NORMALIZED INVENTORY:", normalizedInventory);
+  console.log("LOW STOCK ITEMS:", lowStockItemsList);
+  console.log("EXPIRY ITEMS:", expiryItemsList);
+  console.log("======================================");
 
 
-// ============================================================
-// DYNAMIC 4 KPI STAT CARDS
-// ============================================================
+  // ============================================================
+  // DYNAMIC 4 KPI STAT CARDS
+  // ============================================================
 
-const lowStockAlertsCount = lowStockItemsList.length;
+  const lowStockAlertsCount = lowStockItemsList.length;
 
-const expiringCount = expiryItemsList.filter(
-  (item) => item.status === "Expiring Soon",
-).length;
+  const expiringCount = expiryItemsList.filter(
+    (item) => item.status === "Expiring Soon",
+  ).length;
 
-const expiredCount = expiryItemsList.filter(
-  (item) => item.status === "Expired",
-).length;
+  const expiredCount = expiryItemsList.filter(
+    (item) => item.status === "Expired",
+  ).length;
 
-const deficitSum = lowStockItemsList.reduce((acc, item) => {
-  const numPrice = parseFloat(
-    String(item.amount || "")
-      .replace(/[^0-9.]/g, ""),
+  const deficitSum = lowStockItemsList.reduce((acc, item) => {
+    const numPrice = parseFloat(
+      String(item.amount || "")
+        .replace(/[^0-9.]/g, ""),
+    );
+
+    const safePrice = Number.isFinite(numPrice)
+      ? numPrice
+      : 0;
+
+    const deficitQty = Math.max(
+      0,
+      item.reorderLevel - item.currentStock,
+    );
+
+    return acc + deficitQty * safePrice;
+  }, 0);
+
+
+  const dynamicStockStatusKpis = [
+    {
+      id: "kpi-1",
+      label: "Low Stock Alerts",
+      value: lowStockAlertsCount.toLocaleString(),
+      subtext: "Quantity < 50 items",
+      variant: "amber",
+    },
+
+    {
+      id: "kpi-2",
+      label: "Expiring in 30 Days",
+      value: expiringCount.toLocaleString(),
+      subtext: "Requires monitoring",
+      variant: "blue",
+    },
+
+    {
+      id: "kpi-3",
+      label: "Expired Items",
+      value: expiredCount.toLocaleString(),
+      subtext: "Action required",
+      variant: "red",
+    },
+
+    {
+      id: "kpi-4",
+      label: "Reorder Deficit",
+      value: `₹${deficitSum.toLocaleString("en-IN", {
+        maximumFractionDigits: 0,
+      })}`,
+      subtext: "Procurement value",
+      variant: "teal",
+    },
+  ];
+
+
+  // ============================================================
+  // SEARCH HELPER
+  // ============================================================
+
+  const normalizeSearchValue = (value) =>
+    String(value ?? "").toLowerCase();
+
+  const searchValue = normalizeSearchValue(searchQuery).trim();
+
+
+  // ============================================================
+  // FILTER LOW STOCK
+  // ============================================================
+
+  const filteredLowStock = lowStockItemsList.filter((item) => {
+    const matchesSearch =
+      !searchValue ||
+      normalizeSearchValue(item.brandName).includes(searchValue) ||
+      normalizeSearchValue(item.genericName).includes(searchValue) ||
+      normalizeSearchValue(item.medicine).includes(searchValue) ||
+      normalizeSearchValue(item.sku).includes(searchValue) ||
+      normalizeSearchValue(item.supplier).includes(searchValue) ||
+      normalizeSearchValue(item.batchNo).includes(searchValue);
+
+    const matchesCritical =
+      !criticalOnly ||
+      item.status === "Critical" ||
+      item.status === "Out of Stock";
+
+    return matchesSearch && matchesCritical;
+  });
+
+
+  // ============================================================
+  // FILTER EXPIRY
+  // ============================================================
+
+  const filteredExpiry = expiryItemsList.filter((item) => {
+    const matchesSearch =
+      !searchValue ||
+      normalizeSearchValue(item.brandName).includes(searchValue) ||
+      normalizeSearchValue(item.genericName).includes(searchValue) ||
+      normalizeSearchValue(item.medicine).includes(searchValue) ||
+      normalizeSearchValue(item.batchNo).includes(searchValue) ||
+      normalizeSearchValue(item.supplier).includes(searchValue) ||
+      normalizeSearchValue(item.sku).includes(searchValue);
+
+    const matchesCritical =
+      !criticalOnly ||
+      item.status === "Expired" ||
+      item.status === "Expiring Soon";
+
+    return matchesSearch && matchesCritical;
+  });
+
+
+  // ============================================================
+  // PAGINATION STATE
+  // ============================================================
+
+  const [page, setPage] = useState(1);
+
+  const [pageSize, setPageSize] = useState(10);
+
+  const [isPageLoading, setIsPageLoading] = useState(false);
+
+
+  // ============================================================
+  // RESET PAGE WHEN FILTERS CHANGE
+  // ============================================================
+
+  useEffect(() => {
+    setPage(1);
+  }, [
+    activeTab,
+    searchQuery,
+    criticalOnly,
+    selectedBranch,
+    pageSize,
+  ]);
+
+
+  // ============================================================
+  // ACTIVE LIST
+  // ============================================================
+
+  const activeItemsList =
+    activeTab === "low-stock"
+      ? filteredLowStock
+      : filteredExpiry;
+
+
+  // ============================================================
+  // PAGINATION
+  // ============================================================
+
+  const totalItems = activeItemsList.length;
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(totalItems / pageSize),
   );
 
-  const safePrice = Number.isFinite(numPrice)
-    ? numPrice
-    : 0;
-
-  const deficitQty = Math.max(
-    0,
-    item.reorderLevel - item.currentStock,
+  const safePage = Math.min(
+    page,
+    totalPages,
   );
 
-  return acc + deficitQty * safePrice;
-}, 0);
+  const startIndex =
+    (safePage - 1) * pageSize;
 
-
-const dynamicStockStatusKpis = [
-  {
-    id: "kpi-1",
-    label: "Low Stock Alerts",
-    value: lowStockAlertsCount.toLocaleString(),
-    subtext: "Quantity < 50 items",
-    variant: "amber",
-  },
-
-  {
-    id: "kpi-2",
-    label: "Expiring in 30 Days",
-    value: expiringCount.toLocaleString(),
-    subtext: "Requires monitoring",
-    variant: "blue",
-  },
-
-  {
-    id: "kpi-3",
-    label: "Expired Items",
-    value: expiredCount.toLocaleString(),
-    subtext: "Action required",
-    variant: "red",
-  },
-
-  {
-    id: "kpi-4",
-    label: "Reorder Deficit",
-    value: `₹${deficitSum.toLocaleString("en-IN", {
-      maximumFractionDigits: 0,
-    })}`,
-    subtext: "Procurement value",
-    variant: "teal",
-  },
-];
-
-
-// ============================================================
-// SEARCH HELPER
-// ============================================================
-
-const normalizeSearchValue = (value) =>
-  String(value ?? "").toLowerCase();
-
-const searchValue = normalizeSearchValue(searchQuery).trim();
-
-
-// ============================================================
-// FILTER LOW STOCK
-// ============================================================
-
-const filteredLowStock = lowStockItemsList.filter((item) => {
-  const matchesSearch =
-    !searchValue ||
-    normalizeSearchValue(item.brandName).includes(searchValue) ||
-    normalizeSearchValue(item.genericName).includes(searchValue) ||
-    normalizeSearchValue(item.medicine).includes(searchValue) ||
-    normalizeSearchValue(item.sku).includes(searchValue) ||
-    normalizeSearchValue(item.supplier).includes(searchValue) ||
-    normalizeSearchValue(item.batchNo).includes(searchValue);
-
-  const matchesCritical =
-    !criticalOnly ||
-    item.status === "Critical" ||
-    item.status === "Out of Stock";
-
-  return matchesSearch && matchesCritical;
-});
-
-
-// ============================================================
-// FILTER EXPIRY
-// ============================================================
-
-const filteredExpiry = expiryItemsList.filter((item) => {
-  const matchesSearch =
-    !searchValue ||
-    normalizeSearchValue(item.brandName).includes(searchValue) ||
-    normalizeSearchValue(item.genericName).includes(searchValue) ||
-    normalizeSearchValue(item.medicine).includes(searchValue) ||
-    normalizeSearchValue(item.batchNo).includes(searchValue) ||
-    normalizeSearchValue(item.supplier).includes(searchValue) ||
-    normalizeSearchValue(item.sku).includes(searchValue);
-
-  const matchesCritical =
-    !criticalOnly ||
-    item.status === "Expired" ||
-    item.status === "Expiring Soon";
-
-  return matchesSearch && matchesCritical;
-});
-
-
-// ============================================================
-// PAGINATION STATE
-// ============================================================
-
-const [page, setPage] = useState(1);
-
-const [pageSize, setPageSize] = useState(10);
-
-const [isPageLoading, setIsPageLoading] = useState(false);
-
-
-// ============================================================
-// RESET PAGE WHEN FILTERS CHANGE
-// ============================================================
-
-useEffect(() => {
-  setPage(1);
-}, [
-  activeTab,
-  searchQuery,
-  criticalOnly,
-  selectedBranch,
-  pageSize,
-]);
-
-
-// ============================================================
-// ACTIVE LIST
-// ============================================================
-
-const activeItemsList =
-  activeTab === "low-stock"
-    ? filteredLowStock
-    : filteredExpiry;
-
-
-// ============================================================
-// PAGINATION
-// ============================================================
-
-const totalItems = activeItemsList.length;
-
-const totalPages = Math.max(
-  1,
-  Math.ceil(totalItems / pageSize),
-);
-
-const safePage = Math.min(
-  page,
-  totalPages,
-);
-
-const startIndex =
-  (safePage - 1) * pageSize;
-
-const paginatedItems = activeItemsList.slice(
-  startIndex,
-  startIndex + pageSize,
-);
+  const paginatedItems = activeItemsList.slice(
+    startIndex,
+    startIndex + pageSize,
+  );
 
   const handlePageChange = (newPage) => {
     setIsPageLoading(true);
@@ -600,40 +604,146 @@ const paginatedItems = activeItemsList.slice(
     setActionMenuModalOpen(true);
   };
 
-  const handleExecuteAction = (actionKey) => {
-    const item = selectedItemForAction;
-    setActionMenuModalOpen(false);
-    if (!item) return;
+ const handleExecuteAction = async (actionKey) => {
+  const item = selectedItemForAction;
+
+  setActionMenuModalOpen(false);
+
+  if (!item) return;
+
+  try {
+    // ============================================================
+    // REORDER
+    // ============================================================
 
     if (actionKey === "reorder") {
+      const reorderLevel = Number(item.reorderLevel);
+
+      if (!Number.isFinite(reorderLevel) || reorderLevel <= 0) {
+        if (onShowToast) {
+          onShowToast(
+            "Reorder level must be greater than 0.",
+          );
+        }
+
+        return;
+      }
+
+      const response = await reorderStock({
+        inventoryBatchId:
+          item.inventoryBatchId ||
+          item.inventory_batch_id ||
+          item.batchId ||
+          item.id,
+
+        sku: item.sku,
+
+        batchNo:
+          item.batchNo ||
+          item.batchNumber ||
+          item.batch_number,
+
+        reorderLevel,
+      });
+
+      if (!response?.success) {
+        if (onShowToast) {
+          onShowToast(
+            response?.error ||
+              "Failed to reorder stock.",
+          );
+        }
+
+        return;
+      }
+
+      const newQuantity =
+        response?.data?.quantity ??
+        response?.data?.batch?.quantity;
+
       if (onShowToast) {
         onShowToast(
-          `[POST /api/purchase-orders] Created PO for ${item.brandName || item.medicine} (Qty: ${item.reorderLevel * 2 || 100})`,
+          `Stock reordered for ${
+            item.brandName || item.medicine || item.medicineName
+          }. Added ${reorderLevel}. New quantity: ${newQuantity}.`,
         );
       }
+
       return;
     }
 
+    // ============================================================
+    // WRITE OFF
+    // ============================================================
+
     if (actionKey === "write-off") {
+      const response = await writeOffStock({
+        inventoryBatchId:
+          item.inventoryBatchId ||
+          item.inventory_batch_id ||
+          item.batchId ||
+          item.id,
+
+        sku: item.sku,
+
+        batchNo:
+          item.batchNo ||
+          item.batchNumber ||
+          item.batch_number,
+      });
+
+      if (!response?.success) {
+        if (onShowToast) {
+          onShowToast(
+            response?.error ||
+              "Failed to write off stock.",
+          );
+        }
+
+        return;
+      }
+
       if (onShowToast) {
         onShowToast(
-          `[POST /api/inventory/write-off] Batch ${item.batchNo || item.sku} flagged for quarantine / destruction.`,
+          `Batch ${
+            item.batchNo ||
+            item.batchNumber ||
+            item.sku
+          } written off successfully. Quantity is now 0.`,
         );
       }
+
       return;
     }
+
+    // ============================================================
+    // TRANSFER
+    // ============================================================
 
     if (actionKey === "transfer") {
       if (onShowToast) {
         onShowToast(
-          `Redirecting to Stock Transfer for ${item.brandName || item.medicine}`,
+          `Redirecting to Stock Transfer for ${
+            item.brandName || item.medicine
+          }`,
         );
       }
+
       if (onNavigate) {
-        onNavigate("stock-transfer", { sku: item.sku, batchNo: item.batchNo });
+        onNavigate("stock-transfer", {
+          sku: item.sku,
+          batchNo:
+            item.batchNo ||
+            item.batchNumber,
+        });
       }
+
       return;
     }
+
+    // ============================================================
+    // NOTIFY SUPPLIER
+    // ============================================================
 
     if (actionKey === "notify-supplier") {
       if (onShowToast) {
@@ -641,9 +751,23 @@ const paginatedItems = activeItemsList.slice(
           `📧 Supplier notification email dispatched to ${item.supplier}`,
         );
       }
+
       return;
     }
-  };
+  } catch (error) {
+    console.error(
+      "handleExecuteAction error:",
+      error,
+    );
+
+    if (onShowToast) {
+      onShowToast(
+        error?.message ||
+          "Something went wrong while executing the action.",
+      );
+    }
+  }
+};
 
   const handleReorder = (item) => {
     handleOpenActionMenu(item, "low-stock");
