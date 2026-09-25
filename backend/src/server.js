@@ -10,6 +10,7 @@ const express = require("express");
 const cors = require("cors");
 const managerRoutes = require('./routes/Manager.routes');
 const mainDashboardRoutes = require("./routes/mainDashboard.routes");
+const stockStatusRouter = require("./routes/stock.status.router");
 require("dotenv").config();
 
 const {
@@ -251,6 +252,10 @@ app.post("/api/auth/google", authController.googleLogin);
 app.post("/api/auth/google-onboard", authController.googleOnboard);
 app.use('/api', managerRoutes);
 app.use("/api/dashboard", mainDashboardRoutes);
+app.use(
+  "/api/v1/inventory/stock-status",
+  stockStatusRouter
+);
 
 /**
  * Server Startup
