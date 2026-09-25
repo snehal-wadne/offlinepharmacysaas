@@ -52,7 +52,7 @@ export default function StockAdjustmentsScreen({
     try {
       const rawBranch =
         typeof selectedBranch === "object" && selectedBranch !== null
-          ? selectedBranch.id || selectedBranch.name
+          ? selectedBranch.id
           : selectedBranch;
       const freshProducts = await fetchCashierProducts("", "", rawBranch);
       if (Array.isArray(freshProducts) && freshProducts.length > 0) {
@@ -115,7 +115,7 @@ export default function StockAdjustmentsScreen({
         try {
           const rawBranch =
             typeof selectedBranch === "object" && selectedBranch !== null
-              ? selectedBranch.id || selectedBranch.name
+              ? selectedBranch.id
               : selectedBranch;
           const branchParam =
             rawBranch &&
@@ -224,7 +224,7 @@ export default function StockAdjustmentsScreen({
       } else {
         const rawBranch =
           typeof selectedBranch === "object" && selectedBranch !== null
-            ? selectedBranch.id || selectedBranch.name
+            ? selectedBranch.id
             : selectedBranch;
         const branchParam =
           rawBranch &&
@@ -349,7 +349,7 @@ export default function StockAdjustmentsScreen({
     if (!editingItemId && !formData.branchId) {
       const activeBranchId =
         typeof selectedBranch === "object" && selectedBranch !== null
-          ? selectedBranch.id || selectedBranch.name
+          ? selectedBranch.id
           : selectedBranch;
       if (activeBranchId && activeBranchId !== "All Branches") {
         setFormData((prev) => ({ ...prev, branchId: activeBranchId }));
@@ -1143,7 +1143,7 @@ export default function StockAdjustmentsScreen({
       branchId:
         formData.branchId ||
         (typeof selectedBranch === "object" && selectedBranch !== null
-          ? selectedBranch.id || selectedBranch.name
+          ? selectedBranch.id
           : selectedBranch) ||
         undefined,
       shelfLocation: formData.shelfLocation || "A1-S1",
@@ -2091,9 +2091,8 @@ export default function StockAdjustmentsScreen({
                     style={styles.branchDropdownButtonText}
                     numberOfLines={1}
                   >
-                    {branchesList.find(
-                      (b) => (b.id || b.name) === formData.branchId,
-                    )?.name || "Select a branch"}
+                    {branchesList.find((b) => b.id === formData.branchId)
+                      ?.name || "Select a branch"}
                   </Text>
                   <Text style={styles.chevronIcon}>▾</Text>
                 </Pressable>
@@ -2125,7 +2124,7 @@ export default function StockAdjustmentsScreen({
               <Text style={styles.branchModalTitle}>Select Branch</Text>
               <ScrollView style={{ maxHeight: 320 }}>
                 {branchesList.map((b) => {
-                  const bValue = b.id || b.name;
+                  const bValue = b.id;
                   const isSelected = formData.branchId === bValue;
                   return (
                     <Pressable

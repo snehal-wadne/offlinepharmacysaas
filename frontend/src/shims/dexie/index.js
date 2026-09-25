@@ -28,6 +28,12 @@ class Collection {
     return this;
   }
 
+  filter(fn) {
+    const prevFilterFn = this.filterFn;
+    this.filterFn = (item) => prevFilterFn(item) && fn(item);
+    return this;
+  }
+
   async toArray() {
     let items = Array.from(this.table._store.values()).filter(this.filterFn);
     if (this._sortBy) {
@@ -50,6 +56,11 @@ class Collection {
   async count() {
     const items = await this.toArray();
     return items.length;
+  }
+
+  async primaryKeys() {
+    const items = await this.toArray();
+    return items.map((item) => this.table._extractKey(item)).filter((k) => k !== undefined);
   }
 
   async delete() {
@@ -192,8 +203,25 @@ class Table {
     return this.put(item);
   }
 
+  async update(key, changes) {
+    const item = this._store.get(key);
+    if (!item) return 0;
+    Object.assign(item, changes);
+    this._store.set(key, item);
+    this._persist();
+    return 1;
+  }
+
   async delete(key) {
     this._store.delete(key);
+    this._persist();
+  }
+
+  async bulkDelete(keys) {
+    if (!Array.isArray(keys)) return;
+    for (const key of keys) {
+      this._store.delete(key);
+    }
     this._persist();
   }
 

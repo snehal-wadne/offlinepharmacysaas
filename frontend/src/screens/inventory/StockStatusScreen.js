@@ -66,7 +66,7 @@ export default function StockStatusScreen({
       setLoading(true);
       const rawBranch =
         typeof selectedBranch === "object" && selectedBranch !== null
-          ? selectedBranch.id || selectedBranch.name
+          ? selectedBranch.id
           : selectedBranch;
       const branchParam =
         rawBranch &&

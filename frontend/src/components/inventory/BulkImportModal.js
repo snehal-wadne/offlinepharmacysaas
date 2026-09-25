@@ -246,9 +246,9 @@ export default function BulkImportModal({
             quantity: isNaN(qty) ? 0 : qty,
             amount: amt,
             branchId:
-              (typeof selectedBranch === "object" && selectedBranch !== null
-                ? selectedBranch.id || selectedBranch.name
-                : selectedBranch) || "Main Branch",
+              typeof selectedBranch === "object" && selectedBranch !== null
+                ? selectedBranch.id
+                : selectedBranch,
             errorMessage: errors.join(", "),
           });
         }

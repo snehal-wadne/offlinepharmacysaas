@@ -89,7 +89,7 @@ export default function PurchaseReportsScreen({
       const branchParam =
         typeof selectedBranch === "object" &&
         selectedBranch !== null
-          ? selectedBranch.id || selectedBranch.name
+          ? selectedBranch.id
           : selectedBranch;
 
       const cleanBranch =

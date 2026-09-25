@@ -13,7 +13,7 @@ export async function fetchAuditLogs(params = {}) {
   const query = new URLSearchParams();
   const rawBranch =
     typeof params.branchId === "object" && params.branchId !== null
-      ? params.branchId.id || params.branchId.name
+      ? params.branchId.id
       : params.branchId;
   if (
     rawBranch &&

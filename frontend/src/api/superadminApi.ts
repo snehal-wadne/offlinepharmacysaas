@@ -118,7 +118,7 @@ export async function provisionPharmacy(data: {
   planId?: string;
   planName?: string;
   branches?: number;
-  billingCycle?: 'MONTHLY' | 'YEARLY';
+  billingCycle?: 'MONTHLY' | 'ANNUAL' | 'YEARLY';
 }) {
   return apiRequest('/pharmacies', {
     method: 'POST',
