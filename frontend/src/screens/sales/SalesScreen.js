@@ -1,23 +1,21 @@
-import React, { useState, useRef, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
-  View,
-  Text,
-  TextInput,
+  Modal,
+  Platform,
   Pressable,
   ScrollView,
-  Modal,
   StyleSheet,
+  Text,
+  TextInput,
   useWindowDimensions,
-  Platform,
-  Image,
+  View
 } from "react-native";
-import { usePos } from "../../context/PosContext";
 import { fetchCashierProducts, saveHeldBill } from "../../api/cashierApi";
 import BarcodeScannerModal from "../../components/common/BarcodeScannerModal";
-import { SkeletonItemCard } from "../../components/common/SkeletonLoader";
-import PaginationControls from "../../components/common/PaginationControls";
 import OfflineQRCode from "../../components/common/OfflineQRCode";
-import { generateOfflineQRCode } from "../../utils/qrGenerator";
+import PaginationControls from "../../components/common/PaginationControls";
+import { SkeletonItemCard } from "../../components/common/SkeletonLoader";
+import { usePos } from "../../context/PosContext";
 
 const parseExpiryDate = (exp) => {
   if (!exp) return 9999999999999;
@@ -234,6 +232,9 @@ export default function SalesScreen({
   const [paymentMode, setPaymentMode] = useState(draft.paymentMode || "Cash"); // 'Cash' | 'Card' | 'UPI' | 'Split'
   const [checkoutModalVisible, setCheckoutModalVisible] = useState(false);
   const [cashTendered, setCashTendered] = useState(draft.cashTendered || "");
+  const [splitCash, setSplitCash] = useState("");
+const [splitCard, setSplitCard] = useState("");
+const [splitUpi, setSplitUpi] = useState("");
   const [storeUpiId, setStoreUpiId] = useState("falahpharmacy@okhdfcbank");
   const [upiRefNumber, setUpiRefNumber] = useState(draft.upiRefNumber || "");
   const [isEditingUpiId, setIsEditingUpiId] = useState(false);
@@ -1116,8 +1117,10 @@ const handleHoldBillAction = async () => {
                 style={styles.customerPickerBtn}
               >
                 <Text style={styles.customerPickerName}>
-                  {customCustomerInput.trim() || selectedCustomer.name}
-                </Text>
+  {customCustomerInput.trim() ||
+    selectedCustomer?.name ||
+    "Walk-in Customer"}
+</Text>
                 <Text style={styles.customerPickerArrow}>▾</Text>
               </Pressable>
             </View>
@@ -1414,7 +1417,38 @@ const handleHoldBillAction = async () => {
                 </View>
               </View>
             )}
+            {paymentMode === "Split" && (
+  <View style={styles.tenderSection}>
+    <Text style={styles.fieldLabelText}>SPLIT PAYMENT</Text>
 
+    <Text style={styles.fieldLabelText}>CASH (₹)</Text>
+    <TextInput
+      style={styles.tenderInput}
+      value={splitCash}
+      onChangeText={setSplitCash}
+      keyboardType="numeric"
+      placeholder="0"
+    />
+
+    <Text style={styles.fieldLabelText}>CARD (₹)</Text>
+    <TextInput
+      style={styles.tenderInput}
+      value={splitCard}
+      onChangeText={setSplitCard}
+      keyboardType="numeric"
+      placeholder="0"
+    />
+
+    <Text style={styles.fieldLabelText}>UPI (₹)</Text>
+    <TextInput
+      style={styles.tenderInput}
+      value={splitUpi}
+      onChangeText={setSplitUpi}
+      keyboardType="numeric"
+      placeholder="0"
+    />
+  </View>
+)}
             {paymentMode === "UPI" && (
               <View style={styles.upiQrBox}>
                 <View style={styles.upiQrTopHeader}>
@@ -1753,11 +1787,9 @@ const handleHoldBillAction = async () => {
                   <Pressable
                     key={cust.id}
                     onPress={() => {
-                      setSelectedCustomer(cust);
-                      setCustomCustomerInput(
-                        cust.phone ? `${cust.name} (${cust.phone})` : cust.name,
-                      );
-                      setCustomerModalVisible(false);
+                     setSelectedCustomer(cust);
+setCustomCustomerInput(cust.name);
+setCustomerModalVisible(false);
                     }}
                     style={styles.customerOptionRow}
                   >
@@ -2616,6 +2648,7 @@ const styles = StyleSheet.create({
   // RIGHT BILL PANE (Current Bill - Draft Invoice)
   rightBillPane: {
     flex: 1,
+    minHeight: 0,
     backgroundColor: "#FFFFFF",
     padding: 20,
     flexDirection: "column",
@@ -2749,7 +2782,7 @@ const styles = StyleSheet.create({
   // Items Section
   itemsSectionBox: {
     flex: 1,
-    minHeight: 180,
+    minHeight: 0,
     marginBottom: 14,
   },
   itemsCountHeading: {
@@ -2786,6 +2819,7 @@ const styles = StyleSheet.create({
   },
   cartItemsScrollView: {
     flex: 1,
+    minHeight: 0,
   },
   cartItemRow: {
     flexDirection: "row",
@@ -2928,6 +2962,7 @@ const styles = StyleSheet.create({
   // Payment Method Tabs
   paymentMethodSection: {
     marginBottom: 14,
+    flexShrink: 0
   },
   paymentTabsRow: {
     flexDirection: "row",
@@ -2957,6 +2992,7 @@ const styles = StyleSheet.create({
   billActionsRow: {
     flexDirection: "row",
     gap: 10,
+     flexShrink: 0,
   },
   holdBillBtn: {
     flex: 1,
