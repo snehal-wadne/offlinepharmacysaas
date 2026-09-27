@@ -559,6 +559,7 @@ export default function AppNavigator() {
             onShowToast={showToast}
             isMultiBranch={isMultiBranch}
             selectedBranch={selectedBranch}
+            selectedCustomerId={selectedCustomerId}
           />
         );
       case "cash-register":

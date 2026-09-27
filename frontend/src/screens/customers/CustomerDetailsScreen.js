@@ -10,7 +10,10 @@ import {
   useWindowDimensions,
   Platform,
 } from "react-native";
-import { fetchCustomers } from '../../api/customerApi';
+import {
+  fetchCustomers,
+  fetchCustomerLedger,
+} from "../../api/customerApi";
 import { SkeletonTableRow, SkeletonItemCard } from '../../components/common/SkeletonLoader';
 
 export default function CustomerDetailsScreen({
@@ -28,6 +31,7 @@ export default function CustomerDetailsScreen({
     customerId || null
   );
   const [customer, setCustomer] = useState(null);
+  const [ledgerRecords, setLedgerRecords] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Active Tab: 'purchases' | 'returns' | 'ledger' | 'info'
@@ -139,6 +143,39 @@ export default function CustomerDetailsScreen({
       isMounted = false;
     };
   }, [selectedCustomerId]);
+  useEffect(() => {
+  if (!customer?.id) return;
+
+  let cancelled = false;
+
+  const loadPurchaseHistory = async () => {
+    try {
+      const response = await fetchCustomerLedger(customer.id);
+      const data = response?.data?.data ?? response?.data ?? response;
+
+      console.log("[CustomerDetails] LEDGER:", data);
+      console.log("FIRST ENTRY:", JSON.stringify(data?.entries?.[0], null, 2));
+
+      if (cancelled) return;
+
+      const invoices = Array.isArray(data?.invoices)
+        ? data.invoices
+        : Array.isArray(data?.purchaseHistory)
+          ? data.purchaseHistory
+          : [];
+
+      setLedgerRecords(invoices);
+    } catch (err) {
+      console.error("[CustomerDetails] Ledger error:", err);
+    }
+  };
+
+  loadPurchaseHistory();
+
+  return () => {
+    cancelled = true;
+  };
+}, [customer?.id]);
 
   const profile = useMemo(() => {
     if (!customer) return {};
@@ -316,14 +353,11 @@ export default function CustomerDetailsScreen({
     setInvoiceModalVisible(true);
   };
 
-  const handleNewSale = () => {
-    if (onNavigate) {
-      onNavigate("dashboard");
-    }
-    if (onShowToast) {
-      onShowToast(`Starting new sale for ${profile.name} (${profile.id})`);
-    }
-  };
+ const handleNewSale = () => {
+  if (!customer?.id) return;
+  onNavigate?.("pos-billing", customer.id);
+};
+
 
   const handleBackToCustomers = () => {
     if (onNavigate) {

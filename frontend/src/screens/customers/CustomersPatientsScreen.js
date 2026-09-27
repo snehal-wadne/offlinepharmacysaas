@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+
 import {
   View,
   Text,
@@ -22,6 +23,8 @@ import {
 import { exportToCSV, exportToPDF } from "../../utils/exportUtils";
 
 export default function CustomersPatientsScreen({ onShowToast, onNavigate }) {
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+const [customerToDelete, setCustomerToDelete] = useState(null);
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const isCompact = width < 1100;
@@ -242,28 +245,30 @@ const loadCustomersData = async () => {
     return matchesSearch && matchesCategory;
   });
 
-  const handleOpenAddModal = () => {
-    setIsEditing(false);
-    setEditingId(null);
-    setFormData({
-      name: "",
-      phone: "",
-      email: "",
-      age: "30",
-      gender: "F",
-      category: "Regular",
-      city: "Mumbai",
-      address: "Local Resident",
-      doctorName: "Dr. Farooq Siddiqui",
-      doctorSpecialization: "General Physician",
-      activeRxNo: `Rx-2026-${Math.floor(1000 + Math.random() * 9000)}`,
-      creditLimit: "15000",
-      outstandingBalance: "0",
-    });
-    setFormErrors({});
-    setModalCategoryDropdownOpen(false);
-    setAddModalVisible(true);
-  };
+ const handleOpenAddModal = () => {
+  setIsEditing(false);
+  setEditingId(null);
+
+  setFormData({
+    name: "",
+    phone: "",
+    email: "",
+    age: "",
+    gender: "",
+    category: "",
+    city: "",
+    address: "",
+    doctorName: "",
+    doctorSpecialization: "",
+    activeRxNo: "",
+    creditLimit: "",
+    outstandingBalance: "0",
+  });
+
+  setFormErrors({});
+  setModalCategoryDropdownOpen(false);
+  setAddModalVisible(true);
+};
 
   const handleOpenEditModal = (cust) => {
     setIsEditing(true);
@@ -293,16 +298,44 @@ const loadCustomersData = async () => {
   };
 
   const handleSavePatient = async () => {
-    const errors = {};
-    if (!formData.name.trim()) errors.name = "Customer Full Name is required";
-    if (!formData.phone.trim()) errors.phone = "Phone number is required";
-    if (!formData.age.trim() || isNaN(formData.age))
-      errors.age = "Valid age required";
+  const errors = {};
 
-    if (Object.keys(errors).length > 0) {
-      setFormErrors(errors);
-      return;
-    }
+if (!formData.name?.trim()) {
+  errors.name = "Customer Full Name is required";
+}
+
+const phone = formData.phone?.trim() || "";
+if (!/^[0-9]{10}$/.test(phone)) {
+  errors.phone = "Enter a valid 10-digit phone number";
+}
+const ageText = String(formData.age ?? "").trim();
+const age = Number(ageText);
+
+if (
+  ageText &&
+  (!Number.isInteger(age) || age < 1 || age > 120)
+) {
+  errors.age = "Enter a valid age between 1 and 120";
+}
+
+const email = formData.email?.trim() || "";
+if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  errors.email = "Enter a valid email address";
+}
+
+const creditLimit = Number(formData.creditLimit);
+if (
+  formData.creditLimit?.trim() &&
+  (!Number.isFinite(creditLimit) || creditLimit < 0)
+) {
+  errors.creditLimit = "Credit limit cannot be negative";
+}
+
+setFormErrors(errors);
+
+if (Object.keys(errors).length > 0) {
+  return;
+}
 
     const payload = {
       name: formData.name.trim(),
@@ -359,81 +392,44 @@ const loadCustomersData = async () => {
             `✓ Added customer profile "${formData.name}" to database!`,
           );
         }
-      } catch (err) {
-        console.warn(
-          "DB customer add failed, fallback local state:",
-          err.message,
+     } catch (err) {
+        console.error("Customer add failed:", err);
+        onShowToast?.(
+          err?.message || "Customer could not be saved. Please try again."
         );
-        const newPatient = {
-          id: `CUST-${1040 + customers.length + 1}`,
-          customerNumber: `CUST-${1040 + customers.length + 1}`,
-          name: formData.name,
-          phone: formData.phone,
-          email: formData.email,
-          age: formData.age,
-          gender: formData.gender,
-          category: formData.category,
-          city: formData.city,
-          address: formData.address,
-          doctorName: formData.doctorName,
-          doctorSpecialty: formData.doctorSpecialization,
-          activeRxNo: formData.activeRxNo,
-          creditLimit: parseFloat(formData.creditLimit) || 0,
-          outstandingBalance: parseFloat(formData.outstandingBalance) || 0,
-          totalSpent: 0,
-          status: "Active",
-        };
-        setCustomers((prev) => [newPatient, ...prev]);
-        setAddModalVisible(false);
-        if (onShowToast) {
-          onShowToast(`✓ Added customer profile "${newPatient.name}"!`);
-        }
       }
     }
   };
+const handleDeleteCustomerAction = (cust) => {
+  if (!cust) return;
 
-  const handleDeleteCustomerAction = async (cust) => {
-    if (!cust) return;
-    try {
-      await deleteCustomer(cust.id);
-      await loadCustomersData();
-      setActionMenuOpen(false);
-      if (onShowToast) {
-        onShowToast(
-          `🗑️ Deleted customer profile "${cust.name}" from database!`,
-        );
-      }
-    } catch (err) {
-      setCustomers((prev) => prev.filter((c) => c.id !== cust.id));
-      setActionMenuOpen(false);
-      if (onShowToast) {
-        onShowToast(`Removed ${cust.name}`);
-      }
+  setCustomerToDelete(cust);
+  setActionMenuOpen(false);
+  setDeleteConfirmVisible(true);
+};
+
+const confirmDeleteCustomer = async () => {
+  if (!customerToDelete) return;
+
+  try {
+    await deleteCustomer(customerToDelete.id);
+    await loadCustomersData();
+
+    if (onShowToast) {
+      onShowToast(`Customer "${customerToDelete.name}" deleted successfully.`);
     }
-  };
+  } catch (err) {
+    console.error("Delete customer failed:", err);
 
-  const handleToggleStatus = async (cust) => {
-    if (!cust) return;
-    const nextStatus = cust.status === "Active" ? "Inactive" : "Active";
-    try {
-      await updateCustomer(cust.id, {
-        status: nextStatus === "Active" ? "ACTIVE" : "INACTIVE",
-      });
-      await loadCustomersData();
-      setActionMenuOpen(false);
-      if (onShowToast) {
-        onShowToast(
-          `✓ Customer "${cust.name}" status updated to ${nextStatus}!`,
-        );
-      }
-    } catch (err) {
-      setCustomers((prev) =>
-        prev.map((c) => (c.id === cust.id ? { ...c, status: nextStatus } : c)),
-      );
-      setActionMenuOpen(false);
+    if (onShowToast) {
+      onShowToast("Failed to delete customer. Please try again.");
     }
-  };
-
+  } finally {
+    setDeleteConfirmVisible(false);
+    setCustomerToDelete(null);
+  }
+};
+  
   const handleViewPatientDetails = (cust) => {
     setSelectedPatient(cust);
     setHistoryModalVisible(true);
@@ -502,16 +498,18 @@ const loadCustomersData = async () => {
     }
   };
 
-  const handleAttachToPOS = (cust) => {
-    if (onNavigate) {
-      onNavigate("dashboard");
-    }
-    if (onShowToast) {
-      onShowToast(
-        `✓ Customer "${cust.name}" attached to active sale transaction!`,
-      );
-    }
-  };
+const handleAttachToPOS = (cust) => {
+  if (!cust?.id) return;
+
+  onNavigate?.("pos-billing", cust.id);
+};
+
+const handleViewMoreDetails = () => {
+  if (!selectedPatient?.id) return;
+
+  setHistoryModalVisible(false);
+  onNavigate?.("customer-details", selectedPatient.id);
+};
 
   const handleOpenActionMenu = (cust) => {
     setActionCustomer(cust);
@@ -1294,6 +1292,11 @@ const loadCustomersData = async () => {
                       setFormData((p) => ({ ...p, creditLimit: t }))
                     }
                   />
+                  {formErrors.creditLimit ? (
+  <Text style={{ color: "#DC2626", fontSize: 12, marginTop: 4 }}>
+    {formErrors.creditLimit}
+  </Text>
+) : null}
                 </View>
               </View>
             </ScrollView>
@@ -1498,6 +1501,19 @@ const loadCustomersData = async () => {
                 >
                   <Text style={styles.submitModalBtnText}>Close Record</Text>
                 </Pressable>
+                <Pressable
+  onPress={handleViewMoreDetails}
+  style={{
+    backgroundColor: "#0F766E",
+    padding: 12,
+    borderRadius: 8,
+    marginLeft: 10,
+  }}
+>
+  <Text style={{ color: "#FFFFFF", fontWeight: "600" }}>
+    View More Details →
+  </Text>
+</Pressable>
               </View>
             </Pressable>
           </Pressable>
@@ -1564,6 +1580,67 @@ const loadCustomersData = async () => {
           </Pressable>
         </Modal>
       )}
+    {/* Delete Customer Confirmation */}
+<Modal
+  visible={deleteConfirmVisible}
+  transparent
+  animationType="fade"
+  onRequestClose={() => setDeleteConfirmVisible(false)}
+>
+  <View
+    style={{
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.5)",
+      justifyContent: "center",
+      alignItems: "center",
+      padding: 20,
+    }}
+  >
+    <View
+      style={{
+        backgroundColor: "#fff",
+        borderRadius: 12,
+        padding: 24,
+        width: "100%",
+        maxWidth: 400,
+      }}
+    >
+      <Text style={{ fontSize: 20, fontWeight: "700", marginBottom: 12 }}>
+        Delete Customer?
+      </Text>
+
+      <Text style={{ marginBottom: 24 }}>
+        Are you sure you want to delete {customerToDelete?.name}?
+      </Text>
+
+      <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
+        <Pressable
+          onPress={() => {
+            setDeleteConfirmVisible(false);
+            setCustomerToDelete(null);
+          }}
+          style={{ padding: 12, marginRight: 12 }}
+        >
+          <Text>Cancel</Text>
+        </Pressable>
+
+        <Pressable
+          onPress={confirmDeleteCustomer}
+          style={{
+            backgroundColor: "#DC2626",
+            padding: 12,
+            borderRadius: 8,
+          }}
+        >
+          <Text style={{ color: "#fff", fontWeight: "700" }}>
+            Delete
+          </Text>
+        </Pressable>
+      </View>
+    </View>
+  </View>
+</Modal>
+      
     </ScrollView>
   );
 }
@@ -2151,12 +2228,16 @@ const styles = StyleSheet.create({
     elevation: 100,
     zIndex: 9999,
   },
-  dropdownMenuItem: {
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
-  },
+  dropdownMenu: {
+  position: "relative",
+  marginTop: 5,
+  backgroundColor: "#FFFFFF",
+  borderRadius: 8,
+  borderWidth: 1,
+  borderColor: "#CBD5E1",
+  overflow: "hidden",
+  zIndex: 10,
+},
   dropdownMenuItemActive: {
     backgroundColor: "#F0FDFA",
   },

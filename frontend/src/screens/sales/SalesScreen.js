@@ -88,6 +88,7 @@ export default function SalesScreen({
   onShowToast,
   isMultiBranch = true,
   selectedBranch = null,
+  selectedCustomerId = null,
 }) {
   const savedDraft = useRef(null);
   if (savedDraft.current === null) {
@@ -201,6 +202,19 @@ export default function SalesScreen({
   );
   const [customerModalVisible, setCustomerModalVisible] = useState(false);
   const [customerSearchQuery, setCustomerSearchQuery] = useState("");
+  useEffect(() => {
+  if (!selectedCustomerId || !customers?.length) return;
+
+  const customer = customers.find(
+    (c) => String(c.id) === String(selectedCustomerId)
+  );
+  console.log("POS customer check:", selectedCustomerId, customer);
+
+  if (customer) {
+    setSelectedCustomer(customer);
+    setCustomCustomerInput(customer.name || "");
+  }
+}, [selectedCustomerId, customers]);
 
   // Active Billing Cart State
   const [cart, setCart] = useState(draft.cart || []);
