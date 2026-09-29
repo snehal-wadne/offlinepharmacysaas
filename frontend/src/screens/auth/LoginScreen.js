@@ -32,8 +32,9 @@ export default function LoginScreen({
   }, [authError]);
 
   // Sign In States
-  const [signInEmail, setSignInEmail] = useState("");
-  const [signInPassword, setSignInPassword] = useState("");
+  const [selectedPortal, setSelectedPortal] = useState("pharmacy"); // "pharmacy" | "superadmin"
+  const [signInEmail, setSignInEmail] = useState("rajesh.sharma@medlife.demo");
+  const [signInPassword, setSignInPassword] = useState("PharmaFlow@2026!");
   const [showSignInPassword, setShowSignInPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
@@ -149,45 +150,107 @@ export default function LoginScreen({
     setIsLoading(true);
 
     try {
+      let token = null;
+      let authUser = null;
+
       // 1. Authenticate with Supabase Auth directly
-      const { data: authData, error: authError } =
-        await supabase.auth.signInWithPassword({
-          email,
-          password: signInPassword,
+      try {
+        const { data: authData, error: authError } =
+          await supabase.auth.signInWithPassword({
+            email,
+            password: signInPassword,
+          });
+
+        if (!authError && authData?.session) {
+          token = authData.session.access_token;
+        }
+      } catch (supaErr) {
+        console.warn("Direct Supabase login warning:", supaErr.message);
+      }
+
+      // 2. If Supabase Auth failed (offline or local database account), fallback to backend API
+      if (!token) {
+        const isSuperAdminEmail = email === "superadmin@pharmaflow.com";
+        const loginUrl = isSuperAdminEmail
+          ? `${API_URL}/api/superadmin/auth/login`
+          : `${API_URL}/api/auth/login`;
+
+        const backendRes = await fetch(loginUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password: signInPassword }),
         });
 
-      if (authError || !authData.session) {
+        if (backendRes.ok) {
+          const bData = await backendRes.json();
+          if (bData.success && bData.token) {
+            token = bData.token;
+            authUser = bData.user;
+          }
+        }
+      }
+
+      if (!token) {
         setIsLoading(false);
-        setErrorMessage(authError?.message || "Invalid email or password.");
+        setErrorMessage("Invalid email or password. Please check your credentials.");
         return;
       }
 
-      const token = authData.session.access_token;
+      // 3. Fetch authoritative user context from backend if not already retrieved
+      if (!authUser) {
+        const response = await fetch(`${API_URL}/api/auth/me`, {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        });
 
-      // 2. Fetch authoritative user context from backend
-      const response = await fetch(`${API_URL}/api/auth/me`, {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
+        if (response.ok) {
+          const resData = await response.json();
+          authUser = resData.data?.user || resData.user;
+        }
+      }
 
       setIsLoading(false);
 
-      if (response.ok) {
-        const resData = await response.json();
-        const user = resData.data?.user || resData.user;
-        if (onLoginSuccess) {
-          onLoginSuccess(user, token);
+      const isSuperAdmin =
+        authUser?.isPlatformSuperadmin === true ||
+        authUser?.role === "SUPERADMIN" ||
+        email === "superadmin@pharmaflow.com";
+
+      // Portal Clearance Guard: Non-superadmins cannot use the Super Admin portal
+      if (selectedPortal === "superadmin" && !isSuperAdmin) {
+        setIsLoading(false);
+        setErrorMessage(
+          "Access Denied: Platform Super Admin clearance required. Regular pharmacy accounts cannot access the Super Admin portal."
+        );
+        await supabase.auth.signOut().catch(() => {});
+        return;
+      }
+
+      // Super Admin Portal Routing: Go directly to Razorpay Payments page
+      if (isSuperAdmin) {
+        setSuccessMessage("Super Administrator verified. Opening Razorpay Payments portal...");
+        if (typeof window !== "undefined") {
+          window.location.href = "/superadmin/razorpay-payment";
         }
         return;
       }
 
-      const errorData = await response.json().catch(() => ({}));
-      await supabase.auth.signOut();
+      // Regular Pharmacy ERP Routing (Dr. Rajesh Sharma, staff, managers)
+      if (authUser) {
+        setSuccessMessage(
+          `Welcome back, ${authUser.name || "Dr. Rajesh Sharma"}! Opening Inventory Dashboard...`,
+        );
+        if (onLoginSuccess) {
+          onLoginSuccess(authUser, token);
+        }
+        return;
+      }
+
+      await supabase.auth.signOut().catch(() => {});
       setErrorMessage(
-        errorData.error ||
-          "Failed to load user workspace. Please ensure your account is active.",
+        "Failed to load user workspace. Please ensure your account is active.",
       );
     } catch (err) {
       setIsLoading(false);
@@ -686,6 +749,74 @@ export default function LoginScreen({
               {/* ========================================= */}
               {authMode === "signin" && (
                 <View>
+                  {/* DUAL PORTAL CREDENTIAL SELECTOR */}
+                  <View style={styles.portalSelectorContainer}>
+                    <Text style={styles.portalSelectorTitle}>
+                      SELECT PORTAL & CREDENTIALS:
+                    </Text>
+                    <View style={styles.portalCardsRow}>
+                      {/* 1. Dr. Rajesh Sharma - Pharmacy ERP */}
+                      <Pressable
+                        style={[
+                          styles.portalCard,
+                          selectedPortal === "pharmacy" && styles.portalCardActive,
+                        ]}
+                        onPress={() => {
+                          setSelectedPortal("pharmacy");
+                          setSignInEmail("rajesh.sharma@medlife.demo");
+                          setSignInPassword("PharmaFlow@2026!");
+                          if (errorMessage) setErrorMessage("");
+                        }}
+                      >
+                        <View style={styles.portalCardHeader}>
+                          <Text style={styles.portalBadgePharmacy}>PHARMACY ERP</Text>
+                          {selectedPortal === "pharmacy" && (
+                            <View style={styles.activePillPharmacy}>
+                              <Text style={styles.activePillTextPharmacy}>✓ Ready</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={styles.portalCardTitle}>Dr. Rajesh Sharma</Text>
+                        <Text style={styles.portalCardSub}>rajesh.sharma@medlife.demo</Text>
+                        <View style={styles.portalCardFooter}>
+                          <Text style={styles.portalCardOpens}>
+                            🏪 Opens: Inventory Dashboard & POS Billing
+                          </Text>
+                        </View>
+                      </Pressable>
+
+                      {/* 2. Super Admin - Razorpay Portal */}
+                      <Pressable
+                        style={[
+                          styles.portalCard,
+                          selectedPortal === "superadmin" && styles.portalCardSuperadminActive,
+                        ]}
+                        onPress={() => {
+                          setSelectedPortal("superadmin");
+                          setSignInEmail("superadmin@pharmaflow.com");
+                          setSignInPassword("SuperAdmin@2026");
+                          if (errorMessage) setErrorMessage("");
+                        }}
+                      >
+                        <View style={styles.portalCardHeader}>
+                          <Text style={styles.portalBadgeSuperadmin}>SUPER ADMIN</Text>
+                          {selectedPortal === "superadmin" && (
+                            <View style={styles.activePillSuperadmin}>
+                              <Text style={styles.activePillTextSuperadmin}>✓ Ready</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={styles.portalCardTitle}>Super Administrator</Text>
+                        <Text style={styles.portalCardSub}>superadmin@pharmaflow.com</Text>
+                        <View style={styles.portalCardFooter}>
+                          <Text style={styles.portalCardOpensSuperadmin}>
+                            💳 Opens: Razorpay Payments Page
+                          </Text>
+                        </View>
+                      </Pressable>
+                    </View>
+                  </View>
+
                   {/* Email Field */}
                   <View style={styles.fieldContainer}>
                     <Text style={styles.label}>Email Address</Text>
@@ -1942,4 +2073,122 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#475569",
   },
+
+  /* Dual Portal Selector Styles */
+  portalSelectorContainer: {
+    marginBottom: 16,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 12,
+    padding: 12,
+  },
+  portalSelectorTitle: {
+    fontSize: 10.5,
+    fontWeight: "800",
+    color: "#64748B",
+    letterSpacing: 0.8,
+    marginBottom: 10,
+    textTransform: "uppercase",
+  },
+  portalCardsRow: {
+    gap: 10,
+  },
+  portalCard: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1.5,
+    borderColor: "#E2E8F0",
+    borderRadius: 10,
+    padding: 12,
+    cursor: "pointer",
+    shadowColor: "#000",
+    shadowOpacity: 0.02,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  portalCardActive: {
+    borderColor: "#0F766E",
+    backgroundColor: "#F0FDFA",
+  },
+  portalCardSuperadminActive: {
+    borderColor: "#0284C7",
+    backgroundColor: "#F0F9FF",
+  },
+  portalCardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  portalBadgePharmacy: {
+    fontSize: 10,
+    fontWeight: "850",
+    color: "#0F766E",
+    backgroundColor: "#CCFBF1",
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    borderRadius: 4,
+    letterSpacing: 0.5,
+  },
+  portalBadgeSuperadmin: {
+    fontSize: 10,
+    fontWeight: "850",
+    color: "#0284C7",
+    backgroundColor: "#E0F2FE",
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    borderRadius: 4,
+    letterSpacing: 0.5,
+  },
+  activePillPharmacy: {
+    backgroundColor: "#0F766E",
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 4,
+  },
+  activePillTextPharmacy: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "800",
+  },
+  activePillSuperadmin: {
+    backgroundColor: "#0284C7",
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 4,
+  },
+  activePillTextSuperadmin: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "800",
+  },
+  portalCardTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#0F172A",
+    marginBottom: 2,
+  },
+  portalCardSub: {
+    fontSize: 11.5,
+    color: "#64748B",
+    marginBottom: 6,
+    fontFamily: Platform.select({ web: "monospace", default: "System" }),
+  },
+  portalCardFooter: {
+    borderTopWidth: 1,
+    borderTopColor: "#E2E8F0",
+    paddingTop: 6,
+    marginTop: 4,
+  },
+  portalCardOpens: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#0D9488",
+  },
+  portalCardOpensSuperadmin: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#0284C7",
+  },
 });
+

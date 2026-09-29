@@ -20,26 +20,35 @@ import { useIsMobile } from '../../utils/responsive';
 export default function SuperAdminLayout() {
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [accessDenied, setAccessDenied] = useState(false);
+  const [sessionEmail, setSessionEmail] = useState<string>('');
   const [adminUser, setAdminUser] = useState<any>(null);
 
   const checkAuth = async () => {
     setLoading(true);
+    setAccessDenied(false);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         setIsAuthenticated(false);
         setAdminUser(null);
+        setAccessDenied(false);
         setLoading(false);
         return;
       }
+
+      setSessionEmail(session.user?.email || '');
 
       const res = await fetchSuperadminMe();
       if (res.success && (res.user?.isPlatformSuperadmin || res.user?.role === 'SUPERADMIN')) {
         setIsAuthenticated(true);
         setAdminUser(res.user);
+        setAccessDenied(false);
       } else {
+        // Active Supabase session belongs to a non-superadmin (e.g., Dr. Rajesh Sharma)
         setIsAuthenticated(false);
         setAdminUser(null);
+        setAccessDenied(true);
       }
     } catch (e) {
       setIsAuthenticated(false);
@@ -63,6 +72,8 @@ export default function SuperAdminLayout() {
     await supabase.auth.signOut();
     setIsAuthenticated(false);
     setAdminUser(null);
+    setAccessDenied(false);
+    setSessionEmail('');
   };
 
   if (loading) {
@@ -72,6 +83,43 @@ export default function SuperAdminLayout() {
         <Text style={{ marginTop: 12, color: '#94A3B8', fontSize: 13, fontWeight: '600' }}>
           Verifying Superadmin Clearance...
         </Text>
+      </View>
+    );
+  }
+
+  // Non-superadmin authenticated session guard: Access Denied screen
+  if (accessDenied) {
+    return (
+      <View style={styles.deniedContainer}>
+        <View style={styles.deniedCard}>
+          <Text style={styles.deniedIcon}>🛡️</Text>
+          <Text style={styles.deniedBadge}>RESTRICTED PORTAL</Text>
+          <Text style={styles.deniedTitle}>Super Admin Access Only</Text>
+          <Text style={styles.deniedText}>
+            This portal is exclusively reserved for Platform Super Administrators.
+            You are currently signed in as a Pharmacy ERP user ({sessionEmail || 'Pharmacy Account'}).
+          </Text>
+
+          <View style={styles.deniedActions}>
+            <Pressable
+              style={styles.deniedPrimaryBtn}
+              onPress={() => {
+                if (typeof window !== 'undefined') {
+                  window.location.href = '/dashboard';
+                }
+              }}
+            >
+              <Text style={styles.deniedPrimaryBtnText}>← Return to Pharmacy ERP Dashboard</Text>
+            </Pressable>
+
+            <Pressable
+              style={styles.deniedSecondaryBtn}
+              onPress={handleSignOut}
+            >
+              <Text style={styles.deniedSecondaryBtnText}>⎋ Sign Out & Switch Account</Text>
+            </Pressable>
+          </View>
+        </View>
       </View>
     );
   }
@@ -94,8 +142,8 @@ function SuperAdminShell({ adminUser, onSignOut }: { adminUser?: any; onSignOut:
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  if (pathname === '/superadmin') {
-    return <Redirect href="/superadmin/dashboard" />;
+  if (pathname === '/superadmin' || pathname === '/superadmin/') {
+    return <Redirect href="/superadmin/razorpay-payment" />;
   }
 
   const isPharmacies = pathname.includes('pharmacies') ||
@@ -123,16 +171,10 @@ function SuperAdminShell({ adminUser, onSignOut }: { adminUser?: any; onSignOut:
 
           <View style={styles.menu}>
             <MenuItem
-              icon="▦"
-              label="Dashboard"
-              active={pathname.endsWith('/dashboard')}
-              onPress={() => goTo('/superadmin/dashboard')}
-            />
-            <MenuItem
-              icon="♧"
-              label="Pharmacies"
-              active={isPharmacies}
-              onPress={() => goTo('/superadmin/pharmacies')}
+              icon="▣"
+              label="Razorpay Payments"
+              active={pathname.endsWith('/razorpay-payment') || pathname === '/superadmin' || pathname === '/superadmin/'}
+              onPress={() => goTo('/superadmin/razorpay-payment')}
             />
             <MenuItem
               icon="▤"
@@ -141,19 +183,22 @@ function SuperAdminShell({ adminUser, onSignOut }: { adminUser?: any; onSignOut:
               onPress={() => goTo('/superadmin/subscription-plans')}
             />
             <MenuItem
-              icon="▣"
-              label="Razor Pay Page"
-              active={pathname.endsWith('/razorpay-payment')}
-              onPress={() => goTo('/superadmin/razorpay-payment')}
+              icon="♧"
+              label="Pharmacies"
+              active={isPharmacies}
+              onPress={() => goTo('/superadmin/pharmacies')}
+            />
+            <MenuItem
+              icon="▦"
+              label="Overview"
+              active={pathname.endsWith('/dashboard')}
+              onPress={() => goTo('/superadmin/dashboard')}
             />
           </View>
 
           <View style={styles.sidebarFooter}>
             <Pressable onPress={onSignOut}>
               <Text style={styles.logout}>⎋ Sign Out</Text>
-            </Pressable>
-            <Pressable onPress={() => { if (typeof window !== 'undefined') window.location.href = '/'; }}>
-              <Text style={[styles.logout, { color: '#627D98' }]}>↪ Back to ERP</Text>
             </Pressable>
             <Text style={styles.date}>▣ 01 Sep - 30 Sep</Text>
           </View>
@@ -200,8 +245,9 @@ function renderSuperAdminContent(pathname: string) {
   if (pathname.includes('confirmation')) return <ConfirmationPage />;
   if (pathname.includes('pharmacies')) return <PharmaciesTenantsPage />;
   if (pathname.includes('subscription-plans')) return <SubscriptionPlansPage />;
+  if (pathname.includes('dashboard')) return <SuperAdminDashboard />;
   if (pathname.includes('razorpay-payment')) return <RazorPayPaymentsPage />;
-  return <SuperAdminDashboard />;
+  return <RazorPayPaymentsPage />;
 }
 
 function MenuItem({
@@ -307,5 +353,83 @@ const styles = StyleSheet.create({
     textAlignVertical: 'center',
     fontSize: 11,
     fontWeight: '800',
+  },
+  deniedContainer: {
+    flex: 1,
+    backgroundColor: '#0B1120',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  deniedCard: {
+    width: '100%',
+    maxWidth: 480,
+    backgroundColor: '#1E293B',
+    borderRadius: 20,
+    padding: 32,
+    borderWidth: 1,
+    borderColor: '#334155',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.3,
+    shadowRadius: 24,
+    elevation: 8,
+  },
+  deniedIcon: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  deniedBadge: {
+    color: '#F43F5E',
+    backgroundColor: 'rgba(244, 63, 94, 0.12)',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 20,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1,
+    marginBottom: 12,
+    textTransform: 'uppercase',
+  },
+  deniedTitle: {
+    color: '#F8FAFC',
+    fontSize: 22,
+    fontWeight: '800',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  deniedText: {
+    color: '#94A3B8',
+    fontSize: 14,
+    lineHeight: 22,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  deniedActions: {
+    width: '100%',
+    gap: 12,
+  },
+  deniedPrimaryBtn: {
+    backgroundColor: '#0F766E',
+    borderRadius: 10,
+    paddingVertical: 13,
+    alignItems: 'center',
+  },
+  deniedPrimaryBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  deniedSecondaryBtn: {
+    backgroundColor: '#334155',
+    borderRadius: 10,
+    paddingVertical: 13,
+    alignItems: 'center',
+  },
+  deniedSecondaryBtnText: {
+    color: '#CBD5E1',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

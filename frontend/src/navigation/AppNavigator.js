@@ -289,6 +289,20 @@ export default function AppNavigator() {
       if (response.ok) {
         const resData = await response.json();
         const user = resData.data?.user || resData.user;
+
+        // Platform Super Admin Guard: Divert directly to Super Admin Razorpay portal
+        if (
+          user?.isPlatformSuperadmin ||
+          user?.is_platform_superadmin ||
+          user?.role === "SUPERADMIN" ||
+          user?.email === "superadmin@pharmaflow.com"
+        ) {
+          if (typeof window !== "undefined") {
+            window.location.href = "/superadmin/razorpay-payment";
+          }
+          return;
+        }
+
         const userWithToken = user
           ? { ...user, token: session.access_token }
           : null;
@@ -519,6 +533,25 @@ export default function AppNavigator() {
 
   // Render Active Screen Component
   const renderScreen = () => {
+    if (
+      currentUser?.isPlatformSuperadmin ||
+      currentUser?.is_platform_superadmin ||
+      currentUser?.role === "SUPERADMIN" ||
+      currentUser?.email === "superadmin@pharmaflow.com"
+    ) {
+      if (typeof window !== "undefined") {
+        window.location.href = "/superadmin/razorpay-payment";
+      }
+      return (
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+          <ActivityIndicator size="large" color="#0284c7" />
+          <Text style={{ marginTop: 12, fontSize: 14, color: "#64748b" }}>
+            Redirecting to Super Admin Razorpay Portal...
+          </Text>
+        </View>
+      );
+    }
+
     if (currentUser && currentUser.hasBranch === false) {
       return (
         <BranchesScreen
@@ -822,6 +855,40 @@ export default function AppNavigator() {
     );
   }
 
+  // Auth Guard: If Super Admin is logged in, redirect directly to Razorpay portal
+  if (
+    currentUser?.isPlatformSuperadmin ||
+    currentUser?.is_platform_superadmin ||
+    currentUser?.role === "SUPERADMIN" ||
+    currentUser?.email === "superadmin@pharmaflow.com"
+  ) {
+    if (typeof window !== "undefined") {
+      window.location.href = "/superadmin/razorpay-payment";
+    }
+    return (
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: "#0F172A",
+        }}
+      >
+        <ActivityIndicator size="large" color="#38BDF8" />
+        <Text
+          style={{
+            marginTop: 14,
+            color: "#94A3B8",
+            fontSize: 14,
+            fontWeight: "600",
+          }}
+        >
+          Redirecting to Super Admin Razorpay Portal...
+        </Text>
+      </View>
+    );
+  }
+
   // Auth Guard: If incomplete onboarding or unauthenticated
   if (
     authStatus === "AUTHENTICATED_INCOMPLETE_ONBOARDING" ||
@@ -846,6 +913,17 @@ export default function AppNavigator() {
           setAuthError("");
         }}
         onLoginSuccess={(user, token) => {
+          if (
+            user?.isPlatformSuperadmin ||
+            user?.is_platform_superadmin ||
+            user?.role === "SUPERADMIN" ||
+            user?.email === "superadmin@pharmaflow.com"
+          ) {
+            if (typeof window !== "undefined") {
+              window.location.href = "/superadmin/razorpay-payment";
+            }
+            return;
+          }
           setAuthSession({ organisationId: user?.organisationId });
           setCurrentUser(
             user ? { ...user, token: token || user?.token } : null,
