@@ -9,6 +9,7 @@ import {
   useWindowDimensions,
   View,
   ActivityIndicator,
+  Platform,
 } from "react-native";
 import { API_URL } from "../../config";
 import { supabase, signInWithGoogle } from "../../api/supabaseClient";
