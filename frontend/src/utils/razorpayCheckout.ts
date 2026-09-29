@@ -9,6 +9,10 @@
 import { Platform } from 'react-native';
 import { notify } from './alert';
 
+declare const process: {
+  env?: Record<string, string | undefined>;
+};
+
 export interface RazorpaySuccessResponse {
   razorpay_order_id: string;
   razorpay_payment_id: string;
@@ -69,7 +73,7 @@ export function loadRazorpayScript(): Promise<boolean> {
  */
 export async function openRazorpayCheckout(options: RazorpayCheckoutOptions): Promise<void> {
   const {
-    keyId = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_placeholder_key',
+    keyId = (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_RAZORPAY_KEY_ID) || 'rzp_test_placeholder_key',
     orderId,
     amount,
     currency = 'INR',

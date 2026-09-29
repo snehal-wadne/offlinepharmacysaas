@@ -23,12 +23,17 @@ function setStorageItem(key, value) {
 
 import { signOut, getAccessToken, refreshSession } from "./supabaseClient";
 
-export function setAuthSession({ organisationId } = {}) {
+export function setAuthSession({ organisationId, token } = {}) {
   setStorageItem("organisationId", organisationId || "");
+  if (token) {
+    setStorageItem("authToken", token);
+  }
 }
 
 export async function clearAuthSession() {
   setStorageItem("organisationId", "");
+  setStorageItem("authToken", "");
+  setStorageItem("superadminToken", "");
   try {
     await signOut();
   } catch (e) {}
@@ -38,7 +43,10 @@ const DEFAULT_TIMEOUT = 15000; // 15 seconds
 
 export async function getAuthHeaders() {
   try {
-    const token = await getAccessToken();
+    const token =
+      (await getAccessToken()) ||
+      getStorageItem("authToken") ||
+      getStorageItem("superadminToken");
     const orgId = getStorageItem("organisationId");
     return {
       "Content-Type": "application/json",

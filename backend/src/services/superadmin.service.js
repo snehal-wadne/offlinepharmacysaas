@@ -355,8 +355,30 @@ class SuperadminService {
     }
 
     if (!plan) {
+      if (!subscriptionId) {
+        throw new Error("Either plan or subscriptionId is required.");
+      }
       const sub = await subscriptionRepo.getSubscriptionById(subscriptionId);
+      if (!sub) {
+        throw new Error(`Subscription not found: ${subscriptionId}`);
+      }
       plan = await subscriptionPlanRepo.getPlanById(sub.plan_id);
+    }
+
+    let resolvedSubId = subscriptionId;
+    if (!resolvedSubId) {
+      const currentSub = await subscriptionRepo.getCurrentSubscriptionByOrgId(organisationId);
+      if (currentSub) {
+        resolvedSubId = currentSub.id;
+      } else {
+        const newSub = await subscriptionRepo.createSubscription({
+          organisationId,
+          planId: plan.id,
+          status: "PENDING_PAYMENT",
+          billingCycle,
+        });
+        resolvedSubId = newSub.id;
+      }
     }
 
     // Authoritative tax & price calculation
@@ -389,7 +411,7 @@ class SuperadminService {
       receipt: paymentReference,
       notes: {
         organisationId,
-        subscriptionId,
+        subscriptionId: resolvedSubId,
         transactionType,
       },
     });
@@ -398,7 +420,7 @@ class SuperadminService {
     const payment = await platformPaymentRepo.createPayment({
       paymentReference,
       organisationId,
-      subscriptionId,
+      subscriptionId: resolvedSubId,
       transactionType,
       razorpayOrderId: order.id,
       currency: "INR",

@@ -222,6 +222,8 @@ export default function LoginScreen({
       if (isSuperAdmin) {
         setSuccessMessage("Super Administrator verified. Opening Razorpay Payments portal...");
         if (typeof window !== "undefined") {
+          window.localStorage?.setItem("superadminToken", token);
+          window.localStorage?.setItem("authToken", token);
           window.location.href = "/superadmin/razorpay-payment";
         }
         return;
@@ -229,6 +231,9 @@ export default function LoginScreen({
 
       // Regular Pharmacy ERP Routing (Dr. Rajesh Sharma, staff, managers)
       if (authUser) {
+        if (typeof window !== "undefined") {
+          window.localStorage?.setItem("authToken", token);
+        }
         setSuccessMessage(
           `Welcome back, ${authUser.name || "Dr. Rajesh Sharma"}! Opening Inventory Dashboard...`,
         );

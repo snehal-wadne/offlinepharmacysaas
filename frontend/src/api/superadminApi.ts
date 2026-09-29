@@ -17,7 +17,11 @@ export function getSuperadminToken(): string | null {
 async function apiRequest<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 
-  const token = customSuperadminToken || (await getAccessToken());
+  const storedToken =
+    typeof window !== 'undefined'
+      ? window.localStorage?.getItem('superadminToken') || window.localStorage?.getItem('authToken')
+      : null;
+  const token = customSuperadminToken || storedToken || (await getAccessToken());
 
   const defaultHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
