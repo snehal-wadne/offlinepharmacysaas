@@ -754,10 +754,12 @@ export default function StockAdjustmentsScreen({
       if (res?.success && res.data) {
   const apiData = res.data;
 
-  setBarcodeItemData({
-    ...initialData,
-    svgBarcode: apiData.svgBarcode || null,
-  });
+ setBarcodeItemData({
+  ...initialData,
+  ...apiData,
+  barcode: apiData.barcode || initialData.barcode,
+  svgBarcode: apiData.svgBarcode || null,
+});
 }
     } catch (err) {
       console.warn("Using local item data for barcode modal:", err.message);
@@ -917,26 +919,54 @@ export default function StockAdjustmentsScreen({
   };
 
   const handleDownloadSvg = () => {
-    if (!barcodeItemData || !barcodeItemData.svgBarcode) return;
-    if (Platform.OS === "web" && typeof window !== "undefined") {
-      const blob = new Blob([barcodeItemData.svgBarcode], {
-        type: "image/svg+xml",
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `Barcode-${barcodeItemData.sku || "MED"}.svg`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      if (onShowToast) {
-        onShowToast(
-          `📥 Downloaded barcode SVG for ${barcodeItemData.brandName}`,
-        );
-      }
+  console.log("EXPORT BUTTON CLICKED", barcodeItemData);
+  if (Platform.OS !== "web") return;
+
+  const svg = barcodeItemData?.svgBarcode;
+
+  if (!svg || !svg.includes("<svg")) {
+    if (onShowToast) {
+      onShowToast("Barcode SVG is not available.");
     }
-  };
+    return;
+  }
+
+  let url;
+
+  try {
+    const blob = new Blob([svg], {
+      type: "image/svg+xml;charset=utf-8",
+    });
+
+    url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Barcode-${String(
+      barcodeItemData.sku || "MED"
+    ).replace(/[^a-zA-Z0-9_-]/g, "_")}.svg`;
+
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    if (onShowToast) {
+      onShowToast(
+        `📥 Downloaded barcode SVG for ${barcodeItemData.brandName}`
+      );
+    }
+  } catch (error) {
+    console.error("SVG export failed:", error);
+
+    if (onShowToast) {
+      onShowToast("Failed to download barcode SVG.");
+    }
+  } finally {
+    if (url) {
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+  }
+};
 
   // Active KPI Filter State
   const [activeKpiFilter, setActiveKpiFilter] = useState("ALL");

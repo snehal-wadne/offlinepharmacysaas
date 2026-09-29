@@ -1,4 +1,6 @@
+
 import React, { useState, useEffect, useRef } from 'react';
+import { Html5Qrcode } from 'html5-qrcode';
 import {
   View,
   Text,
@@ -27,18 +29,14 @@ export default function BarcodeScannerModal({
 }) {
   const [manualCode, setManualCode] = useState('');
   const [cameraActive, setCameraActive] = useState(false);
-  const [cameraFacing, setCameraFacing] = useState('user'); // 'user' (front/webcam) | 'environment' (back)
+  const [cameraFacing, setCameraFacing] = useState('user');
   const [cameraStatusMessage, setCameraStatusMessage] = useState('Initializing webcam...');
   const [lastScanned, setLastScanned] = useState(null);
 
-  const videoElementRef = useRef(null);
-  const streamRef = useRef(null);
-  const scanIntervalRef = useRef(null);
   const laserAnim = useRef(new Animated.Value(0)).current;
-  // Dedupe continuous camera detections of the same code (the scan loop
-  // polls every 350ms, so a barcode held in frame would otherwise re-fire
-  // onScan many times a second now that the modal stays open after a scan).
   const lastFiredRef = useRef({ code: null, time: 0 });
+  const html5ScannerRef = useRef(null);
+  const scanLockedRef = useRef(false);
 
   // Sound feedback upon scan
   const triggerScanBeep = () => {
@@ -49,6 +47,7 @@ export default function BarcodeScannerModal({
           const ctx = new AudioCtx();
           const osc = ctx.createOscillator();
           const gain = ctx.createGain();
+
           osc.connect(gain);
           gain.connect(ctx.destination);
           osc.type = 'sine';
@@ -80,6 +79,7 @@ export default function BarcodeScannerModal({
           }),
         ])
       );
+
       loop.start();
       return () => loop.stop();
     }
@@ -88,6 +88,7 @@ export default function BarcodeScannerModal({
   // Execute scan callback
   const executeScan = (code, { skipDedupe = false } = {}) => {
     if (!code || !code.trim()) return;
+
     const clean = code.trim();
 
     if (!skipDedupe) {
@@ -104,170 +105,105 @@ export default function BarcodeScannerModal({
     triggerScanBeep();
     setLastScanned(clean);
     setManualCode('');
+
     if (onScan) {
       onScan(clean);
     }
   };
 
-  // Callback ref that ensures the video DOM element connects to the stream immediately upon mounting
-  const handleVideoRef = (el) => {
-    videoElementRef.current = el;
-    if (el && streamRef.current) {
-      try {
-        if (el.srcObject !== streamRef.current) {
-          el.srcObject = streamRef.current;
-        }
-        el.muted = true;
-        el.playsInline = true;
-        el.play().catch((err) => {
-          console.warn('[Scanner] video play in ref callback:', err.message);
-        });
-      } catch (err) {
-        console.warn('[Scanner] error attaching stream in ref callback:', err);
-      }
-    }
-  };
-
-  // Setup Web Camera with fallback to ensure user camera / laptop webcam always works
+  // Web camera scanner
   useEffect(() => {
-    if (!visible) {
-      // Clean up stream when modal is closed
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
-        streamRef.current = null;
-      }
-      if (scanIntervalRef.current) {
-        clearInterval(scanIntervalRef.current);
-        scanIntervalRef.current = null;
-      }
+    if (!visible || Platform.OS !== 'web') {
       setCameraActive(false);
       lastFiredRef.current = { code: null, time: 0 };
       return;
     }
 
-    let isMounted = true;
+    let cancelled = false;
+    let scanner = null;
+    let startPromise = null;
 
-    async function startCamera() {
-      if (Platform.OS !== 'web' || typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
-        if (isMounted) {
-          setCameraStatusMessage('Web camera not available on this platform. Hardware gun active.');
-        }
-        return;
-      }
+    scanLockedRef.current = false;
+    setCameraActive(false);
+    setCameraStatusMessage('Starting camera...');
 
-      // Stop previous stream if switching camera
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
-        streamRef.current = null;
-      }
-
-      setCameraStatusMessage('Connecting to webcam...');
-
+    const startScanner = async () => {
       try {
-        let stream = null;
-        try {
-          // Attempt 1: Try specific facingMode ('user' for front/laptop webcam or 'environment')
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-              facingMode: cameraFacing === 'user' ? 'user' : { ideal: 'environment' },
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
-            },
-            audio: false,
-          });
-        } catch (e1) {
-          // Attempt 2: Fallback to basic { video: true } which always succeeds on laptop webcams
-          console.warn('[Scanner] Trying fallback { video: true }...', e1.message);
-          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-        }
+        scanner = new Html5Qrcode('pharmacy-barcode-reader', {
+          verbose: false,
+        });
 
-        if (!isMounted) {
-          stream.getTracks().forEach((t) => t.stop());
-          return;
-        }
+        html5ScannerRef.current = scanner;
 
-        streamRef.current = stream;
+        startPromise = scanner.start(
+          { facingMode: cameraFacing },
+          {
+            fps: 10,
+            // Scan the entire camera frame.
+          },
+          (decodedText) => {
+            if (cancelled || scanLockedRef.current) return;
+
+            console.log('CAMERA DETECTED:', decodedText);
+            scanLockedRef.current = true;
+            executeScan(decodedText);
+          },
+          () => {}
+        );
+
+        await startPromise;
+
+        if (cancelled) return;
+
         setCameraActive(true);
-        setCameraStatusMessage(
-          cameraFacing === 'user'
-            ? '🟢 Live Front Webcam (Face) Active'
-            : '🟢 Live Back Camera Active'
-        );
-
-        // Attach stream to video DOM element if already mounted
-        if (videoElementRef.current) {
-          try {
-            videoElementRef.current.srcObject = stream;
-            videoElementRef.current.muted = true;
-            videoElementRef.current.playsInline = true;
-            videoElementRef.current.play().catch((err) => {
-              console.warn('[Scanner] video.play notice:', err.message);
-            });
-          } catch (e) {
-            console.warn('[Scanner] attach stream error:', e);
-          }
+        setCameraStatusMessage('Camera ready — scan barcode or QR code');
+      } catch (error) {
+        if (!cancelled) {
+          console.error('[Scanner]', error);
+          setCameraActive(false);
+          setCameraStatusMessage(
+            'Camera unavailable. Check camera permission.'
+          );
         }
-
-        // Automatic scanning loop for BOTH 1D Barcodes and 2D QR Codes
-        if (typeof window !== 'undefined' && window.BarcodeDetector) {
-          try {
-            const barcodeDetector = new window.BarcodeDetector({
-              formats: [
-                'qr_code',
-                'ean_13',
-                'ean_8',
-                'code_128',
-                'code_39',
-                'upc_a',
-                'upc_e',
-                'data_matrix',
-              ],
-            });
-
-            scanIntervalRef.current = setInterval(async () => {
-              const vid = videoElementRef.current;
-              if (vid && vid.readyState >= 2 && !vid.paused) {
-                try {
-                  const detected = await barcodeDetector.detect(vid);
-                  if (detected && detected.length > 0) {
-                    const detectedValue = detected[0].rawValue;
-                    if (detectedValue) {
-                      executeScan(detectedValue);
-                    }
-                  }
-                } catch (detectErr) {}
-              }
-            }, 350);
-          } catch (detectorInitErr) {
-            console.warn('[Scanner] BarcodeDetector init:', detectorInitErr);
-          }
-        }
-      } catch (err) {
-        if (!isMounted) return;
-        console.warn('[Scanner] Camera error:', err.message);
-        setCameraActive(false);
-        setCameraStatusMessage(
-          '⚠️ Camera permission blocked or unavailable. You can use manual input or test presets below.'
-        );
       }
-    }
+    };
 
-    startCamera();
+    const timer = setTimeout(startScanner, 300);
 
     return () => {
-      isMounted = false;
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
-        streamRef.current = null;
+      cancelled = true;
+      clearTimeout(timer);
+      scanLockedRef.current = true;
+
+      if (scanner) {
+        const scannerToClean = scanner;
+
+        const cleanup = async () => {
+          try {
+            if (startPromise) {
+              await startPromise.catch(() => {});
+            }
+
+            if (scannerToClean.isScanning) {
+              await scannerToClean.stop();
+            }
+
+            scannerToClean.clear();
+          } catch (error) {
+            console.warn('[Scanner cleanup]', error);
+          }
+        };
+
+        cleanup();
       }
-      if (scanIntervalRef.current) {
-        clearInterval(scanIntervalRef.current);
-        scanIntervalRef.current = null;
+
+      if (html5ScannerRef.current === scanner) {
+        html5ScannerRef.current = null;
       }
     };
   }, [visible, cameraFacing]);
 
-  // Hardware Scanner Gun Listener (captures rapid barcode keystrokes + Enter)
+  // Hardware Scanner Gun Listener
   useEffect(() => {
     if (!visible || Platform.OS !== 'web') return;
 
@@ -297,12 +233,15 @@ export default function BarcodeScannerModal({
     };
 
     window.addEventListener('keydown', handleKeyDown);
+
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [visible]);
 
   // Toggle front vs back camera
   const handleToggleCamera = () => {
-    setCameraFacing((prev) => (prev === 'user' ? 'environment' : 'user'));
+    setCameraFacing((prev) =>
+      prev === 'user' ? 'environment' : 'user'
+    );
   };
 
   const sampleProducts = [
@@ -334,13 +273,17 @@ export default function BarcodeScannerModal({
               <View style={styles.headerIconBadge}>
                 <Text style={styles.headerIcon}>📷</Text>
               </View>
+
               <View style={{ flex: 1 }}>
-                <Text style={styles.modalTitle} numberOfLines={1}>{title}</Text>
+                <Text style={styles.modalTitle} numberOfLines={1}>
+                  {title}
+                </Text>
                 <Text style={styles.modalSubtitle} numberOfLines={1}>
                   Supports QR Code, 1D/2D Barcodes & Hardware Scanners
                 </Text>
               </View>
             </View>
+
             <Pressable
               onPress={onClose}
               style={styles.closeBtn}
@@ -365,30 +308,25 @@ export default function BarcodeScannerModal({
           <View style={styles.unifiedFeatureBanner}>
             <Text style={styles.unifiedFeatureIcon}>⚡</Text>
             <Text style={styles.unifiedFeatureText}>
-              Universal Scanner Active: Simultaneously detects both 1D Barcodes and 2D QR Codes
+              Universal Scanner Active: Simultaneously detects both 1D
+              Barcodes and 2D QR Codes
             </Text>
           </View>
 
           {/* Live Camera Viewfinder Box */}
           <View style={styles.cameraViewportContainer}>
-            {/* Native DOM <video> rendered directly by React for 100% reliable webcam display */}
             {Platform.OS === 'web' ? (
-              <video
-                ref={handleVideoRef}
-                autoPlay
-                playsInline
-                muted
+              <div
+                id="pharmacy-barcode-reader"
                 style={{
                   width: '100%',
                   height: '100%',
-                  objectFit: 'cover',
                   position: 'absolute',
                   top: 0,
                   left: 0,
-                  borderRadius: '12px',
                   zIndex: 2,
-                  transform: cameraFacing === 'user' ? 'scaleX(-1)' : 'none',
-                  backgroundColor: '#0F172A',
+                  overflow: 'hidden',
+                  borderRadius: 12,
                 }}
               />
             ) : null}
@@ -397,7 +335,9 @@ export default function BarcodeScannerModal({
             {!cameraActive && (
               <View style={styles.placeholderCameraView}>
                 <Text style={styles.viewfinderGridIcon}>🎯</Text>
-                <Text style={styles.viewfinderText}>{cameraStatusMessage}</Text>
+                <Text style={styles.viewfinderText}>
+                  {cameraStatusMessage}
+                </Text>
                 <Text style={styles.viewfinderSub}>
                   Hold barcode or QR code in front of camera
                 </Text>
@@ -410,12 +350,18 @@ export default function BarcodeScannerModal({
               <View style={styles.cornerTR} />
               <View style={styles.cornerBL} />
               <View style={styles.cornerBR} />
+
               <Animated.View
                 style={[
                   styles.laserLine,
-                  { transform: [{ translateY: laserTranslateY }] },
+                  {
+                    transform: [
+                      { translateY: laserTranslateY },
+                    ],
+                  },
                 ]}
               />
+
               <View style={styles.centerAimCrosshair}>
                 <Text style={styles.aimCrosshairText}>
                   🎯 SMART SCANNER (BARCODE & QR)
@@ -435,9 +381,16 @@ export default function BarcodeScannerModal({
             </View>
 
             {/* Camera Switch / Flip Button */}
-            <Pressable onPress={handleToggleCamera} style={styles.cameraFlipBtn}>
+            <Pressable
+              onPress={handleToggleCamera}
+              style={styles.cameraFlipBtn}
+            >
               <Text style={styles.cameraFlipBtnText}>
-                🔄 Flip ({cameraFacing === 'user' ? 'Webcam / Face' : 'Back'})
+                🔄 Flip (
+                {cameraFacing === 'user'
+                  ? 'Webcam / Face'
+                  : 'Back'}
+                )
               </Text>
             </Pressable>
           </View>
@@ -447,7 +400,9 @@ export default function BarcodeScannerModal({
             <View style={styles.scannedNoticeBox}>
               <Text style={styles.scannedNoticeText}>
                 ✓ Scanned Successfully:{' '}
-                <Text style={styles.scannedCodeText}>{lastScanned}</Text>
+                <Text style={styles.scannedCodeText}>
+                  {lastScanned}
+                </Text>
               </Text>
             </View>
           )}
@@ -525,7 +480,10 @@ export default function BarcodeScannerModal({
 
           {/* Manual Input Bar */}
           <View style={styles.manualInputGroup}>
-            <Text style={styles.inputLabel}>Manual Barcode / QR Code Search:</Text>
+            <Text style={styles.inputLabel}>
+              Manual Barcode / QR Code Search:
+            </Text>
+
             <View style={styles.inputRow}>
               <TextInput
                 style={styles.textInput}
@@ -540,11 +498,14 @@ export default function BarcodeScannerModal({
                 onSubmitEditing={() => executeScan(manualCode, { skipDedupe: true })}
                 autoFocus={true}
               />
+
               <Pressable
                 onPress={() => executeScan(manualCode, { skipDedupe: true })}
                 style={styles.scanActionBtn}
               >
-                <Text style={styles.scanActionBtnText}>Scan</Text>
+                <Text style={styles.scanActionBtnText}>
+                  Scan
+                </Text>
               </Pressable>
             </View>
           </View>
@@ -557,7 +518,10 @@ export default function BarcodeScannerModal({
 
             {mode === 'invoice' || mode === 'all' ? (
               <View style={styles.presetsGroup}>
-                <Text style={styles.presetGroupTitle}>Invoices (Returns):</Text>
+                <Text style={styles.presetGroupTitle}>
+                  Invoices (Returns):
+                </Text>
+
                 <View style={styles.chipRow}>
                   {sampleInvoices.map((inv) => (
                     <Pressable
@@ -565,7 +529,9 @@ export default function BarcodeScannerModal({
                       onPress={() => executeScan(inv, { skipDedupe: true })}
                       style={styles.presetChipInvoice}
                     >
-                      <Text style={styles.presetChipInvoiceText}>{inv}</Text>
+                      <Text style={styles.presetChipInvoiceText}>
+                        {inv}
+                      </Text>
                     </Pressable>
                   ))}
                 </View>
@@ -574,7 +540,10 @@ export default function BarcodeScannerModal({
 
             {mode === 'product' || mode === 'all' ? (
               <View style={styles.presetsGroup}>
-                <Text style={styles.presetGroupTitle}>Medicines (New Sale):</Text>
+                <Text style={styles.presetGroupTitle}>
+                  Medicines (New Sale):
+                </Text>
+
                 <View style={styles.chipRow}>
                   {sampleProducts.map((p) => (
                     <Pressable
@@ -595,8 +564,15 @@ export default function BarcodeScannerModal({
 
           {/* Footer */}
           <View style={styles.modalFooter}>
-            <Pressable onPress={onClose} style={styles.doneBtn} accessibilityRole="button" accessibilityLabel="Close Scanner">
-              <Text style={styles.doneBtnText}>✕ Close Scanner</Text>
+            <Pressable
+              onPress={onClose}
+              style={styles.doneBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Close Scanner"
+            >
+              <Text style={styles.doneBtnText}>
+                ✕ Close Scanner
+              </Text>
             </Pressable>
           </View>
         </View>
@@ -970,7 +946,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     fontSize: 13,
     color: '#0F172A',
-    ...Platform.select({ web: { outlineStyle: 'none' } }),
+    ...Platform.select({
+      web: { outlineStyle: 'none' },
+    }),
   },
   scanActionBtn: {
     backgroundColor: '#0F766E',

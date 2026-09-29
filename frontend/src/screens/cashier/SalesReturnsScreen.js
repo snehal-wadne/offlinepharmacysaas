@@ -1,20 +1,20 @@
-import React, { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
-  View,
-  Text,
-  TextInput,
+  Modal,
+  Platform,
   Pressable,
   ScrollView,
-  Modal,
   StyleSheet,
+  Text,
+  TextInput,
   useWindowDimensions,
-  Platform,
+  View,
 } from "react-native";
-import { usePos } from "../../context/PosContext";
-import BarcodeScannerModal from "../../components/common/BarcodeScannerModal";
-import { SkeletonTableRow } from "../../components/common/SkeletonLoader";
-import PaginationControls from "../../components/common/PaginationControls";
 import { searchReturnInvoice } from "../../api/cashierApi";
+import BarcodeScannerModal from "../../components/common/BarcodeScannerModal";
+import PaginationControls from "../../components/common/PaginationControls";
+import { SkeletonTableRow } from "../../components/common/SkeletonLoader";
+import { usePos } from "../../context/PosContext";
 
 export default function SalesReturnsScreen({
   onNavigate,
@@ -36,7 +36,6 @@ export default function SalesReturnsScreen({
 
   const { invoices, returnHistory, processReturnRefund } = usePos();
 
-  // Active Tab: 'find-invoice' | 'return-history'
   const [activeTab, setActiveTab] = useState("find-invoice");
 
   // Mobile view mode: 'table' | 'details'
@@ -44,6 +43,8 @@ export default function SalesReturnsScreen({
 
   // Search & Filter
   const [searchInvoice, setSearchInvoice] = useState("");
+  const [refundAmount, setRefundAmount] = useState("");
+  const [refundMode, setRefundMode] = useState("Cash");
   const [selectedDateFilter, setSelectedDateFilter] = useState("All Dates");
   const [dateDropdownOpen, setDateDropdownOpen] = useState(false);
 
@@ -98,8 +99,7 @@ export default function SalesReturnsScreen({
   const [returnReason, setReturnReason] = useState(
     "Doctor altered prescription",
   );
-  const [stockDisposition, setStockDisposition] = useState("Sellable"); // 'Sellable' | 'Quarantine'
-  const [refundMode, setRefundMode] = useState("Cash"); // 'Cash' | 'Original Payment' | 'Credit Note'
+  const [stockDisposition, setStockDisposition] = useState("Sellable");
 
   // Credit Note Modal State
   const [creditNoteModalVisible, setCreditNoteModalVisible] = useState(false);
@@ -151,15 +151,19 @@ export default function SalesReturnsScreen({
 
   // Calculate return refund total
   const calculateRefundTotal = () => {
-    if (!selectedInvoice || !selectedInvoice.items) return 0;
-    let total = 0;
-    (selectedInvoice || []).forEach((it, idx) => {
-      const q = returnQtys[idx] || 0;
-      const unitPrice = it.price || it.sellingPrice || 0;
-      total += unitPrice * q;
-    });
-    return total;
-  };
+  if (!selectedInvoice || !selectedInvoice.items) return 0;
+
+  let total = 0;
+
+  selectedInvoice.items.forEach((it, idx) => {
+    const q = returnQtys[idx] || 0;
+    const unitPrice = Number(it.price || it.sellingPrice || 0);
+
+    total += unitPrice * q;
+  });
+
+  return total;
+};
 
   const currentRefundTotal = calculateRefundTotal();
 
@@ -171,62 +175,94 @@ export default function SalesReturnsScreen({
     (selectedInvoice.items || []).forEach((it, idx) => {
       initialQtys[idx] = idx === 0 ? 1 : 0;
     });
-    setReturnQtys(initialQtys);
-    setRefundMode(
-      selectedInvoice.paymentMode === "Cash" ? "Cash" : "Original Payment",
-    );
-    setReturnModalVisible(true);
+   setReturnQtys(initialQtys);
+
+setRefundAmount(
+  String(
+    Number(
+      selectedInvoice.total ||
+      selectedInvoice.grandTotal ||
+      selectedInvoice.amount ||
+      selectedInvoice.totalAmount ||
+      0
+    )
+  )
+);
+
+setRefundMode(
+  selectedInvoice.paymentMode === "Cash" ? "Cash" : "Original Payment",
+);
+
+setReturnModalVisible(true);
   };
+ // Submit and Finalize Return
+const handleConfirmReturn = async () => {
+  console.log("PROCESS REFUND BUTTON CLICKED");
 
-  // Submit and Finalize Return
-  const handleConfirmReturn = async () => {
-    if (currentRefundTotal <= 0) {
-      if (onShowToast)
-        onShowToast("⚠️ Please specify return quantity for at least one item.");
-      return;
+  if (currentRefundTotal <= 0) {
+    if (onShowToast) {
+      onShowToast("⚠️ Please specify return quantity for at least one item.");
     }
+    return;
+  }
 
-    const returnedItemsList = (selectedInvoice.items || [])
-      .map((it, idx) => ({
+  const returnedItemsList = (selectedInvoice.items || [])
+    .map((it, idx) => {
+      const qty = Number(returnQtys[idx] || 0);
+      const unitPrice = Number(it.price || it.sellingPrice || 0);
+
+      return {
         name: it.name,
-        qty: returnQtys[idx] || 0,
-        unitPrice: it.price || it.sellingPrice || 0,
-        refundTotal:
-          (it.price || it.sellingPrice || 0) * (returnQtys[idx] || 0),
+        qty,
+        quantity: qty,
+        unitPrice,
+        refundTotal: unitPrice * qty,
+        refundPrice: unitPrice,
+        price: unitPrice,
+        productId: it.productId || it.id,
+        invoiceItemId: it.invoiceItemId || it.id,
         batch: it.batch,
-      }))
-      .filter((it) => it.qty > 0);
+        batchNumber: it.batchNumber || it.batch,
+      };
+    })
+    .filter((it) => it.qty > 0);
 
-    const returnData = {
-      originalInvoice: selectedInvoice.invoiceNo,
-      customer: selectedInvoice.customer,
-      refundAmount: currentRefundTotal,
-      refundMode,
-      stockDisposition,
-      reason: returnReason,
-      returnedItems: returnedItemsList,
-    };
-
-    try {
-      const creditNote = await processReturnRefund(returnData);
-      setCompletedCreditNote(creditNote);
-      setReturnModalVisible(false);
-      setCreditNoteModalVisible(true);
-
-      if (onShowToast) {
-        onShowToast(
-          `✓ Processed Return & Credit Note #${creditNote.returnNo}! Amount ₹${creditNote.amount.toFixed(2)}`,
-        );
-      }
-    } catch (err) {
-      console.error("[SalesReturnsScreen] Return persistence failure:", err);
-      if (onShowToast) {
-        onShowToast(
-          `✕ Failed to process return: ${err.message || "Local persistence error"}`,
-        );
-      }
-    }
+  const returnData = {
+    originalInvoice: selectedInvoice.invoiceNo,
+    customer: selectedInvoice.customer,
+    refundAmount: currentRefundTotal,
+    refundMode,
+    stockDisposition,
+    reason: returnReason,
+    returnedItems: returnedItemsList,
   };
+
+  try {
+    const creditNote = await processReturnRefund(returnData);
+
+    setCompletedCreditNote(creditNote);
+    setReturnModalVisible(false);
+    setCreditNoteModalVisible(true);
+
+    if (onShowToast) {
+      onShowToast(
+        `✓ Processed Return & Credit Note #${creditNote.returnNo}! Amount ₹${Number(
+          creditNote.amount || 0
+        ).toFixed(2)}`,
+      );
+    }
+  } catch (err) {
+    console.error("[SalesReturnsScreen] Return persistence failure:", err);
+
+    if (onShowToast) {
+      onShowToast(
+        `✕ Failed to process return: ${
+          err.message || "Local persistence error"
+        }`,
+      );
+    }
+  }
+};
 
   // Barcode scanned handler (Invoice or Product Barcode)
   const handleBarcodeScanned = async (scannedCode) => {
@@ -1394,7 +1430,7 @@ export default function SalesReturnsScreen({
       )}
 
       {/* ========================================================================= */}
-      {/* INTERACTIVE QR / BARCODE SCANNER MODAL                                    */}
+      {/* INTERACTIVE QR / BARCODE SCANNER MODAL */}                   
       {/* ========================================================================= */}
       <BarcodeScannerModal
         visible={scannerModalVisible}
