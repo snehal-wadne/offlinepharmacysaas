@@ -133,11 +133,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#F8FAFC",
+    minHeight: "100%",
     ...Platform.select({
       web: {
-        height: "100vh",
-        width: "100vw",
-        overflow: "hidden",
+        height: "100%",
+        width: "100%",
+        minHeight: "100vh",
       },
     }),
   },

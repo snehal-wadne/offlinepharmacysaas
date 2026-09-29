@@ -1,10 +1,8 @@
 import { Platform } from 'react-native';
 import { getAccessToken } from './supabaseClient';
+import { API_URL } from '../config';
 
-const API_ROOT =
-  process.env.EXPO_PUBLIC_API_URL ||
-  (Platform.OS === 'android' ? 'http://10.0.2.2:5000' : 'http://localhost:5000');
-const API_BASE_URL = `${API_ROOT.replace(/\/$/, '')}/api/superadmin`;
+const API_BASE_URL = `${API_URL.replace(/\/$/, '')}/api/superadmin`;
 
 let customSuperadminToken: string | null = null;
 

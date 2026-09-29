@@ -11,7 +11,21 @@ if (typeof process !== "undefined" && process.env) {
 
 let selectedUrl = envUrl || "http://localhost:5000";
 
-if (!envUrl) {
+// When running in a browser on localhost / 127.0.0.1, prioritize localhost:5000
+// if envUrl is missing or points to a foreign/dead local network IP (192.168.x.x, 10.x.x.x)
+if (typeof window !== "undefined" && window.location) {
+  const isLocalHost =
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1";
+  if (
+    isLocalHost &&
+    (!envUrl ||
+      envUrl.includes("192.168.") ||
+      envUrl.includes("10.0.2.2"))
+  ) {
+    selectedUrl = "http://localhost:5000";
+  }
+} else if (!envUrl) {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const RN = require("react-native");

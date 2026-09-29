@@ -279,12 +279,17 @@ export default function AppNavigator() {
     }
 
     try {
+      const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+      const fetchTimeout = controller ? setTimeout(() => controller.abort(), 4000) : null;
+
       const response = await fetch(`${API_URL}/api/auth/me`, {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
+        signal: controller?.signal,
       });
+      if (fetchTimeout) clearTimeout(fetchTimeout);
 
       if (response.ok) {
         const resData = await response.json();
@@ -387,15 +392,41 @@ export default function AppNavigator() {
   };
 
   useEffect(() => {
+    let isMounted = true;
+
+    // Safety timeout: If Supabase getSession or network is slow/unresponsive,
+    // don't leave the user stuck on "Loading workspace..." or blank screen!
+    const initTimeout = setTimeout(() => {
+      if (isMounted) {
+        setAuthStatus((prev) => {
+          if (prev === "INITIALIZING") {
+            return "UNAUTHENTICATED";
+          }
+          return prev;
+        });
+      }
+    }, 1500);
+
     // 1. Initial check on mount
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      restoreAuthSession(session);
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (isMounted) {
+          restoreAuthSession(data?.session || null);
+        }
+      })
+      .catch((err) => {
+        console.warn("Supabase getSession failed:", err);
+        if (isMounted) {
+          setAuthStatus("UNAUTHENTICATED");
+        }
+      });
 
     // 2. Real-time auth state changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!isMounted) return;
       if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
         restoreAuthSession(session);
       } else if (event === "SIGNED_OUT") {
@@ -405,6 +436,8 @@ export default function AppNavigator() {
     });
 
     return () => {
+      isMounted = false;
+      clearTimeout(initTimeout);
       subscription?.unsubscribe();
     };
   }, []);
