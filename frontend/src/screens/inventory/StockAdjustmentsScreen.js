@@ -9,6 +9,7 @@ import {
   useWindowDimensions,
   Platform,
   Modal,
+  Linking,
 } from "react-native";
 import InventoryStatCard from "../../components/inventory/InventoryStatCard";
 import {
@@ -29,12 +30,14 @@ import {
 } from "../../api/inventoryApi";
 import { fetchBranches } from "../../api/branchApi";
 import { fetchCashierProducts } from "../../api/cashierApi";
+import { notifySupplierApi, fetchSuppliers } from "../../api/purchaseApi";
 import { API_URL } from "../../config";
 import { localPersistenceService } from "../../db";
 import { syncEngine } from "../../sync";
 import { usePos } from "../../context/PosContext";
 import BulkImportModal from "../../components/inventory/BulkImportModal";
 import BarcodeScannerModal from "../../components/common/BarcodeScannerModal";
+import { generateOfflineBarcodeSvg, generateOfflineQRCodeSvg } from "../../utils/qrGenerator";
 
 export default function StockAdjustmentsScreen({
   onShowToast,
@@ -71,9 +74,28 @@ export default function StockAdjustmentsScreen({
   const [bulkImportModalOpen, setBulkImportModalOpen] = useState(false);
   // Barcode scanner and scanned product details
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [formScannerOpen, setFormScannerOpen] = useState(false);
   const [scannedProducts, setScannedProducts] = useState([]);
   const [scannedCode, setScannedCode] = useState("");
   const [scanError, setScanError] = useState("");
+
+  // Supplier Notification for Low / Limited / Slow Stock
+  const [supplierModalOpen, setSupplierModalOpen] = useState(false);
+  const [supplierModalItem, setSupplierModalItem] = useState(null);
+  const [supplierDropdownOpen, setSupplierDropdownOpen] = useState(false);
+  const [notificationSuccessModal, setNotificationSuccessModal] = useState(null);
+  const [supplierForm, setSupplierForm] = useState({
+    supplierId: null,
+    supplierName: "",
+    supplierEmail: "",
+    supplierPhone: "",
+    reorderQuantity: "100",
+    channel: "PORTAL",
+    priority: "URGENT",
+    notes: "",
+  });
+  const [supplierSending, setSupplierSending] = useState(false);
+  const [availableSuppliers, setAvailableSuppliers] = useState([]);
 
   useEffect(() => {
     let isMounted = true;
@@ -268,10 +290,35 @@ export default function StockAdjustmentsScreen({
   // Quick Quantity Adjustment Modal State
   const [adjustModalOpen, setAdjustModalOpen] = useState(false);
   const [adjustDelta, setAdjustDelta] = useState("10");
+  const [adjustSign, setAdjustSign] = useState("+");
   const [adjustType, setAdjustType] = useState("CYCLE_COUNT");
   const [adjustReason, setAdjustReason] = useState(
     "Physical stock count adjustment",
   );
+  const [adjustSaving, setAdjustSaving] = useState(false);
+
+  // Edit Medicine Information Modal State (PRD Action Menu)
+  const [editMedicineModalOpen, setEditMedicineModalOpen] = useState(false);
+  const [editMedicineForm, setEditMedicineForm] = useState({
+    id: "",
+    productId: "",
+    medicineName: "",
+    brandName: "",
+    genericName: "",
+    strength: "",
+    packSize: "",
+    manufacturer: "",
+    supplierName: "",
+    amount: "",
+    sku: "",
+    batchNo: "",
+    quantity: "",
+    branchId: "",
+    shelfLocation: "",
+    isRxRequired: false,
+    isActive: true,
+  });
+  const [editMedicineSaving, setEditMedicineSaving] = useState(false);
 
   // Inter-Branch Transfer Modal State
   const [transferModalOpen, setTransferModalOpen] = useState(false);
@@ -290,6 +337,7 @@ export default function StockAdjustmentsScreen({
   const [barcodeLoading, setBarcodeLoading] = useState(false);
   const [barcodeConfig, setBarcodeConfig] = useState({
     format: "thermal_50x25",
+    codeType: "barcode", // "barcode" | "qr" | "both"
     copies: "1",
     showPrice: true,
     showExpiry: true,
@@ -440,6 +488,9 @@ export default function StockAdjustmentsScreen({
 
     if (actionKey === "adjust") {
       setAdjustDelta("10");
+      setAdjustSign("+");
+      setAdjustType("CYCLE_COUNT");
+      setAdjustReason("Physical inventory stock count");
       setAdjustModalOpen(true);
       return;
     }
@@ -484,27 +535,35 @@ export default function StockAdjustmentsScreen({
     }
 
     if (actionKey === "edit") {
-      setEditingItemId(item.id);
-      setFormData({
+      setEditMedicineForm({
+        id: item.id,
+        productId: item.productId || item.id,
         medicineName: item.medicineName || item.genericName || "",
-        brandName: item.brandName || "",
+        brandName: item.brandName || item.medicineName || "",
         genericName: item.genericName || item.medicineName || "",
-        strength: item.strength || "",
-        packSize: item.packSize || "",
-        manufacturer: item.manufacturer || "",
-        supplierName: item.supplierName || "",
-        amount: item.amount ? String(item.amount).replace(/[^0-9.]/g, "") : "",
+        strength: item.strength || "500mg",
+        packSize: item.packSize || "10 Tablets",
+        manufacturer: item.manufacturer || "Pharma Lab",
+        supplierName: item.supplierName || "Direct Supplier",
+        amount: item.amount
+          ? String(item.amount).replace(/[^0-9.]/g, "")
+          : item.mrp
+            ? String(item.mrp).replace(/[^0-9.]/g, "")
+            : "15.00",
         sku: item.sku || "",
-        batchNo: item.batchNo || "",
-        quantity: item.quantity !== undefined ? String(item.quantity) : "",
+        batchNo: item.batchNo || item.batchNumber || "B-1001",
+        quantity: item.quantity !== undefined ? String(item.quantity) : "100",
         branchId: item.branchId || "",
-        shelfLocation: item.shelfLocation || "",
+        shelfLocation: item.shelfLocation || "A1-S1",
+        isRxRequired: Boolean(item.isRxRequired ?? item.rxRequired),
+        isActive: item.isActive !== undefined ? item.isActive : true,
       });
-      if (onShowToast) {
-        onShowToast(
-          `✏️ Loaded "${item.brandName}" details into form below for editing.`,
-        );
-      }
+      setEditMedicineModalOpen(true);
+      return;
+    }
+
+    if (actionKey === "notify-supplier") {
+      handleOpenSupplierModal(item);
       return;
     }
 
@@ -529,91 +588,435 @@ export default function StockAdjustmentsScreen({
     }
   };
 
+  const handleOpenSupplierModal = async (item) => {
+    if (!item) return;
+    setSupplierModalItem(item);
+    const stockQty = Number(item.quantity) || 0;
+    const isCritical = stockQty <= 10;
+
+    let supList = availableSuppliers;
+    if (!supList || supList.length === 0) {
+      try {
+        const supRes = await fetchSuppliers();
+        supList = Array.isArray(supRes?.data?.data)
+          ? supRes.data.data
+          : Array.isArray(supRes?.data)
+            ? supRes.data
+            : [];
+        setAvailableSuppliers(supList);
+      } catch (e) {
+        console.warn("Could not load suppliers:", e.message);
+      }
+    }
+
+    const itemSupName = item.supplierName || item.supplier || "";
+    let matched = (supList || []).find(
+      (s) =>
+        (itemSupName &&
+          (s.name?.toLowerCase().includes(itemSupName.toLowerCase()) ||
+            itemSupName.toLowerCase().includes(s.name?.toLowerCase()))) ||
+        s.id === item.supplierId,
+    );
+    if (!matched && supList && supList.length > 0) {
+      matched = supList[0];
+    }
+
+    setSupplierForm({
+      supplierId: matched ? matched.id : (item.supplierId || null),
+      supplierName: matched ? matched.name : itemSupName,
+      supplierEmail: matched ? (matched.email || "") : (item.supplierEmail || ""),
+      supplierPhone: matched ? (matched.phone || "") : (item.supplierPhone || ""),
+      reorderQuantity: "100",
+      channel: "PORTAL",
+      priority: isCritical ? "CRITICAL" : "URGENT",
+      notes: `Low stock alert: current stock is ${stockQty} units (Reorder threshold: 50). Please prioritize dispatch of replenishment batch.`,
+    });
+    setSupplierDropdownOpen(false);
+    setSupplierModalOpen(true);
+  };
+
+  const handleSendSupplierNotification = async () => {
+    if (!supplierModalItem) return;
+    if (!supplierForm.reorderQuantity || Number(supplierForm.reorderQuantity) <= 0) {
+      if (onShowToast) onShowToast("⚠️ Please enter a valid reorder quantity.");
+      return;
+    }
+    if (!supplierForm.supplierName || !supplierForm.supplierName.trim()) {
+      if (onShowToast) onShowToast("⚠️ Please specify a supplier name.");
+      return;
+    }
+
+    try {
+      setSupplierSending(true);
+      const rawBranch =
+        typeof selectedBranch === "object" && selectedBranch !== null
+          ? selectedBranch.id
+          : selectedBranch;
+      const branchIdParam =
+        rawBranch &&
+        rawBranch !== "All Branches" &&
+        rawBranch !== "all" &&
+        rawBranch !== "No Active Branch"
+          ? rawBranch
+          : supplierModalItem.branchId || null;
+
+      const payload = {
+        branchId: branchIdParam,
+        supplierId: supplierForm.supplierId || null,
+        supplierName: supplierForm.supplierName.trim(),
+        recipientEmail: supplierForm.supplierEmail ? supplierForm.supplierEmail.trim() : null,
+        recipientPhone: supplierForm.supplierPhone ? supplierForm.supplierPhone.trim() : null,
+        productId: supplierModalItem.productId || supplierModalItem.id,
+        batchId: supplierModalItem.batchId || null,
+        medicineName:
+          supplierModalItem.medicineName || supplierModalItem.brandName || "Medicine",
+        sku: supplierModalItem.sku || "N/A",
+        batchNo:
+          supplierModalItem.batchNo || supplierModalItem.batchNumber || "N/A",
+        currentStock: Number(supplierModalItem.quantity) || 0,
+        reorderQuantity: Number(supplierForm.reorderQuantity) || 100,
+        channel: supplierForm.channel || "PORTAL",
+        priority: supplierForm.priority || "URGENT",
+        message: `LOW STOCK REORDER ALERT (${supplierForm.priority})
+Store / Branch: ${rawBranch || "Active Branch"}
+Medicine: ${supplierModalItem.brandName || supplierModalItem.medicineName}
+SKU: ${supplierModalItem.sku || "N/A"} | Batch: ${supplierModalItem.batchNo || "N/A"}
+Current Available Stock: ${supplierModalItem.quantity || 0} units
+Requested Reorder Quantity: ${supplierForm.reorderQuantity} units
+Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
+      };
+
+      const res = await notifySupplierApi(payload);
+
+      if (res && (res.success || res.data?.success)) {
+        const notifResult = res.data || res;
+        setSupplierModalOpen(false);
+
+        // Open Confirmation & Delivery Pop-up Modal
+        setNotificationSuccessModal({
+          supplierName: supplierForm.supplierName,
+          supplierPhone: supplierForm.supplierPhone,
+          supplierEmail: supplierForm.supplierEmail,
+          medicineName: supplierModalItem.brandName || supplierModalItem.medicineName,
+          sku: supplierModalItem.sku || "N/A",
+          batchNo: supplierModalItem.batchNo || "N/A",
+          currentStock: Number(supplierModalItem.quantity) || 0,
+          reorderQuantity: supplierForm.reorderQuantity,
+          channel: supplierForm.channel,
+          priority: supplierForm.priority,
+          message: payload.message,
+          referenceNumber: notifResult.referenceNumber || `REF-${Date.now().toString().slice(-6)}`,
+        });
+
+        if (onShowToast) {
+          onShowToast(
+            `📢 Reorder notification delivered to ${supplierForm.supplierName}'s portal!`,
+          );
+        }
+      } else {
+        throw new Error(res?.error || res?.data?.error || "Failed to deliver supplier alert");
+      }
+    } catch (err) {
+      console.error("Supplier notification error:", err);
+      if (onShowToast) {
+        onShowToast(`❌ Error sending notification: ${err.message}`);
+      }
+    } finally {
+      setSupplierSending(false);
+    }
+  };
+
+  const handleFormBarcodeScanned = async (scannedCode) => {
+    const raw = String(scannedCode || "").trim();
+    if (!raw) return;
+
+    setFormScannerOpen(false);
+    setFormData((prev) => ({ ...prev, sku: raw }));
+    setEditMedicineForm((prev) => ({ ...prev, sku: raw }));
+
+    if (onShowToast) {
+      onShowToast(`📷 Scanned Barcode: ${raw}`);
+    }
+
+    const cleanLower = raw.toLowerCase();
+    const cleanWithoutLeadingZero = cleanLower.startsWith("0") ? cleanLower.replace(/^0+/, "") : cleanLower;
+
+    let matchedItem = stockItems.find((item) => {
+      const b = String(item.barcode || item.barcodeNumber || item.barcode_number || "").trim().toLowerCase();
+      const s = String(item.sku || "").trim().toLowerCase();
+      return (
+        b === cleanLower ||
+        b === cleanWithoutLeadingZero ||
+        s === cleanLower ||
+        s === cleanWithoutLeadingZero
+      );
+    });
+
+    if (!matchedItem) {
+      try {
+        const rawBranch =
+          typeof selectedBranch === "object" && selectedBranch !== null
+            ? selectedBranch.id
+            : selectedBranch;
+        const products = await fetchCashierProducts("", raw, rawBranch);
+        if (Array.isArray(products) && products.length > 0) {
+          const p = products[0];
+          matchedItem = {
+            medicineName: p.generic || p.name,
+            brandName: p.brand || p.brandName || p.name,
+            genericName: p.generic || p.name,
+            strength: p.strength || "500mg",
+            packSize: p.pack || p.packSize || "10 Tablets",
+            manufacturer: p.manufacturer || "Pharma Lab",
+            amount: p.mrp ? String(p.mrp) : p.price ? String(p.price) : "",
+            sku: p.sku || raw,
+            shelfLocation: p.shelfLocation || "A1-S1",
+          };
+        }
+      } catch (err) {
+        console.warn("Could not check backend for scanned SKU:", err.message);
+      }
+    }
+
+    if (matchedItem) {
+      setFormData((prev) => ({
+        ...prev,
+        medicineName: matchedItem.medicineName || matchedItem.genericName || prev.medicineName,
+        brandName: matchedItem.brandName || matchedItem.name || prev.brandName,
+        genericName: matchedItem.genericName || matchedItem.medicineName || prev.genericName,
+        strength: matchedItem.strength || prev.strength,
+        packSize: matchedItem.packSize || prev.packSize,
+        manufacturer: matchedItem.manufacturer || prev.manufacturer,
+        supplierName: matchedItem.supplierName || prev.supplierName,
+        amount: matchedItem.amount
+          ? String(matchedItem.amount).replace(/[^0-9.]/g, "")
+          : matchedItem.mrp
+            ? String(matchedItem.mrp)
+            : prev.amount,
+        sku: raw,
+        shelfLocation: matchedItem.shelfLocation || prev.shelfLocation,
+      }));
+      if (onShowToast) {
+        onShowToast(`✨ Pre-filled details for "${matchedItem.brandName || matchedItem.medicineName}".`);
+      }
+    }
+  };
+
   const handleSaveAdjustment = async () => {
     if (!selectedItemForAction) return;
-    const deltaNum = parseInt(adjustDelta, 10);
-    if (isNaN(deltaNum) || deltaNum === 0) {
+
+    const rawDelta = Math.abs(parseInt(adjustDelta, 10) || 0);
+    if (rawDelta === 0) {
       if (onShowToast)
         onShowToast("Please enter a valid non-zero quantity change number");
       return;
     }
 
+    const effectiveSign = adjustType === "DAMAGE_WRITEOFF" ? "-" : adjustSign;
+    const signedDelta = effectiveSign === "-" ? -rawDelta : rawDelta;
     const currentQty = Number(selectedItemForAction.quantity || 0);
-    const newQty = currentQty + deltaNum;
+    const newQty = currentQty + signedDelta;
+
     if (newQty < 0) {
       if (onShowToast) {
         onShowToast(
-          `Adjustment would cause negative stock (${currentQty} + (${deltaNum}) = ${newQty})`,
+          `Adjustment would cause negative stock (${currentQty} ${signedDelta < 0 ? "-" : "+"} ${rawDelta} = ${newQty})`,
         );
       }
       return;
     }
 
     try {
+      setAdjustSaving(true);
+
+      // 1. Persist directly to backend database (PostgreSQL)
+      const updatedPayload = {
+        ...selectedItemForAction,
+        quantity: newQty,
+      };
+      await updateInventoryEntry(selectedItemForAction.id, updatedPayload);
+
+      // 2. Record stock movement in backend audit history
+      const movementType =
+        adjustType === "DAMAGE_WRITEOFF"
+          ? "DAMAGE"
+          : adjustType === "CORRECTION"
+            ? "CORRECTION"
+            : "CYCLE_COUNT";
+
+      await recordStockMovementApi({
+        branchName:
+          selectedItemForAction.branchName ||
+          selectedItemForAction.branchId ||
+          "Main Dispensary",
+        type: movementType,
+        item:
+          selectedItemForAction.brandName ||
+          selectedItemForAction.medicineName,
+        quantity: rawDelta,
+        reference: `ADJ-${selectedItemForAction.sku || selectedItemForAction.batchNo || "MANUAL"}`,
+        status: signedDelta >= 0 ? "STOCK_IN" : "STOCK_OUT",
+        notes: adjustReason,
+      }).catch((e) => console.warn("Stock movement audit warning:", e.message));
+
+      // 3. Keep local persistence cache synchronized
       if (typeof localPersistenceService?.adjustLocalStock === "function") {
-        await localPersistenceService.adjustLocalStock({
-          productId:
-            selectedItemForAction.productId || selectedItemForAction.id,
-          productName:
-            selectedItemForAction.brandName ||
-            selectedItemForAction.medicineName,
-          batchNumber:
-            selectedItemForAction.batchNo ||
-            selectedItemForAction.batchNumber ||
-            "B-1001",
-          deltaQuantity: deltaNum,
-          adjustmentType: adjustType,
-          reason: adjustReason,
-        });
+        await localPersistenceService
+          .adjustLocalStock({
+            productId:
+              selectedItemForAction.productId || selectedItemForAction.id,
+            productName:
+              selectedItemForAction.brandName ||
+              selectedItemForAction.medicineName,
+            batchNumber:
+              selectedItemForAction.batchNo ||
+              selectedItemForAction.batchNumber ||
+              "B-1001",
+            deltaQuantity: signedDelta,
+            adjustmentType: adjustType,
+            reason: adjustReason,
+          })
+          .catch(() => {});
+      }
 
-        setStockItems((prev) =>
-          prev.map((i) => {
-            if (i.id === selectedItemForAction.id) {
-              return {
-                ...i,
-                quantity: newQty,
-                lastUpdated: new Date().toISOString().split("T")[0],
-                status:
-                  newQty < 50
-                    ? newQty === 0
-                      ? "Out of Stock"
-                      : "Low Stock"
-                    : "In Stock",
-                syncStatus: "PENDING",
-              };
-            }
-            return i;
-          }),
+      // 4. Update in-memory table state
+      setStockItems((prev) =>
+        prev.map((i) => {
+          if (i.id === selectedItemForAction.id) {
+            return {
+              ...i,
+              quantity: newQty,
+              lastUpdated: new Date().toISOString().split("T")[0],
+              status:
+                newQty < 50
+                  ? newQty === 0
+                    ? "Out of Stock"
+                    : "Low Stock"
+                  : "In Stock",
+            };
+          }
+          return i;
+        }),
+      );
+
+      refreshPosCatalog();
+      setAdjustModalOpen(false);
+
+      if (onShowToast) {
+        onShowToast(
+          `✓ Stock adjustment of ${signedDelta > 0 ? `+${signedDelta}` : signedDelta} units saved to database! (New stock: ${newQty})`,
         );
-        setAdjustModalOpen(false);
-
-        if (onShowToast) {
-          onShowToast(
-            `✓ Stock adjustment of ${deltaNum > 0 ? `+${deltaNum}` : deltaNum} units saved locally!`,
-          );
-        }
-
-        if (typeof syncEngine?.sync === "function") {
-          syncEngine.sync().catch(() => { });
-        }
-      } else {
-        const updatedPayload = {
-          ...selectedItemForAction,
-          quantity: newQty,
-        };
-        await updateInventoryEntry(selectedItemForAction.id, updatedPayload);
-        setStockItems((prev) =>
-          prev.map((i) =>
-            i.id === selectedItemForAction.id ? { ...i, quantity: newQty } : i,
-          ),
-        );
-        setAdjustModalOpen(false);
       }
     } catch (err) {
       console.error("[StockAdjustments] Error adjusting stock:", err);
       if (onShowToast) {
         onShowToast(`Error adjusting stock: ${err.message}`);
       }
+    } finally {
+      setAdjustSaving(false);
+    }
+  };
+
+  const handleUpdateMedicineModal = async () => {
+    if (!editMedicineForm || !editMedicineForm.id) return;
+    if (!editMedicineForm.brandName?.trim()) {
+      if (onShowToast) onShowToast("⚠️ Brand name is required");
+      return;
+    }
+    if (!editMedicineForm.sku?.trim()) {
+      if (onShowToast) onShowToast("⚠️ SKU / Barcode is required");
+      return;
+    }
+
+    try {
+      setEditMedicineSaving(true);
+      const rawBranch =
+        typeof selectedBranch === "object" && selectedBranch !== null
+          ? selectedBranch.id
+          : selectedBranch;
+      const branchIdParam =
+        rawBranch &&
+        rawBranch !== "All Branches" &&
+        rawBranch !== "all" &&
+        rawBranch !== "No Active Branch"
+          ? rawBranch
+          : editMedicineForm.branchId || undefined;
+
+      const numAmount =
+        parseFloat(
+          String(editMedicineForm.amount).replace(/[^0-9.]/g, ""),
+        ) || 15.0;
+      const numQty =
+        parseInt(String(editMedicineForm.quantity), 10) || 0;
+
+      const payload = {
+        id: editMedicineForm.id,
+        productId: editMedicineForm.productId || editMedicineForm.id,
+        medicineName:
+          editMedicineForm.medicineName || editMedicineForm.brandName,
+        brandName: editMedicineForm.brandName,
+        genericName:
+          editMedicineForm.genericName ||
+          editMedicineForm.medicineName ||
+          editMedicineForm.brandName,
+        strength: editMedicineForm.strength || "500mg",
+        packSize: editMedicineForm.packSize || "10 Tablets",
+        manufacturer: editMedicineForm.manufacturer || "Pharma Lab",
+        supplierName: editMedicineForm.supplierName || "Direct Supplier",
+        amount: `₹${numAmount.toFixed(2)}`,
+        mrp: `₹${numAmount.toFixed(2)}`,
+        sku: editMedicineForm.sku,
+        batchNo: editMedicineForm.batchNo || "B-1001",
+        batchNumber: editMedicineForm.batchNo || "B-1001",
+        quantity: numQty,
+        branchId: branchIdParam,
+        shelfLocation: editMedicineForm.shelfLocation || "A1-S1",
+        isRxRequired: Boolean(editMedicineForm.isRxRequired),
+        rxRequired: Boolean(editMedicineForm.isRxRequired),
+        isActive: Boolean(editMedicineForm.isActive),
+      };
+
+      const res = await updateInventoryEntry(editMedicineForm.id, payload);
+
+      if (res && res.success === false) {
+        throw new Error(
+          res.error || "Failed to save medicine update to server",
+        );
+      }
+
+      setStockItems((prev) =>
+        prev.map((i) =>
+          i.id === editMedicineForm.id
+            ? {
+                ...i,
+                ...payload,
+                status:
+                  numQty < 50
+                    ? numQty === 0
+                      ? "Out of Stock"
+                      : "Low Stock"
+                    : "In Stock",
+                lastUpdated: new Date().toISOString().split("T")[0],
+              }
+            : i,
+        ),
+      );
+
+      refreshPosCatalog();
+      setEditMedicineModalOpen(false);
+
+      if (onShowToast) {
+        onShowToast(
+          `✓ Updated medicine "${payload.brandName}" in database!`,
+        );
+      }
+    } catch (err) {
+      console.error("[EditMedicine] Error:", err);
+      if (onShowToast) {
+        onShowToast(`❌ Error saving medicine: ${err.message}`);
+      }
+    } finally {
+      setEditMedicineSaving(false);
     }
   };
 
@@ -731,6 +1134,13 @@ export default function StockAdjustmentsScreen({
     setBarcodeLoading(true);
 
     const fallbackBarcode = item.barcode || item.sku || "MED-001";
+    const initialSvg = generateOfflineBarcodeSvg(fallbackBarcode, {
+      barHeight: 52,
+      moduleWidth: 2,
+      quietZoneModules: 14,
+    });
+    const initialQr = generateOfflineQRCodeSvg(fallbackBarcode, 96);
+
     const initialData = {
       id: item.id,
       productId: item.productId || item.id,
@@ -747,20 +1157,34 @@ export default function StockAdjustmentsScreen({
       shelfLocation: item.shelfLocation || "Rack A1-S1",
       branchName: item.branchName || item.branchId || "Main Store",
       pharmacyName: "Falah Pharmacy",
+      svgBarcode: initialSvg,
+      qrBarcode: initialQr,
     };
-   setBarcodeItemData(initialData);
-   try {
+    setBarcodeItemData(initialData);
+
+    try {
       const res = await fetchItemBarcode(item.id || item.sku);
       if (res?.success && res.data) {
-  const apiData = res.data;
+        const apiData = res.data;
+        const codeToUse = apiData.barcode || initialData.barcode;
+        const validSvg =
+          apiData.svgBarcode && apiData.svgBarcode.includes("<svg")
+            ? apiData.svgBarcode
+            : generateOfflineBarcodeSvg(codeToUse, {
+                barHeight: 52,
+                moduleWidth: 2,
+                quietZoneModules: 14,
+              });
+        const validQr = generateOfflineQRCodeSvg(codeToUse, 96);
 
- setBarcodeItemData({
-  ...initialData,
-  ...apiData,
-  barcode: apiData.barcode || initialData.barcode,
-  svgBarcode: apiData.svgBarcode || null,
-});
-}
+        setBarcodeItemData({
+          ...initialData,
+          ...apiData,
+          barcode: codeToUse,
+          svgBarcode: validSvg,
+          qrBarcode: validQr,
+        });
+      }
     } catch (err) {
       console.warn("Using local item data for barcode modal:", err.message);
     } finally {
@@ -804,8 +1228,14 @@ export default function StockAdjustmentsScreen({
             ${showShelf ? `<span>Rack: ${barcodeItemData.shelfLocation || "A1"}</span>` : ""}
             <span>Pack: ${barcodeItemData.packSize || "Units"}</span>
           </div>
-          <div class="barcode-container">
-            ${barcodeItemData.svgBarcode || ""}
+          <div class="barcode-container" style="display:flex; justify-content:center; align-items:center; gap: 8px;">
+            ${
+              barcodeConfig.codeType === "qr"
+                ? barcodeItemData.qrBarcode || ""
+                : barcodeConfig.codeType === "both"
+                  ? `${barcodeItemData.svgBarcode || ""}<div style="width:20mm;height:20mm;">${barcodeItemData.qrBarcode || ""}</div>`
+                  : barcodeItemData.svgBarcode || ""
+            }
           </div>
         </div>
       `;
@@ -919,36 +1349,40 @@ export default function StockAdjustmentsScreen({
   };
 
   const handleDownloadSvg = () => {
-  console.log("EXPORT BUTTON CLICKED", barcodeItemData);
-  if (Platform.OS !== "web") return;
+    console.log("EXPORT BUTTON CLICKED", barcodeItemData);
+    if (Platform.OS !== "web") return;
 
-  const svg = barcodeItemData?.svgBarcode;
+    const isQrMode = barcodeConfig.codeType === "qr";
+    const svg = isQrMode
+      ? barcodeItemData?.qrBarcode || generateOfflineQRCodeSvg(barcodeItemData?.barcode || barcodeItemData?.sku || "MED-001", 240)
+      : barcodeItemData?.svgBarcode || generateOfflineBarcodeSvg(barcodeItemData?.barcode || barcodeItemData?.sku || "MED-001", { barHeight: 60, moduleWidth: 2.5, quietZoneModules: 14 });
 
-  if (!svg || !svg.includes("<svg")) {
-    if (onShowToast) {
-      onShowToast("Barcode SVG is not available.");
+    if (!svg || !svg.includes("<svg")) {
+      if (onShowToast) {
+        onShowToast("Barcode / QR SVG is not available.");
+      }
+      return;
     }
-    return;
-  }
 
-  let url;
+    let url;
 
-  try {
-    const blob = new Blob([svg], {
-      type: "image/svg+xml;charset=utf-8",
-    });
+    try {
+      const blob = new Blob([svg], {
+        type: "image/svg+xml;charset=utf-8",
+      });
 
-    url = URL.createObjectURL(blob);
+      url = URL.createObjectURL(blob);
 
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Barcode-${String(
-      barcodeItemData.sku || "MED"
-    ).replace(/[^a-zA-Z0-9_-]/g, "_")}.svg`;
+      const prefix = isQrMode ? "QRCode" : "Barcode";
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${prefix}-${String(
+        barcodeItemData.sku || barcodeItemData.barcode || "MED"
+      ).replace(/[^a-zA-Z0-9_-]/g, "_")}.svg`;
 
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
 
     if (onShowToast) {
       onShowToast(
@@ -2033,15 +2467,34 @@ export default function StockAdjustmentsScreen({
 
           {/* Row 4: SKU, Batch No & Quantity */}
           <View style={styles.formFieldThird}>
-            <Text style={styles.fieldLabel}>
-              SKU Code <Text style={styles.reqStar}>*</Text>
-            </Text>
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 6,
+              }}
+            >
+              <Text style={[styles.fieldLabel, { marginBottom: 0 }]}>
+                SKU / Barcode <Text style={styles.reqStar}>*</Text>
+              </Text>
+              <Pressable
+                onPress={() => setFormScannerOpen(true)}
+                style={styles.scanBarcodeInlineBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Scan barcode for medicine"
+              >
+                <Text style={styles.scanBarcodeInlineBtnText}>
+                  📷 Scan Barcode
+                </Text>
+              </Pressable>
+            </View>
             <TextInput
               style={[
                 styles.formInput,
                 formErrors.sku && styles.formInputError,
               ]}
-              placeholder="e.g., SKU-CRO-500"
+              placeholder="Scan or type barcode/SKU"
               placeholderTextColor="#94A3B8"
               value={formData.sku}
               onChangeText={(t) => handleFormChange("sku", t)}
@@ -2283,6 +2736,52 @@ export default function StockAdjustmentsScreen({
               </Pressable>
 
               <Pressable
+                onPress={() => handleExecuteAction("notify-supplier")}
+                style={styles.actionOptionRow}
+              >
+                <Text style={styles.actionOptionIcon}>📢</Text>
+                <View style={styles.actionOptionTextCol}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                  >
+                    <Text style={styles.actionOptionTitle}>
+                      Notify Supplier (Low Stock Alert)
+                    </Text>
+                    {(selectedItemForAction?.quantity < 50 ||
+                      selectedItemForAction?.status === "Low Stock" ||
+                      selectedItemForAction?.status === "Out of Stock") && (
+                      <View
+                        style={{
+                          backgroundColor: "#FEE2E2",
+                          paddingHorizontal: 6,
+                          paddingVertical: 2,
+                          borderRadius: 4,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 10,
+                            fontWeight: "700",
+                            color: "#DC2626",
+                          }}
+                        >
+                          Reorder Alert
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={styles.actionOptionDesc}>
+                    Send automated replenishment order / PO alert via Email,
+                    WhatsApp or SMS
+                  </Text>
+                </View>
+              </Pressable>
+
+              <Pressable
                 onPress={() => handleExecuteAction("edit")}
                 style={styles.actionOptionRow}
               >
@@ -2349,43 +2848,283 @@ export default function StockAdjustmentsScreen({
               <View style={styles.formGroupModal}>
                 <Text style={styles.fieldLabelModal}>Adjustment Type</Text>
                 <View style={styles.adjustTypeRow}>
-                  {["CYCLE_COUNT", "DAMAGE_WRITEOFF", "CORRECTION"].map((t) => (
+                  {[
+                    { key: "CYCLE_COUNT", label: "Cycle Count", icon: "⚖️" },
+                    { key: "DAMAGE_WRITEOFF", label: "Damage (-)", icon: "⚠️" },
+                    { key: "CORRECTION", label: "Correction (+)", icon: "✏️" },
+                  ].map(({ key, label, icon }) => (
                     <Pressable
-                      key={t}
-                      onPress={() => setAdjustType(t)}
+                      key={key}
+                      onPress={() => {
+                        setAdjustType(key);
+                        if (key === "DAMAGE_WRITEOFF") {
+                          setAdjustSign("-");
+                          setAdjustReason("Damaged stock write-off");
+                        } else if (key === "CORRECTION") {
+                          setAdjustSign("+");
+                          setAdjustReason("Inventory physical correction");
+                        } else {
+                          setAdjustReason("Audit cycle count discrepancy");
+                        }
+                      }}
                       style={[
                         styles.adjustTypeBtn,
-                        adjustType === t && styles.adjustTypeBtnActive,
+                        adjustType === key && styles.adjustTypeBtnActive,
                       ]}
                     >
                       <Text
                         style={[
                           styles.adjustTypeBtnText,
-                          adjustType === t && styles.adjustTypeBtnTextActive,
+                          adjustType === key && styles.adjustTypeBtnTextActive,
                         ]}
                       >
-                        {t === "CYCLE_COUNT"
-                          ? "Cycle Count"
-                          : t === "DAMAGE_WRITEOFF"
-                            ? "Damage"
-                            : "Correction"}
+                        {icon} {label}
                       </Text>
                     </Pressable>
                   ))}
                 </View>
               </View>
 
+              {/* Explicit Sign (+ Add / - Subtract) Selector */}
               <View style={styles.formGroupModal}>
                 <Text style={styles.fieldLabelModal}>
-                  Quantity Change (+ to add, - to subtract)
+                  Operation Sign (Add or Subtract)
                 </Text>
-                <TextInput
-                  style={styles.adjustInput}
-                  value={adjustDelta}
-                  onChangeText={setAdjustDelta}
-                  keyboardType="numeric"
-                  placeholder="e.g. 10 or -5"
-                />
+                <View style={{ flexDirection: "row", gap: 10 }}>
+                  <Pressable
+                    onPress={() => {
+                      if (adjustType !== "DAMAGE_WRITEOFF") {
+                        setAdjustSign("+");
+                      }
+                    }}
+                    disabled={adjustType === "DAMAGE_WRITEOFF"}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 10,
+                      borderRadius: 8,
+                      borderWidth: 2,
+                      borderColor: adjustSign === "+" ? "#16A34A" : "#E2E8F0",
+                      backgroundColor:
+                        adjustSign === "+" ? "#DCFCE7" : "#F8FAFC",
+                      alignItems: "center",
+                      flexDirection: "row",
+                      justifyContent: "center",
+                      gap: 6,
+                      opacity: adjustType === "DAMAGE_WRITEOFF" ? 0.35 : 1,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 14,
+                        fontWeight: "800",
+                        color: adjustSign === "+" ? "#15803D" : "#64748B",
+                      }}
+                    >
+                      ➕ Add Stock (+)
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() => setAdjustSign("-")}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 10,
+                      borderRadius: 8,
+                      borderWidth: 2,
+                      borderColor: adjustSign === "-" ? "#DC2626" : "#E2E8F0",
+                      backgroundColor:
+                        adjustSign === "-" ? "#FEE2E2" : "#F8FAFC",
+                      alignItems: "center",
+                      flexDirection: "row",
+                      justifyContent: "center",
+                      gap: 6,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 14,
+                        fontWeight: "800",
+                        color: adjustSign === "-" ? "#B91C1C" : "#64748B",
+                      }}
+                    >
+                      ➖ Subtract Stock (-)
+                    </Text>
+                  </Pressable>
+                </View>
+                {adjustType === "DAMAGE_WRITEOFF" && (
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      color: "#DC2626",
+                      marginTop: 4,
+                      fontWeight: "600",
+                    }}
+                  >
+                    ℹ️ Damage write-offs automatically deduct (-) stock from
+                    available inventory.
+                  </Text>
+                )}
+                {adjustType === "CORRECTION" && (
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      color: "#16A34A",
+                      marginTop: 4,
+                      fontWeight: "600",
+                    }}
+                  >
+                    ℹ️ Stock corrections default to adding (+) stock to balance
+                    physical inventory.
+                  </Text>
+                )}
+              </View>
+
+              {/* Quantity Change Input with Sign Prefix */}
+              <View style={styles.formGroupModal}>
+                <Text style={styles.fieldLabelModal}>
+                  Quantity to {adjustSign === "+" ? "Add" : "Deduct"} (Units)
+                </Text>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    borderWidth: 1.5,
+                    borderColor: adjustSign === "+" ? "#16A34A" : "#DC2626",
+                    borderRadius: 8,
+                    overflow: "hidden",
+                    backgroundColor: "#FFFFFF",
+                  }}
+                >
+                  <View
+                    style={{
+                      backgroundColor:
+                        adjustSign === "+" ? "#DCFCE7" : "#FEE2E2",
+                      paddingHorizontal: 14,
+                      paddingVertical: 12,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 18,
+                        fontWeight: "900",
+                        color: adjustSign === "+" ? "#15803D" : "#B91C1C",
+                      }}
+                    >
+                      {adjustSign}
+                    </Text>
+                  </View>
+                  <TextInput
+                    style={[
+                      styles.adjustInput,
+                      { flex: 1, borderWidth: 0, paddingVertical: 10 },
+                    ]}
+                    value={adjustDelta.replace(/[^0-9]/g, "")}
+                    onChangeText={(val) =>
+                      setAdjustDelta(val.replace(/[^0-9]/g, ""))
+                    }
+                    keyboardType="numeric"
+                    placeholder="e.g. 10"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+              </View>
+
+              {/* Live Preview: Current vs After */}
+              <View
+                style={{
+                  backgroundColor: "#F1F5F9",
+                  padding: 10,
+                  borderRadius: 8,
+                  marginBottom: 12,
+                  borderWidth: 1,
+                  borderColor: "#CBD5E1",
+                }}
+              >
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    marginBottom: 4,
+                  }}
+                >
+                  <Text style={{ fontSize: 12, color: "#64748B" }}>
+                    Current Available Stock:
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: "700",
+                      color: "#1E293B",
+                    }}
+                  >
+                    {selectedItemForAction?.quantity || 0} units
+                  </Text>
+                </View>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    marginBottom: 4,
+                  }}
+                >
+                  <Text style={{ fontSize: 12, color: "#64748B" }}>
+                    Adjustment Change:
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: "800",
+                      color: adjustSign === "+" ? "#16A34A" : "#DC2626",
+                    }}
+                  >
+                    {adjustSign}{" "}
+                    {Math.abs(parseInt(adjustDelta, 10) || 0)} units
+                  </Text>
+                </View>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    borderTopWidth: 1,
+                    borderTopColor: "#E2E8F0",
+                    paddingTop: 4,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: "700",
+                      color: "#0F172A",
+                    }}
+                  >
+                    New Calculated Stock:
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: "900",
+                      color:
+                        Number(selectedItemForAction?.quantity || 0) +
+                          (adjustSign === "-"
+                            ? -Math.abs(parseInt(adjustDelta, 10) || 0)
+                            : Math.abs(parseInt(adjustDelta, 10) || 0)) <
+                        0
+                          ? "#DC2626"
+                          : "#0F766E",
+                    }}
+                  >
+                    {Math.max(
+                      0,
+                      Number(selectedItemForAction?.quantity || 0) +
+                        (adjustSign === "-"
+                          ? -Math.abs(parseInt(adjustDelta, 10) || 0)
+                          : Math.abs(parseInt(adjustDelta, 10) || 0)),
+                    )}{" "}
+                    units
+                  </Text>
+                </View>
               </View>
 
               <View style={styles.formGroupModal}>
@@ -2397,14 +3136,8 @@ export default function StockAdjustmentsScreen({
                   value={adjustReason}
                   onChangeText={setAdjustReason}
                   placeholder="Audit count recount..."
+                  placeholderTextColor="#94A3B8"
                 />
-              </View>
-
-              {/* Endpoint Preview badge */}
-              <View style={styles.apiPreviewBox}>
-                <Text style={styles.apiPreviewText}>
-                  Backend Endpoint: POST /api/inventory/adjustments
-                </Text>
               </View>
             </View>
 
@@ -2412,14 +3145,388 @@ export default function StockAdjustmentsScreen({
               <Pressable
                 onPress={() => setAdjustModalOpen(false)}
                 style={styles.cancelBtn}
+                disabled={adjustSaving}
               >
                 <Text style={styles.cancelBtnText}>Cancel</Text>
               </Pressable>
               <Pressable
                 onPress={handleSaveAdjustment}
-                style={styles.saveAdjustBtn}
+                style={[
+                  styles.saveAdjustBtn,
+                  adjustSaving && { opacity: 0.6 },
+                ]}
+                disabled={adjustSaving}
               >
-                <Text style={styles.saveAdjustBtnText}>Save Adjustment</Text>
+                <Text style={styles.saveAdjustBtnText}>
+                  {adjustSaving ? "Saving to Database..." : "Save Adjustment"}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 2B. EDIT MEDICINE INFORMATION MODAL */}
+      <Modal
+        visible={editMedicineModalOpen}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setEditMedicineModalOpen(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View
+            style={[
+              styles.actionMenuCard,
+              { maxWidth: 640, maxHeight: "90%" },
+            ]}
+          >
+            <View style={styles.actionMenuHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.actionMenuTitle}>
+                  ✏️ Edit Medicine Information
+                </Text>
+                <Text style={styles.actionMenuSub}>
+                  Update medicine catalog entry, pricing, batch & rack details
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => setEditMedicineModalOpen(false)}
+                style={styles.closeActionBtn}
+              >
+                <Text style={styles.closeActionText}>✕</Text>
+              </Pressable>
+            </View>
+
+            <ScrollView style={{ padding: 16 }}>
+              {/* Row 1: Brand & Medicine / Generic Name */}
+              <View style={{ flexDirection: "row", gap: 12, marginBottom: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fieldLabelModal}>
+                    Brand Name <Text style={styles.reqStar}>*</Text>
+                  </Text>
+                  <TextInput
+                    style={styles.formInput}
+                    value={editMedicineForm.brandName}
+                    onChangeText={(v) =>
+                      setEditMedicineForm((p) => ({ ...p, brandName: v }))
+                    }
+                    placeholder="e.g. Crocin 500"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fieldLabelModal}>
+                    Generic / Salt Name <Text style={styles.reqStar}>*</Text>
+                  </Text>
+                  <TextInput
+                    style={styles.formInput}
+                    value={editMedicineForm.genericName}
+                    onChangeText={(v) =>
+                      setEditMedicineForm((p) => ({
+                        ...p,
+                        genericName: v,
+                        medicineName: v,
+                      }))
+                    }
+                    placeholder="e.g. Paracetamol"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+              </View>
+
+              {/* Row 2: Strength & Pack Size */}
+              <View style={{ flexDirection: "row", gap: 12, marginBottom: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fieldLabelModal}>Strength / Dosage</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    value={editMedicineForm.strength}
+                    onChangeText={(v) =>
+                      setEditMedicineForm((p) => ({ ...p, strength: v }))
+                    }
+                    placeholder="e.g. 500mg, 100ml"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fieldLabelModal}>Pack Size</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    value={editMedicineForm.packSize}
+                    onChangeText={(v) =>
+                      setEditMedicineForm((p) => ({ ...p, packSize: v }))
+                    }
+                    placeholder="e.g. 10 Tablets, 1 Strip"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+              </View>
+
+              {/* Row 3: Manufacturer & Supplier */}
+              <View style={{ flexDirection: "row", gap: 12, marginBottom: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fieldLabelModal}>Manufacturer</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    value={editMedicineForm.manufacturer}
+                    onChangeText={(v) =>
+                      setEditMedicineForm((p) => ({ ...p, manufacturer: v }))
+                    }
+                    placeholder="e.g. Cipla, Sun Pharma, GSK"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fieldLabelModal}>
+                    Supplier / Distributor
+                  </Text>
+                  <TextInput
+                    style={styles.formInput}
+                    value={editMedicineForm.supplierName}
+                    onChangeText={(v) =>
+                      setEditMedicineForm((p) => ({ ...p, supplierName: v }))
+                    }
+                    placeholder="e.g. Apex Pharma Distributors"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+              </View>
+
+              {/* Row 4: SKU/Barcode & Batch No */}
+              <View style={{ flexDirection: "row", gap: 12, marginBottom: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <Text style={styles.fieldLabelModal}>
+                      SKU / Barcode <Text style={styles.reqStar}>*</Text>
+                    </Text>
+                    <Pressable
+                      onPress={() => {
+                        setFormScannerOpen(true);
+                      }}
+                      style={{
+                        paddingHorizontal: 6,
+                        paddingVertical: 2,
+                        backgroundColor: "#EFF6FF",
+                        borderRadius: 4,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          color: "#2563EB",
+                          fontWeight: "700",
+                        }}
+                      >
+                        📷 Scan
+                      </Text>
+                    </Pressable>
+                  </View>
+                  <TextInput
+                    style={styles.formInput}
+                    value={editMedicineForm.sku}
+                    onChangeText={(v) =>
+                      setEditMedicineForm((p) => ({ ...p, sku: v }))
+                    }
+                    placeholder="e.g. 890123456789"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fieldLabelModal}>
+                    Batch Number <Text style={styles.reqStar}>*</Text>
+                  </Text>
+                  <TextInput
+                    style={styles.formInput}
+                    value={editMedicineForm.batchNo}
+                    onChangeText={(v) =>
+                      setEditMedicineForm((p) => ({ ...p, batchNo: v }))
+                    }
+                    placeholder="e.g. B-1001"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+              </View>
+
+              {/* Row 5: Price (MRP), Stock & Shelf Location */}
+              <View style={{ flexDirection: "row", gap: 12, marginBottom: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fieldLabelModal}>Price / MRP (₹)</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    value={editMedicineForm.amount}
+                    onChangeText={(v) =>
+                      setEditMedicineForm((p) => ({ ...p, amount: v }))
+                    }
+                    placeholder="e.g. 25.00"
+                    placeholderTextColor="#94A3B8"
+                    keyboardType="numeric"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fieldLabelModal}>Current Quantity</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    value={String(editMedicineForm.quantity)}
+                    onChangeText={(v) =>
+                      setEditMedicineForm((p) => ({ ...p, quantity: v }))
+                    }
+                    placeholder="e.g. 100"
+                    placeholderTextColor="#94A3B8"
+                    keyboardType="numeric"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fieldLabelModal}>Shelf / Rack</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    value={editMedicineForm.shelfLocation}
+                    onChangeText={(v) =>
+                      setEditMedicineForm((p) => ({ ...p, shelfLocation: v }))
+                    }
+                    placeholder="e.g. A1-S1"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+              </View>
+
+              {/* Row 6: Toggles */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  gap: 12,
+                  marginTop: 4,
+                  marginBottom: 8,
+                }}
+              >
+                <Pressable
+                  onPress={() =>
+                    setEditMedicineForm((p) => ({
+                      ...p,
+                      isRxRequired: !p.isRxRequired,
+                    }))
+                  }
+                  style={{
+                    flex: 1,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: 10,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: editMedicineForm.isRxRequired
+                      ? "#DC2626"
+                      : "#E2E8F0",
+                    backgroundColor: editMedicineForm.isRxRequired
+                      ? "#FEF2F2"
+                      : "#F8FAFC",
+                  }}
+                >
+                  <Text style={{ fontSize: 16 }}>
+                    {editMedicineForm.isRxRequired ? "💊" : "⚪"}
+                  </Text>
+                  <View>
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontWeight: "700",
+                        color: editMedicineForm.isRxRequired
+                          ? "#DC2626"
+                          : "#1E293B",
+                      }}
+                    >
+                      Prescription Required (Rx)
+                    </Text>
+                    <Text style={{ fontSize: 11, color: "#64748B" }}>
+                      {editMedicineForm.isRxRequired
+                        ? "Requires doctor prescription"
+                        : "Over-the-counter (OTC)"}
+                    </Text>
+                  </View>
+                </Pressable>
+
+                <Pressable
+                  onPress={() =>
+                    setEditMedicineForm((p) => ({ ...p, isActive: !p.isActive }))
+                  }
+                  style={{
+                    flex: 1,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: 10,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: editMedicineForm.isActive
+                      ? "#16A34A"
+                      : "#E2E8F0",
+                    backgroundColor: editMedicineForm.isActive
+                      ? "#F0FDF4"
+                      : "#F8FAFC",
+                  }}
+                >
+                  <Text style={{ fontSize: 16 }}>
+                    {editMedicineForm.isActive ? "🟢" : "⚪"}
+                  </Text>
+                  <View>
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontWeight: "700",
+                        color: editMedicineForm.isActive
+                          ? "#16A34A"
+                          : "#64748B",
+                      }}
+                    >
+                      Active in Catalog
+                    </Text>
+                    <Text style={{ fontSize: 11, color: "#64748B" }}>
+                      {editMedicineForm.isActive
+                        ? "Visible in POS & store search"
+                        : "Hidden from sale"}
+                    </Text>
+                  </View>
+                </Pressable>
+              </View>
+            </ScrollView>
+
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "flex-end",
+                gap: 12,
+                padding: 16,
+                borderTopWidth: 1,
+                borderTopColor: "#E2E8F0",
+                backgroundColor: "#F8FAFC",
+              }}
+            >
+              <Pressable
+                onPress={() => setEditMedicineModalOpen(false)}
+                style={styles.cancelBtn}
+                disabled={editMedicineSaving}
+              >
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleUpdateMedicineModal}
+                style={[
+                  styles.printBarcodePrimaryBtn,
+                  { backgroundColor: "#0F766E" },
+                  editMedicineSaving && { opacity: 0.6 },
+                ]}
+                disabled={editMedicineSaving}
+              >
+                <Text style={styles.printBarcodePrimaryBtnText}>
+                  {editMedicineSaving
+                    ? "Saving to Database..."
+                    : "💾 Save & Update Medicine"}
+                </Text>
               </Pressable>
             </View>
           </View>
@@ -2983,41 +4090,87 @@ export default function StockAdjustmentsScreen({
                     </Text>
                   </View>
 
-                  {/* Barcode Visualization */}
+                  {/* Barcode & QR Code Visualization */}
                   <View style={styles.labelBarcodeWrapper}>
-                    {Platform.OS === "web" && barcodeItemData?.svgBarcode ? (
-                      <View
-                        style={styles.labelBarcodeSvgBox}
-                        dangerouslySetInnerHTML={{
-                          __html: barcodeItemData.svgBarcode,
-                        }}
-                      />
-                    ) : (
-                      <View style={styles.labelBarcodeFallback}>
-                        <View style={styles.barcodeStripeRow}>
-                          {[
-                            2, 1, 3, 1, 2, 3, 1, 1, 2, 1, 3, 2, 1, 2, 1, 3, 1,
-                            2, 1, 1, 3, 2, 1, 3, 2, 1, 2, 3, 1, 2, 1, 1, 3, 1,
-                            2, 3, 2, 1, 1, 3, 2, 1, 2, 1, 3, 1,
-                          ].map((w, idx) => (
+                    {Platform.OS === "web" ? (
+                      <View style={{ alignItems: "center", justifyContent: "center", width: "100%" }}>
+                        {barcodeConfig.codeType === "qr" ? (
+                          <View
+                            style={{
+                              backgroundColor: "#FFFFFF",
+                              padding: 6,
+                              borderRadius: 8,
+                              alignItems: "center",
+                              borderWidth: 1,
+                              borderColor: "#E2E8F0",
+                            }}
+                            dangerouslySetInnerHTML={{
+                              __html:
+                                barcodeItemData?.qrBarcode ||
+                                generateOfflineQRCodeSvg(
+                                  barcodeItemData?.barcode || barcodeItemData?.sku || "MED-001",
+                                  110,
+                                ),
+                            }}
+                          />
+                        ) : barcodeConfig.codeType === "both" ? (
+                          <View
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              width: "100%",
+                              gap: 10,
+                              backgroundColor: "#FFFFFF",
+                              padding: 6,
+                              borderRadius: 8,
+                              borderWidth: 1,
+                              borderColor: "#E2E8F0",
+                            }}
+                          >
                             <View
-                              key={`bar-${idx}`}
-                              style={{
-                                width: w * 2,
-                                height: 38,
-                                backgroundColor:
-                                  idx % 2 === 0 ? "#0F172A" : "#FFFFFF",
-                                marginRight: 1,
+                              style={{ flex: 1, overflow: "hidden" }}
+                              dangerouslySetInnerHTML={{
+                                __html:
+                                  barcodeItemData?.svgBarcode ||
+                                  generateOfflineBarcodeSvg(
+                                    barcodeItemData?.barcode || barcodeItemData?.sku || "MED-001",
+                                    { barHeight: 46, moduleWidth: 1.8 },
+                                  ),
                               }}
                             />
-                          ))}
-                        </View>
-                        <Text style={styles.barcodeFallbackText}>
-                          {barcodeItemData?.barcode ||
-                            barcodeItemData?.sku ||
-                            "SKU-001"}
-                        </Text>
+                            <View
+                              dangerouslySetInnerHTML={{
+                                __html:
+                                  barcodeItemData?.qrBarcode ||
+                                  generateOfflineQRCodeSvg(
+                                    barcodeItemData?.barcode || barcodeItemData?.sku || "MED-001",
+                                    74,
+                                  ),
+                              }}
+                            />
+                          </View>
+                        ) : (
+                          <View
+                            style={[
+                              styles.labelBarcodeSvgBox,
+                              { backgroundColor: "#FFFFFF", borderRadius: 6, padding: 4 },
+                            ]}
+                            dangerouslySetInnerHTML={{
+                              __html:
+                                barcodeItemData?.svgBarcode ||
+                                generateOfflineBarcodeSvg(
+                                  barcodeItemData?.barcode || barcodeItemData?.sku || "MED-001",
+                                  { barHeight: 52, moduleWidth: 2, quietZoneModules: 14 },
+                                ),
+                            }}
+                          />
+                        )}
                       </View>
+                    ) : (
+                      <Text style={styles.barcodeFallbackText}>
+                        {barcodeItemData?.barcode || barcodeItemData?.sku || "SKU-001"}
+                      </Text>
                     )}
                   </View>
                 </View>
@@ -3025,6 +4178,95 @@ export default function StockAdjustmentsScreen({
 
               {/* Bottom: Configuration & Controls */}
               <View style={styles.barcodeConfigGrid}>
+                {/* Code Engine Selector: 1D Barcode vs QR Code vs Both */}
+                <View style={styles.barcodeConfigCard}>
+                  <Text style={styles.barcodeConfigCardTitle}>
+                    ⚡ Barcode & QR Code Engine (Scanner Compatible)
+                  </Text>
+                  <View style={styles.formatOptionsRow}>
+                    <Pressable
+                      onPress={() =>
+                        setBarcodeConfig((prev) => ({
+                          ...prev,
+                          codeType: "barcode",
+                        }))
+                      }
+                      style={[
+                        styles.formatOptionBtn,
+                        barcodeConfig.codeType === "barcode" &&
+                        styles.formatOptionBtnActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.formatOptionTitle,
+                          barcodeConfig.codeType === "barcode" &&
+                          styles.formatOptionTitleActive,
+                        ]}
+                      >
+                        🏷️ 1D Barcode (Code-128)
+                      </Text>
+                      <Text style={styles.formatOptionDesc}>
+                        Standard Retail & Pharmacy Scanners
+                      </Text>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() =>
+                        setBarcodeConfig((prev) => ({
+                          ...prev,
+                          codeType: "qr",
+                        }))
+                      }
+                      style={[
+                        styles.formatOptionBtn,
+                        barcodeConfig.codeType === "qr" &&
+                        styles.formatOptionBtnActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.formatOptionTitle,
+                          barcodeConfig.codeType === "qr" &&
+                          styles.formatOptionTitleActive,
+                        ]}
+                      >
+                        ⚡ Fast QR Code
+                      </Text>
+                      <Text style={styles.formatOptionDesc}>
+                        Instant Mobile & Webcam Detection
+                      </Text>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() =>
+                        setBarcodeConfig((prev) => ({
+                          ...prev,
+                          codeType: "both",
+                        }))
+                      }
+                      style={[
+                        styles.formatOptionBtn,
+                        barcodeConfig.codeType === "both" &&
+                        styles.formatOptionBtnActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.formatOptionTitle,
+                          barcodeConfig.codeType === "both" &&
+                          styles.formatOptionTitleActive,
+                        ]}
+                      >
+                        🔄 Dual (1D + 2D)
+                      </Text>
+                      <Text style={styles.formatOptionDesc}>
+                        Universal Scan Compatibility
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+
                 {/* 1. Label Format Selector */}
                 <View style={styles.barcodeConfigCard}>
                   <Text style={styles.barcodeConfigCardTitle}>
@@ -3387,168 +4629,1307 @@ export default function StockAdjustmentsScreen({
         onShowToast={onShowToast}
         selectedBranch={selectedBranch}
       />
+      {/* Table Barcode Scanner Modal */}
       <BarcodeScannerModal
-  visible={scannerOpen}
-  onClose={() => setScannerOpen(false)}
-  onScan={(code) => {
-    const enteredCode = String(code || "").trim().toLowerCase();
+        visible={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onScan={async (code) => {
+          const raw = String(code || "").trim();
+          if (!raw) return;
+          const enteredCode = raw.toLowerCase();
+          const cleanWithoutLeadingZero = enteredCode.startsWith("0")
+            ? enteredCode.replace(/^0+/, "")
+            : enteredCode;
+          const cleanWithLeadingZero =
+            enteredCode.length === 12 ? "0" + enteredCode : enteredCode;
 
-    const matches = stockItems.filter((item) =>
-      [
-        item.barcode,
-        item.barcodeNumber,
-        item.barcode_number,
-        item.sku,
-      ].some(
-        (value) =>
-          value != null &&
-          String(value).trim().toLowerCase() === enteredCode,
-      ),
-    );
+          setScannerOpen(false);
+          setScannedCode(raw);
 
-    setScannerOpen(false);
-    setScannedCode(code);
-    setScannedProducts(matches);
-    setScanError(
-      matches.length === 0
-        ? `Product not found: ${code}`
-        : "",
-    );
-  }}
-  mode="product"
-  title="Scan Product Barcode"
-/>
+          // 1. Search in-memory stockItems
+          let matches = stockItems.filter((item) =>
+            [
+              item.barcode,
+              item.barcodeNumber,
+              item.barcode_number,
+              item.sku,
+            ].some((value) => {
+              if (value == null) return false;
+              const v = String(value).trim().toLowerCase();
+              return (
+                v === enteredCode ||
+                v === cleanWithoutLeadingZero ||
+                v === cleanWithLeadingZero ||
+                (enteredCode.length >= 6 && v.includes(enteredCode))
+              );
+            }),
+          );
 
-{/* Scanned Product Details */}
-<Modal
-  visible={scannedProducts.length > 0 || Boolean(scanError)}
-  transparent
-  animationType="fade"
-  onRequestClose={() => {
-    setScannedProducts([]);
-    setScanError("");
-  }}
->
-  <View
-    style={{
-      flex: 1,
-      backgroundColor: "rgba(0,0,0,0.5)",
-      justifyContent: "center",
-      alignItems: "center",
-      padding: 20,
-    }}
-  >
-    <View
-      style={{
-        backgroundColor: "#FFFFFF",
-        borderRadius: 16,
-        padding: 20,
-        width: "100%",
-        maxWidth: 500,
-        maxHeight: "80%",
-      }}
-    >
-      <Text
-        style={{
-          fontSize: 20,
-          fontWeight: "700",
-          marginBottom: 6,
-          color: "#111827",
+          // 2. If not found in current page, query backend database
+          if (matches.length === 0) {
+            try {
+              const rawBranch =
+                typeof selectedBranch === "object" && selectedBranch !== null
+                  ? selectedBranch.id
+                  : selectedBranch;
+              const branchIdParam =
+                rawBranch &&
+                rawBranch !== "All Branches" &&
+                rawBranch !== "all" &&
+                rawBranch !== "No Active Branch"
+                  ? rawBranch
+                  : undefined;
+
+              let serverProducts = await fetchCashierProducts(
+                "",
+                raw,
+                branchIdParam,
+              );
+              if (!Array.isArray(serverProducts) || serverProducts.length === 0) {
+                serverProducts = await fetchCashierProducts(
+                  raw,
+                  "",
+                  branchIdParam,
+                );
+              }
+              if (
+                (!Array.isArray(serverProducts) || serverProducts.length === 0) &&
+                cleanWithoutLeadingZero !== enteredCode
+              ) {
+                serverProducts = await fetchCashierProducts(
+                  "",
+                  cleanWithoutLeadingZero,
+                  branchIdParam,
+                );
+              }
+
+              if (Array.isArray(serverProducts) && serverProducts.length > 0) {
+                matches = serverProducts.map((p) => ({
+                  id: p.id,
+                  productId: p.id,
+                  medicineName: p.name || p.generic,
+                  brandName: p.brandName || p.brand || p.name,
+                  genericName: p.generic || p.name,
+                  sku: p.sku || raw,
+                  barcode: p.barcode || p.sku || raw,
+                  batchNo: p.batch || "N/A",
+                  batchNumber: p.batch || "N/A",
+                  quantity: p.stock ?? 0,
+                  amount: p.mrp ? `₹${Number(p.mrp).toFixed(2)}` : "—",
+                  mrp: p.mrp ? `₹${Number(p.mrp).toFixed(2)}` : "—",
+                  shelfLocation: p.shelfLocation || "Dispensary Rack",
+                  status:
+                    (p.stock ?? 0) < 50
+                      ? (p.stock ?? 0) === 0
+                        ? "Out of Stock"
+                        : "Low Stock"
+                      : "In Stock",
+                  supplierName: p.supplierName || "Apex Pharma",
+                  supplierEmail: p.supplierEmail || "orders@apexpharma.com",
+                  supplierPhone: p.supplierPhone || "+91 98765 43210",
+                }));
+              }
+            } catch (err) {
+              console.warn("Backend barcode search failed:", err.message);
+            }
+          }
+
+          setScannedProducts(matches);
+          setScanError(
+            matches.length === 0
+              ? `No medicine found in database with barcode: ${raw}`
+              : "",
+          );
+        }}
+        mode="product"
+        title="Scan Product Barcode"
+      />
+
+      {/* Form Barcode Scanner Modal (Invoked from SKU input) */}
+      <BarcodeScannerModal
+        visible={formScannerOpen}
+        onClose={() => setFormScannerOpen(false)}
+        onScan={handleFormBarcodeScanned}
+        mode="product"
+        title="Scan Barcode into Medicine Entry"
+      />
+
+      {/* Scanned Product Details Modal */}
+      <Modal
+        visible={scannedProducts.length > 0 || Boolean(scanError)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setScannedProducts([]);
+          setScanError("");
         }}
       >
-        {scanError ? "Product Not Found" : "Product Details"}
-      </Text>
-
-      <Text style={{ color: "#6B7280", marginBottom: 16 }}>
-        Scanned code: {scannedCode}
-      </Text>
-
-      <ScrollView>
-        {scanError ? (
-          <Text style={{ color: "#DC2626" }}>{scanError}</Text>
-        ) : (
-          scannedProducts.map((item, index) => (
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            justifyContent: "center",
+            alignItems: "center",
+            padding: 20,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "#FFFFFF",
+              borderRadius: 16,
+              padding: 20,
+              width: "100%",
+              maxWidth: 540,
+              maxHeight: "85%",
+            }}
+          >
             <View
-              key={String(item.id || `${item.sku}-${index}`)}
               style={{
-                borderWidth: 1,
-                borderColor: "#E5E7EB",
-                borderRadius: 12,
-                padding: 15,
-                marginBottom: 12,
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 6,
               }}
             >
               <Text
                 style={{
-                  fontSize: 18,
+                  fontSize: 20,
                   fontWeight: "700",
-                  color: "#0F766E",
-                  marginBottom: 12,
+                  color: scanError ? "#DC2626" : "#111827",
                 }}
               >
-                {item.medicineName || item.brandName || item.name || "Medicine"}
+                {scanError ? "Product Not Found" : "Scanned Medicine Details"}
               </Text>
-
-              {[
-                ["Barcode", item.barcode || item.barcodeNumber || item.barcode_number || "—"],
-                ["SKU", item.sku || "—"],
-                ["Batch", item.batchNo || item.batchNumber || "—"],
-                ["Available Stock", item.quantity ?? "—"],
-                ["MRP", item.mrp ?? item.amount ?? "—"],
-                ["Expiry", item.expiryDate || item.expiry_date || "—"],
-                ["Shelf Location", item.shelfLocation || "—"],
-              ].map(([label, value]) => (
-                <View
-                  key={label}
+              <Pressable
+                onPress={() => {
+                  setScannedProducts([]);
+                  setScanError("");
+                  setScannedCode("");
+                }}
+                style={{ padding: 4 }}
+              >
+                <Text
                   style={{
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    paddingVertical: 7,
-                    borderBottomWidth: 1,
-                    borderBottomColor: "#F3F4F6",
+                    fontSize: 18,
+                    color: "#64748B",
+                    fontWeight: "700",
                   }}
                 >
-                  <Text style={{ color: "#6B7280", flex: 1 }}>
-                    {label}
+                  ✕
+                </Text>
+              </Pressable>
+            </View>
+
+            <Text style={{ color: "#6B7280", marginBottom: 16 }}>
+              Scanned code:{" "}
+              <Text style={{ fontWeight: "700", color: "#0F766E" }}>
+                {scannedCode}
+              </Text>
+            </Text>
+
+            <ScrollView>
+              {scanError ? (
+                <View
+                  style={{
+                    backgroundColor: "#FEF2F2",
+                    borderRadius: 12,
+                    padding: 16,
+                    borderWidth: 1,
+                    borderColor: "#FCA5A5",
+                    alignItems: "center",
+                  }}
+                >
+                  <Text style={{ fontSize: 32, marginBottom: 8 }}>🔍</Text>
+                  <Text
+                    style={{
+                      color: "#991B1B",
+                      fontWeight: "700",
+                      fontSize: 15,
+                      textAlign: "center",
+                      marginBottom: 6,
+                    }}
+                  >
+                    {scanError}
                   </Text>
                   <Text
                     style={{
-                      color: "#111827",
-                      fontWeight: "600",
-                      flex: 1,
-                      textAlign: "right",
+                      color: "#7F1D1D",
+                      fontSize: 13,
+                      textAlign: "center",
+                      marginBottom: 16,
                     }}
                   >
-                    {String(value)}
+                    Would you like to register this medicine in the database now?
+                  </Text>
+
+                  <Pressable
+                    onPress={() => {
+                      const codeToLoad = scannedCode;
+                      setScannedProducts([]);
+                      setScanError("");
+                      setScannedCode("");
+                      setEditingItemId(null);
+                      setFormData((prev) => ({
+                        ...prev,
+                        sku: codeToLoad,
+                      }));
+                      if (onShowToast) {
+                        onShowToast(
+                          `➕ Barcode "${codeToLoad}" loaded into Add Medicine form.`,
+                        );
+                      }
+                    }}
+                    style={{
+                      backgroundColor: "#0F766E",
+                      paddingHorizontal: 16,
+                      paddingVertical: 10,
+                      borderRadius: 8,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 6,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: "#FFFFFF",
+                        fontWeight: "700",
+                        fontSize: 13,
+                      }}
+                    >
+                      ➕ Add New Medicine with this Barcode
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : (
+                scannedProducts.map((item, index) => (
+                  <View
+                    key={String(item.id || `${item.sku}-${index}`)}
+                    style={{
+                      borderWidth: 1,
+                      borderColor: "#E5E7EB",
+                      borderRadius: 12,
+                      padding: 16,
+                      marginBottom: 12,
+                      backgroundColor: "#FAFAFA",
+                    }}
+                  >
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        alignItems: "flex-start",
+                        marginBottom: 10,
+                      }}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={{
+                            fontSize: 17,
+                            fontWeight: "700",
+                            color: "#0F766E",
+                          }}
+                        >
+                          {item.brandName ||
+                            item.medicineName ||
+                            item.name ||
+                            "Medicine"}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: "#64748B" }}>
+                          {item.genericName || item.medicineName}
+                        </Text>
+                      </View>
+                      <View
+                        style={{
+                          backgroundColor:
+                            Number(item.quantity) < 50
+                              ? Number(item.quantity) === 0
+                                ? "#FEE2E2"
+                                : "#FEF3C7"
+                              : "#DCFCE7",
+                          paddingHorizontal: 8,
+                          paddingVertical: 3,
+                          borderRadius: 6,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            fontWeight: "700",
+                            color:
+                              Number(item.quantity) < 50
+                                ? Number(item.quantity) === 0
+                                  ? "#DC2626"
+                                  : "#D97706"
+                                : "#16A34A",
+                          }}
+                        >
+                          {item.status ||
+                            (Number(item.quantity) < 50
+                              ? "Low Stock"
+                              : "In Stock")}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {[
+                      ["Barcode / SKU", item.barcode || item.sku || "—"],
+                      ["Batch No", item.batchNo || item.batchNumber || "—"],
+                      ["Available Stock", `${item.quantity ?? 0} units`],
+                      ["MRP", item.mrp ?? item.amount ?? "—"],
+                      ["Shelf Location", item.shelfLocation || "—"],
+                    ].map(([label, value]) => (
+                      <View
+                        key={label}
+                        style={{
+                          flexDirection: "row",
+                          justifyContent: "space-between",
+                          paddingVertical: 5,
+                          borderBottomWidth: 1,
+                          borderBottomColor: "#F3F4F6",
+                        }}
+                      >
+                        <Text style={{ color: "#6B7280", fontSize: 13 }}>
+                          {label}
+                        </Text>
+                        <Text
+                          style={{
+                            color: "#111827",
+                            fontWeight: "600",
+                            fontSize: 13,
+                          }}
+                        >
+                          {String(value)}
+                        </Text>
+                      </View>
+                    ))}
+
+                    {/* Quick Actions for Scanned Item */}
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        gap: 8,
+                        marginTop: 12,
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <Pressable
+                        onPress={() => {
+                          setScannedProducts([]);
+                          setScanError("");
+                          setScannedCode("");
+                          setEditingItemId(item.id);
+                          setFormData({
+                            medicineName:
+                              item.medicineName || item.genericName || "",
+                            brandName: item.brandName || "",
+                            genericName:
+                              item.genericName || item.medicineName || "",
+                            strength: item.strength || "",
+                            packSize: item.packSize || "",
+                            manufacturer: item.manufacturer || "",
+                            supplierName: item.supplierName || "",
+                            amount: item.amount
+                              ? String(item.amount).replace(/[^0-9.]/g, "")
+                              : item.mrp
+                                ? String(item.mrp).replace(/[^0-9.]/g, "")
+                                : "",
+                            sku: item.sku || "",
+                            batchNo: item.batchNo || "",
+                            quantity:
+                              item.quantity !== undefined
+                                ? String(item.quantity)
+                                : "",
+                            branchId: item.branchId || "",
+                            shelfLocation: item.shelfLocation || "",
+                          });
+                          if (onShowToast) {
+                            onShowToast(
+                              `✏️ Loaded "${item.brandName || item.medicineName}" into form for editing.`,
+                            );
+                          }
+                        }}
+                        style={{
+                          backgroundColor: "#F1F5F9",
+                          borderWidth: 1,
+                          borderColor: "#CBD5E1",
+                          paddingHorizontal: 10,
+                          paddingVertical: 6,
+                          borderRadius: 6,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            fontWeight: "600",
+                            color: "#334155",
+                          }}
+                        >
+                          ✏️ Edit Form
+                        </Text>
+                      </Pressable>
+
+                      <Pressable
+                        onPress={() => {
+                          setScannedProducts([]);
+                          setScanError("");
+                          setScannedCode("");
+                          setSelectedItemForAction(item);
+                          setAdjustDelta("10");
+                          setAdjustModalOpen(true);
+                        }}
+                        style={{
+                          backgroundColor: "#F1F5F9",
+                          borderWidth: 1,
+                          borderColor: "#CBD5E1",
+                          paddingHorizontal: 10,
+                          paddingVertical: 6,
+                          borderRadius: 6,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            fontWeight: "600",
+                            color: "#334155",
+                          }}
+                        >
+                          ⚖️ Adjust Stock
+                        </Text>
+                      </Pressable>
+
+                      <Pressable
+                        onPress={() => {
+                          setScannedProducts([]);
+                          setScanError("");
+                          setScannedCode("");
+                          handleOpenSupplierModal(item);
+                        }}
+                        style={{
+                          backgroundColor: "#FEF3C7",
+                          borderWidth: 1,
+                          borderColor: "#F59E0B",
+                          paddingHorizontal: 10,
+                          paddingVertical: 6,
+                          borderRadius: 6,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            fontWeight: "700",
+                            color: "#B45309",
+                          }}
+                        >
+                          📢 Notify Supplier
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+
+            <Pressable
+              onPress={() => {
+                setScannedProducts([]);
+                setScanError("");
+                setScannedCode("");
+              }}
+              style={{
+                backgroundColor: "#0F766E",
+                borderRadius: 10,
+                padding: 12,
+                alignItems: "center",
+                marginTop: 16,
+              }}
+            >
+              <Text style={{ color: "#FFFFFF", fontWeight: "700" }}>Close</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 5. SUPPLIER LOW-STOCK NOTIFICATION MODAL */}
+      <Modal
+        visible={supplierModalOpen}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setSupplierModalOpen(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View
+            style={[
+              styles.actionMenuCard,
+              { maxWidth: 560, maxHeight: "90%" },
+            ]}
+          >
+            <View style={styles.actionMenuHeader}>
+              <View style={{ flex: 1 }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <Text style={styles.actionMenuTitle}>
+                    📢 Notify Supplier (Reorder Alert)
+                  </Text>
+                  <View
+                    style={{
+                      backgroundColor:
+                        (Number(supplierModalItem?.quantity) || 0) <= 10
+                          ? "#FEE2E2"
+                          : "#FEF3C7",
+                      paddingHorizontal: 8,
+                      paddingVertical: 2,
+                      borderRadius: 12,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontWeight: "700",
+                        color:
+                          (Number(supplierModalItem?.quantity) || 0) <= 10
+                            ? "#DC2626"
+                            : "#D97706",
+                      }}
+                    >
+                      Stock: {supplierModalItem?.quantity || 0} units
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.actionMenuSub}>
+                  Medicine:{" "}
+                  {supplierModalItem?.brandName ||
+                    supplierModalItem?.medicineName}{" "}
+                  • SKU: {supplierModalItem?.sku}
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => setSupplierModalOpen(false)}
+                style={styles.closeActionBtn}
+              >
+                <Text style={styles.closeActionText}>✕</Text>
+              </Pressable>
+            </View>
+
+            <ScrollView style={{ padding: 16 }}>
+              {/* Medicine Summary Card */}
+              <View
+                style={{
+                  backgroundColor: "#F8FAFC",
+                  borderRadius: 10,
+                  padding: 12,
+                  marginBottom: 16,
+                  borderWidth: 1,
+                  borderColor: "#E2E8F0",
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontWeight: "700",
+                    color: "#1E293B",
+                    marginBottom: 4,
+                  }}
+                >
+                  Medicine Summary
+                </Text>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    marginBottom: 4,
+                  }}
+                >
+                  <Text style={{ fontSize: 12, color: "#64748B" }}>
+                    Generic Name:
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: "600",
+                      color: "#0F172A",
+                    }}
+                  >
+                    {supplierModalItem?.genericName ||
+                      supplierModalItem?.medicineName ||
+                      "N/A"}
                   </Text>
                 </View>
-              ))}
-            </View>
-          ))
-        )}
-      </ScrollView>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    marginBottom: 4,
+                  }}
+                >
+                  <Text style={{ fontSize: 12, color: "#64748B" }}>
+                    Batch No:
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: "600",
+                      color: "#0F172A",
+                    }}
+                  >
+                    {supplierModalItem?.batchNo ||
+                      supplierModalItem?.batchNumber ||
+                      "N/A"}
+                  </Text>
+                </View>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    marginBottom: 4,
+                  }}
+                >
+                  <Text style={{ fontSize: 12, color: "#64748B" }}>
+                    Branch / Store:
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: "600",
+                      color: "#0F172A",
+                    }}
+                  >
+                    {supplierModalItem?.branchName ||
+                      supplierModalItem?.branchId ||
+                      (typeof selectedBranch === "object"
+                        ? selectedBranch?.name
+                        : selectedBranch) ||
+                      "Active Dispensary"}
+                  </Text>
+                </View>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <Text style={{ fontSize: 12, color: "#64748B" }}>
+                    Current Stock Status:
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: "700",
+                      color:
+                        (Number(supplierModalItem?.quantity) || 0) <= 10
+                          ? "#DC2626"
+                          : "#D97706",
+                    }}
+                  >
+                    {(Number(supplierModalItem?.quantity) || 0) <= 0
+                      ? "Out of Stock (0 units)"
+                      : `Limited / Slow Stock (${supplierModalItem?.quantity} units)`}
+                  </Text>
+                </View>
+              </View>
 
-      <Pressable
-        onPress={() => {
-          setScannedProducts([]);
-          setScanError("");
-          setScannedCode("");
-        }}
-        style={{
-          backgroundColor: "#0F766E",
-          borderRadius: 10,
-          padding: 13,
-          alignItems: "center",
-          marginTop: 16,
-        }}
+              {/* Channel Selector */}
+              <Text style={styles.fieldLabelModal}>Select Delivery Channel</Text>
+              <View
+                style={{
+                  flexDirection: isMobile ? "column" : "row",
+                  gap: 10,
+                  marginBottom: 16,
+                }}
+              >
+                {[
+                  {
+                    id: "PORTAL",
+                    label: "🌐 Website / Portal",
+                    sub: "Posts directly to Supplier Dashboard",
+                    color: "#0D9488",
+                  },
+                  {
+                    id: "EMAIL",
+                    label: "✉️ Email Alert",
+                    sub: "Dispatches to registered vendor email",
+                    color: "#2563EB",
+                  },
+                  {
+                    id: "WHATSAPP",
+                    label: "💬 WhatsApp Direct",
+                    sub: "Instant WhatsApp dispatch link",
+                    color: "#16A34A",
+                  },
+                ].map((ch) => {
+                  const isSelected = supplierForm.channel === ch.id;
+                  return (
+                    <Pressable
+                      key={ch.id}
+                      onPress={() =>
+                        setSupplierForm((prev) => ({
+                          ...prev,
+                          channel: ch.id,
+                        }))
+                      }
+                      style={{
+                        flex: 1,
+                        paddingVertical: 10,
+                        paddingHorizontal: 12,
+                        borderRadius: 8,
+                        borderWidth: 2,
+                        borderColor: isSelected ? ch.color : "#E2E8F0",
+                        backgroundColor: isSelected ? "#F0FDFA" : "#FFFFFF",
+                        alignItems: "flex-start",
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontWeight: "700",
+                          fontSize: 13,
+                          color: isSelected ? ch.color : "#334155",
+                        }}
+                      >
+                        {ch.label}
+                      </Text>
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          color: isSelected ? "#0F766E" : "#64748B",
+                          marginTop: 2,
+                        }}
+                      >
+                        {ch.sub}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              {/* Supplier Info */}
+              <View style={styles.formGroupModal}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 6,
+                  }}
+                >
+                  <Text style={styles.fieldLabelModal}>
+                    Supplier / Distributor
+                  </Text>
+                  {availableSuppliers.length > 0 && (
+                    <Pressable
+                      onPress={() =>
+                        setSupplierDropdownOpen(!supplierDropdownOpen)
+                      }
+                      style={{
+                        paddingHorizontal: 8,
+                        paddingVertical: 3,
+                        backgroundColor: "#E0F2FE",
+                        borderRadius: 6,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          fontWeight: "700",
+                          color: "#0369A1",
+                        }}
+                      >
+                        {supplierDropdownOpen
+                          ? "Close List ▲"
+                          : "Choose from Registered Vendors ▼"}
+                      </Text>
+                    </Pressable>
+                  )}
+                </View>
+
+                {supplierDropdownOpen && availableSuppliers.length > 0 && (
+                  <View
+                    style={{
+                      borderWidth: 1,
+                      borderColor: "#CBD5E1",
+                      borderRadius: 8,
+                      backgroundColor: "#FFFFFF",
+                      marginBottom: 10,
+                      maxHeight: 180,
+                      overflow: "hidden",
+                    }}
+                  >
+                    <ScrollView nestedScrollEnabled={true}>
+                      {availableSuppliers.map((s) => {
+                        const isMatch =
+                          supplierForm.supplierName === s.name ||
+                          supplierForm.supplierId === s.id;
+                        return (
+                          <Pressable
+                            key={s.id}
+                            onPress={() => {
+                              setSupplierForm((prev) => ({
+                                ...prev,
+                                supplierId: s.id,
+                                supplierName: s.name,
+                                supplierEmail: s.email || prev.supplierEmail,
+                                supplierPhone: s.phone || prev.supplierPhone,
+                              }));
+                              setSupplierDropdownOpen(false);
+                            }}
+                            style={{
+                              paddingVertical: 8,
+                              paddingHorizontal: 12,
+                              borderBottomWidth: 1,
+                              borderBottomColor: "#F1F5F9",
+                              flexDirection: "row",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              backgroundColor: isMatch ? "#F0FDF4" : "#FFFFFF",
+                            }}
+                          >
+                            <View>
+                              <Text
+                                style={{
+                                  fontSize: 13,
+                                  fontWeight: "700",
+                                  color: "#0F172A",
+                                }}
+                              >
+                                {s.name}
+                              </Text>
+                              <Text style={{ fontSize: 11, color: "#64748B" }}>
+                                {s.phone ? `📞 ${s.phone}` : ""}{" "}
+                                {s.email ? `✉️ ${s.email}` : ""}
+                              </Text>
+                            </View>
+                            {isMatch && (
+                              <Text
+                                style={{
+                                  color: "#16A34A",
+                                  fontWeight: "700",
+                                  fontSize: 12,
+                                }}
+                              >
+                                ✓ Selected
+                              </Text>
+                            )}
+                          </Pressable>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                )}
+
+                <TextInput
+                  style={styles.formInput}
+                  value={supplierForm.supplierName}
+                  onChangeText={(val) =>
+                    setSupplierForm((prev) => ({
+                      ...prev,
+                      supplierName: val,
+                    }))
+                  }
+                  placeholder="e.g. Sun Pharma Distributors"
+                  placeholderTextColor="#94A3B8"
+                />
+              </View>
+
+              <View
+                style={{
+                  flexDirection: isMobile ? "column" : "row",
+                  gap: 12,
+                  marginBottom: 12,
+                }}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fieldLabelModal}>Supplier Email</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    value={supplierForm.supplierEmail}
+                    onChangeText={(val) =>
+                      setSupplierForm((prev) => ({
+                        ...prev,
+                        supplierEmail: val,
+                      }))
+                    }
+                    placeholder="orders@supplier.com"
+                    placeholderTextColor="#94A3B8"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fieldLabelModal}>
+                    Supplier Phone / WhatsApp
+                  </Text>
+                  <TextInput
+                    style={styles.formInput}
+                    value={supplierForm.supplierPhone}
+                    onChangeText={(val) =>
+                      setSupplierForm((prev) => ({
+                        ...prev,
+                        supplierPhone: val,
+                      }))
+                    }
+                    placeholder="+91 98765 43210"
+                    placeholderTextColor="#94A3B8"
+                    keyboardType="phone-pad"
+                  />
+                </View>
+              </View>
+
+              {/* Reorder Qty & Priority */}
+              <View
+                style={{
+                  flexDirection: isMobile ? "column" : "row",
+                  gap: 12,
+                  marginBottom: 12,
+                }}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fieldLabelModal}>
+                    Reorder Quantity (Units)
+                  </Text>
+                  <TextInput
+                    style={styles.formInput}
+                    value={supplierForm.reorderQuantity}
+                    onChangeText={(val) =>
+                      setSupplierForm((prev) => ({
+                        ...prev,
+                        reorderQuantity: val,
+                      }))
+                    }
+                    placeholder="e.g. 100"
+                    placeholderTextColor="#94A3B8"
+                    keyboardType="numeric"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fieldLabelModal}>Priority Level</Text>
+                  <View style={{ flexDirection: "row", gap: 6, marginTop: 4 }}>
+                    {["URGENT", "CRITICAL"].map((p) => (
+                      <Pressable
+                        key={p}
+                        onPress={() =>
+                          setSupplierForm((prev) => ({
+                            ...prev,
+                            priority: p,
+                          }))
+                        }
+                        style={{
+                          flex: 1,
+                          paddingVertical: 9,
+                          borderRadius: 6,
+                          borderWidth: 1.5,
+                          borderColor:
+                            supplierForm.priority === p
+                              ? p === "CRITICAL"
+                                ? "#DC2626"
+                                : "#D97706"
+                              : "#CBD5E1",
+                          backgroundColor:
+                            supplierForm.priority === p
+                              ? p === "CRITICAL"
+                                ? "#FEE2E2"
+                                : "#FEF3C7"
+                              : "#F8FAFC",
+                          alignItems: "center",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            fontWeight: "700",
+                            color:
+                              supplierForm.priority === p
+                                ? p === "CRITICAL"
+                                  ? "#DC2626"
+                                  : "#D97706"
+                                : "#64748B",
+                          }}
+                        >
+                          {p}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+              </View>
+
+              {/* Optional Notes */}
+              <View style={styles.formGroupModal}>
+                <Text style={styles.fieldLabelModal}>
+                  Notes / Special Instructions
+                </Text>
+                <TextInput
+                  style={[
+                    styles.formInput,
+                    { height: 60, textAlignVertical: "top" },
+                  ]}
+                  value={supplierForm.notes}
+                  onChangeText={(val) =>
+                    setSupplierForm((prev) => ({ ...prev, notes: val }))
+                  }
+                  placeholder="e.g. Please expedite dispatch via direct courier"
+                  placeholderTextColor="#94A3B8"
+                  multiline
+                />
+              </View>
+            </ScrollView>
+
+            {/* Modal Actions */}
+            <View
+              style={{
+                flexDirection: isMobile ? "column" : "row",
+                justifyContent: "flex-end",
+                gap: 12,
+                padding: 16,
+                borderTopWidth: 1,
+                borderTopColor: "#E2E8F0",
+                backgroundColor: "#F8FAFC",
+              }}
+            >
+              <Pressable
+                onPress={() => setSupplierModalOpen(false)}
+                style={styles.cancelBtn}
+                disabled={supplierSending}
+              >
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleSendSupplierNotification}
+                style={[
+                  styles.printBarcodePrimaryBtn,
+                  { backgroundColor: "#0F766E" },
+                  supplierSending && { opacity: 0.6 },
+                ]}
+                disabled={supplierSending}
+              >
+                <Text style={styles.printBarcodePrimaryBtnText}>
+                  {supplierSending
+                    ? "Publishing Alert..."
+                    : `🚀 Send Alert via ${
+                        supplierForm.channel === "PORTAL"
+                          ? "Website Portal"
+                          : supplierForm.channel === "EMAIL"
+                            ? "Email"
+                            : "WhatsApp"
+                      }`}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Confirmation & WhatsApp Delivery Pop-up Modal */}
+      <Modal
+        visible={!!notificationSuccessModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setNotificationSuccessModal(null)}
       >
-        <Text style={{ color: "#FFFFFF", fontWeight: "700" }}>
-          Close
-        </Text>
-      </Pressable>
-    </View>
-  </View>
-</Modal>
+        <View style={styles.modalBackdrop}>
+          <View
+            style={[
+              styles.actionMenuCard,
+              {
+                maxWidth: 520,
+                width: isMobile ? "92%" : 520,
+                backgroundColor: "#FFFFFF",
+                borderRadius: 16,
+                padding: 0,
+                overflow: "hidden",
+              },
+            ]}
+          >
+            <View
+              style={{
+                backgroundColor: "#F0FDF4",
+                padding: 20,
+                borderBottomWidth: 1,
+                borderBottomColor: "#BBF7D0",
+                alignItems: "center",
+              }}
+            >
+              <Text style={{ fontSize: 36, marginBottom: 6 }}>✅</Text>
+              <Text
+                style={{
+                  fontSize: 18,
+                  fontWeight: "800",
+                  color: "#166534",
+                  textAlign: "center",
+                }}
+              >
+                Alert Published to Supplier Portal!
+              </Text>
+              <Text
+                style={{
+                  fontSize: 13,
+                  color: "#15803D",
+                  textAlign: "center",
+                  marginTop: 4,
+                }}
+              >
+                {notificationSuccessModal?.supplierName} will immediately see
+                this alert in their Supplier Portal dashboard.
+              </Text>
+            </View>
+
+            <View style={{ padding: 20, gap: 12 }}>
+              <View
+                style={{
+                  backgroundColor: "#F8FAFC",
+                  borderRadius: 10,
+                  padding: 12,
+                  borderWidth: 1,
+                  borderColor: "#E2E8F0",
+                }}
+              >
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    marginBottom: 4,
+                  }}
+                >
+                  <Text style={{ fontSize: 12, color: "#64748B" }}>
+                    Medicine:
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: "700",
+                      color: "#0F172A",
+                    }}
+                  >
+                    {notificationSuccessModal?.medicineName}
+                  </Text>
+                </View>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    marginBottom: 4,
+                  }}
+                >
+                  <Text style={{ fontSize: 12, color: "#64748B" }}>
+                    Batch / SKU:
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: "600",
+                      color: "#334155",
+                    }}
+                  >
+                    {notificationSuccessModal?.batchNo} (
+                    {notificationSuccessModal?.sku})
+                  </Text>
+                </View>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    marginBottom: 4,
+                  }}
+                >
+                  <Text style={{ fontSize: 12, color: "#64748B" }}>
+                    Reorder Quantity:
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: "800",
+                      color: "#0F766E",
+                    }}
+                  >
+                    {notificationSuccessModal?.reorderQuantity} Units
+                  </Text>
+                </View>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <Text style={{ fontSize: 12, color: "#64748B" }}>
+                    Reference ID:
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      fontWeight: "700",
+                      color: "#64748B",
+                    }}
+                  >
+                    {notificationSuccessModal?.referenceNumber}
+                  </Text>
+                </View>
+              </View>
+
+              {/* WhatsApp Button */}
+              <Pressable
+                onPress={() => {
+                  const cleanPhone = (
+                    notificationSuccessModal?.supplierPhone || ""
+                  ).replace(/[^0-9]/g, "");
+                  const waUrl = cleanPhone
+                    ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(
+                        notificationSuccessModal?.message || "",
+                      )}`
+                    : `https://wa.me/?text=${encodeURIComponent(
+                        notificationSuccessModal?.message || "",
+                      )}`;
+                  if (typeof window !== "undefined") {
+                    window.open(waUrl, "_blank");
+                  }
+                }}
+                style={{
+                  backgroundColor: "#22C55E",
+                  paddingVertical: 12,
+                  paddingHorizontal: 16,
+                  borderRadius: 10,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                }}
+              >
+                <Text style={{ fontSize: 18 }}>💬</Text>
+                <Text
+                  style={{
+                    color: "#FFFFFF",
+                    fontWeight: "700",
+                    fontSize: 14,
+                  }}
+                >
+                  Send Reorder to Supplier on WhatsApp
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => setNotificationSuccessModal(null)}
+                style={{
+                  backgroundColor: "#F1F5F9",
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                  alignItems: "center",
+                }}
+              >
+                <Text
+                  style={{
+                    color: "#475569",
+                    fontWeight: "600",
+                    fontSize: 13,
+                  }}
+                >
+                  Done
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -5222,5 +7603,21 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 13,
     fontWeight: "800",
+  },
+  scanBarcodeInlineBtn: {
+    backgroundColor: "#EFF6FF",
+    borderColor: "#3B82F6",
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    cursor: "pointer",
+  },
+  scanBarcodeInlineBtnText: {
+    color: "#1D4ED8",
+    fontSize: 11,
+    fontWeight: "700",
   },
 });

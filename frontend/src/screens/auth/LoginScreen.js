@@ -33,10 +33,41 @@ export default function LoginScreen({
   }, [authError]);
 
   // Sign In States
-  const [signInEmail, setSignInEmail] = useState("");
+  const [signInEmail, setSignInEmail] = useState(() => {
+    if (typeof window !== "undefined") {
+      return window.localStorage?.getItem("lastLoginEmail") || "";
+    }
+    return "";
+  });
   const [signInPassword, setSignInPassword] = useState("");
   const [showSignInPassword, setShowSignInPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
+
+  // Onboarding role toggle: 'PHARMACY' | 'SUPPLIER'
+  const [signUpRoleType, setSignUpRoleType] = useState("PHARMACY");
+
+  // Supplier-specific signup fields
+  const [supplierCompanyName, setSupplierCompanyName] = useState("");
+  const [supplierContactPerson, setSupplierContactPerson] = useState("");
+  const [supplierEmail, setSupplierEmail] = useState("");
+  const [supplierPhone, setSupplierPhone] = useState("");
+  const [supplierCity, setSupplierCity] = useState("");
+  const [supplierGstin, setSupplierGstin] = useState("");
+  const [supplierCategory, setSupplierCategory] = useState(
+    "Medicines & Injections",
+  );
+  const [supplierPassword, setSupplierPassword] = useState("");
+  const [supplierConfirmPassword, setSupplierConfirmPassword] = useState("");
+  const [showSupplierPassword, setShowSupplierPassword] = useState(false);
+
+  // Staff-specific signup fields
+  const [staffName, setStaffName] = useState("");
+  const [staffEmail, setStaffEmail] = useState("");
+  const [staffPhone, setStaffPhone] = useState("");
+  const [staffRoleTitle, setStaffRoleTitle] = useState("Pharmacist");
+  const [staffPassword, setStaffPassword] = useState("");
+  const [staffConfirmPassword, setStaffConfirmPassword] = useState("");
+  const [showStaffPassword, setShowStaffPassword] = useState(false);
 
   // Pharmacy Owner Onboarding (Sign Up) States
   const [signUpPharmacyName, setSignUpPharmacyName] = useState("");
@@ -153,40 +184,46 @@ export default function LoginScreen({
       let token = null;
       let authUser = null;
 
-      // 1. Authenticate with Supabase Auth directly
+      // 1. Primary: Authoritative Backend Authentication
+      const isSuperAdminEmail = email === "superadmin@pharmaflow.com";
+      const loginUrl = isSuperAdminEmail
+        ? `${API_URL}/api/superadmin/auth/login`
+        : `${API_URL}/api/auth/login`;
+
       try {
-        const { data: authData, error: authError } =
-          await supabase.auth.signInWithPassword({
-            email,
-            password: signInPassword,
-          });
-
-        if (!authError && authData?.session) {
-          token = authData.session.access_token;
-        }
-      } catch (supaErr) {
-        console.warn("Direct Supabase login warning:", supaErr.message);
-      }
-
-      // 2. If Supabase Auth failed (offline or local database account), fallback to backend API
-      if (!token) {
-        const isSuperAdminEmail = email === "superadmin@pharmaflow.com";
-        const loginUrl = isSuperAdminEmail
-          ? `${API_URL}/api/superadmin/auth/login`
-          : `${API_URL}/api/auth/login`;
-
         const backendRes = await fetch(loginUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, password: signInPassword }),
         });
 
-        if (backendRes.ok) {
-          const bData = await backendRes.json();
-          if (bData.success && bData.token) {
-            token = bData.token;
-            authUser = bData.user;
+        const bData = await backendRes.json().catch(() => ({}));
+        if (backendRes.ok && bData.success && bData.token) {
+          token = bData.token;
+          authUser = bData.user;
+        } else if (backendRes.status === 400 || backendRes.status === 401) {
+          setIsLoading(false);
+          setErrorMessage(bData.error || bData.message || "Invalid email or password. Please check your credentials.");
+          return;
+        }
+      } catch (netErr) {
+        console.warn("Backend login network error, trying Supabase fallback:", netErr?.message);
+      }
+
+      // 2. Fallback only if backend was unreachable
+      if (!token) {
+        try {
+          const { data: authData, error: authError } =
+            await supabase.auth.signInWithPassword({
+              email,
+              password: signInPassword,
+            });
+
+          if (!authError && authData?.session) {
+            token = authData.session.access_token;
           }
+        } catch (supaErr) {
+          console.warn("Direct Supabase login warning:", supaErr.message);
         }
       }
 
@@ -229,14 +266,23 @@ export default function LoginScreen({
         return;
       }
 
-      // Regular Pharmacy ERP Routing (Dr. Rajesh Sharma, staff, managers)
+      // Regular Pharmacy ERP Routing / Supplier Portal Routing
       if (authUser) {
         if (typeof window !== "undefined") {
           window.localStorage?.setItem("authToken", token);
+          if (rememberMe) {
+            window.localStorage?.setItem("lastLoginEmail", email);
+          }
         }
-        setSuccessMessage(
-          `Welcome back, ${authUser.name || "Dr. Rajesh Sharma"}! Opening Inventory Dashboard...`,
-        );
+        if (authUser.role === "SUPPLIER") {
+          setSuccessMessage(
+            `Welcome, ${authUser.companyName || authUser.name || "Supplier Partner"}! Opening Supplier Portal...`,
+          );
+        } else {
+          setSuccessMessage(
+            `Welcome back, ${authUser.name || "Dr. Rajesh Sharma"}! Opening Inventory Dashboard...`,
+          );
+        }
         if (onLoginSuccess) {
           onLoginSuccess(authUser, token);
         }
@@ -249,7 +295,17 @@ export default function LoginScreen({
       );
     } catch (err) {
       setIsLoading(false);
-      setErrorMessage("Authentication error: " + err.message);
+      const isNetworkError =
+        err?.message &&
+        (err.message.toLowerCase().includes("failed to fetch") ||
+          err.message.toLowerCase().includes("networkerror"));
+      if (isNetworkError) {
+        setErrorMessage(
+          "Unable to connect to backend server. Please verify that the backend API is running on http://localhost:5000."
+        );
+      } else {
+        setErrorMessage("Authentication error: " + (err?.message || "Unknown error"));
+      }
     }
   };
 
@@ -456,6 +512,186 @@ export default function LoginScreen({
     } catch (err) {
       setIsLoading(false);
       setErrorMessage("Registration error: " + err.message);
+    }
+  };
+
+  // Supplier / Distributor Registration Handler
+  const handleSupplierSignUp = async () => {
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    const companyName = supplierCompanyName.trim();
+    const contactPerson = supplierContactPerson.trim();
+    const email = supplierEmail.trim().toLowerCase();
+    const phone = supplierPhone.trim();
+    const city = supplierCity.trim();
+    const gstin = supplierGstin.trim();
+    const category = supplierCategory.trim() || "Medicines & Injections";
+
+    if (!companyName || companyName.length < 2) {
+      setErrorMessage("Please enter supplier company / distributor name.");
+      return;
+    }
+
+    if (!email || !isValidEmail(email)) {
+      setErrorMessage("Please enter a valid email address.");
+      return;
+    }
+
+    if (!phone) {
+      setErrorMessage("Please enter mobile / phone number.");
+      return;
+    }
+
+    if (!supplierPassword || supplierPassword.length < 6) {
+      setErrorMessage("Password must be at least 6 characters long.");
+      return;
+    }
+
+    if (supplierPassword !== supplierConfirmPassword) {
+      setErrorMessage("Passwords do not match. Please re-enter your password.");
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const response = await fetch(`${API_URL}/api/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          accountType: "SUPPLIER",
+          role: "SUPPLIER",
+          companyName,
+          contactPerson: contactPerson || companyName,
+          email,
+          phone,
+          city: city || "Mumbai",
+          gstin: gstin || null,
+          category,
+          password: supplierPassword,
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      setIsLoading(false);
+
+      if (!response.ok || !data.success) {
+        setErrorMessage(data.error || "Failed to register supplier account.");
+        return;
+      }
+
+      if (typeof window !== "undefined") {
+        if (data.token) {
+          window.localStorage?.setItem("authToken", data.token);
+        }
+        window.localStorage?.setItem("lastLoginEmail", email);
+      }
+
+      setSuccessMessage(
+        "Supplier account registered successfully! Entering Supplier Portal...",
+      );
+      if (onLoginSuccess && data.user) {
+        onLoginSuccess(data.user, data.token);
+      }
+    } catch (err) {
+      setIsLoading(false);
+      const isNetworkError =
+        err?.message &&
+        (err.message.toLowerCase().includes("failed to fetch") ||
+          err.message.toLowerCase().includes("networkerror"));
+      if (isNetworkError) {
+        setErrorMessage(
+          "Unable to connect to backend server. Please verify that the backend API is running on http://localhost:5000."
+        );
+      } else {
+        setErrorMessage("Supplier registration error: " + (err?.message || "Unknown error"));
+      }
+    }
+  };
+
+  // Staff Member Registration Handler
+  const handleStaffSignUp = async () => {
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    const name = staffName.trim();
+    const email = staffEmail.trim().toLowerCase();
+    const phone = staffPhone.trim();
+    const roleTitle = staffRoleTitle.trim() || "Pharmacist";
+
+    if (!name || name.length < 2) {
+      setErrorMessage("Please enter your full name.");
+      return;
+    }
+    if (!email || !isValidEmail(email)) {
+      setErrorMessage("Please enter a valid email address.");
+      return;
+    }
+    if (!phone) {
+      setErrorMessage("Please enter your mobile / phone number.");
+      return;
+    }
+    if (!staffPassword || staffPassword.length < 6) {
+      setErrorMessage("Password must be at least 6 characters long.");
+      return;
+    }
+    if (staffPassword !== staffConfirmPassword) {
+      setErrorMessage("Passwords do not match. Please re-enter your password.");
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const response = await fetch(`${API_URL}/api/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          accountType: "STAFF",
+          role: "STAFF",
+          name,
+          email,
+          phone,
+          staffRole: roleTitle,
+          password: staffPassword,
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      setIsLoading(false);
+
+      if (!response.ok || !data.success) {
+        setErrorMessage(data.error || "Failed to register staff account.");
+        return;
+      }
+
+      if (typeof window !== "undefined") {
+        if (data.token) {
+          window.localStorage?.setItem("authToken", data.token);
+        }
+        window.localStorage?.setItem("lastLoginEmail", email);
+      }
+
+      setSuccessMessage(
+        "Staff account registered successfully! Signing in...",
+      );
+      if (onLoginSuccess && data.user) {
+        onLoginSuccess(data.user, data.token);
+      }
+    } catch (err) {
+      setIsLoading(false);
+      const isNetworkError =
+        err?.message &&
+        (err.message.toLowerCase().includes("failed to fetch") ||
+          err.message.toLowerCase().includes("networkerror"));
+      if (isNetworkError) {
+        setErrorMessage(
+          "Unable to connect to backend server. Please verify that the backend API is running on http://localhost:5000."
+        );
+      } else {
+        setErrorMessage("Staff registration error: " + (err?.message || "Unknown error"));
+      }
     }
   };
 
@@ -819,6 +1055,49 @@ export default function LoginScreen({
                     </Pressable>
                   </View>
 
+                  {/* Default Store Admin Credentials Note */}
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      backgroundColor: "#F0FDFA",
+                      borderWidth: 1,
+                      borderColor: "#99F6E4",
+                      borderRadius: 8,
+                      paddingHorizontal: 12,
+                      paddingVertical: 10,
+                      marginBottom: 14,
+                      gap: 8,
+                    }}
+                  >
+                    <Text style={{ fontSize: 16 }}>🔑</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={{
+                          fontSize: 11.5,
+                          color: "#0F766E",
+                          fontWeight: "700",
+                        }}
+                      >
+                        Store Admin Login Credentials:
+                      </Text>
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          color: "#334155",
+                          marginTop: 2,
+                        }}
+                      >
+                        Email:{" "}
+                        <Text style={{ fontWeight: "700" }}>
+                          admin@falahpharmacy.com
+                        </Text>{" "}
+                        | Password:{" "}
+                        <Text style={{ fontWeight: "700" }}>password123</Text>
+                      </Text>
+                    </View>
+                  </View>
+
                   {/* SUBMIT SIGN IN */}
                   <Pressable
                     style={[
@@ -862,299 +1141,249 @@ export default function LoginScreen({
               {/* ========================================= */}
               {authMode === "signup" && (
                 <View>
-                  {/* Section 1: Pharmacy / Business Information */}
-                  <View style={styles.sectionHeaderRow}>
-                    <Text style={styles.sectionHeaderTitle}>
-                      Pharmacy / Business Information
-                    </Text>
-                  </View>
-
-                  {/* Pharmacy Name */}
-                  <View style={styles.fieldContainer}>
-                    <Text style={styles.label}>Pharmacy Name *</Text>
-                    <View style={styles.inputWrapper}>
-                      <Text style={styles.inputPrefixIcon}>🏥</Text>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="Al Noor Pharmacy"
-                        placeholderTextColor="#94a3b8"
-                        value={signUpPharmacyName}
-                        onChangeText={(text) => {
-                          setSignUpPharmacyName(text);
-                          if (errorMessage) setErrorMessage("");
-                        }}
-                        autoCapitalize="words"
-                        editable={!isLoading}
-                      />
-                    </View>
-                  </View>
-
-                  {/* Owner / Contact Person */}
-                  <View style={styles.fieldContainer}>
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                      }}
-                    >
-                      <Text style={styles.label}>Owner / Contact Person *</Text>
-                      {googleOnboardingData?.name ? (
-                        <Text
-                          style={{
-                            fontSize: 11,
-                            color: "#059669",
-                            fontWeight: "600",
-                          }}
-                        >
-                          Prefilled from Google
-                        </Text>
-                      ) : null}
-                    </View>
-                    <View style={styles.inputWrapper}>
-                      <Text style={styles.inputPrefixIcon}>👤</Text>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="Mohammed Ali"
-                        placeholderTextColor="#94a3b8"
-                        value={signUpAdminName}
-                        onChangeText={(text) => {
-                          setSignUpAdminName(text);
-                          if (errorMessage) setErrorMessage("");
-                        }}
-                        autoCapitalize="words"
-                        editable={!isLoading}
-                      />
-                    </View>
-                  </View>
-
-                  {/* Email (Login ID) */}
-                  <View style={styles.fieldContainer}>
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                      }}
-                    >
-                      <Text style={styles.label}>Email (Login ID) *</Text>
-                      {googleOnboardingData ? (
-                        <Text
-                          style={{
-                            fontSize: 11,
-                            color: "#059669",
-                            fontWeight: "600",
-                          }}
-                        >
-                          Google Verified
-                        </Text>
-                      ) : null}
-                    </View>
-                    <View
-                      style={[
-                        styles.inputWrapper,
-                        googleOnboardingData && { backgroundColor: "#f1f5f9" },
-                      ]}
-                    >
-                      <Text style={styles.inputPrefixIcon}>📧</Text>
-                      <TextInput
-                        style={[
-                          styles.input,
-                          googleOnboardingData && { color: "#64748B" },
-                        ]}
-                        placeholder="admin@pharmacy.com"
-                        placeholderTextColor="#94a3b8"
-                        value={signUpEmail}
-                        onChangeText={(text) => {
-                          if (!googleOnboardingData) {
-                            setSignUpEmail(text);
-                            if (errorMessage) setErrorMessage("");
-                          }
-                        }}
-                        autoCapitalize="none"
-                        keyboardType="email-address"
-                        editable={!isLoading && !googleOnboardingData}
-                      />
-                    </View>
-                    <Text style={styles.helperText}>
-                      {googleOnboardingData
-                        ? "This verified Google email will be your account login ID."
-                        : "This email will be used as Login ID for the admin."}
-                    </Text>
-                  </View>
-
-                  {/* Phone / Mobile */}
-                  <View style={styles.fieldContainer}>
-                    <Text style={styles.label}>Phone / Mobile *</Text>
-                    <View style={styles.inputWrapper}>
-                      <Text style={styles.inputPrefixIcon}>📞</Text>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="+91 98765 43210"
-                        placeholderTextColor="#94a3b8"
-                        value={signUpPhone}
-                        onChangeText={(text) => {
-                          setSignUpPhone(text);
-                          if (errorMessage) setErrorMessage("");
-                        }}
-                        keyboardType="phone-pad"
-                        editable={!isLoading}
-                      />
-                    </View>
-                  </View>
-
-                  {/* Business Address */}
-                  <View style={styles.fieldContainer}>
-                    <Text style={styles.label}>Business Address *</Text>
-                    <View
-                      style={[styles.inputWrapper, styles.addressInputWrapper]}
-                    >
-                      <TextInput
-                        style={[styles.input, styles.addressInput]}
-                        placeholder="No. 12, Residency Road, Shanthala Nagar"
-                        placeholderTextColor="#94a3b8"
-                        value={signUpAddress}
-                        onChangeText={(text) => {
-                          setSignUpAddress(text);
-                          if (errorMessage) setErrorMessage("");
-                        }}
-                        multiline
-                        editable={!isLoading}
-                      />
-                    </View>
-                  </View>
-
-                  {/* City, State, Pincode in 3 columns */}
-                  <View
-                    style={{ flexDirection: "row", gap: 8, marginBottom: 14 }}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.label}>City *</Text>
-                      <View style={styles.inputWrapper}>
-                        <TextInput
-                          style={styles.input}
-                          placeholder="Bangalore"
-                          placeholderTextColor="#94a3b8"
-                          value={signUpCity}
-                          onChangeText={(text) => {
-                            setSignUpCity(text);
-                            if (errorMessage) setErrorMessage("");
-                          }}
-                          editable={!isLoading}
-                        />
-                      </View>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.label}>State *</Text>
-                      <View style={styles.inputWrapper}>
-                        <TextInput
-                          style={styles.input}
-                          placeholder="Karnataka"
-                          placeholderTextColor="#94a3b8"
-                          value={signUpState}
-                          onChangeText={(text) => {
-                            setSignUpState(text);
-                            if (errorMessage) setErrorMessage("");
-                          }}
-                          editable={!isLoading}
-                        />
-                      </View>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.label}>Pincode *</Text>
-                      <View style={styles.inputWrapper}>
-                        <TextInput
-                          style={styles.input}
-                          placeholder="560001"
-                          placeholderTextColor="#94a3b8"
-                          value={signUpPincode}
-                          onChangeText={(text) => {
-                            setSignUpPincode(text);
-                            if (errorMessage) setErrorMessage("");
-                          }}
-                          keyboardType="number-pad"
-                          editable={!isLoading}
-                        />
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* Section 2: Additional Information */}
-                  <View style={styles.sectionHeaderRow}>
-                    <Text style={styles.sectionHeaderTitle}>
-                      Additional Information
-                    </Text>
-                  </View>
-
-                  {/* GST Number */}
-                  <View style={styles.fieldContainer}>
-                    <Text style={styles.label}>GST Number</Text>
-                    <View style={styles.inputWrapper}>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="29ABCDE1234F1Z5"
-                        placeholderTextColor="#94a3b8"
-                        value={signUpGstNumber}
-                        onChangeText={setSignUpGstNumber}
-                        autoCapitalize="characters"
-                        editable={!isLoading}
-                      />
-                    </View>
-                  </View>
-
-                  {/* Business Type */}
-                  <View style={styles.fieldContainer}>
-                    <Text style={styles.label}>Business Type</Text>
-                    <View style={styles.inputWrapper}>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="Private Limited"
-                        placeholderTextColor="#94a3b8"
-                        value={signUpBusinessType}
-                        onChangeText={setSignUpBusinessType}
-                        editable={!isLoading}
-                      />
-                    </View>
-                  </View>
-
-                  {/* Section 3: Credentials (Hidden during Google Onboarding) */}
                   {!googleOnboardingData && (
-                    <>
+                    <View style={styles.signUpTypeContainer}>
+                      <Pressable
+                        style={[
+                          styles.signUpTypeButton,
+                          signUpRoleType === "PHARMACY" &&
+                            styles.signUpTypeButtonActive,
+                        ]}
+                        onPress={() => {
+                          setSignUpRoleType("PHARMACY");
+                          setErrorMessage("");
+                        }}
+                      >
+                        <Text style={styles.signUpTypeIcon}>🏥</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={[
+                              styles.signUpTypeTitle,
+                              signUpRoleType === "PHARMACY" &&
+                                styles.signUpTypeTitleActive,
+                            ]}
+                          >
+                            Pharmacy Admin
+                          </Text>
+                          <Text style={styles.signUpTypeSub}>
+                            Store owner setup
+                          </Text>
+                        </View>
+                      </Pressable>
+
+                      <Pressable
+                        style={[
+                          styles.signUpTypeButton,
+                          signUpRoleType === "STAFF" &&
+                            styles.signUpTypeButtonActive,
+                        ]}
+                        onPress={() => {
+                          setSignUpRoleType("STAFF");
+                          setErrorMessage("");
+                        }}
+                      >
+                        <Text style={styles.signUpTypeIcon}>👤</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={[
+                              styles.signUpTypeTitle,
+                              signUpRoleType === "STAFF" &&
+                                styles.signUpTypeTitleActive,
+                            ]}
+                          >
+                            Pharmacy Staff
+                          </Text>
+                          <Text style={styles.signUpTypeSub}>
+                            Pharmacist & staff
+                          </Text>
+                        </View>
+                      </Pressable>
+
+                      <Pressable
+                        style={[
+                          styles.signUpTypeButton,
+                          signUpRoleType === "SUPPLIER" &&
+                            styles.signUpTypeButtonActive,
+                        ]}
+                        onPress={() => {
+                          setSignUpRoleType("SUPPLIER");
+                          setErrorMessage("");
+                        }}
+                      >
+                        <Text style={styles.signUpTypeIcon}>🚚</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={[
+                              styles.signUpTypeTitle,
+                              signUpRoleType === "SUPPLIER" &&
+                                styles.signUpTypeTitleActive,
+                            ]}
+                          >
+                            Medicine Supplier
+                          </Text>
+                          <Text style={styles.signUpTypeSub}>
+                            Vendor distributor
+                          </Text>
+                        </View>
+                      </Pressable>
+                    </View>
+                  )}
+
+                  {signUpRoleType === "SUPPLIER" && !googleOnboardingData ? (
+                    <View>
+                      {/* Section Header */}
                       <View style={styles.sectionHeaderRow}>
                         <Text style={styles.sectionHeaderTitle}>
-                          Account Credentials
+                          Supplier & Distributor Registration
                         </Text>
+                      </View>
+
+                      {/* Company Name */}
+                      <View style={styles.fieldContainer}>
+                        <Text style={styles.label}>
+                          Distributor / Company Name *
+                        </Text>
+                        <View style={styles.inputWrapper}>
+                          <Text style={styles.inputPrefixIcon}>🚚</Text>
+                          <TextInput
+                            style={styles.input}
+                            placeholder="e.g. Apex Pharma Distributor"
+                            placeholderTextColor="#94a3b8"
+                            value={supplierCompanyName}
+                            onChangeText={setSupplierCompanyName}
+                            autoCapitalize="words"
+                            editable={!isLoading}
+                          />
+                        </View>
+                      </View>
+
+                      {/* Contact Person */}
+                      <View style={styles.fieldContainer}>
+                        <Text style={styles.label}>
+                          Contact Person / Representative *
+                        </Text>
+                        <View style={styles.inputWrapper}>
+                          <Text style={styles.inputPrefixIcon}>👤</Text>
+                          <TextInput
+                            style={styles.input}
+                            placeholder="e.g. Vikram Patel"
+                            placeholderTextColor="#94a3b8"
+                            value={supplierContactPerson}
+                            onChangeText={setSupplierContactPerson}
+                            autoCapitalize="words"
+                            editable={!isLoading}
+                          />
+                        </View>
+                      </View>
+
+                      {/* Email */}
+                      <View style={styles.fieldContainer}>
+                        <Text style={styles.label}>
+                          Official Email (Login ID) *
+                        </Text>
+                        <View style={styles.inputWrapper}>
+                          <Text style={styles.inputPrefixIcon}>📧</Text>
+                          <TextInput
+                            style={styles.input}
+                            placeholder="orders@apexpharma.com"
+                            placeholderTextColor="#94a3b8"
+                            value={supplierEmail}
+                            onChangeText={setSupplierEmail}
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                            editable={!isLoading}
+                          />
+                        </View>
+                      </View>
+
+                      {/* Phone */}
+                      <View style={styles.fieldContainer}>
+                        <Text style={styles.label}>Mobile / Phone Number *</Text>
+                        <View style={styles.inputWrapper}>
+                          <Text style={styles.inputPrefixIcon}>📱</Text>
+                          <TextInput
+                            style={styles.input}
+                            placeholder="+91 98765 43210"
+                            placeholderTextColor="#94a3b8"
+                            value={supplierPhone}
+                            onChangeText={setSupplierPhone}
+                            keyboardType="phone-pad"
+                            editable={!isLoading}
+                          />
+                        </View>
+                      </View>
+
+                      {/* City */}
+                      <View style={styles.fieldContainer}>
+                        <Text style={styles.label}>City / Region</Text>
+                        <View style={styles.inputWrapper}>
+                          <Text style={styles.inputPrefixIcon}>📍</Text>
+                          <TextInput
+                            style={styles.input}
+                            placeholder="e.g. Mumbai, Maharashtra"
+                            placeholderTextColor="#94a3b8"
+                            value={supplierCity}
+                            onChangeText={setSupplierCity}
+                            editable={!isLoading}
+                          />
+                        </View>
+                      </View>
+
+                      {/* GSTIN */}
+                      <View style={styles.fieldContainer}>
+                        <Text style={styles.label}>GSTIN / Tax ID</Text>
+                        <View style={styles.inputWrapper}>
+                          <Text style={styles.inputPrefixIcon}>📜</Text>
+                          <TextInput
+                            style={styles.input}
+                            placeholder="27AABCS1429B1Z1"
+                            placeholderTextColor="#94a3b8"
+                            value={supplierGstin}
+                            onChangeText={setSupplierGstin}
+                            autoCapitalize="characters"
+                            editable={!isLoading}
+                          />
+                        </View>
+                      </View>
+
+                      {/* Category */}
+                      <View style={styles.fieldContainer}>
+                        <Text style={styles.label}>Primary Supply Category</Text>
+                        <View style={styles.inputWrapper}>
+                          <Text style={styles.inputPrefixIcon}>📦</Text>
+                          <TextInput
+                            style={styles.input}
+                            placeholder="Medicines & Injections"
+                            placeholderTextColor="#94a3b8"
+                            value={supplierCategory}
+                            onChangeText={setSupplierCategory}
+                            editable={!isLoading}
+                          />
+                        </View>
                       </View>
 
                       {/* Password */}
                       <View style={styles.fieldContainer}>
-                        <Text style={styles.label}>
-                          Password (Min 6 characters) *
-                        </Text>
+                        <Text style={styles.label}>Set Password *</Text>
                         <View style={styles.inputWrapper}>
                           <Text style={styles.inputPrefixIcon}>🔒</Text>
                           <TextInput
                             style={styles.input}
-                            placeholder="Create a secure password"
+                            placeholder="At least 6 characters"
                             placeholderTextColor="#94a3b8"
-                            secureTextEntry={!showSignUpPassword}
-                            value={signUpPassword}
-                            onChangeText={(text) => {
-                              setSignUpPassword(text);
-                              if (errorMessage) setErrorMessage("");
-                            }}
-                            autoCapitalize="none"
+                            secureTextEntry={!showSupplierPassword}
+                            value={supplierPassword}
+                            onChangeText={setSupplierPassword}
                             editable={!isLoading}
                           />
                           <Pressable
                             style={styles.eyeButton}
                             onPress={() =>
-                              setShowSignUpPassword(!showSignUpPassword)
+                              setShowSupplierPassword(!showSupplierPassword)
                             }
-                            disabled={isLoading}
                           >
                             <Text style={styles.eyeIcon}>
-                              {showSignUpPassword ? "🙈" : "👁️"}
+                              {showSupplierPassword ? "🙈" : "👁️"}
                             </Text>
                           </Pressable>
                         </View>
@@ -1164,64 +1393,373 @@ export default function LoginScreen({
                       <View style={styles.fieldContainer}>
                         <Text style={styles.label}>Confirm Password *</Text>
                         <View style={styles.inputWrapper}>
-                          <Text style={styles.inputPrefixIcon}>🔐</Text>
+                          <Text style={styles.inputPrefixIcon}>🔒</Text>
                           <TextInput
                             style={styles.input}
-                            placeholder="Confirm password"
+                            placeholder="Confirm your password"
                             placeholderTextColor="#94a3b8"
-                            secureTextEntry={!showSignUpPassword}
-                            value={signUpConfirmPassword}
-                            onChangeText={(text) => {
-                              setSignUpConfirmPassword(text);
-                              if (errorMessage) setErrorMessage("");
-                            }}
-                            autoCapitalize="none"
+                            secureTextEntry={!showSupplierPassword}
+                            value={supplierConfirmPassword}
+                            onChangeText={setSupplierConfirmPassword}
                             editable={!isLoading}
-                            onSubmitEditing={handleSignUp}
                           />
                         </View>
                       </View>
-                    </>
-                  )}
 
-                  {/* SUBMIT SIGN UP */}
-                  <Pressable
-                    style={[
-                      styles.signInButton,
-                      isLoading && styles.disabledButton,
-                    ]}
-                    onPress={handleSignUp}
-                    disabled={isLoading}
-                  >
-                    {isLoading ? (
-                      <ActivityIndicator size="small" color="#ffffff" />
-                    ) : (
-                      <Text style={styles.signInText}>
-                        {googleOnboardingData
-                          ? "Complete Pharmacy Registration →"
-                          : "Register Pharmacy & Sign In →"}
-                      </Text>
-                    )}
-                  </Pressable>
+                      {/* Submit Supplier */}
+                      <Pressable
+                        style={[
+                          styles.signInButton,
+                          { backgroundColor: "#0F766E" },
+                          isLoading && styles.disabledButton,
+                        ]}
+                        onPress={handleSupplierSignUp}
+                        disabled={isLoading}
+                      >
+                        {isLoading ? (
+                          <ActivityIndicator size="small" color="#ffffff" />
+                        ) : (
+                          <Text style={styles.signInText}>
+                            Register Supplier Account →
+                          </Text>
+                        )}
+                      </Pressable>
 
-                  {/* Switch to Sign In mode link (Hidden during Google Onboarding) */}
-                  {!googleOnboardingData && (
-                    <Pressable
-                      onPress={() => {
-                        setAuthMode("signin");
-                        setErrorMessage("");
-                        setSuccessMessage("");
-                      }}
-                      style={styles.switchModeRow}
-                      accessibilityRole="button"
-                    >
-                      <Text style={styles.switchModeText}>
-                        Already have an account?{" "}
-                        <Text style={styles.switchModeHighlight}>
-                          Sign In here
+                      {/* Switch to Sign In link */}
+                      <Pressable
+                        onPress={() => {
+                          setAuthMode("signin");
+                          setErrorMessage("");
+                        }}
+                        style={styles.switchModeRow}
+                      >
+                        <Text style={styles.switchModeText}>
+                          Already have a supplier account?{" "}
+                          <Text style={styles.switchModeHighlight}>
+                            Sign In here
+                          </Text>
                         </Text>
+                      </Pressable>
+                    </View>
+                  ) : signUpRoleType === "STAFF" && !googleOnboardingData ? (
+                    <View>
+                      {/* Section Header */}
+                      <View style={styles.sectionHeaderRow}>
+                        <Text style={styles.sectionHeaderTitle}>
+                          Pharmacy Staff & Pharmacist Sign Up
+                        </Text>
+                      </View>
+
+                      {/* Full Name */}
+                      <View style={styles.fieldContainer}>
+                        <Text style={styles.label}>Full Name *</Text>
+                        <View style={styles.inputWrapper}>
+                          <Text style={styles.inputPrefixIcon}>👤</Text>
+                          <TextInput
+                            style={styles.input}
+                            placeholder="e.g. Rahul Sharma"
+                            placeholderTextColor="#94a3b8"
+                            value={staffName}
+                            onChangeText={setStaffName}
+                            autoCapitalize="words"
+                            editable={!isLoading}
+                          />
+                        </View>
+                      </View>
+
+                      {/* Email */}
+                      <View style={styles.fieldContainer}>
+                        <Text style={styles.label}>Official Email (Login ID) *</Text>
+                        <View style={styles.inputWrapper}>
+                          <Text style={styles.inputPrefixIcon}>📧</Text>
+                          <TextInput
+                            style={styles.input}
+                            placeholder="rahul.staff@pharmacy.com"
+                            placeholderTextColor="#94a3b8"
+                            value={staffEmail}
+                            onChangeText={setStaffEmail}
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                            editable={!isLoading}
+                          />
+                        </View>
+                      </View>
+
+                      {/* Phone */}
+                      <View style={styles.fieldContainer}>
+                        <Text style={styles.label}>Mobile / Phone Number *</Text>
+                        <View style={styles.inputWrapper}>
+                          <Text style={styles.inputPrefixIcon}>📱</Text>
+                          <TextInput
+                            style={styles.input}
+                            placeholder="+91 98765 43210"
+                            placeholderTextColor="#94a3b8"
+                            value={staffPhone}
+                            onChangeText={setStaffPhone}
+                            keyboardType="phone-pad"
+                            editable={!isLoading}
+                          />
+                        </View>
+                      </View>
+
+                      {/* Staff Role Designation */}
+                      <View style={styles.fieldContainer}>
+                        <Text style={styles.label}>Designation / Role *</Text>
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            gap: 8,
+                            marginTop: 4,
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          {[
+                            "Pharmacist",
+                            "Cashier",
+                            "Inventory Specialist",
+                            "Sales Associate",
+                          ].map((role) => {
+                            const isSelected = staffRoleTitle === role;
+                            return (
+                              <Pressable
+                                key={role}
+                                onPress={() => setStaffRoleTitle(role)}
+                                style={{
+                                  paddingVertical: 8,
+                                  paddingHorizontal: 12,
+                                  borderRadius: 8,
+                                  borderWidth: 1.5,
+                                  borderColor: isSelected ? "#0D9488" : "#CBD5E1",
+                                  backgroundColor: isSelected
+                                    ? "#F0FDFA"
+                                    : "#FFFFFF",
+                                }}
+                              >
+                                <Text
+                                  style={{
+                                    fontSize: 12,
+                                    fontWeight: "700",
+                                    color: isSelected ? "#0D9488" : "#475569",
+                                  }}
+                                >
+                                  {role}
+                                </Text>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      </View>
+
+                      {/* Password */}
+                      <View style={styles.fieldContainer}>
+                        <Text style={styles.label}>Create Password *</Text>
+                        <View style={styles.inputWrapper}>
+                          <Text style={styles.inputPrefixIcon}>🔒</Text>
+                          <TextInput
+                            style={styles.input}
+                            placeholder="Minimum 6 characters"
+                            placeholderTextColor="#94a3b8"
+                            secureTextEntry={!showStaffPassword}
+                            value={staffPassword}
+                            onChangeText={setStaffPassword}
+                            editable={!isLoading}
+                          />
+                          <Pressable
+                            style={styles.eyeButton}
+                            onPress={() =>
+                              setShowStaffPassword(!showStaffPassword)
+                            }
+                          >
+                            <Text style={styles.eyeIcon}>
+                              {showStaffPassword ? "🙈" : "👁️"}
+                            </Text>
+                          </Pressable>
+                        </View>
+                      </View>
+
+                      {/* Confirm Password */}
+                      <View style={styles.fieldContainer}>
+                        <Text style={styles.label}>Confirm Password *</Text>
+                        <View style={styles.inputWrapper}>
+                          <Text style={styles.inputPrefixIcon}>🔒</Text>
+                          <TextInput
+                            style={styles.input}
+                            placeholder="Confirm your password"
+                            placeholderTextColor="#94a3b8"
+                            secureTextEntry={!showStaffPassword}
+                            value={staffConfirmPassword}
+                            onChangeText={setStaffConfirmPassword}
+                            editable={!isLoading}
+                          />
+                        </View>
+                      </View>
+
+                      {/* Submit Staff */}
+                      <Pressable
+                        style={[
+                          styles.signInButton,
+                          { backgroundColor: "#0F766E" },
+                          isLoading && styles.disabledButton,
+                        ]}
+                        onPress={handleStaffSignUp}
+                        disabled={isLoading}
+                      >
+                        {isLoading ? (
+                          <ActivityIndicator size="small" color="#ffffff" />
+                        ) : (
+                          <Text style={styles.signInText}>
+                            Register Staff Account →
+                          </Text>
+                        )}
+                      </Pressable>
+
+                      {/* Switch to Sign In link */}
+                      <Pressable
+                        onPress={() => {
+                          setAuthMode("signin");
+                          setErrorMessage("");
+                        }}
+                        style={styles.switchModeRow}
+                      >
+                        <Text style={styles.switchModeText}>
+                          Already have a staff account?{" "}
+                          <Text style={styles.switchModeHighlight}>
+                            Sign In here
+                          </Text>
+                        </Text>
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <View
+                      style={{
+                        backgroundColor: "#FFFFFF",
+                        borderRadius: 14,
+                        borderWidth: 1.5,
+                        borderColor: "#CCFBF1",
+                        padding: 24,
+                        alignItems: "center",
+                        marginTop: 4,
+                        marginBottom: 16,
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 56,
+                          height: 56,
+                          borderRadius: 28,
+                          backgroundColor: "#F0FDFA",
+                          borderWidth: 2,
+                          borderColor: "#99F6E4",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          marginBottom: 14,
+                        }}
+                      >
+                        <Text style={{ fontSize: 26 }}>🏥</Text>
+                      </View>
+
+                      <Text
+                        style={{
+                          fontSize: 17,
+                          fontWeight: "800",
+                          color: "#0F766E",
+                          textAlign: "center",
+                          marginBottom: 6,
+                        }}
+                      >
+                        Pharmacy Admin Instant Access
                       </Text>
-                    </Pressable>
+
+                      <Text
+                        style={{
+                          fontSize: 13,
+                          color: "#475569",
+                          textAlign: "center",
+                          lineHeight: 19,
+                          marginBottom: 20,
+                          maxWidth: 380,
+                        }}
+                      >
+                        Admins and store owners sign up and log in directly with your Gmail / Google account. No manual forms needed — your pharmacy inventory workspace will be created and opened automatically.
+                      </Text>
+
+                      {/* Google Sign-In Button */}
+                      <Pressable
+                        style={[
+                          styles.googleButton,
+                          {
+                            width: "100%",
+                            paddingVertical: 14,
+                            borderRadius: 10,
+                            borderWidth: 1.5,
+                            borderColor: "#CBD5E1",
+                            backgroundColor: "#FFFFFF",
+                            marginBottom: 16,
+                          },
+                          isLoading && styles.disabledButton,
+                        ]}
+                        onPress={() => handleGoogleAuth("signup")}
+                        disabled={isLoading}
+                      >
+                        <View style={styles.googleIconCircle}>
+                          <Text style={styles.googleGText}>G</Text>
+                        </View>
+                        <Text style={[styles.googleButtonText, { fontSize: 14 }]}>
+                          Sign Up / Log In with Google (Gmail)
+                        </Text>
+                      </Pressable>
+
+                      {/* Direct Admin Credentials Helper note */}
+                      <View
+                        style={{
+                          backgroundColor: "#F8FAFC",
+                          borderRadius: 8,
+                          borderWidth: 1,
+                          borderColor: "#E2E8F0",
+                          padding: 12,
+                          width: "100%",
+                          marginBottom: 14,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            fontWeight: "700",
+                            color: "#0F766E",
+                            marginBottom: 3,
+                          }}
+                        >
+                          🔑 Existing Default Store Admin Credentials:
+                        </Text>
+                        <Text style={{ fontSize: 11.5, color: "#334155" }}>
+                          Email:{" "}
+                          <Text style={{ fontWeight: "700" }}>
+                            admin@falahpharmacy.com
+                          </Text>
+                        </Text>
+                        <Text style={{ fontSize: 11.5, color: "#334155" }}>
+                          Password:{" "}
+                          <Text style={{ fontWeight: "700" }}>password123</Text>
+                        </Text>
+                      </View>
+
+                      {/* Switch to Sign In link */}
+                      <Pressable
+                        onPress={() => {
+                          setAuthMode("signin");
+                          setErrorMessage("");
+                          setSuccessMessage("");
+                        }}
+                        style={{ marginTop: 4 }}
+                      >
+                        <Text style={styles.switchModeText}>
+                          Already have standard credentials?{" "}
+                          <Text style={styles.switchModeHighlight}>
+                            Sign In directly here
+                          </Text>
+                        </Text>
+                      </Pressable>
+                    </View>
                   )}
                 </View>
               )}
@@ -1999,6 +2537,88 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     color: "#475569",
+  },
+  quickLoginBox: {
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 14,
+  },
+  quickLoginTitle: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#64748B",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  quickLoginButtonsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  quickRolePill: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
+    cursor: "pointer",
+  },
+  quickRoleText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#334155",
+  },
+  quickRoleSupplier: {
+    backgroundColor: "#F0FDFA",
+    borderColor: "#0F766E",
+  },
+  quickRoleSupplierText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#0F766E",
+  },
+  signUpTypeContainer: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 18,
+  },
+  signUpTypeButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1.5,
+    borderColor: "#E2E8F0",
+    borderRadius: 10,
+    padding: 12,
+    gap: 10,
+    cursor: "pointer",
+  },
+  signUpTypeButtonActive: {
+    backgroundColor: "#F0FDFA",
+    borderColor: "#0F766E",
+  },
+  signUpTypeIcon: {
+    fontSize: 22,
+  },
+  signUpTypeTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#475569",
+  },
+  signUpTypeTitleActive: {
+    color: "#0F766E",
+    fontWeight: "800",
+  },
+  signUpTypeSub: {
+    fontSize: 10,
+    color: "#94A3B8",
+    marginTop: 1,
   },
 });
 

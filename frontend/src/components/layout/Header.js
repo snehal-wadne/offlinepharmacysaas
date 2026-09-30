@@ -35,12 +35,24 @@ export default function Header({
   const syncNow = offlineSync?.syncNow;
 
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [branchOptions, setBranchOptions] = useState(DEFAULT_BRANCH_OPTIONS);
+  const isAdminOrOwner = Boolean(
+    currentUser?.isOwner ||
+    currentUser?.isPlatformSuperadmin ||
+    currentUser?.is_platform_superadmin ||
+    (currentUser?.role || "").toUpperCase() === "OWNER" ||
+    (currentUser?.role || "").toUpperCase() === "ADMIN" ||
+    (currentUser?.role || "").toUpperCase() === "SUPERADMIN" ||
+    (currentUser?.role || "").toLowerCase().includes("admin") ||
+    (currentUser?.role || "").toLowerCase().includes("owner")
+  );
+  const [branchOptions, setBranchOptions] = useState(
+    isAdminOrOwner ? DEFAULT_BRANCH_OPTIONS : []
+  );
 
   const displayBranch =
     typeof currentBranch === "object" && currentBranch !== null
-      ? currentBranch.name || currentBranch.branchCode || "Main Branch"
-      : String(currentBranch || "All Branches");
+      ? currentBranch.name || currentBranch.branchCode || (isAdminOrOwner ? "All Branches" : "My Branch")
+      : String(currentBranch || (isAdminOrOwner ? "All Branches" : "My Branch"));
 
   const fetchBranchesFromDb = async () => {
     try {
@@ -60,15 +72,35 @@ export default function Header({
           name: b.name,
           branchCode: b.branch_code || b.branchCode,
         }));
-        const combined = [{ id: null, name: "All Branches" }, ...branchObjs];
+
+        let combined;
+        if (isAdminOrOwner) {
+          combined = [{ id: null, name: "All Branches" }, ...branchObjs];
+        } else {
+          // Non-admin branch staff MUST ONLY see their assigned branch!
+          // NEVER show "All Branches" and never show other branches!
+          combined = branchObjs;
+        }
+
         setBranchOptions(combined);
+
+        // Auto-select assigned branch for non-admins if currently "All Branches" or empty
+        if (!isAdminOrOwner && combined.length > 0) {
+          const isInvalid =
+            !currentBranch ||
+            currentBranch === "All Branches" ||
+            (typeof currentBranch === "object" && (!currentBranch.id || currentBranch.name === "All Branches"));
+          if (isInvalid && onBranchChange) {
+            onBranchChange(combined[0]);
+          }
+        }
         return;
       }
     } catch (err) {
       console.warn("Could not fetch database branches in Header:", err.message);
     }
 
-    setBranchOptions(DEFAULT_BRANCH_OPTIONS);
+    setBranchOptions(isAdminOrOwner ? DEFAULT_BRANCH_OPTIONS : []);
   };
 
   // --- Global Search (products & customers) ---
@@ -227,42 +259,59 @@ export default function Header({
                 />
                 <View style={styles.dropdownCardAnchored}>
                   <Text style={styles.dropdownTitle}>
-                    Select Active Store Branch
+                    {isAdminOrOwner
+                      ? "Select Active Store Branch"
+                      : "Your Assigned Store Branch"}
                   </Text>
-                  {branchOptions.map((branch) => {
-                    const branchName =
-                      typeof branch === "object" && branch !== null
-                        ? branch.name || branch.branchCode || "Branch"
-                        : String(branch);
-                    const isSelected = branchName === displayBranch;
-                    return (
-                      <Pressable
-                        key={branch.id || branchName}
-                        onPress={() => handleSelectBranch(branch)}
-                        style={[
-                          styles.dropdownItem,
-                          isSelected && styles.dropdownItemSelected,
-                        ]}
-                      >
-                        <Text
+                  {branchOptions.length === 0 ? (
+                    <Text
+                      style={{
+                        padding: 12,
+                        color: "#64748B",
+                        fontSize: 13,
+                        textAlign: "center",
+                      }}
+                    >
+                      No active branch assigned. Please contact your store administrator.
+                    </Text>
+                  ) : (
+                    branchOptions.map((branch) => {
+                      const branchName =
+                        typeof branch === "object" && branch !== null
+                          ? branch.name || branch.branchCode || "Branch"
+                          : String(branch);
+                      const isSelected = branchName === displayBranch;
+                      return (
+                        <Pressable
+                          key={branch.id || branchName}
+                          onPress={() => handleSelectBranch(branch)}
                           style={[
-                            styles.dropdownItemText,
-                            isSelected && styles.dropdownItemTextSelected,
+                            styles.dropdownItem,
+                            isSelected && styles.dropdownItemSelected,
                           ]}
                         >
-                          📍 {branchName}
-                        </Text>
-                        {isSelected && <Text style={styles.checkmark}>✓</Text>}
-                      </Pressable>
-                    );
-                  })}
+                          <Text
+                            style={[
+                              styles.dropdownItemText,
+                              isSelected && styles.dropdownItemTextSelected,
+                            ]}
+                          >
+                            📍 {branchName}
+                          </Text>
+                          {isSelected && <Text style={styles.checkmark}>✓</Text>}
+                        </Pressable>
+                      );
+                    })
+                  )}
 
-                  {/* Single vs Multi Pharmacy Mode Switcher */}
-                  <View style={styles.dropdownDivider} />
-                  <View style={styles.dropdownModeSection}>
-                    <Text style={styles.dropdownModeSectionTitle}>
-                      PHARMACY OPERATION MODE
-                    </Text>
+                  {/* Single vs Multi Pharmacy Mode Switcher - Admin Only */}
+                  {isAdminOrOwner && (
+                    <>
+                      <View style={styles.dropdownDivider} />
+                      <View style={styles.dropdownModeSection}>
+                        <Text style={styles.dropdownModeSectionTitle}>
+                          PHARMACY OPERATION MODE
+                        </Text>
                     <Pressable
                       onPress={() => {
                         if (onSetPharmacyMode) onSetPharmacyMode(false);
@@ -306,9 +355,11 @@ export default function Header({
                       {isMultiBranch && <Text style={styles.checkmark}>✓</Text>}
                     </Pressable>
                   </View>
-                </View>
-              </>
-            )}
+                </>
+              )}
+            </View>
+          </>
+        )}
           </View>
 
           {/* Quick Mode Toggle Pill in Header Bar */}

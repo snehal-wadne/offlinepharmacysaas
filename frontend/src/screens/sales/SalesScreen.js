@@ -631,8 +631,10 @@ const handleHoldBillAction = async () => {
 
   // Handle barcode scanned from camera or gun
   const handleBarcodeScanned = async (scannedCode) => {
+    if (!scannedCode) return;
+
     if (scannerPurpose === "utr") {
-      const cleanUtr = scannedCode.trim();
+      const cleanUtr = String(scannedCode).trim();
       setUpiRefNumber(cleanUtr);
       setScannerModalVisible(false);
       setScannerPurpose("product");
@@ -642,18 +644,64 @@ const handleHoldBillAction = async () => {
       return;
     }
 
-    const code = scannedCode.trim().toLowerCase();
-    const match = products.find(
+    const raw = String(scannedCode).trim();
+
+    // 1. Diagnostics: Validate barcode length / format
+    if (raw.length < 3) {
+      setScanResultCard({
+        status: "error",
+        code: raw,
+        title: `⚠️ Barcode Details Invalid ("${raw}")`,
+        reason: `Scanned code "${raw}" is too short to be a valid medicine barcode. Valid barcodes must contain 4 to 14 characters.`,
+      });
+      if (onShowToast) {
+        onShowToast(`⚠️ Barcode details invalid: "${raw}" is too short.`);
+      }
+      return;
+    }
+
+    const code = raw.toLowerCase();
+    const strippedZero = code.startsWith("0") ? code.replace(/^0+/, "") : code;
+    const paddedZero = code.length === 12 ? "0" + code : code;
+
+    const matchesCode = (val) => {
+      if (!val) return false;
+      const v = String(val).trim().toLowerCase();
+      return (
+        v === code ||
+        v === strippedZero ||
+        v === paddedZero ||
+        (code.length >= 6 && v.includes(code))
+      );
+    };
+
+    let match = products.find(
       (p) =>
-        (p.barcode && p.barcode.toLowerCase() === code) ||
-        (p.sku && p.sku.toLowerCase() === code) ||
-        p.name.toLowerCase().includes(code),
+        matchesCode(p.barcode) ||
+        matchesCode(p.sku) ||
+        matchesCode(p.id) ||
+        (code.length > 3 && (p.name || "").toLowerCase().includes(code)),
     );
 
     // Scanning stays open on a match — the cashier can see the medicine's
     // details + live stock (and keep scanning more items) instead of the
     // modal closing after a split second.
     if (match) {
+      const currentStock = Number(match.stock ?? 0);
+      if (currentStock <= 0) {
+        setScanResultCard({
+          status: "error",
+          code: raw,
+          name: match.name,
+          title: `⚠️ "${match.name}" Out of Stock`,
+          reason: `Found medicine "${match.name}" (Batch ${match.batch || "N/A"}), but stock is 0 units. Cannot add out-of-stock items to bill.`,
+        });
+        if (onShowToast) {
+          onShowToast(`⚠️ "${match.name}" is out of stock (0 units).`);
+        }
+        return;
+      }
+
       handleAddToCart(match);
       const cartQty =
         (cart.find(
@@ -669,17 +717,51 @@ const handleHoldBillAction = async () => {
         qty: cartQty,
       });
       if (onShowToast) {
-        onShowToast(`📷 Scanned [${scannedCode}]: Added ${match.name}`);
+        onShowToast(`📷 Scanned [${raw}]: Added ${match.name}`);
       }
       return;
     }
 
-    // Not in the cached catalog yet (e.g. medicine just added) — ask the
-    // backend directly by barcode/SKU before giving up.
+    // Not in the cached catalog yet (e.g. medicine just added in database) —
+    // ask the backend directly by barcode/SKU before giving up.
     try {
-      const found = await fetchCashierProducts("", scannedCode.trim());
-      const serverMatch = Array.isArray(found) ? found[0] : null;
+      const rawBranch =
+        typeof selectedBranch === "object" && selectedBranch !== null
+          ? selectedBranch.id
+          : selectedBranch;
+      const branchIdParam =
+        rawBranch &&
+        rawBranch !== "All Branches" &&
+        rawBranch !== "all" &&
+        rawBranch !== "No Active Branch"
+          ? rawBranch
+          : undefined;
+
+      let found = await fetchCashierProducts("", raw, branchIdParam);
+      if (!Array.isArray(found) || found.length === 0) {
+        found = await fetchCashierProducts(raw, "", branchIdParam);
+      }
+      if ((!Array.isArray(found) || found.length === 0) && strippedZero !== code) {
+        found = await fetchCashierProducts("", strippedZero, branchIdParam);
+      }
+
+      const serverMatch = Array.isArray(found) && found.length > 0 ? found[0] : null;
       if (serverMatch) {
+        const serverStock = Number(serverMatch.stock ?? 0);
+        if (serverStock <= 0) {
+          setScanResultCard({
+            status: "error",
+            code: raw,
+            name: serverMatch.name,
+            title: `⚠️ "${serverMatch.name}" Out of Stock`,
+            reason: `Found medicine "${serverMatch.name}" (Batch ${serverMatch.batch || "N/A"}), but stock is 0 units in this branch. Cannot add out-of-stock items to bill.`,
+          });
+          if (onShowToast) {
+            onShowToast(`⚠️ "${serverMatch.name}" is out of stock (0 units).`);
+          }
+          return;
+        }
+
         setProducts((prev) =>
           prev.some((p) => p.id === serverMatch.id)
             ? prev
@@ -696,7 +778,7 @@ const handleHoldBillAction = async () => {
           qty: 1,
         });
         if (onShowToast) {
-          onShowToast(`📷 Scanned [${scannedCode}]: Added ${serverMatch.name}`);
+          onShowToast(`📷 Scanned [${raw}]: Added ${serverMatch.name}`);
         }
         return;
       }
@@ -704,9 +786,19 @@ const handleHoldBillAction = async () => {
       console.warn("Barcode server lookup failed:", err.message);
     }
 
-    setScanResultCard({ status: "notfound", code: scannedCode.trim() });
+    const branchLabel =
+      typeof selectedBranch === "object" && selectedBranch !== null
+        ? selectedBranch.name || selectedBranch.id
+        : selectedBranch || "active store";
+
+    setScanResultCard({
+      status: "notfound",
+      code: raw,
+      title: `❓ Medicine Not Found ("${raw}")`,
+      reason: `No medicine registered with barcode/SKU "${raw}" in ${branchLabel}. Check the code or register it under Stock Adjustments.`,
+    });
     if (onShowToast) {
-      onShowToast(`⚠️ No product found with barcode "${scannedCode}".`);
+      onShowToast(`⚠️ Barcode "${raw}" not registered in ${branchLabel}.`);
     }
   };
 

@@ -458,4 +458,98 @@ export function generateOfflineQRCode(text, size = 220) {
   return `data:image/svg+xml;base64,${toBase64(svg)}`;
 }
 
+// =========================================================================
+// CODE-128 OFFLINE BARCODE GENERATOR (100% Client-Side Vector Engine)
+// Standard ISO/IEC 15417 Code 128 Set B with generous quiet zones & sharp bars
+// =========================================================================
+const CODE128_PATTERNS = [
+  "212222", "222122", "222221", "121223", "121322", "131222", "122213", "122312", "132212", "221213",
+  "221312", "231212", "112232", "122132", "122231", "113222", "123122", "123221", "223211", "221132",
+  "221231", "213212", "223112", "312131", "311222", "321122", "321221", "312212", "322112", "322211",
+  "212123", "212321", "232121", "111323", "131123", "131321", "112313", "132113", "132311", "211313",
+  "231113", "231311", "112133", "112331", "132131", "113123", "113321", "133121", "313121", "211331",
+  "231131", "213113", "213311", "213131", "311123", "311321", "331121", "312113", "312311", "332111",
+  "314111", "221411", "431111", "111224", "111422", "121124", "121421", "141122", "141221", "112214",
+  "112412", "122114", "122411", "142112", "142211", "241211", "221114", "413111", "241112", "134111",
+  "111242", "121142", "121241", "114212", "124112", "124211", "411212", "421112", "421211", "212141",
+  "214121", "412121", "111143", "111341", "131141", "114113", "114311", "411113", "411311", "113141",
+  "114131", "311141", "411131", "211412", "211214", "211232", "2331112"
+];
+
+/**
+ * Generate a scannable Code-128 SVG barcode string
+ * @param {string} text - Raw barcode or SKU
+ * @param {object} options - Sizing, quiet zone, and label display options
+ */
+export function generateOfflineBarcodeSvg(text, options = {}) {
+  const {
+    barHeight = 52,
+    moduleWidth = 2,
+    quietZoneModules = 14,
+    showText = true,
+    fontSize = 12,
+  } = options;
+
+  const rawText = String(text || "MED-001").trim();
+  const clean = rawText.replace(/[^ -~]/g, "") || "MED-001";
+
+  // Code 128 Set B starts with index 104
+  const chars = [104];
+  let checksum = 104;
+
+  for (let i = 0; i < clean.length; i++) {
+    const code = clean.charCodeAt(i) - 32;
+    chars.push(code);
+    checksum += code * (i + 1);
+  }
+  chars.push(checksum % 103);
+  chars.push(106); // Stop character
+
+  let totalModules = 0;
+  const segments = [];
+  for (const c of chars) {
+    const pattern = CODE128_PATTERNS[c] || CODE128_PATTERNS[0];
+    for (let j = 0; j < pattern.length; j++) {
+      const width = parseInt(pattern[j], 10);
+      const isBar = j % 2 === 0;
+      segments.push({ isBar, width });
+      totalModules += width;
+    }
+  }
+
+  const svgWidth = (totalModules + quietZoneModules * 2) * moduleWidth;
+  const svgHeight = barHeight + (showText ? fontSize + 10 : 6);
+
+  let x = quietZoneModules * moduleWidth;
+  let rects = "";
+  for (const seg of segments) {
+    const w = seg.width * moduleWidth;
+    if (seg.isBar) {
+      rects += `<rect x="${x}" y="3" width="${w}" height="${barHeight}" fill="#000000" />`;
+    }
+    x += w;
+  }
+
+  const textX = Math.round(svgWidth / 2);
+  const textY = barHeight + fontSize + 4;
+
+  const textElement = showText
+    ? `<text x="${textX}" y="${textY}" text-anchor="middle" font-family="'Courier New', Courier, monospace" font-size="${fontSize}" font-weight="700" fill="#0F172A" letter-spacing="1.4">${clean}</text>`
+    : "";
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${svgWidth} ${svgHeight}" width="${svgWidth}" height="${svgHeight}" style="background-color: #FFFFFF; shape-rendering: crispEdges;">
+  <rect width="100%" height="100%" fill="#FFFFFF" />
+  ${rects}
+  ${textElement}
+</svg>`;
+}
+
+/**
+ * Generate a Base64 SVG Data URI for Code-128 barcode
+ */
+export function generateOfflineBarcodeDataUri(text, options = {}) {
+  const svg = generateOfflineBarcodeSvg(text, options);
+  return `data:image/svg+xml;base64,${toBase64(svg)}`;
+}
+
 export default generateOfflineQRCode;

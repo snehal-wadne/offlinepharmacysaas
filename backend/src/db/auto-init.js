@@ -224,6 +224,120 @@ const autoInitDatabase = async () => {
           syncMigrateErr.message,
         );
       }
+
+      // Apply supplier notifications & portal schema
+      try {
+        await targetPool.query(`
+          CREATE TABLE IF NOT EXISTS supplier_notifications (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            organisation_id UUID NOT NULL REFERENCES organisations(id) ON DELETE CASCADE,
+            branch_id UUID REFERENCES branches(id) ON DELETE SET NULL,
+            supplier_id UUID REFERENCES suppliers(id) ON DELETE SET NULL,
+            product_id UUID REFERENCES products(id) ON DELETE SET NULL,
+            batch_id UUID REFERENCES inventory_batches(id) ON DELETE SET NULL,
+            medicine_name VARCHAR(200) NOT NULL,
+            supplier_name VARCHAR(200),
+            current_stock INT NOT NULL DEFAULT 0,
+            reorder_quantity INT NOT NULL DEFAULT 100,
+            notification_type VARCHAR(50) DEFAULT 'LOW_STOCK',
+            channel VARCHAR(50) DEFAULT 'EMAIL',
+            priority VARCHAR(50) DEFAULT 'URGENT',
+            recipient_email VARCHAR(200),
+            recipient_phone VARCHAR(50),
+            status VARCHAR(50) DEFAULT 'SENT',
+            message TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+          );
+          ALTER TABLE public.users ADD COLUMN IF NOT EXISTS supplier_id UUID REFERENCES suppliers(id) ON DELETE SET NULL;
+          ALTER TABLE public.users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'STAFF';
+          CREATE INDEX IF NOT EXISTS idx_supplier_notifications_org ON supplier_notifications(organisation_id);
+          CREATE INDEX IF NOT EXISTS idx_supplier_notifications_supplier ON supplier_notifications(supplier_id);
+          CREATE INDEX IF NOT EXISTS idx_supplier_notifications_email ON supplier_notifications(LOWER(recipient_email));
+          CREATE INDEX IF NOT EXISTS idx_supplier_notifications_status ON supplier_notifications(status);
+        `);
+      } catch (supErr) {
+        console.warn("⚠️ supplier schema notice:", supErr.message);
+      }
+
+      // Seed/ensure quick demo accounts for Admin, FIT Staff, and Supplier
+      try {
+        const bcrypt = require("bcrypt");
+        const passHash = await bcrypt.hash("password123", 10);
+        const orgRes = await targetPool.query("SELECT id FROM organisations ORDER BY created_at ASC LIMIT 1;");
+        if (orgRes.rows.length > 0) {
+          const orgId = orgRes.rows[0].id;
+          
+          // Admin
+          const adminEmail = "admin@falahpharmacy.com";
+          const adminCheck = await targetPool.query("SELECT id FROM users WHERE LOWER(email) = LOWER($1);", [adminEmail]);
+          let adminId = adminCheck.rows[0]?.id;
+          if (!adminId) {
+            const ins = await targetPool.query(
+              "INSERT INTO users (name, email, password_hash, role, status) VALUES ('Falah Pharmacy Admin', $1, $2, 'ADMIN', 'ACTIVE') RETURNING id;",
+              [adminEmail, passHash]
+            );
+            adminId = ins.rows[0].id;
+          } else {
+            await targetPool.query("UPDATE users SET password_hash = $1, role = 'ADMIN', status = 'ACTIVE' WHERE id = $2;", [passHash, adminId]);
+          }
+          await targetPool.query(
+            "INSERT INTO organisation_memberships (organisation_id, user_id, status) VALUES ($1, $2, 'ACTIVE') ON CONFLICT (organisation_id, user_id) DO UPDATE SET status = 'ACTIVE';",
+            [orgId, adminId]
+          );
+
+          // FIT Branch Staff
+          const staffEmail = "staff.fit@falahpharmacy.com";
+          const staffCheck = await targetPool.query("SELECT id FROM users WHERE LOWER(email) = LOWER($1);", [staffEmail]);
+          let staffId = staffCheck.rows[0]?.id;
+          if (!staffId) {
+            const ins = await targetPool.query(
+              "INSERT INTO users (name, email, password_hash, role, status) VALUES ('FIT Fast Branch Staff', $1, $2, 'STAFF', 'ACTIVE') RETURNING id;",
+              [staffEmail, passHash]
+            );
+            staffId = ins.rows[0].id;
+          } else {
+            await targetPool.query("UPDATE users SET password_hash = $1, role = 'STAFF', status = 'ACTIVE' WHERE id = $2;", [passHash, staffId]);
+          }
+          const omRes = await targetPool.query(
+            "INSERT INTO organisation_memberships (organisation_id, user_id, status) VALUES ($1, $2, 'ACTIVE') ON CONFLICT (organisation_id, user_id) DO UPDATE SET status = 'ACTIVE' RETURNING id;",
+            [orgId, staffId]
+          );
+          const membershipId = omRes.rows[0]?.id;
+          const branchRes = await targetPool.query("SELECT id FROM branches WHERE organisation_id = $1 ORDER BY created_at ASC;", [orgId]);
+          const fitBranchId = branchRes.rows[1]?.id || branchRes.rows[0]?.id;
+          const roleRes = await targetPool.query("SELECT id FROM roles WHERE role_identifier IN ('PHARMACIST', 'CASHIER', 'STAFF') LIMIT 1;");
+          const roleId = roleRes.rows[0]?.id;
+          if (membershipId && fitBranchId && roleId) {
+            await targetPool.query("DELETE FROM branch_assignments WHERE membership_id = $1;", [membershipId]);
+            await targetPool.query(
+              "INSERT INTO branch_assignments (membership_id, branch_id, role_id, is_primary) VALUES ($1, $2, $3, TRUE);",
+              [membershipId, fitBranchId, roleId]
+            );
+          }
+
+          // Supplier Users: ensure all suppliers have login credentials in users table
+          const allSups = await targetPool.query("SELECT id, name, email, phone FROM suppliers;");
+          for (const s of allSups.rows) {
+            const cleanName = s.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+            const supEmail = s.email && !s.email.includes('example.com')
+              ? s.email.toLowerCase()
+              : (s.email || `supplier.${cleanName || 'vendor'}@pharmaflow.in`.toLowerCase());
+            const uCheck = await targetPool.query(
+              "SELECT id FROM users WHERE supplier_id = $1 OR LOWER(email) = LOWER($2);",
+              [s.id, supEmail]
+            );
+            if (uCheck.rows.length === 0) {
+              await targetPool.query(
+                "INSERT INTO users (name, email, phone, password_hash, role, status, supplier_id) VALUES ($1, $2, $3, $4, 'SUPPLIER', 'ACTIVE', $5);",
+                [s.name, supEmail, s.phone || null, passHash, s.id]
+              );
+            }
+          }
+        }
+      } catch (seedErr) {
+        console.warn("⚠️ Demo auth accounts seed notice:", seedErr.message);
+      }
     }
 
     // 3. Verify user table seed data

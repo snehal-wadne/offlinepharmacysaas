@@ -665,27 +665,27 @@ function generateCode128Svg(text, barHeight = 44, moduleWidth = 2) {
     }
   }
 
-  const quietZone = 8;
+  const quietZone = 14;
   const svgWidth = (totalModules + quietZone * 2) * moduleWidth;
-  const svgHeight = barHeight + 16;
+  const svgHeight = barHeight + 18;
 
   let x = quietZone * moduleWidth;
   let rects = "";
   for (const seg of segments) {
     const w = seg.width * moduleWidth;
     if (seg.isBar) {
-      rects += `<rect x="${x}" y="0" width="${w}" height="${barHeight}" fill="#000000" />`;
+      rects += `<rect x="${x}" y="3" width="${w}" height="${barHeight}" fill="#000000" />`;
     }
     x += w;
   }
 
   const textX = svgWidth / 2;
-  const textY = barHeight + 13;
+  const textY = barHeight + 14;
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${svgWidth} ${svgHeight}" width="${svgWidth}" height="${svgHeight}">
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${svgWidth} ${svgHeight}" width="${svgWidth}" height="${svgHeight}" style="background-color: #FFFFFF; shape-rendering: crispEdges;">
   <rect width="100%" height="100%" fill="#ffffff" />
   ${rects}
-  <text x="${textX}" y="${textY}" text-anchor="middle" font-family="monospace, sans-serif" font-size="11" font-weight="700" fill="#111827" letter-spacing="1.5">${clean}</text>
+  <text x="${textX}" y="${textY}" text-anchor="middle" font-family="'Courier New', monospace, sans-serif" font-size="11" font-weight="700" fill="#111827" letter-spacing="1.5">${clean}</text>
 </svg>`;
 }
 

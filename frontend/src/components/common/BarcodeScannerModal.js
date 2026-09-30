@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Html5Qrcode } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import {
   View,
   Text,
@@ -32,11 +32,14 @@ export default function BarcodeScannerModal({
   const [cameraFacing, setCameraFacing] = useState('user');
   const [cameraStatusMessage, setCameraStatusMessage] = useState('Initializing webcam...');
   const [lastScanned, setLastScanned] = useState(null);
+  const [imageScanning, setImageScanning] = useState(false);
+  const [imageScanError, setImageScanError] = useState('');
 
   const laserAnim = useRef(new Animated.Value(0)).current;
   const lastFiredRef = useRef({ code: null, time: 0 });
   const html5ScannerRef = useRef(null);
   const scanLockedRef = useRef(false);
+  const fileInputRef = useRef(null);
 
   // Sound feedback upon scan
   const triggerScanBeep = () => {
@@ -129,23 +132,61 @@ export default function BarcodeScannerModal({
 
     const startScanner = async () => {
       try {
+        const formatsToSupport = [
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.CODE_93,
+          Html5QrcodeSupportedFormats.CODABAR,
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.UPC_EAN_EXTENSION,
+          Html5QrcodeSupportedFormats.ITF,
+          Html5QrcodeSupportedFormats.QR_CODE,
+          Html5QrcodeSupportedFormats.DATA_MATRIX,
+        ];
+
         scanner = new Html5Qrcode('pharmacy-barcode-reader', {
+          formatsToSupport,
           verbose: false,
+          experimentalFeatures: {
+            useBarCodeDetectorIfSupported: true,
+          },
         });
 
         html5ScannerRef.current = scanner;
 
         startPromise = scanner.start(
-          { facingMode: cameraFacing },
           {
-            fps: 10,
-            // Scan the entire camera frame.
+            facingMode: cameraFacing,
+            width: { min: 640, ideal: 1280, max: 1920 },
+            height: { min: 480, ideal: 720, max: 1080 },
+          },
+          {
+            fps: 20,
+            qrbox: (viewfinderWidth, viewfinderHeight) => {
+              const width = Math.min(
+                viewfinderWidth - 12,
+                Math.max(260, Math.floor(viewfinderWidth * 0.94))
+              );
+              const height = Math.min(
+                viewfinderHeight - 12,
+                Math.max(160, Math.floor(viewfinderHeight * 0.8))
+              );
+              return { width, height };
+            },
+            aspectRatio: 1.777778,
           },
           (decodedText) => {
             if (cancelled || scanLockedRef.current) return;
 
             console.log('CAMERA DETECTED:', decodedText);
             scanLockedRef.current = true;
+            // Unlock scanner after 1.5 seconds so user can scan consecutive products
+            setTimeout(() => {
+              scanLockedRef.current = false;
+            }, 1500);
             executeScan(decodedText);
           },
           () => {}
@@ -156,13 +197,13 @@ export default function BarcodeScannerModal({
         if (cancelled) return;
 
         setCameraActive(true);
-        setCameraStatusMessage('Camera ready — scan barcode or QR code');
+        setCameraStatusMessage('Camera ready — hold barcode or image in front of camera');
       } catch (error) {
         if (!cancelled) {
           console.error('[Scanner]', error);
           setCameraActive(false);
           setCameraStatusMessage(
-            'Camera unavailable. Check camera permission.'
+            'Camera unavailable. Reason: ' + (error?.message || 'Check camera permission')
           );
         }
       }
@@ -211,7 +252,16 @@ export default function BarcodeScannerModal({
     let lastKeyTime = Date.now();
 
     const handleKeyDown = (e) => {
-      if (e.target && e.target.tagName === 'INPUT') return;
+      if (e.target && e.target.tagName === 'INPUT') {
+        if (e.key === 'Enter') {
+          const val = e.target.value;
+          if (val && val.trim().length >= 2) {
+            e.preventDefault();
+            executeScan(val.trim(), { skipDedupe: true });
+          }
+        }
+        return;
+      }
 
       const currentTime = Date.now();
       const diff = currentTime - lastKeyTime;
@@ -242,6 +292,63 @@ export default function BarcodeScannerModal({
     setCameraFacing((prev) =>
       prev === 'user' ? 'environment' : 'user'
     );
+  };
+
+  // Scan directly from an uploaded or dropped image file
+  const handleImageFileUpload = async (event) => {
+    const file = event?.target?.files?.[0];
+    if (!file) return;
+
+    setImageScanning(true);
+    setImageScanError('');
+
+    try {
+      let decodedText = null;
+
+      const formatsToSupport = [
+        Html5QrcodeSupportedFormats.CODE_128,
+        Html5QrcodeSupportedFormats.CODE_39,
+        Html5QrcodeSupportedFormats.CODE_93,
+        Html5QrcodeSupportedFormats.CODABAR,
+        Html5QrcodeSupportedFormats.EAN_13,
+        Html5QrcodeSupportedFormats.EAN_8,
+        Html5QrcodeSupportedFormats.UPC_A,
+        Html5QrcodeSupportedFormats.UPC_E,
+        Html5QrcodeSupportedFormats.UPC_EAN_EXTENSION,
+        Html5QrcodeSupportedFormats.ITF,
+        Html5QrcodeSupportedFormats.QR_CODE,
+        Html5QrcodeSupportedFormats.DATA_MATRIX,
+      ];
+
+      if (html5ScannerRef.current) {
+        decodedText = await html5ScannerRef.current.scanFile(file, true);
+      } else {
+        const tempScanner = new Html5Qrcode('pharmacy-barcode-reader', {
+          formatsToSupport,
+          verbose: false,
+        });
+        decodedText = await tempScanner.scanFile(file, true);
+        tempScanner.clear();
+      }
+
+      if (decodedText) {
+        setImageScanError('');
+        executeScan(decodedText, { skipDedupe: true });
+      } else {
+        setImageScanError(
+          'No barcode found in uploaded image. Please ensure the full barcode lines and numbers are clearly visible.'
+        );
+      }
+    } catch (err) {
+      console.warn('Image scan failed:', err);
+      setImageScanError(
+        'Could not decode barcode from image. Reason: ' +
+          (err?.message || 'Barcode lines are blurry, low-resolution, or cut off.')
+      );
+    } finally {
+      setImageScanning(false);
+      if (event.target) event.target.value = '';
+    }
   };
 
   const sampleProducts = [
@@ -380,7 +487,7 @@ export default function BarcodeScannerModal({
               </Text>
             </View>
 
-            {/* Camera Switch / Flip Button */}
+            {/* Camera Switch / Flip Button inside viewport */}
             <Pressable
               onPress={handleToggleCamera}
               style={styles.cameraFlipBtn}
@@ -393,6 +500,109 @@ export default function BarcodeScannerModal({
                 )
               </Text>
             </Pressable>
+          </View>
+
+          {/* Action row: Flip Camera + Upload Image Barcode Button */}
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 10, marginBottom: 8 }}>
+            <Pressable
+              onPress={handleToggleCamera}
+              style={{
+                flex: 1,
+                backgroundColor: '#F1F5F9',
+                borderColor: '#CBD5E1',
+                borderWidth: 1,
+                borderRadius: 8,
+                paddingVertical: 9,
+                alignItems: 'center',
+                flexDirection: 'row',
+                justifyContent: 'center',
+                gap: 6,
+              }}
+            >
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#334155' }}>
+                🔄 Flip Camera ({cameraFacing === 'user' ? 'Face' : 'Back'})
+              </Text>
+            </Pressable>
+
+            {Platform.OS === 'web' && (
+              <Pressable
+                onPress={() => fileInputRef.current?.click()}
+                disabled={imageScanning}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#EFF6FF',
+                  borderColor: '#3B82F6',
+                  borderWidth: 1,
+                  borderRadius: 8,
+                  paddingVertical: 9,
+                  alignItems: 'center',
+                  flexDirection: 'row',
+                  justifyContent: 'center',
+                  gap: 6,
+                  opacity: imageScanning ? 0.6 : 1,
+                }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#1D4ED8' }}>
+                  {imageScanning ? 'Scanning Image... ⏳' : '📁 Upload Barcode Image'}
+                </Text>
+              </Pressable>
+            )}
+          </View>
+
+          {/* Hidden File Input for Image Upload */}
+          {Platform.OS === 'web' && (
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={handleImageFileUpload}
+            />
+          )}
+
+          {/* Image Scanning Failure / Diagnostic Error Notice */}
+          {Boolean(imageScanError) && (
+            <View
+              style={{
+                backgroundColor: '#FEF2F2',
+                borderColor: '#FCA5A5',
+                borderWidth: 1,
+                borderRadius: 8,
+                padding: 12,
+                marginBottom: 10,
+              }}
+            >
+              <Text style={{ color: '#DC2626', fontWeight: '700', fontSize: 13, marginBottom: 4 }}>
+                ⚠️ Barcode Detection Issue
+              </Text>
+              <Text style={{ color: '#991B1B', fontSize: 12, lineHeight: 18 }}>
+                {imageScanError}
+              </Text>
+              <Text style={{ color: '#6B7280', fontSize: 11, marginTop: 4 }}>
+                💡 Tip: If scanning a barcode from another phone screen, increase screen brightness to 70%+ and reduce light reflections.
+              </Text>
+            </View>
+          )}
+
+          {/* Quick Scanner Guidance & Diagnostic Tips */}
+          <View
+            style={{
+              backgroundColor: '#F8FAFC',
+              borderColor: '#E2E8F0',
+              borderWidth: 1,
+              borderRadius: 8,
+              padding: 10,
+              marginBottom: 10,
+            }}
+          >
+            <Text style={{ fontSize: 12, fontWeight: '700', color: '#1E293B', marginBottom: 2 }}>
+              🎯 How to scan barcode images & labels:
+            </Text>
+            <Text style={{ fontSize: 11, color: '#64748B', lineHeight: 16 }}>
+              • Hold barcode 15–25 cm in front of camera, keeping stripes horizontal.{'\n'}
+              • If holding a phone screen displaying the barcode, set brightness to 70%+ to avoid glare.{'\n'}
+              • You can also click <Text style={{ fontWeight: '700', color: '#2563EB' }}>"📁 Upload Barcode Image"</Text> above to scan any screenshot directly.
+            </Text>
           </View>
 
           {/* Feedback Banner when scanned (raw code — always shown) */}
@@ -414,16 +624,30 @@ export default function BarcodeScannerModal({
               style={[
                 styles.resultCardBox,
                 resultCard.status === 'notfound' && styles.resultCardBoxWarn,
+                resultCard.status === 'error' && styles.resultCardBoxError,
               ]}
             >
-              {resultCard.status === 'notfound' ? (
+              {resultCard.status === 'notfound' || resultCard.status === 'error' ? (
                 <>
-                  <Text style={styles.resultCardTitle}>
-                    ❓ No medicine found for "{resultCard.code}"
+                  <Text
+                    style={[
+                      styles.resultCardTitle,
+                      resultCard.status === 'error' && { color: '#DC2626' },
+                    ]}
+                  >
+                    {resultCard.title ||
+                      (resultCard.status === 'error'
+                        ? `⚠️ Invalid Barcode Details ("${resultCard.code}")`
+                        : `❓ No medicine found for "${resultCard.code}"`)}
                   </Text>
-                  <Text style={styles.resultCardSubtitle}>
-                    Try the manual search below, or check the SKU on the
-                    printed label.
+                  <Text
+                    style={[
+                      styles.resultCardSubtitle,
+                      resultCard.status === 'error' && { color: '#991B1B' },
+                    ]}
+                  >
+                    {resultCard.reason ||
+                      'Try the manual search below, or check the SKU on the printed label.'}
                   </Text>
                 </>
               ) : (
@@ -872,6 +1096,10 @@ const styles = StyleSheet.create({
   resultCardBoxWarn: {
     backgroundColor: '#FFFBEB',
     borderColor: '#FCD34D',
+  },
+  resultCardBoxError: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FCA5A5',
   },
   resultCardHeaderRow: {
     flexDirection: 'row',

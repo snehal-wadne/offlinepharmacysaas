@@ -41,7 +41,7 @@ const authenticate = async (req, res, next) => {
 
         const userRes = await pool.query(
           `SELECT id, name, email, phone, staff_id AS "staffId", status, 
-                  is_platform_superadmin, supabase_auth_id
+                  is_platform_superadmin, supabase_auth_id, role, supplier_id
            FROM users
            WHERE (supabase_auth_id = $1 OR LOWER(email) = LOWER($2))
              AND status = 'ACTIVE'
@@ -61,6 +61,76 @@ const authenticate = async (req, res, next) => {
               .catch(() => {});
             user.supabase_auth_id = subUuid;
           }
+        } else if (supabaseDecoded.email) {
+          // Automatic JIT provisioning for Google Auth Admin (Zero-form onboarding)
+          const googleEmail = supabaseDecoded.email.trim().toLowerCase();
+          const rawName =
+            supabaseDecoded.user_metadata?.full_name ||
+            supabaseDecoded.user_metadata?.name ||
+            googleEmail.split("@")[0] ||
+            "Pharmacy Admin";
+          const googleName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
+          const pharmacyName = `${googleName}'s Pharmacy`;
+
+          try {
+            // 1. Create Organization
+            const orgRes = await pool.query(
+              `INSERT INTO organisations (name, status)
+               VALUES ($1, 'ACTIVE')
+               RETURNING id, name;`,
+              [pharmacyName],
+            );
+            const orgId = orgRes.rows[0].id;
+
+            // 2. Create User as ADMIN
+            const newUserRes = await pool.query(
+              `INSERT INTO users (name, email, supabase_auth_id, role, status)
+               VALUES ($1, $2, $3, 'ADMIN', 'ACTIVE')
+               RETURNING id, name, email, phone, staff_id AS "staffId", status, 
+                         is_platform_superadmin, supabase_auth_id, role, supplier_id;`,
+              [googleName, googleEmail, subUuid],
+            );
+            user = newUserRes.rows[0];
+
+            // 3. Link owner to organisation
+            await pool
+              .query(
+                `UPDATE organisations SET owner_id = $1 WHERE id = $2;`,
+                [user.id, orgId],
+              )
+              .catch(() => {});
+
+            // 4. Create primary branch
+            const branchRes = await pool.query(
+              `INSERT INTO branches (organisation_id, name, branch_code, status)
+               VALUES ($1, 'Main Branch', 'BR-01', 'ACTIVE')
+               RETURNING id;`,
+              [orgId],
+            );
+            const branchId = branchRes.rows[0]?.id;
+
+            // 5. Create organisation membership
+            const memRes = await pool.query(
+              `INSERT INTO organisation_memberships (organisation_id, user_id, status)
+               VALUES ($1, $2, 'ACTIVE')
+               RETURNING id;`,
+              [orgId, user.id],
+            );
+            const memId = memRes.rows[0]?.id;
+
+            // 6. Assign to branch
+            if (branchId && memId) {
+              await pool
+                .query(
+                  `INSERT INTO branch_assignments (membership_id, branch_id, is_primary)
+                   VALUES ($1, $2, TRUE);`,
+                  [memId, branchId],
+                )
+                .catch(() => {});
+            }
+          } catch (jitErr) {
+            console.warn("JIT Google onboarding warning:", jitErr.message);
+          }
         }
       }
 
@@ -70,7 +140,7 @@ const authenticate = async (req, res, next) => {
         if (legacyDecoded && legacyDecoded.userId) {
           const userRes = await pool.query(
             `SELECT id, name, email, phone, staff_id AS "staffId", status, 
-                    is_platform_superadmin, supabase_auth_id
+                    is_platform_superadmin, supabase_auth_id, role, supplier_id
              FROM users
              WHERE id = $1 AND status = 'ACTIVE'
              LIMIT 1;`,
@@ -126,6 +196,33 @@ const authenticate = async (req, res, next) => {
       });
     }
 
+    // Check if authenticated user is a Supplier (isolated from internal pharmacy memberships)
+    if (user.role === "SUPPLIER" || user.supplier_id) {
+      const supRes = await pool.query(
+        "SELECT id, name, email, phone, organisation_id FROM suppliers WHERE id = $1 OR LOWER(email) = $2 LIMIT 1;",
+        [user.supplier_id || "00000000-0000-0000-0000-000000000000", user.email],
+      );
+      const supplierInfo = supRes.rows[0];
+
+      req.user = {
+        id: user.id,
+        supabaseAuthId: user.supabase_auth_id || null,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        staffId: user.staffId,
+        isPlatformSuperadmin: false,
+        role: "SUPPLIER",
+        roleName: "Medicine Supplier",
+        roleId: null,
+        supplierId: supplierInfo?.id || user.supplier_id || null,
+        supplierName: supplierInfo?.name || null,
+        organisationId: supplierInfo?.organisation_id || null,
+        branchId: null,
+      };
+      return next();
+    }
+
     // 2. Query legitimate ACTIVE organisation memberships from PostgreSQL
     const memRes = await pool.query(
       `SELECT 
@@ -141,7 +238,8 @@ const authenticate = async (req, res, next) => {
        JOIN organisations o ON o.id = om.organisation_id
        LEFT JOIN branch_assignments ba ON ba.membership_id = om.id
        LEFT JOIN roles r ON r.id = ba.role_id
-       WHERE om.user_id = $1 AND om.status = 'ACTIVE' AND o.status = 'ACTIVE';`,
+       WHERE om.user_id = $1 AND om.status = 'ACTIVE' AND o.status = 'ACTIVE'
+       ORDER BY ba.is_primary DESC NULLS LAST, om.created_at ASC;`,
       [user.id],
     );
 

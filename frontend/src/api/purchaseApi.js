@@ -136,3 +136,12 @@ export async function updateSupplier(id, supplierData) {
 export async function deleteSupplier(id) {
   return apiDelete(`/api/suppliers/${id}`);
 }
+
+/**
+ * POST /api/suppliers/notify
+ * Send low/slow stock reorder notification to supplier
+ */
+export async function notifySupplierApi(notificationData) {
+  return apiPost("/api/suppliers/notify", notificationData);
+}
+

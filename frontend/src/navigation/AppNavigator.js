@@ -64,6 +64,9 @@ import ExpiryReportsScreen from "../screens/reports/ExpiryReportsScreen";
 import TaxGstSettingsScreen from "../screens/settings/TaxGstSettingsScreen";
 import SubscriptionPlansScreen from "../screens/settings/SubscriptionPlansScreen";
 
+// 8. Isolated Dedicated Supplier Portal
+import SupplierPortalScreen from "../screens/supplier/SupplierPortalScreen";
+
 const ROUTE_PERMISSIONS = {
   "tax-settings": "tax-settings:view",
   "subscription-plans": "subscription:view",
@@ -236,8 +239,15 @@ export default function AppNavigator() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [branchRefreshKey, setBranchRefreshKey] = useState(0);
 
-  const handleBranchesUpdated = () => {
+  const handleBranchesUpdated = (createdBranch) => {
     setBranchRefreshKey((prev) => prev + 1);
+    if (createdBranch && createdBranch.name) {
+      setSelectedBranch(createdBranch);
+      if (typeof syncEngine?.setActiveBranch === "function") {
+        syncEngine.setActiveBranch(createdBranch.id || createdBranch.name);
+      }
+      showToast(`Switched active branch to newly added branch: ${createdBranch.name}`);
+    }
   };
 
   // 3-state Auth Lifecycle: 'INITIALIZING' | 'AUTHENTICATED' | 'UNAUTHENTICATED' | 'AUTHENTICATED_INCOMPLETE_ONBOARDING'
@@ -316,15 +326,47 @@ export default function AppNavigator() {
         setAuthError("");
         setAuthSession({ organisationId: user?.organisationId });
 
+        if (user?.role === "SUPPLIER") {
+          setCurrentRoute("supplier-portal");
+          setSelectedBranch(null);
+          setAuthStatus("AUTHENTICATED");
+          return;
+        }
+
+        const isAdmin = Boolean(
+          user?.isOwner ||
+          user?.isPlatformSuperadmin ||
+          user?.is_platform_superadmin ||
+          (user?.role || "").toUpperCase() === "OWNER" ||
+          (user?.role || "").toUpperCase() === "ADMIN" ||
+          (user?.role || "").toUpperCase() === "SUPERADMIN" ||
+          (user?.role || "").toLowerCase().includes("admin") ||
+          (user?.role || "").toLowerCase().includes("owner")
+        );
+
         if (user && user.hasBranch === false) {
           setCurrentRoute("branches");
           updateBrowserRoute("branches", true);
           setSelectedBranch(null);
         } else if (user) {
-          // Default to "All Branches" on every fresh load instead of
-          // auto-pinning to the user's assigned branch; they pick a branch
-          // explicitly from the header dropdown when they need one.
-          setSelectedBranch(null);
+          if (isAdmin) {
+            // Admin can see all branches and defaults to "All Branches"
+            setSelectedBranch(null);
+          } else {
+            // Non-admin branch staff member MUST be pinned to their own branch
+            const assignedBranch =
+              user.branch ||
+              (user.branchId
+                ? {
+                    id: user.branchId,
+                    name: user.branchName || "Assigned Branch",
+                  }
+                : null);
+            setSelectedBranch(assignedBranch);
+            if (assignedBranch && typeof syncEngine?.setActiveBranch === "function") {
+              syncEngine.setActiveBranch(assignedBranch.id || assignedBranch.name);
+            }
+          }
         }
 
         setAuthStatus("AUTHENTICATED");
@@ -400,25 +442,48 @@ export default function AppNavigator() {
       if (isMounted) {
         setAuthStatus((prev) => {
           if (prev === "INITIALIZING") {
+            const localToken =
+              typeof window !== "undefined"
+                ? window.localStorage?.getItem("authToken")
+                : null;
+            if (localToken) {
+              restoreAuthSession({ access_token: localToken });
+              return prev;
+            }
             return "UNAUTHENTICATED";
           }
           return prev;
         });
       }
-    }, 1500);
+    }, 2000);
 
     // 1. Initial check on mount
     supabase.auth
       .getSession()
       .then(({ data }) => {
         if (isMounted) {
-          restoreAuthSession(data?.session || null);
+          const localToken =
+            typeof window !== "undefined"
+              ? window.localStorage?.getItem("authToken")
+              : null;
+          const effectiveSession =
+            data?.session ||
+            (localToken ? { access_token: localToken } : null);
+          restoreAuthSession(effectiveSession);
         }
       })
       .catch((err) => {
         console.warn("Supabase getSession failed:", err);
         if (isMounted) {
-          setAuthStatus("UNAUTHENTICATED");
+          const localToken =
+            typeof window !== "undefined"
+              ? window.localStorage?.getItem("authToken")
+              : null;
+          if (localToken) {
+            restoreAuthSession({ access_token: localToken });
+          } else {
+            setAuthStatus("UNAUTHENTICATED");
+          }
         }
       });
 
@@ -760,6 +825,7 @@ export default function AppNavigator() {
             onNavigate={handleNavigate}
             onShowToast={showToast}
             isMultiBranch={isMultiBranch}
+            currentUser={currentUser}
             onBranchesUpdated={async () => {
               handleBranchesUpdated();
               const {
@@ -964,18 +1030,58 @@ export default function AppNavigator() {
           setGoogleOnboardingData(null);
           setAuthError("");
           setAuthStatus("AUTHENTICATED");
-          if (user && user.hasBranch === false) {
+
+          const isUserAdmin = Boolean(
+            user?.isOwner ||
+            user?.isPlatformSuperadmin ||
+            user?.is_platform_superadmin ||
+            (user?.role || "").toUpperCase() === "OWNER" ||
+            (user?.role || "").toUpperCase() === "ADMIN" ||
+            (user?.role || "").toUpperCase() === "SUPERADMIN" ||
+            (user?.role || "").toLowerCase().includes("admin") ||
+            (user?.role || "").toLowerCase().includes("owner")
+          );
+
+          if (user?.role === "SUPPLIER") {
+            setCurrentRoute("supplier-portal");
+            setSelectedBranch(null);
+          } else if (user && user.hasBranch === false) {
             setCurrentRoute("branches");
             updateBrowserRoute("branches", true);
             setSelectedBranch(null);
-          } else {
-            // Default to "All Branches" on login; the user picks a branch
-            // explicitly from the header dropdown when they need one.
+          } else if (isUserAdmin) {
+            // Admin defaults to All Branches
             setSelectedBranch(null);
+          } else {
+            // Non-admin branch staff member: Pin strictly to assigned branch!
+            const assignedBranch =
+              user.branch ||
+              (user.branchId
+                ? {
+                    id: user.branchId,
+                    name: user.branchName || "My Branch",
+                  }
+                : null);
+            setSelectedBranch(assignedBranch);
+            if (assignedBranch && typeof syncEngine?.setActiveBranch === "function") {
+              syncEngine.setActiveBranch(assignedBranch.id || assignedBranch.name);
+            }
           }
           showToast(`Welcome back, ${user.display_name || user.name}!`);
         }}
       />
+    );
+  }
+
+  // Auth Guard: SUPPLIER PORTAL (Dedicated isolated portal for medicine suppliers)
+  if (currentUser?.role === "SUPPLIER") {
+    return (
+      <View style={styles.appContainer}>
+        <SupplierPortalScreen
+          currentUser={currentUser}
+          onSignOut={handleSignOut}
+        />
+      </View>
     );
   }
 

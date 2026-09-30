@@ -47,6 +47,8 @@ class AuthService {
         u.status, 
         u.password_hash,
         u.supabase_auth_id,
+        u.role AS user_role,
+        u.supplier_id,
         om.organisation_id,
         ba.branch_id,
         r.name AS role_name,
@@ -57,8 +59,25 @@ class AuthService {
       LEFT JOIN organisations o ON o.id = om.organisation_id AND o.status = 'ACTIVE'
       LEFT JOIN branch_assignments ba ON ba.membership_id = om.id
       LEFT JOIN roles r ON r.id = ba.role_id
-      WHERE (LOWER(u.email) = $1 OR u.phone = $1 OR LOWER(u.staff_id) = $1)
+      LEFT JOIN suppliers s ON s.id = u.supplier_id
+      WHERE (
+        LOWER(u.email) = $1 
+        OR u.phone = $1 
+        OR LOWER(u.staff_id) = $1
+        OR LOWER(u.name) = $1
+        OR LOWER(COALESCE(s.name, '')) = $1
+        OR LOWER(COALESCE(s.name, '')) LIKE '%' || $1 || '%'
+        OR (s.phone IS NOT NULL AND (s.phone = $1 OR REPLACE(REPLACE(s.phone, ' ', ''), '-', '') = REPLACE(REPLACE($1, ' ', ''), '-', '')))
+        OR (u.phone IS NOT NULL AND REPLACE(REPLACE(u.phone, ' ', ''), '-', '') = REPLACE(REPLACE($1, ' ', ''), '-', ''))
+      )
         AND u.status = 'ACTIVE'
+      ORDER BY 
+        CASE 
+          WHEN LOWER(u.email) = $1 THEN 0
+          WHEN u.phone = $1 THEN 1
+          WHEN LOWER(COALESCE(s.name, '')) = $1 THEN 2
+          ELSE 3
+        END
       LIMIT 1;
     `;
 
@@ -116,7 +135,25 @@ class AuthService {
       user.supabase_auth_id = supabaseAuthId;
     }
 
-    // 3. Resolve organisation context legitimately from PostgreSQL
+    // 3. Check for Supplier identity
+    const isSupplier = user.user_role === "SUPPLIER" || Boolean(user.supplier_id);
+    let supplierDetails = null;
+
+    if (isSupplier) {
+      const sRes = await pool.query(
+        "SELECT id, name, contact_person, phone, email, city, gstin, category, organisation_id FROM suppliers WHERE id = $1 OR LOWER(email) = $2 LIMIT 1;",
+        [user.supplier_id || "00000000-0000-0000-0000-000000000000", user.email],
+      );
+      if (sRes.rows.length > 0) {
+        supplierDetails = sRes.rows[0];
+        if (!user.organisation_id) {
+          user.organisation_id = supplierDetails.organisation_id;
+        }
+      }
+    }
+
+    // Resolve organisation context legitimately from PostgreSQL
+    let isOwner = false;
     if (!user.organisation_id) {
       const ownerOrgRes = await pool.query(
         "SELECT id, name FROM organisations WHERE owner_id = $1 AND status = 'ACTIVE' LIMIT 1;",
@@ -125,9 +162,10 @@ class AuthService {
       if (ownerOrgRes.rows.length > 0) {
         user.organisation_id = ownerOrgRes.rows[0].id;
         user.organisation_name = ownerOrgRes.rows[0].name;
+        isOwner = true;
       } else {
         const memRes = await pool.query(
-          `SELECT o.id, o.name FROM organisations o
+          `SELECT o.id, o.name, o.owner_id FROM organisations o
            JOIN organisation_memberships om ON om.organisation_id = o.id
            WHERE om.user_id = $1 AND om.status = 'ACTIVE' AND o.status = 'ACTIVE'
            ORDER BY om.created_at ASC LIMIT 1;`,
@@ -136,9 +174,29 @@ class AuthService {
         if (memRes.rows.length > 0) {
           user.organisation_id = memRes.rows[0].id;
           user.organisation_name = memRes.rows[0].name;
+          isOwner = memRes.rows[0].owner_id === user.id;
         }
       }
+    } else {
+      const orgCheck = await pool.query(
+        "SELECT owner_id FROM organisations WHERE id = $1 LIMIT 1;",
+        [user.organisation_id],
+      );
+      if (orgCheck.rows[0]?.owner_id === user.id) {
+        isOwner = true;
+      }
     }
+
+    const isExplicitAdmin =
+      (user.role_identifier || user.role_name || user.user_role || "").toUpperCase() === "ADMIN";
+    const isAdminOrOwner = isOwner || isExplicitAdmin;
+    const resolvedRole = isSupplier
+      ? "SUPPLIER"
+      : isOwner
+      ? "OWNER"
+      : isExplicitAdmin
+      ? "ADMIN"
+      : (user.role_identifier || user.role_name || user.user_role || "STAFF");
 
     // 4. Resolve branch strictly within user's organisation
     let branch = null;
@@ -151,6 +209,17 @@ class AuthService {
         branch = branchRes.rows[0];
       }
     }
+    // If user has an assigned branch from branch_assignments, respect it!
+    if (!branch && user.branch_id) {
+      const assignedBranchRes = await pool.query(
+        "SELECT id, name, branch_code AS \"branchCode\" FROM branches WHERE id = $1 AND status = 'ACTIVE' LIMIT 1;",
+        [user.branch_id],
+      );
+      if (assignedBranchRes.rows.length > 0) {
+        branch = assignedBranchRes.rows[0];
+      }
+    }
+    // Fallback to first branch of user's organisation
     if (!branch && user.organisation_id) {
       const defaultBranchRes = await pool.query(
         "SELECT id, name, branch_code AS \"branchCode\" FROM branches WHERE organisation_id = $1 AND status = 'ACTIVE' ORDER BY created_at ASC LIMIT 1;",
@@ -176,12 +245,27 @@ class AuthService {
         email: user.email,
         phone: user.phone,
         staffId: user.staffId,
-        role: user.role_identifier || user.role_name || "ADMIN",
-        roleName: user.role_name || "Administrator",
+        role: resolvedRole,
+        roleName: isSupplier
+          ? "Medicine Supplier"
+          : user.role_name || (isOwner ? "Pharmacy Owner" : "Staff Member"),
+        isOwner: Boolean(isOwner),
+        supplierId: supplierDetails?.id || user.supplier_id || null,
+        supplierName: supplierDetails?.name || null,
+        companyName: supplierDetails?.name || null,
+        supplierDetails: supplierDetails || null,
         organisationId: user.organisation_id,
         organisationName: user.organisation_name || "Falah Pharmacy",
         branchId: branch?.id || null,
-        branch: branch?.name || null,
+        branchName: branch?.name || null,
+        branch: branch
+          ? {
+              id: branch.id,
+              name: branch.name,
+              branchCode: branch.branchCode,
+            }
+          : null,
+        hasBranch: Boolean(branch),
         isOffline: false,
       },
     };
@@ -211,6 +295,286 @@ class AuthService {
    * 3. Rollback & Supabase user cleanup on failure
    */
   async register(userData) {
+    const isSupplierRegistration =
+      (userData?.accountType || "").toUpperCase() === "SUPPLIER" ||
+      (userData?.role || "").toUpperCase() === "SUPPLIER";
+
+    if (isSupplierRegistration) {
+      const companyName = (
+        userData.companyName ||
+        userData.pharmacyName ||
+        userData.name ||
+        ""
+      ).trim();
+      const contactPerson = (
+        userData.contactPerson ||
+        userData.adminName ||
+        userData.ownerName ||
+        userData.name ||
+        ""
+      ).trim();
+      const cleanEmail = (userData.email || "").trim().toLowerCase();
+      const cleanPhone = (userData.phone || "").trim();
+      const cleanCity = (userData.city || "Mumbai").trim();
+      const cleanGstin =
+        (userData.gstin || userData.gstNumber || "").trim() || null;
+      const cleanCategory = (
+        userData.category || "Medicines & Injections"
+      ).trim();
+      const password = userData.password;
+
+      if (!companyName || !cleanEmail || !password) {
+        throw new Error(
+          "Company name, email, and password are required for supplier registration.",
+        );
+      }
+      if (password.length < 6) {
+        throw new Error("Password must be at least 6 characters long.");
+      }
+
+      const existingUser = await pool.query(
+        "SELECT id FROM users WHERE LOWER(email) = $1 LIMIT 1;",
+        [cleanEmail],
+      );
+      if (existingUser.rows.length > 0) {
+        throw new Error("An account with this email address already exists.");
+      }
+
+      let supabaseAuthId = crypto.randomUUID();
+      if (supabaseAdmin?.auth?.admin?.createUser) {
+        try {
+          const { data: supaUser } = await supabaseAdmin.auth.admin.createUser({
+            email: cleanEmail,
+            password,
+            email_confirm: true,
+            user_metadata: {
+              name: contactPerson || companyName,
+              role: "SUPPLIER",
+            },
+          });
+          if (supaUser?.user?.id) {
+            supabaseAuthId = supaUser.user.id;
+          }
+        } catch (e) {}
+      }
+
+      const passwordHash = await bcrypt.hash(password, 10);
+
+      const orgRes = await pool.query(
+        "SELECT id, name FROM organisations WHERE status = 'ACTIVE' ORDER BY created_at ASC LIMIT 1;",
+      );
+      let orgId = orgRes.rows[0]?.id;
+      let orgName = orgRes.rows[0]?.name || "Falah Pharmacy";
+
+      if (!orgId) {
+        const newOrg = await pool.query(
+          "INSERT INTO organisations (name, status) VALUES ('Pharma Network', 'ACTIVE') RETURNING id, name;",
+        );
+        orgId = newOrg.rows[0].id;
+        orgName = newOrg.rows[0].name;
+      }
+
+      const supRes = await pool.query(
+        `INSERT INTO suppliers (organisation_id, name, contact_person, phone, email, city, gstin, category, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'ACTIVE')
+         RETURNING *;`,
+        [
+          orgId,
+          companyName,
+          contactPerson || companyName,
+          cleanPhone || null,
+          cleanEmail,
+          cleanCity,
+          cleanGstin,
+          cleanCategory,
+        ],
+      );
+      const supplier = supRes.rows[0];
+
+      const userRes = await pool.query(
+        `INSERT INTO users (name, email, password_hash, phone, supabase_auth_id, role, supplier_id, status)
+         VALUES ($1, $2, $3, $4, $5, 'SUPPLIER', $6, 'ACTIVE')
+         RETURNING id, name, email, phone, supabase_auth_id, role, supplier_id, status;`,
+        [
+          contactPerson || companyName,
+          cleanEmail,
+          passwordHash,
+          cleanPhone || null,
+          supabaseAuthId,
+          supplier.id,
+        ],
+      );
+      const user = userRes.rows[0];
+
+      const token = createSupabaseTestToken({
+        sub: supabaseAuthId,
+        email: cleanEmail,
+      });
+
+      return {
+        success: true,
+        message: "Supplier account registered successfully.",
+        token,
+        user: {
+          id: user.id,
+          supabaseAuthId,
+          name: user.name,
+          email: user.email,
+          phone: user.phone,
+          role: "SUPPLIER",
+          roleName: "Medicine Supplier",
+          supplierId: supplier.id,
+          supplierName: supplier.name,
+          companyName: supplier.name,
+          organisationId: orgId,
+          organisationName: orgName,
+        },
+      };
+    }
+
+    const isStaffRegistration =
+      (userData?.accountType || "").toUpperCase() === "STAFF" ||
+      (userData?.role || "").toUpperCase() === "STAFF";
+
+    if (isStaffRegistration) {
+      const staffName = (userData.name || userData.adminName || "").trim();
+      const cleanEmail = (userData.email || "").trim().toLowerCase();
+      const cleanPhone = (userData.phone || "").trim();
+      const staffRole = (userData.staffRole || "Pharmacist").trim();
+      const password = userData.password;
+
+      if (!staffName || !cleanEmail || !password) {
+        throw new Error(
+          "Full name, email, and password are required for staff registration.",
+        );
+      }
+      if (password.length < 6) {
+        throw new Error("Password must be at least 6 characters long.");
+      }
+
+      const existingUser = await pool.query(
+        "SELECT id FROM users WHERE LOWER(email) = $1 LIMIT 1;",
+        [cleanEmail],
+      );
+      if (existingUser.rows.length > 0) {
+        throw new Error("An account with this email address already exists.");
+      }
+
+      let supabaseAuthId = crypto.randomUUID();
+      if (supabaseAdmin?.auth?.admin?.createUser) {
+        try {
+          const { data: supaUser } = await supabaseAdmin.auth.admin.createUser({
+            email: cleanEmail,
+            password,
+            email_confirm: true,
+            user_metadata: {
+              name: staffName,
+              role: "STAFF",
+            },
+          });
+          if (supaUser?.user?.id) {
+            supabaseAuthId = supaUser.user.id;
+          }
+        } catch (e) {}
+      }
+
+      const passwordHash = await bcrypt.hash(password, 10);
+
+      // Link to organization
+      let orgId = null;
+      let orgName = "Pharmacy";
+      if (userData.pharmacyCode) {
+        const orgByCode = await pool.query(
+          "SELECT id, name FROM organisations WHERE LOWER(name) LIKE '%' || LOWER($1) || '%' OR id::text = $1 LIMIT 1;",
+          [userData.pharmacyCode.trim()],
+        );
+        if (orgByCode.rows.length > 0) {
+          orgId = orgByCode.rows[0].id;
+          orgName = orgByCode.rows[0].name;
+        }
+      }
+      if (!orgId) {
+        const defaultOrg = await pool.query(
+          "SELECT id, name FROM organisations WHERE status = 'ACTIVE' ORDER BY created_at ASC LIMIT 1;",
+        );
+        orgId = defaultOrg.rows[0]?.id;
+        orgName = defaultOrg.rows[0]?.name || "Pharmacy";
+      }
+
+      // Pick first active branch of the organisation
+      const branchRes = await pool.query(
+        "SELECT id, name, branch_code AS \"branchCode\" FROM branches WHERE organisation_id = $1 AND status = 'ACTIVE' ORDER BY created_at ASC LIMIT 1;",
+        [orgId],
+      );
+      const branch = branchRes.rows[0] || null;
+
+      // Generate staff ID
+      const staffSeqRes = await pool.query("SELECT COUNT(*) + 1 AS num FROM users WHERE role = 'STAFF';");
+      const staffSeq = staffSeqRes.rows[0]?.num || 1;
+      const staffId = `STF-${String(staffSeq).padStart(3, "0")}`;
+
+      const userRes = await pool.query(
+        `INSERT INTO users (name, email, password_hash, phone, supabase_auth_id, role, staff_id, status)
+         VALUES ($1, $2, $3, $4, $5, 'STAFF', $6, 'ACTIVE')
+         RETURNING id, name, email, phone, supabase_auth_id, role, staff_id, status;`,
+        [staffName, cleanEmail, passwordHash, cleanPhone || null, supabaseAuthId, staffId],
+      );
+      const user = userRes.rows[0];
+
+      let membershipId = null;
+      if (orgId) {
+        const memRes = await pool.query(
+          `INSERT INTO organisation_memberships (organisation_id, user_id, status)
+           VALUES ($1, $2, 'ACTIVE')
+           ON CONFLICT DO NOTHING RETURNING id;`,
+          [orgId, user.id],
+        ).catch((err) => console.warn("Staff membership error:", err.message));
+        membershipId = memRes?.rows?.[0]?.id;
+        if (!membershipId) {
+          const existingMem = await pool.query(
+            "SELECT id FROM organisation_memberships WHERE organisation_id = $1 AND user_id = $2 LIMIT 1;",
+            [orgId, user.id],
+          );
+          membershipId = existingMem.rows[0]?.id;
+        }
+      }
+
+      if (branch?.id && membershipId) {
+        await pool.query(
+          `INSERT INTO branch_assignments (membership_id, branch_id, is_primary)
+           VALUES ($1, $2, TRUE)
+           ON CONFLICT DO NOTHING;`,
+          [membershipId, branch.id],
+        ).catch((err) => console.warn("Staff branch assignment error:", err.message));
+      }
+
+      const token = createSupabaseTestToken({
+        sub: supabaseAuthId,
+        email: cleanEmail,
+      });
+
+      return {
+        success: true,
+        message: "Staff account registered successfully.",
+        token,
+        user: {
+          id: user.id,
+          supabaseAuthId,
+          name: user.name,
+          email: user.email,
+          phone: user.phone,
+          staffId: user.staff_id,
+          role: "STAFF",
+          roleName: staffRole || "Pharmacy Staff",
+          organisationId: orgId,
+          organisationName: orgName,
+          branchId: branch?.id || null,
+          branchName: branch?.name || null,
+          hasBranch: Boolean(branch?.id),
+        },
+      };
+    }
+
     const {
       ownerName,
       adminName,
@@ -957,6 +1321,36 @@ class AuthService {
       throw new Error("Invalid user context.");
     }
 
+    // If authenticated user is a Supplier, return supplier-specific context
+    if (user.role === "SUPPLIER" || user.supplierId) {
+      const supRes = await pool.query(
+        "SELECT id, name, contact_person, phone, email, city, gstin, category, status, organisation_id FROM suppliers WHERE id = $1 OR LOWER(email) = $2 LIMIT 1;",
+        [user.supplierId || "00000000-0000-0000-0000-000000000000", user.email],
+      );
+      const sup = supRes.rows[0];
+      return {
+        success: true,
+        user: {
+          id: user.id,
+          supabaseAuthId: user.supabaseAuthId || null,
+          name: user.name,
+          email: user.email,
+          phone: user.phone,
+          role: "SUPPLIER",
+          roleName: "Medicine Supplier",
+          supplierId: sup?.id || user.supplierId || null,
+          supplierName: sup?.name || null,
+          companyName: sup?.name || null,
+          organisationId: sup?.organisation_id || user.organisationId,
+          organisationName: "Pharma Distribution Network",
+          branchId: null,
+          branchName: null,
+          hasBranch: false,
+          branch: null,
+        },
+      };
+    }
+
     // Query fresh user & organisation details
     const orgRes = user.organisationId
       ? await pool.query(
@@ -981,6 +1375,21 @@ class AuthService {
           [user.branchId, user.organisationId],
         );
         branchRecord = branchRes.rows[0] || null;
+      }
+
+      if (!branchRecord) {
+        const baRes = await pool.query(
+          `SELECT b.id, b.name, b.branch_code
+           FROM branch_assignments ba
+           JOIN organisation_memberships om ON om.id = ba.membership_id
+           JOIN branches b ON b.id = ba.branch_id
+           WHERE om.user_id = $1 AND om.organisation_id = $2 AND b.status = 'ACTIVE'
+           ORDER BY ba.is_primary DESC LIMIT 1;`,
+          [user.id, user.organisationId],
+        );
+        if (baRes.rows.length > 0) {
+          branchRecord = baRes.rows[0];
+        }
       }
 
       if (!branchRecord && branchCount > 0) {
@@ -1225,12 +1634,22 @@ class AuthService {
       );
       const membershipId = membershipRes.rows[0].id;
 
-      if (branchId && roleId) {
-        await client.query(
-          `INSERT INTO branch_assignments (membership_id, branch_id, role_id, is_primary)
-           VALUES ($1, $2, $3, TRUE);`,
-          [membershipId, branchId, roleId],
-        );
+      if (branchId) {
+        let effectiveRoleId = roleId;
+        if (!effectiveRoleId) {
+          const defaultRoleRes = await client.query(
+            "SELECT id FROM roles WHERE organisation_id = $1 ORDER BY created_at ASC LIMIT 1;",
+            [organisationId],
+          );
+          effectiveRoleId = defaultRoleRes.rows[0]?.id;
+        }
+        if (effectiveRoleId) {
+          await client.query(
+            `INSERT INTO branch_assignments (membership_id, branch_id, role_id, is_primary)
+             VALUES ($1, $2, $3, TRUE);`,
+            [membershipId, branchId, effectiveRoleId],
+          );
+        }
       }
 
       await client.query("COMMIT");
@@ -1291,7 +1710,7 @@ class AuthService {
       );
       const user = updateRes.rows[0];
 
-      if (roleId && branchId) {
+      if (branchId) {
         const branchCheck = await client.query(
           "SELECT id FROM branches WHERE id = $1 AND organisation_id = $2;",
           [branchId, organisationId],
@@ -1299,21 +1718,41 @@ class AuthService {
         if (branchCheck.rows.length === 0) {
           throw new Error("Branch does not belong to this organisation.");
         }
-        const roleCheck = await client.query(
-          "SELECT id FROM roles WHERE id = $1 AND organisation_id = $2;",
-          [roleId, organisationId],
-        );
-        if (roleCheck.rows.length === 0) {
-          throw new Error("Role does not belong to this organisation.");
+
+        let effectiveRoleId = roleId;
+        if (effectiveRoleId) {
+          const roleCheck = await client.query(
+            "SELECT id FROM roles WHERE id = $1 AND organisation_id = $2;",
+            [effectiveRoleId, organisationId],
+          );
+          if (roleCheck.rows.length === 0) {
+            throw new Error("Role does not belong to this organisation.");
+          }
+        } else {
+          const existingBa = await client.query(
+            "SELECT role_id FROM branch_assignments WHERE membership_id = $1 LIMIT 1;",
+            [membershipId],
+          );
+          if (existingBa.rows.length > 0 && existingBa.rows[0].role_id) {
+            effectiveRoleId = existingBa.rows[0].role_id;
+          } else {
+            const defaultRoleRes = await client.query(
+              "SELECT id FROM roles WHERE organisation_id = $1 ORDER BY created_at ASC LIMIT 1;",
+              [organisationId],
+            );
+            effectiveRoleId = defaultRoleRes.rows[0]?.id;
+          }
         }
 
-        await client.query(
-          `INSERT INTO branch_assignments (membership_id, branch_id, role_id, is_primary)
-           VALUES ($1, $2, $3, TRUE)
-           ON CONFLICT (membership_id, branch_id)
-           DO UPDATE SET role_id = EXCLUDED.role_id, is_primary = TRUE;`,
-          [membershipId, branchId, roleId],
-        );
+        if (effectiveRoleId) {
+          await client.query(
+            `INSERT INTO branch_assignments (membership_id, branch_id, role_id, is_primary)
+             VALUES ($1, $2, $3, TRUE)
+             ON CONFLICT (membership_id, branch_id)
+             DO UPDATE SET role_id = EXCLUDED.role_id, is_primary = TRUE;`,
+            [membershipId, branchId, effectiveRoleId],
+          );
+        }
       }
 
       await client.query("COMMIT");

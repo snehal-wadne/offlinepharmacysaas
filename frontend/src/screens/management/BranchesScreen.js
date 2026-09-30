@@ -33,6 +33,16 @@ export default function BranchesScreen({
   const isCompact = width < 1100;
   const isMobile = width < 768;
 
+  // Role-based access: admin/owner can manage all branches; others are read-only
+  const isAdminOrOwner =
+    currentUser?.isOwner ||
+    currentUser?.isPlatformSuperadmin ||
+    (currentUser?.role || "").toUpperCase() === "OWNER" ||
+    (currentUser?.role || "").toUpperCase() === "ADMIN" ||
+    (currentUser?.role || "").toLowerCase().includes("admin") ||
+    (currentUser?.role || "").toLowerCase().includes("owner") ||
+    isStandaloneOnboarding;
+
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedType, setSelectedType] = useState("All Types");
@@ -456,7 +466,7 @@ export default function BranchesScreen({
     }
 
     if (onBranchesUpdated) {
-      onBranchesUpdated();
+      onBranchesUpdated(editingBranchId ? null : newBranch);
     }
 
     setModalVisible(false);
@@ -563,20 +573,27 @@ export default function BranchesScreen({
         <View style={styles.titleWrapper}>
           <Text style={styles.pageTitle}>Branch Management</Text>
           <Text style={styles.pageSubtitle}>
-            Configure and manage physical pharmacies, hospital dispensaries, and
-            warehouses across{" "}
-            {currentUser?.organisationName || "your pharmacy organization"}.
+            {isAdminOrOwner
+              ? `Configure and manage physical pharmacies, hospital dispensaries, and warehouses across ${currentUser?.organisationName || "your pharmacy organization"}.`
+              : `Viewing your assigned branch details for ${currentUser?.organisationName || "your pharmacy organization"}.`}
           </Text>
         </View>
-        <Pressable
-          onPress={handleOpenAddModal}
-          style={styles.addBranchButton}
-          accessibilityRole="button"
-          accessibilityLabel="Add New Branch"
-        >
-          <Text style={styles.addBranchButtonIcon}>+</Text>
-          <Text style={styles.addBranchButtonText}>Add Branch</Text>
-        </Pressable>
+        {isAdminOrOwner ? (
+          <Pressable
+            onPress={handleOpenAddModal}
+            style={styles.addBranchButton}
+            accessibilityRole="button"
+            accessibilityLabel="Add New Branch"
+          >
+            <Text style={styles.addBranchButtonIcon}>+</Text>
+            <Text style={styles.addBranchButtonText}>Add Branch</Text>
+          </Pressable>
+        ) : (
+          <View style={[styles.addBranchButton, { backgroundColor: "#94A3B8", opacity: 0.7 }]}>
+            <Text style={styles.addBranchButtonIcon}>🔒</Text>
+            <Text style={styles.addBranchButtonText}>View Only</Text>
+          </View>
+        )}
       </View>
 
       {/* 2. Top KPI Cards (Dynamically computed from actual branches) */}
@@ -730,15 +747,18 @@ export default function BranchesScreen({
             <Text style={styles.emptyIcon}>🏢</Text>
             <Text style={styles.emptyTitle}>No Branches Found</Text>
             <Text style={styles.emptySubtitle}>
-              Try adjusting your search criteria or add a new branch to the
-              network.
+              {isAdminOrOwner
+                ? "Try adjusting your search criteria or add a new branch to the network."
+                : "No branch has been assigned to your account yet. Please contact your administrator."}
             </Text>
-            <Pressable
-              onPress={handleOpenAddModal}
-              style={styles.emptyAddButton}
-            >
-              <Text style={styles.emptyAddButtonText}>+ Add First Branch</Text>
-            </Pressable>
+            {isAdminOrOwner && (
+              <Pressable
+                onPress={handleOpenAddModal}
+                style={styles.emptyAddButton}
+              >
+                <Text style={styles.emptyAddButtonText}>+ Add First Branch</Text>
+              </Pressable>
+            )}
           </View>
         ) : isMobile ? (
           <View style={styles.mobileBranchList}>
@@ -766,41 +786,73 @@ export default function BranchesScreen({
                       )}
                     </View>
 
-                    <Pressable
-                      onPress={() => handleToggleStatus(branch)}
-                      style={styles.toggleSwitchRow}
-                      accessibilityRole="switch"
-                      accessibilityState={{ checked: isActive }}
-                      accessibilityLabel={`Branch status: ${branch.status}`}
-                    >
-                      <View
-                        style={[
-                          styles.toggleTrack,
-                          isActive
-                            ? styles.toggleTrackActive
-                            : styles.toggleTrackInactive,
-                        ]}
+                    {isAdminOrOwner ? (
+                      <Pressable
+                        onPress={() => handleToggleStatus(branch)}
+                        style={styles.toggleSwitchRow}
+                        accessibilityRole="switch"
+                        accessibilityState={{ checked: isActive }}
+                        accessibilityLabel={`Branch status: ${branch.status}`}
                       >
                         <View
                           style={[
-                            styles.toggleThumb,
+                            styles.toggleTrack,
                             isActive
-                              ? styles.toggleThumbActive
-                              : styles.toggleThumbInactive,
+                              ? styles.toggleTrackActive
+                              : styles.toggleTrackInactive,
                           ]}
-                        />
+                        >
+                          <View
+                            style={[
+                              styles.toggleThumb,
+                              isActive
+                                ? styles.toggleThumbActive
+                                : styles.toggleThumbInactive,
+                            ]}
+                          />
+                        </View>
+                        <Text
+                          style={[
+                            styles.toggleLabelText,
+                            isActive
+                              ? styles.toggleLabelActive
+                              : styles.toggleLabelInactive,
+                          ]}
+                        >
+                          {branch.status}
+                        </Text>
+                      </Pressable>
+                    ) : (
+                      <View style={styles.toggleSwitchRow}>
+                        <View
+                          style={[
+                            styles.toggleTrack,
+                            isActive
+                              ? styles.toggleTrackActive
+                              : styles.toggleTrackInactive,
+                          ]}
+                        >
+                          <View
+                            style={[
+                              styles.toggleThumb,
+                              isActive
+                                ? styles.toggleThumbActive
+                                : styles.toggleThumbInactive,
+                            ]}
+                          />
+                        </View>
+                        <Text
+                          style={[
+                            styles.toggleLabelText,
+                            isActive
+                              ? styles.toggleLabelActive
+                              : styles.toggleLabelInactive,
+                          ]}
+                        >
+                          {branch.status}
+                        </Text>
                       </View>
-                      <Text
-                        style={[
-                          styles.toggleLabelText,
-                          isActive
-                            ? styles.toggleLabelActive
-                            : styles.toggleLabelInactive,
-                        ]}
-                      >
-                        {branch.status}
-                      </Text>
-                    </Pressable>
+                    )}
                   </View>
 
                   {/* Branch Name */}
@@ -854,14 +906,16 @@ export default function BranchesScreen({
                       >
                         <Text style={styles.actionViewBtnText}>View</Text>
                       </Pressable>
-                      <Pressable
-                        onPress={() => handleOpenEditModal(branch)}
-                        style={styles.actionEditBtn}
-                        accessibilityRole="button"
-                        accessibilityLabel="Edit Branch"
-                      >
-                        <Text style={styles.actionEditBtnText}>Edit</Text>
-                      </Pressable>
+                      {isAdminOrOwner && (
+                        <Pressable
+                          onPress={() => handleOpenEditModal(branch)}
+                          style={styles.actionEditBtn}
+                          accessibilityRole="button"
+                          accessibilityLabel="Edit Branch"
+                        >
+                          <Text style={styles.actionEditBtnText}>Edit</Text>
+                        </Pressable>
+                      )}
                     </View>
                   </View>
                 </View>
@@ -961,41 +1015,73 @@ export default function BranchesScreen({
 
                     {/* Status Toggle Switch */}
                     <View style={styles.colStatus}>
-                      <Pressable
-                        onPress={() => handleToggleStatus(branch)}
-                        style={styles.toggleSwitchRow}
-                        accessibilityRole="switch"
-                        accessibilityState={{ checked: isActive }}
-                        accessibilityLabel={`Branch status: ${branch.status}. Tap to switch.`}
-                      >
-                        <View
-                          style={[
-                            styles.toggleTrack,
-                            isActive
-                              ? styles.toggleTrackActive
-                              : styles.toggleTrackInactive,
-                          ]}
+                      {isAdminOrOwner ? (
+                        <Pressable
+                          onPress={() => handleToggleStatus(branch)}
+                          style={styles.toggleSwitchRow}
+                          accessibilityRole="switch"
+                          accessibilityState={{ checked: isActive }}
+                          accessibilityLabel={`Branch status: ${branch.status}. Tap to switch.`}
                         >
                           <View
                             style={[
-                              styles.toggleThumb,
+                              styles.toggleTrack,
                               isActive
-                                ? styles.toggleThumbActive
-                                : styles.toggleThumbInactive,
+                                ? styles.toggleTrackActive
+                                : styles.toggleTrackInactive,
                             ]}
-                          />
+                          >
+                            <View
+                              style={[
+                                styles.toggleThumb,
+                                isActive
+                                  ? styles.toggleThumbActive
+                                  : styles.toggleThumbInactive,
+                              ]}
+                            />
+                          </View>
+                          <Text
+                            style={[
+                              styles.toggleLabelText,
+                              isActive
+                                ? styles.toggleLabelActive
+                                : styles.toggleLabelInactive,
+                            ]}
+                          >
+                            {branch.status}
+                          </Text>
+                        </Pressable>
+                      ) : (
+                        <View style={styles.toggleSwitchRow}>
+                          <View
+                            style={[
+                              styles.toggleTrack,
+                              isActive
+                                ? styles.toggleTrackActive
+                                : styles.toggleTrackInactive,
+                            ]}
+                          >
+                            <View
+                              style={[
+                                styles.toggleThumb,
+                                isActive
+                                  ? styles.toggleThumbActive
+                                  : styles.toggleThumbInactive,
+                              ]}
+                            />
+                          </View>
+                          <Text
+                            style={[
+                              styles.toggleLabelText,
+                              isActive
+                                ? styles.toggleLabelActive
+                                : styles.toggleLabelInactive,
+                            ]}
+                          >
+                            {branch.status}
+                          </Text>
                         </View>
-                        <Text
-                          style={[
-                            styles.toggleLabelText,
-                            isActive
-                              ? styles.toggleLabelActive
-                              : styles.toggleLabelInactive,
-                          ]}
-                        >
-                          {branch.status}
-                        </Text>
-                      </Pressable>
+                      )}
                     </View>
 
                     {/* Actions */}
@@ -1009,14 +1095,16 @@ export default function BranchesScreen({
                         <Text style={styles.actionViewBtnText}>View</Text>
                       </Pressable>
 
-                      <Pressable
-                        onPress={() => handleOpenEditModal(branch)}
-                        style={styles.actionEditBtn}
-                        accessibilityRole="button"
-                        accessibilityLabel="Edit Branch"
-                      >
-                        <Text style={styles.actionEditBtnText}>Edit</Text>
-                      </Pressable>
+                      {isAdminOrOwner && (
+                        <Pressable
+                          onPress={() => handleOpenEditModal(branch)}
+                          style={styles.actionEditBtn}
+                          accessibilityRole="button"
+                          accessibilityLabel="Edit Branch"
+                        >
+                          <Text style={styles.actionEditBtnText}>Edit</Text>
+                        </Pressable>
+                      )}
                     </View>
                   </View>
                 );

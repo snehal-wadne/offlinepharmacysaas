@@ -67,7 +67,7 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
     contactPerson: "",
     phone: "",
     email: "",
-    city: "Mumbai",
+    city: "",
     gstin: "",
   });
   const [formErrors, setFormErrors] = useState({});
@@ -270,7 +270,7 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
       contactPerson: "",
       phone: "",
       email: "",
-      city: "Mumbai",
+      city: "",
       gstin: "",
     });
     setFormErrors({});
@@ -288,7 +288,7 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
       phone: sup.phone === "N/A" ? "" : sup.phone || "",
       email:
         sup.email === "contact@supplier.example.com" ? "" : sup.email || "",
-      city: sup.city || "Mumbai, MH",
+      city: sup.city === "Mumbai, MH" ? "" : sup.city || "",
       gstin: sup.gstin === "27AABCS1429B1Z1" ? "" : sup.gstin || "",
     });
     setFormErrors({});
@@ -325,13 +325,11 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
       category: formData.category
         ? formData.category.trim()
         : "Medicines & Injections",
-      contactPerson: formData.contactPerson.trim() || "Account Executive",
-      phone: formData.phone.trim() || "+91 98000 11111",
-      email:
-        formData.email.trim() ||
-        `${formData.name.toLowerCase().replace(/[^a-z]/g, "")}@supplier.example.com`,
-      city: formData.city.trim() || "Mumbai, MH",
-      gstin: formData.gstin.trim() || "27AABCS1429B1Z1",
+      contactPerson: formData.contactPerson ? formData.contactPerson.trim() : "",
+      phone: formData.phone ? formData.phone.trim() : "",
+      email: formData.email ? formData.email.trim() : "",
+      city: formData.city ? formData.city.trim() : "",
+      gstin: formData.gstin ? formData.gstin.trim() : "",
       status: "ACTIVE",
     };
 
@@ -359,6 +357,8 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
                   contactPerson: formData.contactPerson || s.contactPerson,
                   phone: formData.phone || s.phone,
                   city: formData.city || s.city,
+                  email: formData.email || s.email,
+                  gstin: formData.gstin || s.gstin,
                 }
               : s,
           ),
@@ -373,13 +373,13 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
       }
     } else {
       try {
-        const res = await createSupplier(payload);
+        await createSupplier(payload);
         setModalVisible(false);
         await loadSuppliersData();
 
         if (onShowToast) {
           onShowToast(
-            `✓ Added ${formData.name.trim()} into suppliers database table!`,
+            `✓ Supplier "${formData.name.trim()}" added to Vendor Directory!`,
           );
         }
       } catch (err) {
@@ -390,11 +390,11 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
         const newSup = {
           id: `SUP-${Date.now()}`,
           name: formData.name,
-          contactPerson: formData.contactPerson || "Account Executive",
-          phone: formData.phone || "+91 98000 11111",
-          email: formData.email || "orders@pharma.in",
-          city: formData.city || "Mumbai",
-          gstin: formData.gstin || "27AABCT1234F1Z0",
+          contactPerson: formData.contactPerson || "",
+          phone: formData.phone || "",
+          email: formData.email || "",
+          city: formData.city || "",
+          gstin: formData.gstin || "",
           balance: "₹0.00",
           status: "Active",
           category: formData.category || "Medicines & Injections",
@@ -1057,6 +1057,7 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
                   />
                 </View>
               </View>
+
             </ScrollView>
 
             <View style={styles.modalFooter}>
@@ -1078,6 +1079,7 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
           </Pressable>
         </Pressable>
       </Modal>
+
 
       {/* Supplier 3-Dots Action Menu Modal */}
       <Modal
