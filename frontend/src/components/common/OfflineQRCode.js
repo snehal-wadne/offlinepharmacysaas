@@ -70,8 +70,8 @@ const styles = StyleSheet.create({
   },
   badgeContainer: {
     marginTop: 6,
-    backgroundColor: '#ECFDF5',
-    borderColor: '#A7F3D0',
+    backgroundColor: '#EAF2EE',
+    borderColor: '#EAF2EE',
     borderWidth: 1,
     borderRadius: 6,
     paddingHorizontal: 8,
@@ -80,7 +80,7 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#047857',
+    color: '#4F8A72',
     textAlign: 'center',
   },
 });

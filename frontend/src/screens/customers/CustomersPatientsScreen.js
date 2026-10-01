@@ -607,7 +607,7 @@ const handleViewMoreDetails = () => {
             <TextInput
               style={styles.searchInput}
               placeholder="Search customer name, phone, ID, doctor or city..."
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor="#77717A"
               value={searchQuery}
               onChangeText={setSearchQuery}
             />
@@ -673,9 +673,9 @@ const handleViewMoreDetails = () => {
 
         {loading ? (
           <View style={{ padding: 40, alignItems: "center" }}>
-            <ActivityIndicator size="large" color="#0F766E" />
+            <ActivityIndicator size="large" color="#B9829A" />
             <Text
-              style={{ marginTop: 12, color: "#64748B", fontWeight: "600" }}
+              style={{ marginTop: 12, color: "#77717A", fontWeight: "600" }}
             >
               Fetching customer records from database...
             </Text>
@@ -749,7 +749,7 @@ const handleViewMoreDetails = () => {
                       <View style={styles.mobileGridCol}>
                         <Text style={styles.mobileLabel}>Active Rx No</Text>
                         <Text
-                          style={[styles.mobileValBold, { color: "#0F766E" }]}
+                          style={[styles.mobileValBold, { color: "#B9829A" }]}
                         >
                           {cust.activeRxNo}
                         </Text>
@@ -769,8 +769,8 @@ const handleViewMoreDetails = () => {
                               color:
                                 outstandingVal !== "₹0.00" &&
                                 outstandingVal !== "₹0"
-                                  ? "#DC2626"
-                                  : "#16A34A",
+                                  ? "#B85C64"
+                                  : "#4F8A72",
                             },
                           ]}
                         >
@@ -914,7 +914,7 @@ const handleViewMoreDetails = () => {
                           style={[
                             styles.tdCell,
                             styles.patientNameText,
-                            { color: "#0F766E" },
+                            { color: "#B9829A" },
                           ]}
                           numberOfLines={1}
                         >
@@ -984,8 +984,8 @@ const handleViewMoreDetails = () => {
                             color:
                               outstandingVal !== "₹0.00" &&
                               outstandingVal !== "₹0"
-                                ? "#DC2626"
-                                : "#334155",
+                                ? "#B85C64"
+                                : "#28242B",
                           },
                         ]}
                       >
@@ -1109,7 +1109,7 @@ const handleViewMoreDetails = () => {
                       formErrors.name && styles.inputError,
                     ]}
                     placeholder="e.g., Rajesh Verma"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor="#77717A"
                     value={formData.name}
                     onChangeText={(t) =>
                       setFormData((p) => ({ ...p, name: t }))
@@ -1130,7 +1130,7 @@ const handleViewMoreDetails = () => {
                       formErrors.phone && styles.inputError,
                     ]}
                     placeholder="+91 98XXX XXXXX"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor="#77717A"
                     value={formData.phone}
                     onChangeText={(t) =>
                       setFormData((p) => ({ ...p, phone: t }))
@@ -1153,7 +1153,7 @@ const handleViewMoreDetails = () => {
                       formErrors.age && styles.inputError,
                     ]}
                     placeholder="e.g. 45"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor="#77717A"
                     keyboardType="numeric"
                     value={formData.age}
                     onChangeText={(t) => setFormData((p) => ({ ...p, age: t }))}
@@ -1168,7 +1168,7 @@ const handleViewMoreDetails = () => {
                   <TextInput
                     style={styles.modalInput}
                     placeholder="F / M / Other"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor="#77717A"
                     value={formData.gender}
                     onChangeText={(t) =>
                       setFormData((p) => ({ ...p, gender: t }))
@@ -1239,7 +1239,7 @@ const handleViewMoreDetails = () => {
                   <TextInput
                     style={styles.modalInput}
                     placeholder="e.g., Dr. Amitabh Sharma"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor="#77717A"
                     value={formData.doctorName}
                     onChangeText={(t) =>
                       setFormData((p) => ({ ...p, doctorName: t }))
@@ -1252,7 +1252,7 @@ const handleViewMoreDetails = () => {
                   <TextInput
                     style={styles.modalInput}
                     placeholder="e.g., Cardiologist / Diabetologist"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor="#77717A"
                     value={formData.doctorSpecialization}
                     onChangeText={(t) =>
                       setFormData((p) => ({ ...p, doctorSpecialization: t }))
@@ -1270,7 +1270,7 @@ const handleViewMoreDetails = () => {
                   <TextInput
                     style={styles.modalInput}
                     placeholder="e.g., Rx-2026-0841"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor="#77717A"
                     value={formData.activeRxNo}
                     onChangeText={(t) =>
                       setFormData((p) => ({ ...p, activeRxNo: t }))
@@ -1286,14 +1286,14 @@ const handleViewMoreDetails = () => {
                     style={styles.modalInput}
                     keyboardType="numeric"
                     placeholder="e.g., 25000"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor="#77717A"
                     value={formData.creditLimit}
                     onChangeText={(t) =>
                       setFormData((p) => ({ ...p, creditLimit: t }))
                     }
                   />
                   {formErrors.creditLimit ? (
-  <Text style={{ color: "#DC2626", fontSize: 12, marginTop: 4 }}>
+  <Text style={{ color: "#B85C64", fontSize: 12, marginTop: 4 }}>
     {formErrors.creditLimit}
   </Text>
 ) : null}
@@ -1504,7 +1504,7 @@ const handleViewMoreDetails = () => {
                 <Pressable
   onPress={handleViewMoreDetails}
   style={{
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     padding: 12,
     borderRadius: 8,
     marginLeft: 10,
@@ -1572,7 +1572,7 @@ const handleViewMoreDetails = () => {
                 style={[styles.actionMenuItem, styles.actionMenuItemDelete]}
               >
                 <Text style={styles.actionMenuItemIcon}>🗑️</Text>
-                <Text style={[styles.actionMenuItemText, { color: "#EF4444" }]}>
+                <Text style={[styles.actionMenuItemText, { color: "#B85C64" }]}>
                   Delete Customer
                 </Text>
               </Pressable>
@@ -1627,7 +1627,7 @@ const handleViewMoreDetails = () => {
         <Pressable
           onPress={confirmDeleteCustomer}
           style={{
-            backgroundColor: "#DC2626",
+            backgroundColor: "#B85C64",
             padding: 12,
             borderRadius: 8,
           }}
@@ -1683,13 +1683,13 @@ const styles = StyleSheet.create({
   pageTitle: {
     fontSize: 24,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
     letterSpacing: -0.4,
   },
   liveTagBadge: {
-    backgroundColor: "#CCFBF1",
+    backgroundColor: "#E8D5DD",
     borderWidth: 1,
-    borderColor: "#99F6E4",
+    borderColor: "#E8D5DD",
     paddingVertical: 3,
     paddingHorizontal: 8,
     borderRadius: 6,
@@ -1697,13 +1697,13 @@ const styles = StyleSheet.create({
   liveTagText: {
     fontSize: 10.5,
     fontWeight: "800",
-    color: "#0F766E",
+    color: "#B9829A",
     letterSpacing: 0.5,
   },
   pageSubtitle: {
     fontSize: 13.5,
     fontWeight: "500",
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 4,
   },
   headerActions: {
@@ -1718,7 +1718,7 @@ const styles = StyleSheet.create({
   exportBtnSecondary: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     paddingVertical: 9,
     paddingHorizontal: 16,
     borderRadius: 8,
@@ -1727,12 +1727,12 @@ const styles = StyleSheet.create({
   exportBtnTextSecondary: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#334155",
+    color: "#28242B",
   },
   newPatientBtn: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingVertical: 10,
     paddingHorizontal: 18,
     borderRadius: 8,
@@ -1769,9 +1769,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     padding: 20,
-    shadowColor: "#0F172A",
+    shadowColor: "#28242B",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
     shadowRadius: 8,
@@ -1791,9 +1791,9 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     paddingHorizontal: 14,
     height: 42,
@@ -1804,13 +1804,13 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 13.5,
-    color: "#0F172A",
+    color: "#28242B",
   },
   clearBtn: {
     padding: 4,
   },
   clearBtnText: {
-    color: "#94A3B8",
+    color: "#77717A",
     fontSize: 14,
     fontWeight: "700",
   },
@@ -1826,16 +1826,16 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     paddingHorizontal: 14,
     borderRadius: 20,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     cursor: "pointer",
   },
   filterChipActive: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
   },
   filterChipText: {
     fontSize: 12.5,
     fontWeight: "600",
-    color: "#64748B",
+    color: "#77717A",
   },
   filterChipTextActive: {
     color: "#FFFFFF",
@@ -1848,16 +1848,16 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   sectionTitle: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   paginationInfo: {
     fontSize: 12.5,
-    color: "#64748B",
+    color: "#77717A",
     fontWeight: "500",
   },
   emptyState: {
@@ -1868,21 +1868,21 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#334155",
+    color: "#28242B",
   },
   emptySubtitle: {
     fontSize: 13,
-    color: "#94A3B8",
+    color: "#77717A",
     marginTop: 4,
   },
   mobileCardList: {
     gap: 12,
   },
   mobileCustomerCard: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     padding: 14,
     gap: 12,
   },
@@ -1894,11 +1894,11 @@ const styles = StyleSheet.create({
   mobileCustName: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   mobileCustSub: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   mobileGrid: {
@@ -1911,16 +1911,16 @@ const styles = StyleSheet.create({
   },
   mobileLabel: {
     fontSize: 11,
-    color: "#64748B",
+    color: "#77717A",
     fontWeight: "600",
   },
   mobileVal: {
     fontSize: 12.5,
-    color: "#334155",
+    color: "#28242B",
   },
   mobileValBold: {
     fontSize: 12.5,
-    color: "#0F172A",
+    color: "#28242B",
     fontWeight: "700",
   },
   mobileCustFooter: {
@@ -1931,7 +1931,7 @@ const styles = StyleSheet.create({
   },
   mobileAttachPOSBtn: {
     flex: 1,
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingVertical: 7,
     borderRadius: 6,
     alignItems: "center",
@@ -1942,13 +1942,13 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   mobileHistoryBtn: {
-    backgroundColor: "#E2E8F0",
+    backgroundColor: "#E5DFE4",
     paddingVertical: 7,
     paddingHorizontal: 12,
     borderRadius: 6,
   },
   mobileHistoryBtnText: {
-    color: "#334155",
+    color: "#28242B",
     fontSize: 12,
     fontWeight: "700",
   },
@@ -1958,18 +1958,18 @@ const styles = StyleSheet.create({
   tableHeader: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderTopLeftRadius: 8,
     borderTopRightRadius: 8,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: "#E5DFE4",
   },
   thCell: {
     fontSize: 11,
     fontWeight: "800",
-    color: "#475569",
+    color: "#77717A",
     letterSpacing: 0.3,
   },
   tableRow: {
@@ -1978,45 +1978,45 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   tableRowAlt: {
-    backgroundColor: "#FAFAFA",
+    backgroundColor: "#F8F5F7",
   },
   tdCell: {
     fontSize: 13,
-    color: "#334155",
+    color: "#28242B",
   },
   patientIdText: {
     fontWeight: "700",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   patientNameText: {
     fontWeight: "700",
   },
   categorySubtext: {
     fontSize: 11,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 1,
   },
   phoneText: {
     fontSize: 12.5,
-    color: "#475569",
+    color: "#77717A",
   },
   docNameText: {
     fontSize: 12.5,
     fontWeight: "600",
-    color: "#0F172A",
+    color: "#28242B",
   },
   docSpecSubtext: {
     fontSize: 11,
-    color: "#64748B",
+    color: "#77717A",
   },
   rxTagText: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#0F766E",
-    backgroundColor: "#CCFBF1",
+    color: "#B9829A",
+    backgroundColor: "#E8D5DD",
     paddingVertical: 3,
     paddingHorizontal: 8,
     borderRadius: 6,
@@ -2027,21 +2027,21 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   statusBadgeActive: {
-    backgroundColor: "#DCFCE7",
+    backgroundColor: "#EAF2EE",
     paddingVertical: 3,
     paddingHorizontal: 10,
     borderRadius: 12,
   },
   statusBadgeOverdue: {
-    backgroundColor: "#FEE2E2",
+    backgroundColor: "#F7EDEE",
   },
   statusBadgeTextActive: {
     fontSize: 11.5,
     fontWeight: "700",
-    color: "#15803D",
+    color: "#4F8A72",
   },
   statusBadgeTextOverdue: {
-    color: "#B91C1C",
+    color: "#B85C64",
   },
   actionWrapperRow: {
     flexDirection: "row",
@@ -2050,7 +2050,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   attachPOSButton: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingVertical: 5,
     paddingHorizontal: 9,
     borderRadius: 6,
@@ -2062,16 +2062,16 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   viewHistoryButton: {
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     paddingVertical: 4,
     paddingHorizontal: 9,
     borderRadius: 6,
     cursor: "pointer",
   },
   viewHistoryButtonText: {
-    color: "#334155",
+    color: "#28242B",
     fontSize: 12,
     fontWeight: "600",
   },
@@ -2079,9 +2079,9 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 6,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     alignItems: "center",
     justifyContent: "center",
     cursor: "pointer",
@@ -2089,7 +2089,7 @@ const styles = StyleSheet.create({
   actionMenuMoreDots: {
     fontSize: 14,
     fontWeight: "900",
-    color: "#475569",
+    color: "#77717A",
     textAlign: "center",
     lineHeight: 14,
   },
@@ -2117,17 +2117,17 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderBottomColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   modalSubtitle: {
     fontSize: 12.5,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   closeBtn: {
@@ -2135,7 +2135,7 @@ const styles = StyleSheet.create({
   },
   closeBtnText: {
     fontSize: 16,
-    color: "#64748B",
+    color: "#77717A",
     fontWeight: "700",
   },
   modalBody: {
@@ -2144,7 +2144,7 @@ const styles = StyleSheet.create({
   sectionHeading: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#0F766E",
+    color: "#B9829A",
     letterSpacing: 0.5,
     marginTop: 12,
     marginBottom: 10,
@@ -2168,28 +2168,28 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 12.5,
     fontWeight: "600",
-    color: "#334155",
+    color: "#28242B",
     marginBottom: 6,
   },
   reqStar: {
-    color: "#EF4444",
+    color: "#B85C64",
   },
   modalInput: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
     fontSize: 13.5,
-    color: "#0F172A",
+    color: "#28242B",
   },
   inputError: {
-    borderColor: "#EF4444",
+    borderColor: "#B85C64",
   },
   errorText: {
     fontSize: 11,
-    color: "#EF4444",
+    color: "#B85C64",
     marginTop: 3,
   },
   dropdownPickerBtn: {
@@ -2198,7 +2198,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 9,
@@ -2206,11 +2206,11 @@ const styles = StyleSheet.create({
   dropdownPickerText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#0F172A",
+    color: "#28242B",
   },
   dropdownArrowIcon: {
     fontSize: 10,
-    color: "#64748B",
+    color: "#77717A",
   },
   dropdownMenu: {
     position: "absolute",
@@ -2220,8 +2220,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
-    shadowColor: "#000",
+    borderColor: "#E5DFE4",
+    shadowColor: "#28242B",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 10,
@@ -2234,20 +2234,20 @@ const styles = StyleSheet.create({
   backgroundColor: "#FFFFFF",
   borderRadius: 8,
   borderWidth: 1,
-  borderColor: "#CBD5E1",
+  borderColor: "#E5DFE4",
   overflow: "hidden",
   zIndex: 10,
 },
   dropdownMenuItemActive: {
-    backgroundColor: "#F0FDFA",
+    backgroundColor: "#E8D5DD",
   },
   dropdownMenuItemText: {
     fontSize: 13,
-    color: "#334155",
+    color: "#28242B",
     fontWeight: "500",
   },
   dropdownMenuItemTextActive: {
-    color: "#0F766E",
+    color: "#B9829A",
     fontWeight: "700",
   },
   modalFooter: {
@@ -2256,7 +2256,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: "#E2E8F0",
+    borderTopColor: "#E5DFE4",
     gap: 10,
   },
   cancelBtn: {
@@ -2267,10 +2267,10 @@ const styles = StyleSheet.create({
   cancelBtnText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#64748B",
+    color: "#77717A",
   },
   submitModalBtn: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingVertical: 9,
     paddingHorizontal: 20,
     borderRadius: 8,
@@ -2282,9 +2282,9 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
   rxDetailsBox: {
-    backgroundColor: "#F0FDFA",
+    backgroundColor: "#E8D5DD",
     borderWidth: 1,
-    borderColor: "#99F6E4",
+    borderColor: "#E8D5DD",
     borderRadius: 10,
     padding: 16,
     marginBottom: 20,
@@ -2292,7 +2292,7 @@ const styles = StyleSheet.create({
   rxBoxTitle: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#0F766E",
+    color: "#B9829A",
     marginBottom: 12,
   },
   rxGrid: {
@@ -2305,18 +2305,18 @@ const styles = StyleSheet.create({
   },
   rxLabel: {
     fontSize: 11.5,
-    color: "#64748B",
+    color: "#77717A",
     fontWeight: "600",
   },
   rxValue: {
     fontSize: 13,
-    color: "#0F172A",
+    color: "#28242B",
     fontWeight: "600",
     marginTop: 2,
   },
   rxValueHighlight: {
     fontSize: 13,
-    color: "#0F766E",
+    color: "#B9829A",
     fontWeight: "800",
     marginTop: 2,
   },
@@ -2324,7 +2324,7 @@ const styles = StyleSheet.create({
     marginTop: 14,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: "#CCFBF1",
+    borderTopColor: "#E8D5DD",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -2334,15 +2334,15 @@ const styles = StyleSheet.create({
   docAttachmentLabel: {
     fontSize: 12.5,
     fontWeight: "600",
-    color: "#334155",
+    color: "#28242B",
   },
   docAttachmentName: {
     fontSize: 12.5,
     fontWeight: "700",
-    color: "#0284C7",
+    color: "#A66D86",
   },
   previewDocBtn: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingVertical: 5,
     paddingHorizontal: 12,
     borderRadius: 6,
@@ -2355,23 +2355,23 @@ const styles = StyleSheet.create({
   },
   historyTableWrapper: {
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     overflow: "hidden",
     marginBottom: 12,
   },
   historyTableHeader: {
     flexDirection: "row",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: "#E5DFE4",
   },
   hThCell: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
   },
   historyTableRow: {
     flexDirection: "row",
@@ -2379,38 +2379,38 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   hTdCell: {
     fontSize: 12.5,
-    color: "#334155",
+    color: "#28242B",
   },
   invNoText: {
     fontWeight: "700",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   amountText: {
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   noHistoryBox: {
     padding: 24,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderRadius: 8,
   },
   noHistoryText: {
     fontSize: 13,
-    color: "#64748B",
+    color: "#77717A",
   },
   actionMenuPopover: {
     width: 260,
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    shadowColor: "#000",
+    borderColor: "#E5DFE4",
+    shadowColor: "#28242B",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
@@ -2420,17 +2420,17 @@ const styles = StyleSheet.create({
   actionMenuHeader: {
     padding: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
     marginBottom: 4,
   },
   actionMenuTitle: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   actionMenuSub: {
     fontSize: 11.5,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   actionMenuItem: {
@@ -2442,7 +2442,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   actionMenuItemDelete: {
-    backgroundColor: "#FEF2F2",
+    backgroundColor: "#F7EDEE",
   },
   actionMenuItemIcon: {
     fontSize: 14,
@@ -2450,11 +2450,11 @@ const styles = StyleSheet.create({
   actionMenuItemText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#334155",
+    color: "#28242B",
   },
   actionMenuDivider: {
     height: 1,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     marginVertical: 4,
   },
 });

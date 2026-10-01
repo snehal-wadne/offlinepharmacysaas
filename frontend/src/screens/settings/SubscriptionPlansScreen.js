@@ -520,7 +520,7 @@ export default function SubscriptionPlansScreen({ onNavigate, onShowToast, isMul
 
                 <View style={styles.taxRow}>
                   <Text style={styles.taxRowLabel}>Total 18% GST Component:</Text>
-                  <Text style={[styles.taxRowValue, { color: '#0F766E', fontWeight: '700' }]}>
+                  <Text style={[styles.taxRowValue, { color: '#B9829A', fontWeight: '700' }]}>
                     ₹{gstAmount.toFixed(2)}
                   </Text>
                 </View>
@@ -697,7 +697,7 @@ export default function SubscriptionPlansScreen({ onNavigate, onShowToast, isMul
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F8F5F7',
   },
   contentContainer: {
     padding: 24,
@@ -710,7 +710,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E5DFE4',
     padding: 24,
     marginBottom: 20,
     flexDirection: 'row',
@@ -733,11 +733,11 @@ const styles = StyleSheet.create({
   tagBadge: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#0F766E',
+    color: '#B9829A',
     letterSpacing: 0.8,
   },
   gstTag: {
-    backgroundColor: '#EDE9FE',
+    backgroundColor: '#E8D5DD',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 4,
@@ -745,17 +745,17 @@ const styles = StyleSheet.create({
   gstTagText: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#7C3AED',
+    color: '#B9829A',
   },
   pageTitle: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#28242B',
     letterSpacing: -0.3,
   },
   pageSubtitle: {
     fontSize: 13,
-    color: '#64748B',
+    color: '#77717A',
     marginTop: 4,
     lineHeight: 19,
   },
@@ -769,9 +769,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#F8F5F7',
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#E5DFE4',
     paddingVertical: 9,
     paddingHorizontal: 14,
     borderRadius: 8,
@@ -783,10 +783,10 @@ const styles = StyleSheet.create({
   devGuideBtnText: {
     fontSize: 12.5,
     fontWeight: '700',
-    color: '#334155',
+    color: '#28242B',
   },
   taxSettingsBtn: {
-    backgroundColor: '#0F766E',
+    backgroundColor: '#B9829A',
     paddingVertical: 9,
     paddingHorizontal: 14,
     borderRadius: 8,
@@ -798,10 +798,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   activePlanBanner: {
-    backgroundColor: '#F0FDFA',
+    backgroundColor: '#E8D5DD',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#99F6E4',
+    borderColor: '#E8D5DD',
     padding: 16,
     marginBottom: 20,
     flexDirection: 'row',
@@ -821,7 +821,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#CCFBF1',
+    backgroundColor: '#E8D5DD',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -831,15 +831,15 @@ const styles = StyleSheet.create({
   activePlanTitle: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#0F766E',
+    color: '#B9829A',
   },
   activePlanSub: {
     fontSize: 12,
-    color: '#475569',
+    color: '#77717A',
     marginTop: 2,
   },
   activePlanStatusBadge: {
-    backgroundColor: '#0F766E',
+    backgroundColor: '#B9829A',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
@@ -858,7 +858,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E5DFE4',
     padding: 4,
   },
   billingToggleButton: {
@@ -871,19 +871,19 @@ const styles = StyleSheet.create({
     cursor: 'pointer',
   },
   billingToggleButtonActive: {
-    backgroundColor: '#0F766E',
+    backgroundColor: '#B9829A',
   },
   billingToggleText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#64748B',
+    color: '#77717A',
   },
   billingToggleTextActive: {
     color: '#FFFFFF',
     fontWeight: '700',
   },
   saveBadge: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: '#EAF2EE',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -891,7 +891,7 @@ const styles = StyleSheet.create({
   saveBadgeText: {
     fontSize: 9.5,
     fontWeight: '800',
-    color: '#15803D',
+    color: '#4F8A72',
   },
   planCardsGrid: {
     flexDirection: 'row',
@@ -905,7 +905,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E5DFE4',
     padding: 24,
     position: 'relative',
     ...Platform.select({
@@ -915,18 +915,18 @@ const styles = StyleSheet.create({
     }),
   },
   planCardHighlight: {
-    borderColor: '#0F766E',
+    borderColor: '#B9829A',
     borderWidth: 2,
     backgroundColor: '#FFFFFF',
   },
   planCardActiveOutline: {
-    borderColor: '#0F766E',
+    borderColor: '#B9829A',
   },
   planBadge: {
     position: 'absolute',
     top: -12,
     right: 20,
-    backgroundColor: '#0F766E',
+    backgroundColor: '#B9829A',
     paddingVertical: 4,
     paddingHorizontal: 10,
     borderRadius: 12,
@@ -939,7 +939,7 @@ const styles = StyleSheet.create({
   planCardName: {
     fontSize: 17,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#28242B',
     marginBottom: 8,
   },
   priceRow: {
@@ -950,23 +950,23 @@ const styles = StyleSheet.create({
   currencySymbol: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#0F172A',
+    color: '#28242B',
     marginRight: 2,
   },
   priceNumber: {
     fontSize: 32,
     fontWeight: '900',
-    color: '#0F172A',
+    color: '#28242B',
   },
   priceInterval: {
     fontSize: 13,
-    color: '#64748B',
+    color: '#77717A',
     marginLeft: 4,
   },
   planGstBox: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F8F5F7',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E5DFE4',
     borderRadius: 8,
     padding: 10,
     marginBottom: 16,
@@ -978,32 +978,32 @@ const styles = StyleSheet.create({
   },
   planGstLabel: {
     fontSize: 11,
-    color: '#64748B',
+    color: '#77717A',
   },
   planGstVal: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#334155',
+    color: '#28242B',
   },
   planGstValHighlight: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#7C3AED',
+    color: '#B9829A',
   },
   planGstDivider: {
     height: 1,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#E5DFE4',
     marginVertical: 2,
   },
   planGstTotalLabel: {
     fontSize: 11.5,
     fontWeight: '700',
-    color: '#0F172A',
+    color: '#28242B',
   },
   planGstTotalVal: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#0F766E',
+    color: '#B9829A',
   },
   featuresList: {
     gap: 10,
@@ -1017,12 +1017,12 @@ const styles = StyleSheet.create({
   checkIcon: {
     fontSize: 13,
     fontWeight: 'bold',
-    color: '#0F766E',
+    color: '#B9829A',
     marginTop: 1,
   },
   featureText: {
     fontSize: 12.5,
-    color: '#475569',
+    color: '#77717A',
     lineHeight: 18,
     flex: 1,
   },
@@ -1033,17 +1033,17 @@ const styles = StyleSheet.create({
     cursor: 'pointer',
   },
   selectPlanBtnNormal: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#F8F5F7',
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#E5DFE4',
   },
   selectPlanBtnHighlight: {
-    backgroundColor: '#0F766E',
+    backgroundColor: '#B9829A',
   },
   selectPlanBtnText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#334155',
+    color: '#28242B',
   },
   selectPlanBtnTextHighlight: {
     color: '#FFFFFF',
@@ -1052,7 +1052,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E5DFE4',
     padding: 18,
   },
   taxNoticeHeader: {
@@ -1067,11 +1067,11 @@ const styles = StyleSheet.create({
   taxNoticeTitle: {
     fontSize: 13.5,
     fontWeight: '700',
-    color: '#0F172A',
+    color: '#28242B',
   },
   taxNoticeText: {
     fontSize: 12,
-    color: '#64748B',
+    color: '#77717A',
     lineHeight: 18,
   },
   modalOverlay: {
@@ -1099,17 +1099,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderBottomColor: '#E5DFE4',
+    backgroundColor: '#F8F5F7',
   },
   checkoutModalTitle: {
     fontSize: 17,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#28242B',
   },
   checkoutModalSubtitle: {
     fontSize: 12,
-    color: '#64748B',
+    color: '#77717A',
   },
   modalCloseBtn: {
     padding: 6,
@@ -1118,7 +1118,7 @@ const styles = StyleSheet.create({
   modalCloseText: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#64748B',
+    color: '#77717A',
   },
   checkoutModalBody: {
     padding: 20,
@@ -1127,9 +1127,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#F0FDFA',
+    backgroundColor: '#E8D5DD',
     borderWidth: 1,
-    borderColor: '#99F6E4',
+    borderColor: '#E8D5DD',
     padding: 14,
     borderRadius: 8,
     marginBottom: 18,
@@ -1137,16 +1137,16 @@ const styles = StyleSheet.create({
   summaryPlanName: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#0F766E',
+    color: '#B9829A',
   },
   summaryPlanBilling: {
     fontSize: 12,
-    color: '#475569',
+    color: '#77717A',
   },
   summaryPlanPrice: {
     fontSize: 18,
     fontWeight: '900',
-    color: '#0F766E',
+    color: '#B9829A',
   },
   checkoutFormSection: {
     marginBottom: 18,
@@ -1155,7 +1155,7 @@ const styles = StyleSheet.create({
   sectionHeaderTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#0F172A',
+    color: '#28242B',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -1165,11 +1165,11 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#334155',
+    color: '#28242B',
   },
   formInput: {
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#E5DFE4',
     borderRadius: 8,
     paddingVertical: 8,
     paddingHorizontal: 12,
@@ -1178,7 +1178,7 @@ const styles = StyleSheet.create({
   },
   formFieldHelp: {
     fontSize: 11,
-    color: '#94A3B8',
+    color: '#77717A',
   },
   stateSelectRow: {
     flexDirection: 'row',
@@ -1190,21 +1190,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderColor: '#E5DFE4',
+    backgroundColor: '#F8F5F7',
     cursor: 'pointer',
   },
   stateChipSelected: {
-    borderColor: '#0F766E',
-    backgroundColor: '#F0FDFA',
+    borderColor: '#B9829A',
+    backgroundColor: '#E8D5DD',
   },
   stateChipText: {
     fontSize: 11.5,
-    color: '#64748B',
+    color: '#77717A',
     fontWeight: '500',
   },
   stateChipTextSelected: {
-    color: '#0F766E',
+    color: '#B9829A',
     fontWeight: '700',
   },
   paymentMethodsGrid: {
@@ -1214,16 +1214,16 @@ const styles = StyleSheet.create({
   paymentMethodOption: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E5DFE4',
     borderRadius: 8,
     padding: 10,
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F8F5F7',
     cursor: 'pointer',
   },
   paymentMethodOptionSelected: {
-    borderColor: '#0F766E',
-    backgroundColor: '#F0FDFA',
+    borderColor: '#B9829A',
+    backgroundColor: '#E8D5DD',
   },
   paymentMethodIcon: {
     fontSize: 18,
@@ -1232,12 +1232,12 @@ const styles = StyleSheet.create({
   paymentMethodName: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#334155',
+    color: '#28242B',
   },
   taxComputationCard: {
-    backgroundColor: '#FAF5FF',
+    backgroundColor: '#E8D5DD',
     borderWidth: 1,
-    borderColor: '#C4B5FD',
+    borderColor: '#E8D5DD',
     borderRadius: 10,
     padding: 16,
     gap: 8,
@@ -1252,10 +1252,10 @@ const styles = StyleSheet.create({
   taxCompTitle: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#6D28D9',
+    color: '#A66D86',
   },
   liveBadge: {
-    backgroundColor: '#EDE9FE',
+    backgroundColor: '#E8D5DD',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -1263,7 +1263,7 @@ const styles = StyleSheet.create({
   liveBadgeText: {
     fontSize: 9.5,
     fontWeight: '800',
-    color: '#7C3AED',
+    color: '#B9829A',
   },
   taxRow: {
     flexDirection: 'row',
@@ -1271,16 +1271,16 @@ const styles = StyleSheet.create({
   },
   taxRowLabel: {
     fontSize: 12,
-    color: '#475569',
+    color: '#77717A',
   },
   taxRowValue: {
     fontSize: 12.5,
     fontWeight: '600',
-    color: '#1E293B',
+    color: '#28242B',
   },
   taxCompDivider: {
     height: 1,
-    backgroundColor: '#DDD6FE',
+    backgroundColor: '#E8D5DD',
     marginVertical: 4,
   },
   taxTotalRow: {
@@ -1291,16 +1291,16 @@ const styles = StyleSheet.create({
   taxTotalTitle: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#28242B',
   },
   taxTotalSubtitle: {
     fontSize: 10.5,
-    color: '#6D28D9',
+    color: '#A66D86',
   },
   taxTotalValue: {
     fontSize: 20,
     fontWeight: '900',
-    color: '#0F766E',
+    color: '#B9829A',
   },
   checkoutModalFooter: {
     flexDirection: 'row',
@@ -1308,24 +1308,24 @@ const styles = StyleSheet.create({
     gap: 12,
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderTopColor: '#E5DFE4',
+    backgroundColor: '#F8F5F7',
   },
   cancelBtn: {
     paddingVertical: 9,
     paddingHorizontal: 16,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#E5DFE4',
     cursor: 'pointer',
   },
   cancelBtnText: {
     fontSize: 13,
-    color: '#64748B',
+    color: '#77717A',
     fontWeight: '600',
   },
   confirmPayBtn: {
-    backgroundColor: '#0F766E',
+    backgroundColor: '#B9829A',
     paddingVertical: 9,
     paddingHorizontal: 20,
     borderRadius: 8,
@@ -1353,8 +1353,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderBottomColor: '#E5DFE4',
+    backgroundColor: '#F8F5F7',
   },
   invoiceLogoRow: {
     flexDirection: 'row',
@@ -1365,7 +1365,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 8,
-    backgroundColor: '#0F766E',
+    backgroundColor: '#B9829A',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1377,14 +1377,14 @@ const styles = StyleSheet.create({
   invoiceTitle: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#28242B',
   },
   invoiceGstin: {
     fontSize: 11,
-    color: '#64748B',
+    color: '#77717A',
   },
   paidBadge: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: '#EAF2EE',
     paddingVertical: 4,
     paddingHorizontal: 10,
     borderRadius: 6,
@@ -1392,7 +1392,7 @@ const styles = StyleSheet.create({
   paidBadgeText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#15803D',
+    color: '#4F8A72',
   },
   invoiceBody: {
     padding: 20,
@@ -1402,7 +1402,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 16,
     marginBottom: 20,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F8F5F7',
     padding: 12,
     borderRadius: 8,
   },
@@ -1411,34 +1411,34 @@ const styles = StyleSheet.create({
   },
   invLabel: {
     fontSize: 10.5,
-    color: '#64748B',
+    color: '#77717A',
   },
   invVal: {
     fontSize: 12,
-    color: '#0F172A',
+    color: '#28242B',
   },
   invValBold: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#0F172A',
+    color: '#28242B',
   },
   invTable: {
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E5DFE4',
     borderRadius: 8,
     overflow: 'hidden',
     marginBottom: 16,
   },
   invTableHeader: {
     flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#F8F5F7',
     paddingVertical: 8,
     paddingHorizontal: 10,
   },
   invTh: {
     fontSize: 10.5,
     fontWeight: '700',
-    color: '#475569',
+    color: '#77717A',
   },
   invTableRow: {
     flexDirection: 'row',
@@ -1449,23 +1449,23 @@ const styles = StyleSheet.create({
   invItemName: {
     fontSize: 12.5,
     fontWeight: '700',
-    color: '#0F172A',
+    color: '#28242B',
   },
   invItemSub: {
     fontSize: 10.5,
-    color: '#64748B',
+    color: '#77717A',
   },
   invTd: {
     fontSize: 12,
-    color: '#334155',
+    color: '#28242B',
   },
   invTdBold: {
     fontSize: 12.5,
     fontWeight: '700',
-    color: '#0F172A',
+    color: '#28242B',
   },
   invSummaryBox: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F8F5F7',
     borderRadius: 8,
     padding: 14,
     gap: 6,
@@ -1476,16 +1476,16 @@ const styles = StyleSheet.create({
   },
   invSumLabel: {
     fontSize: 12,
-    color: '#475569',
+    color: '#77717A',
   },
   invSumVal: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#0F172A',
+    color: '#28242B',
   },
   invSumDivider: {
     height: 1,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#E5DFE4',
     marginVertical: 4,
   },
   invGrandTotalRow: {
@@ -1496,12 +1496,12 @@ const styles = StyleSheet.create({
   invGrandTotalLabel: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#28242B',
   },
   invGrandTotalVal: {
     fontSize: 17,
     fontWeight: '900',
-    color: '#0F766E',
+    color: '#B9829A',
   },
   invoiceFooter: {
     flexDirection: 'row',
@@ -1509,11 +1509,11 @@ const styles = StyleSheet.create({
     gap: 10,
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderTopColor: '#E5DFE4',
+    backgroundColor: '#F8F5F7',
   },
   printBtn: {
-    backgroundColor: '#0F766E',
+    backgroundColor: '#B9829A',
     paddingVertical: 9,
     paddingHorizontal: 16,
     borderRadius: 8,
@@ -1525,14 +1525,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   closeInvBtn: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#F8F5F7',
     paddingVertical: 9,
     paddingHorizontal: 16,
     borderRadius: 8,
     cursor: 'pointer',
   },
   closeInvBtnText: {
-    color: '#475569',
+    color: '#77717A',
     fontSize: 12.5,
     fontWeight: '600',
   },
@@ -1553,8 +1553,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 18,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderBottomColor: '#E5DFE4',
+    backgroundColor: '#F8F5F7',
   },
   devGuideTitleRow: {
     flexDirection: 'row',
@@ -1565,7 +1565,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 8,
-    backgroundColor: '#0F766E',
+    backgroundColor: '#B9829A',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1575,11 +1575,11 @@ const styles = StyleSheet.create({
   devGuideModalTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#28242B',
   },
   devGuideModalSubtitle: {
     fontSize: 12,
-    color: '#64748B',
+    color: '#77717A',
   },
   devGuideBody: {
     padding: 20,
@@ -1590,21 +1590,21 @@ const styles = StyleSheet.create({
   guideBlockTitle: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#0F766E',
+    color: '#B9829A',
     marginBottom: 6,
   },
   guideBlockDesc: {
     fontSize: 12,
-    color: '#475569',
+    color: '#77717A',
     marginBottom: 8,
   },
   sqlCodeBox: {
-    backgroundColor: '#0F172A',
+    backgroundColor: '#28242B',
     borderRadius: 8,
     padding: 12,
   },
   sqlCodeText: {
-    color: '#38BDF8',
+    color: '#A66D86',
     fontSize: 11.5,
     fontFamily: Platform.select({ web: 'Consolas, Monaco, monospace', default: 'System' }),
     lineHeight: 17,
@@ -1616,7 +1616,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   apiMethodBadge: {
-    backgroundColor: '#16A34A',
+    backgroundColor: '#4F8A72',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -1629,18 +1629,18 @@ const styles = StyleSheet.create({
   apiPathText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#0F172A',
+    color: '#28242B',
     fontFamily: Platform.select({ web: 'monospace', default: 'System' }),
   },
   devGuideFooter: {
     padding: 14,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderTopColor: '#E5DFE4',
+    backgroundColor: '#F8F5F7',
     alignItems: 'flex-end',
   },
   closeDevGuideBtn: {
-    backgroundColor: '#0F766E',
+    backgroundColor: '#B9829A',
     paddingVertical: 8,
     paddingHorizontal: 18,
     borderRadius: 8,

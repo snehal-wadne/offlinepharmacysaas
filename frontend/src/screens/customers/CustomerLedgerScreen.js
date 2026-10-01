@@ -592,7 +592,7 @@ export default function CustomerLedgerScreen({ onShowToast, onNavigate }) {
             <TextInput
               style={styles.searchInput}
               placeholder="Search by customer name, phone, patient ID or branch..."
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor="#77717A"
               value={searchQuery}
               onChangeText={setSearchQuery}
             />
@@ -708,8 +708,8 @@ export default function CustomerLedgerScreen({ onShowToast, onNavigate }) {
                                 color:
                                   (acc.currentBalance || acc.currentDue) !==
                                   "₹0.00"
-                                    ? "#DC2626"
-                                    : "#16A34A",
+                                    ? "#B85C64"
+                                    : "#4F8A72",
                               },
                             ]}
                           >
@@ -728,8 +728,8 @@ export default function CustomerLedgerScreen({ onShowToast, onNavigate }) {
                             style={[
                               styles.mobileValBold,
                               isExceeded
-                                ? { color: "#DC2626" }
-                                : { color: "#0F766E" },
+                                ? { color: "#B85C64" }
+                                : { color: "#B9829A" },
                             ]}
                           >
                             {acc.utilizationPercent ||
@@ -744,7 +744,7 @@ export default function CustomerLedgerScreen({ onShowToast, onNavigate }) {
                             style={[
                               styles.mobileVal,
                               isOverdue
-                                ? { color: "#DC2626", fontWeight: "700" }
+                                ? { color: "#B85C64", fontWeight: "700" }
                                 : {},
                             ]}
                           >
@@ -912,8 +912,8 @@ export default function CustomerLedgerScreen({ onShowToast, onNavigate }) {
                               color:
                                 (acc.currentBalance || acc.currentDue) !==
                                 "₹0.00"
-                                  ? "#DC2626"
-                                  : "#16A34A",
+                                  ? "#B85C64"
+                                  : "#4F8A72",
                             },
                           ]}
                         >
@@ -1088,7 +1088,7 @@ export default function CustomerLedgerScreen({ onShowToast, onNavigate }) {
                       Current Balance Due:
                     </Text>
                     <Text
-                      style={[styles.stmtSummaryValue, { color: "#DC2626" }]}
+                      style={[styles.stmtSummaryValue, { color: "#B85C64" }]}
                     >
                       {activeAccount.currentBalance}
                     </Text>
@@ -1096,7 +1096,7 @@ export default function CustomerLedgerScreen({ onShowToast, onNavigate }) {
                   <View style={styles.stmtSummaryCol}>
                     <Text style={styles.stmtSummaryLabel}>Aging Status:</Text>
                     <Text
-                      style={[styles.stmtSummaryValue, { color: "#0F766E" }]}
+                      style={[styles.stmtSummaryValue, { color: "#B9829A" }]}
                     >
                       {activeAccount.agingBucket}
                     </Text>
@@ -1156,8 +1156,8 @@ export default function CustomerLedgerScreen({ onShowToast, onNavigate }) {
                               width: 110,
                               fontWeight: "700",
                               color: row.type.includes("Debit")
-                                ? "#0F172A"
-                                : "#16A34A",
+                                ? "#28242B"
+                                : "#4F8A72",
                             },
                           ]}
                         >
@@ -1185,7 +1185,7 @@ export default function CustomerLedgerScreen({ onShowToast, onNavigate }) {
                               width: 90,
                               textAlign: "right",
                               fontWeight: "700",
-                              color: row.debit !== "-" ? "#DC2626" : "#64748B",
+                              color: row.debit !== "-" ? "#B85C64" : "#77717A",
                             },
                           ]}
                         >
@@ -1198,7 +1198,7 @@ export default function CustomerLedgerScreen({ onShowToast, onNavigate }) {
                               width: 90,
                               textAlign: "right",
                               fontWeight: "700",
-                              color: row.credit !== "-" ? "#16A34A" : "#64748B",
+                              color: row.credit !== "-" ? "#4F8A72" : "#77717A",
                             },
                           ]}
                         >
@@ -1211,7 +1211,7 @@ export default function CustomerLedgerScreen({ onShowToast, onNavigate }) {
                               width: 100,
                               textAlign: "right",
                               fontWeight: "800",
-                              color: "#0F172A",
+                              color: "#28242B",
                             },
                           ]}
                         >
@@ -1263,7 +1263,7 @@ export default function CustomerLedgerScreen({ onShowToast, onNavigate }) {
                       <Text
                         style={[
                           styles.sTdCell,
-                          { width: 110, fontWeight: "700", color: "#0F172A" },
+                          { width: 110, fontWeight: "700", color: "#28242B" },
                         ]}
                       >
                         Debit (Invoice)
@@ -1283,7 +1283,7 @@ export default function CustomerLedgerScreen({ onShowToast, onNavigate }) {
                             width: 90,
                             textAlign: "right",
                             fontWeight: "700",
-                            color: "#DC2626",
+                            color: "#B85C64",
                           },
                         ]}
                       >
@@ -1292,7 +1292,7 @@ export default function CustomerLedgerScreen({ onShowToast, onNavigate }) {
                       <Text
                         style={[
                           styles.sTdCell,
-                          { width: 90, textAlign: "right", color: "#64748B" },
+                          { width: 90, textAlign: "right", color: "#77717A" },
                         ]}
                       >
                         -
@@ -1374,7 +1374,7 @@ export default function CustomerLedgerScreen({ onShowToast, onNavigate }) {
                     style={styles.modalInput}
                     keyboardType="numeric"
                     placeholder="Enter amount to pay"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor="#77717A"
                     value={settleAmount}
                     onChangeText={setSettleAmount}
                   />
@@ -1385,7 +1385,7 @@ export default function CustomerLedgerScreen({ onShowToast, onNavigate }) {
                   <TextInput
                     style={styles.modalInput}
                     placeholder="UPI / QR, Cash, Card, Cheque"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor="#77717A"
                     value={settleMode}
                     onChangeText={setSettleMode}
                   />
@@ -1455,13 +1455,13 @@ const styles = StyleSheet.create({
   pageTitle: {
     fontSize: 24,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
     letterSpacing: -0.4,
   },
   liveTagBadge: {
-    backgroundColor: "#CCFBF1",
+    backgroundColor: "#E8D5DD",
     borderWidth: 1,
-    borderColor: "#99F6E4",
+    borderColor: "#E8D5DD",
     paddingVertical: 3,
     paddingHorizontal: 8,
     borderRadius: 6,
@@ -1469,17 +1469,17 @@ const styles = StyleSheet.create({
   liveTagText: {
     fontSize: 10.5,
     fontWeight: "800",
-    color: "#0F766E",
+    color: "#B9829A",
     letterSpacing: 0.5,
   },
   pageSubtitle: {
     fontSize: 13.5,
     fontWeight: "500",
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 4,
   },
   exportBtnPrimary: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingVertical: 10,
     paddingHorizontal: 18,
     borderRadius: 8,
@@ -1493,7 +1493,7 @@ const styles = StyleSheet.create({
   exportBtnSecondary: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     paddingVertical: 9,
     paddingHorizontal: 16,
     borderRadius: 8,
@@ -1502,7 +1502,7 @@ const styles = StyleSheet.create({
   exportBtnTextSecondary: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#334155",
+    color: "#28242B",
   },
   kpiRow: {
     flexDirection: "row",
@@ -1529,7 +1529,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     padding: 14,
   },
   mobileCardHeader: {
@@ -1538,17 +1538,17 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
     gap: 8,
   },
   mobileAccName: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   mobileAccSub: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   mobileGrid: {
@@ -1566,18 +1566,18 @@ const styles = StyleSheet.create({
   mobileLabel: {
     fontSize: 11,
     fontWeight: "600",
-    color: "#94A3B8",
+    color: "#77717A",
     textTransform: "uppercase",
   },
   mobileVal: {
     fontSize: 12.5,
-    color: "#334155",
+    color: "#28242B",
     marginTop: 1,
   },
   mobileValBold: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
     marginTop: 1,
   },
   mobileCardFooter: {
@@ -1586,11 +1586,11 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
+    borderTopColor: "#F8F5F7",
   },
   mobileSettleBtn: {
     flex: 1,
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingVertical: 8,
     borderRadius: 6,
     alignItems: "center",
@@ -1601,9 +1601,9 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
   mobileStmtBtn: {
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 6,
@@ -1612,19 +1612,19 @@ const styles = StyleSheet.create({
   mobileStmtBtnText: {
     fontSize: 12.5,
     fontWeight: "600",
-    color: "#334155",
+    color: "#28242B",
   },
   statusBadgeExceeded: {
-    backgroundColor: "#FEE2E2",
+    backgroundColor: "#F7EDEE",
   },
   statusBadgeTextExceeded: {
-    color: "#DC2626",
+    color: "#B85C64",
   },
   cardContainer: {
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     overflow: "hidden",
     ...Platform.select({
       web: {
@@ -1642,9 +1642,9 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 20,
     paddingVertical: 12,
-    backgroundColor: "#FAFAFA",
+    backgroundColor: "#F8F5F7",
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
     gap: 12,
   },
   filtersBarCompact: {
@@ -1657,7 +1657,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     paddingHorizontal: 12,
     height: 38,
@@ -1668,7 +1668,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 13,
-    color: "#0F172A",
+    color: "#28242B",
     outlineStyle: "none",
   },
   clearBtn: {
@@ -1676,7 +1676,7 @@ const styles = StyleSheet.create({
   },
   clearBtnText: {
     fontSize: 12,
-    color: "#94A3B8",
+    color: "#77717A",
   },
   filterChipScroll: {
     maxHeight: 44,
@@ -1692,17 +1692,17 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     cursor: "pointer",
   },
   filterChipActive: {
-    backgroundColor: "#0F766E",
-    borderColor: "#0F766E",
+    backgroundColor: "#B9829A",
+    borderColor: "#B9829A",
   },
   filterChipText: {
     fontSize: 12,
     fontWeight: "500",
-    color: "#64748B",
+    color: "#77717A",
   },
   filterChipTextActive: {
     fontWeight: "700",
@@ -1715,17 +1715,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   sectionTitle: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   paginationInfo: {
     fontSize: 12.5,
     fontWeight: "500",
-    color: "#64748B",
+    color: "#77717A",
   },
   tableWrapper: {
     minWidth: 1420,
@@ -1737,13 +1737,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderBottomColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
   },
   thCell: {
     fontSize: 11.5,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
     paddingHorizontal: 6,
     letterSpacing: 0.3,
   },
@@ -1753,35 +1753,35 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   tableRowAlt: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
   },
   tdCell: {
     fontSize: 13,
-    color: "#334155",
+    color: "#28242B",
     paddingHorizontal: 6,
   },
   patientIdText: {
     fontWeight: "700",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   patientNameText: {
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   branchSubtext: {
     fontSize: 11,
-    color: "#64748B",
+    color: "#77717A",
     paddingHorizontal: 6,
     marginTop: 2,
   },
   utilPercentText: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#0369A1",
-    backgroundColor: "#E0F2FE",
+    color: "#A66D86",
+    backgroundColor: "#E8D5DD",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -1792,45 +1792,45 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   agingPillTeal: {
-    backgroundColor: "#CCFBF1",
+    backgroundColor: "#E8D5DD",
   },
   agingPillAmber: {
-    backgroundColor: "#FEF3C7",
+    backgroundColor: "#F7F0E5",
   },
   agingPillRed: {
-    backgroundColor: "#FEE2E2",
+    backgroundColor: "#F7EDEE",
   },
   agingPillText: {
     fontSize: 11.5,
     fontWeight: "700",
   },
   agingTextTeal: {
-    color: "#0F766E",
+    color: "#B9829A",
   },
   agingTextAmber: {
-    color: "#B45309",
+    color: "#C49752",
   },
   agingTextRed: {
-    color: "#B91C1C",
+    color: "#B85C64",
   },
   lastInvText: {
     fontSize: 12.5,
     fontWeight: "600",
-    color: "#0F172A",
+    color: "#28242B",
   },
   lastInvNoSubtext: {
     fontSize: 11,
-    color: "#64748B",
+    color: "#77717A",
   },
   lastPayText: {
     fontSize: 12.5,
     fontWeight: "600",
-    color: "#0F172A",
+    color: "#28242B",
   },
   lastPayAmtSubtext: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#16A34A",
+    color: "#4F8A72",
   },
   statusBadge: {
     paddingHorizontal: 8,
@@ -1838,26 +1838,26 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   statusBadgeGreen: {
-    backgroundColor: "#DCFCE7",
+    backgroundColor: "#EAF2EE",
   },
   statusBadgeAmber: {
-    backgroundColor: "#FEF3C7",
+    backgroundColor: "#F7F0E5",
   },
   statusBadgeRed: {
-    backgroundColor: "#FEE2E2",
+    backgroundColor: "#F7EDEE",
   },
   statusBadgeText: {
     fontSize: 11.5,
     fontWeight: "700",
   },
   statusTextGreen: {
-    color: "#15803D",
+    color: "#4F8A72",
   },
   statusTextAmber: {
-    color: "#B45309",
+    color: "#C49752",
   },
   statusTextRed: {
-    color: "#B91C1C",
+    color: "#B85C64",
   },
   actionsCellWrapper: {
     flexDirection: "row",
@@ -1866,7 +1866,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   settleBtn: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     borderRadius: 6,
     paddingVertical: 4,
     paddingHorizontal: 8,
@@ -1878,9 +1878,9 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
   stmtBtn: {
-    backgroundColor: "#E0F2FE",
+    backgroundColor: "#E8D5DD",
     borderWidth: 1,
-    borderColor: "#BAE6FD",
+    borderColor: "#E8D5DD",
     borderRadius: 6,
     paddingVertical: 4,
     paddingHorizontal: 8,
@@ -1889,7 +1889,7 @@ const styles = StyleSheet.create({
   stmtBtnText: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#0369A1",
+    color: "#A66D86",
   },
   emptyState: {
     alignItems: "center",
@@ -1899,11 +1899,11 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   emptySubtitle: {
     fontSize: 13,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   modalBackdrop: {
@@ -1937,16 +1937,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   modalTitle: {
     fontSize: 17,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   modalSubtitle: {
     fontSize: 12.5,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   closeBtn: {
@@ -1954,7 +1954,7 @@ const styles = StyleSheet.create({
   },
   closeBtnText: {
     fontSize: 14,
-    color: "#94A3B8",
+    color: "#77717A",
     fontWeight: "700",
   },
   modalBody: {
@@ -1967,21 +1967,21 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 12.5,
     fontWeight: "600",
-    color: "#334155",
+    color: "#28242B",
     marginBottom: 6,
   },
   reqStar: {
-    color: "#DC2626",
+    color: "#B85C64",
   },
   modalInput: {
     height: 40,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     backgroundColor: "#FFFFFF",
     paddingHorizontal: 12,
     fontSize: 13,
-    color: "#0F172A",
+    color: "#28242B",
     outlineStyle: "none",
   },
   modalFooter: {
@@ -1992,8 +1992,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingVertical: 14,
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
-    backgroundColor: "#FAFAFA",
+    borderTopColor: "#F8F5F7",
+    backgroundColor: "#F8F5F7",
   },
   cancelBtn: {
     paddingVertical: 9,
@@ -2004,10 +2004,10 @@ const styles = StyleSheet.create({
   cancelBtnText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#64748B",
+    color: "#77717A",
   },
   submitModalBtn: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingVertical: 9,
     paddingHorizontal: 20,
     borderRadius: 8,
@@ -2020,9 +2020,9 @@ const styles = StyleSheet.create({
   },
   stmtSummaryBox: {
     flexDirection: "row",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 10,
     padding: 14,
     marginBottom: 20,
@@ -2033,41 +2033,41 @@ const styles = StyleSheet.create({
   },
   stmtSummaryLabel: {
     fontSize: 11.5,
-    color: "#64748B",
+    color: "#77717A",
     fontWeight: "600",
   },
   stmtSummaryValue: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
     marginTop: 3,
   },
   sectionHeading: {
     fontSize: 13.5,
     fontWeight: "700",
-    color: "#0F766E",
+    color: "#B9829A",
     marginBottom: 12,
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   stmtTableWrapper: {
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     overflow: "hidden",
   },
   stmtTableHeader: {
     flexDirection: "row",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     paddingVertical: 10,
     paddingHorizontal: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: "#E5DFE4",
   },
   sThCell: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
   },
   stmtTableRow: {
     flexDirection: "row",
@@ -2075,14 +2075,14 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     paddingHorizontal: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   sTdCell: {
     fontSize: 12.5,
-    color: "#334155",
+    color: "#28242B",
   },
   refText: {
     fontWeight: "700",
-    color: "#0F766E",
+    color: "#B9829A",
   },
 });

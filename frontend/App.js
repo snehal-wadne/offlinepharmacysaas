@@ -132,7 +132,7 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F7F5FA",
     minHeight: "100%",
     ...Platform.select({
       web: {
@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     padding: 24,
-    backgroundColor: "#FEF2F2",
+    backgroundColor: "#F7EDEE",
   },
   errorEmoji: {
     fontSize: 48,
@@ -156,12 +156,12 @@ const styles = StyleSheet.create({
   errorTitle: {
     fontSize: 20,
     fontWeight: "800",
-    color: "#991B1B",
+    color: "#B85C64",
     marginBottom: 8,
   },
   errorMessage: {
     fontSize: 13,
-    color: "#B91C1C",
+    color: "#B85C64",
     textAlign: "center",
     maxWidth: 600,
     marginBottom: 20,
@@ -170,10 +170,10 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#FECACA",
+    borderColor: "#F7EDEE",
   },
   retryButton: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,

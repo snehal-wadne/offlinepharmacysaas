@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { SuperAdminPalette as C } from '../../constants/theme';
 import {
   Pressable,
   ScrollView,
@@ -36,7 +37,7 @@ const PLANS: {
       'Single Store Support',
       'Daily Sales Reports',
     ],
-    color: '#2563EB',
+    color: C.dustyRose,
   },
   {
     name: 'Standard',
@@ -51,7 +52,7 @@ const PLANS: {
       'Customers CRM',
       'Stock Transfer System',
     ],
-    color: '#D97706',
+    color: C.warmGold,
   },
   {
     name: 'Professional',
@@ -67,7 +68,7 @@ const PLANS: {
       'Goods Receiving',
       'Users & Roles Access',
     ],
-    color: '#7C3AED',
+    color: C.dustyRose,
     popular: true,
   },
   {
@@ -83,7 +84,7 @@ const PLANS: {
       'Dedicated Onboarding',
       'Multi-Store Syncing',
     ],
-    color: '#059669',
+    color: C.sageGreen,
   },
   {
     name: 'Custom',
@@ -97,7 +98,7 @@ const PLANS: {
       'Flexible Billing Options',
       'SLA Agreements',
     ],
-    color: '#475569',
+    color: C.mutedGray,
   },
 ];
 
@@ -116,7 +117,7 @@ export default function SubscriptionPlansPage() {
             users: `Up to ${p.max_users || 5} Users`,
             modules: `${(p.features || []).length || 2} Modules`,
             features: Array.isArray(p.features) ? p.features : ['Core Module'],
-            color: p.color_hex || '#2563EB',
+            color: C.dustyRose,
             popular: Boolean(p.is_popular),
           }));
           setPlans(mapped);
@@ -226,7 +227,7 @@ export default function SubscriptionPlansPage() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: C.offWhite,
   },
   content: {
     padding: 24,
@@ -240,13 +241,13 @@ const styles = StyleSheet.create({
     marginBottom: 22,
   },
   title: {
-    color: '#172033',
+    color: C.charcoal,
     fontSize: 28,
     fontWeight: '900',
   },
   subtitle: {
     marginTop: 6,
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 14,
   },
   planGrid: {
@@ -261,22 +262,22 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
+    borderColor: C.softGray,
+    backgroundColor: C.white,
   },
   popularCard: {
     borderWidth: 2,
-    borderColor: '#C4B5FD',
+    borderColor: C.softRose,
   },
   popularBadge: {
     alignSelf: 'flex-end',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 10,
-    backgroundColor: '#EDE9FE',
+    backgroundColor: C.softRose,
   },
   popularText: {
-    color: '#7C3AED',
+    color: C.dustyRose,
     fontSize: 9,
     fontWeight: '900',
   },
@@ -288,7 +289,7 @@ const styles = StyleSheet.create({
   planDescription: {
     minHeight: 35,
     marginTop: 8,
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 12,
   },
   priceRow: {
@@ -297,34 +298,34 @@ const styles = StyleSheet.create({
     marginTop: 18,
   },
   price: {
-    color: '#172033',
+    color: C.charcoal,
     fontSize: 23,
     fontWeight: '900',
   },
   perYear: {
     marginLeft: 5,
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 11,
   },
   planLimit: {
     marginTop: 9,
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 11,
   },
   divider: {
     height: 1,
     marginVertical: 17,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: C.softGray,
   },
   includes: {
     marginBottom: 8,
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 10,
     fontWeight: '900',
   },
   feature: {
     marginTop: 9,
-    color: '#475569',
+    color: C.mutedGray,
     fontSize: 11,
   },
   buttons: {
@@ -345,11 +346,11 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: C.softGray,
     alignItems: 'center',
   },
   exportButtonText: {
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 12,
     fontWeight: '800',
   },

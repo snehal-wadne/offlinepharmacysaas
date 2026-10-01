@@ -727,7 +727,7 @@ export default function TaxGstSettingsScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F8F5F7',
   },
   contentContainer: {
     padding: 24,
@@ -740,7 +740,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E5DFE4',
     padding: 22,
     marginBottom: 16,
     flexDirection: 'row',
@@ -762,11 +762,11 @@ const styles = StyleSheet.create({
   headerTag: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#0F766E',
+    color: '#B9829A',
     letterSpacing: 0.8,
   },
   adminBadge: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: '#EAF2EE',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 4,
@@ -774,22 +774,22 @@ const styles = StyleSheet.create({
   adminBadgeText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#15803D',
+    color: '#4F8A72',
   },
   headerTitle: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#28242B',
     letterSpacing: -0.3,
   },
   headerSubtitle: {
     fontSize: 13,
-    color: '#64748B',
+    color: '#77717A',
     marginTop: 4,
     lineHeight: 19,
   },
   subscriptionNavButton: {
-    backgroundColor: '#0F766E',
+    backgroundColor: '#B9829A',
     paddingVertical: 9,
     paddingHorizontal: 16,
     borderRadius: 8,
@@ -805,7 +805,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E5DFE4',
     padding: 6,
     marginBottom: 20,
     flexWrap: 'wrap',
@@ -818,12 +818,12 @@ const styles = StyleSheet.create({
     cursor: 'pointer',
   },
   tabItemActive: {
-    backgroundColor: '#0F766E',
+    backgroundColor: '#B9829A',
   },
   tabItemText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#64748B',
+    color: '#77717A',
   },
   tabItemTextActive: {
     color: '#FFFFFF',
@@ -836,7 +836,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E5DFE4',
     padding: 22,
     ...Platform.select({
       web: {
@@ -850,7 +850,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: '#F8F5F7',
     paddingBottom: 14,
     flexWrap: 'wrap',
     gap: 12,
@@ -858,15 +858,15 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#0F172A',
+    color: '#28242B',
   },
   cardSubtitle: {
     fontSize: 12.5,
-    color: '#64748B',
+    color: '#77717A',
     marginTop: 2,
   },
   activePill: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: '#EAF2EE',
     paddingHorizontal: 10,
     paddingVertical: 3,
     borderRadius: 12,
@@ -874,7 +874,7 @@ const styles = StyleSheet.create({
   activePillText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#15803D',
+    color: '#4F8A72',
   },
   formGrid: {
     flexDirection: 'row',
@@ -888,22 +888,22 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#334155',
+    color: '#28242B',
     marginBottom: 6,
   },
   textInput: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#E5DFE4',
     borderRadius: 8,
     paddingVertical: 9,
     paddingHorizontal: 12,
     fontSize: 13.5,
-    color: '#0F172A',
+    color: '#28242B',
   },
   fieldHint: {
     fontSize: 11,
-    color: '#94A3B8',
+    color: '#77717A',
     marginTop: 4,
   },
   btnRow: {
@@ -916,21 +916,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderColor: '#E5DFE4',
+    backgroundColor: '#F8F5F7',
     cursor: 'pointer',
   },
   choiceBtnActive: {
-    borderColor: '#0F766E',
-    backgroundColor: '#F0FDFA',
+    borderColor: '#B9829A',
+    backgroundColor: '#E8D5DD',
   },
   choiceBtnText: {
     fontSize: 12,
-    color: '#64748B',
+    color: '#77717A',
     fontWeight: '500',
   },
   choiceBtnTextActive: {
-    color: '#0F766E',
+    color: '#B9829A',
     fontWeight: '700',
   },
   togglesList: {
@@ -942,7 +942,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F8FAFC',
+    borderBottomColor: '#F8F5F7',
     gap: 16,
   },
   toggleInfo: {
@@ -951,11 +951,11 @@ const styles = StyleSheet.create({
   toggleTitle: {
     fontSize: 13.5,
     fontWeight: '700',
-    color: '#0F172A',
+    color: '#28242B',
   },
   toggleDesc: {
     fontSize: 12,
-    color: '#64748B',
+    color: '#77717A',
     lineHeight: 17,
     marginTop: 2,
   },
@@ -968,10 +968,10 @@ const styles = StyleSheet.create({
     cursor: 'pointer',
   },
   toggleOn: {
-    backgroundColor: '#0F766E',
+    backgroundColor: '#B9829A',
   },
   toggleOff: {
-    backgroundColor: '#CBD5E1',
+    backgroundColor: '#E5DFE4',
   },
   toggleKnob: {
     width: 20,
@@ -989,12 +989,12 @@ const styles = StyleSheet.create({
     marginTop: 20,
     paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: '#F8F5F7',
     flexDirection: 'row',
     justifyContent: 'flex-end',
   },
   saveButton: {
-    backgroundColor: '#0F766E',
+    backgroundColor: '#B9829A',
     paddingVertical: 10,
     paddingHorizontal: 20,
     borderRadius: 8,
@@ -1006,7 +1006,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   addButton: {
-    backgroundColor: '#0F766E',
+    backgroundColor: '#B9829A',
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 8,
@@ -1018,9 +1018,9 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   summaryBanner: {
-    backgroundColor: '#F0FDFA',
+    backgroundColor: '#E8D5DD',
     borderWidth: 1,
-    borderColor: '#99F6E4',
+    borderColor: '#E8D5DD',
     borderRadius: 8,
     padding: 12,
     marginBottom: 16,
@@ -1029,7 +1029,7 @@ const styles = StyleSheet.create({
   summaryBannerTitle: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#0F766E',
+    color: '#B9829A',
   },
   summaryPillsRow: {
     flexDirection: 'row',
@@ -1038,7 +1038,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   appliedPill: {
-    backgroundColor: '#CCFBF1',
+    backgroundColor: '#E8D5DD',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 6,
@@ -1046,10 +1046,10 @@ const styles = StyleSheet.create({
   appliedPillText: {
     fontSize: 11.5,
     fontWeight: '700',
-    color: '#0F766E',
+    color: '#B9829A',
   },
   totalRatePill: {
-    backgroundColor: '#0F766E',
+    backgroundColor: '#B9829A',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 6,
@@ -1063,9 +1063,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   taxItemCard: {
-    backgroundColor: '#FAFAFA',
+    backgroundColor: '#F8F5F7',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E5DFE4',
     borderRadius: 10,
     padding: 16,
     flexDirection: 'row',
@@ -1075,7 +1075,7 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   taxItemCardApplied: {
-    borderColor: '#99F6E4',
+    borderColor: '#E8D5DD',
     backgroundColor: '#FFFFFF',
   },
   taxItemInfo: {
@@ -1092,7 +1092,7 @@ const styles = StyleSheet.create({
   taxItemName: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#0F172A',
+    color: '#28242B',
   },
   taxTypeBadge: {
     paddingHorizontal: 6,
@@ -1100,21 +1100,21 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   taxTypeVat: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: '#F7F0E5',
   },
   taxTypeState: {
-    backgroundColor: '#E0F2FE',
+    backgroundColor: '#E8D5DD',
   },
   taxTypeCentral: {
-    backgroundColor: '#EDE9FE',
+    backgroundColor: '#E8D5DD',
   },
   taxTypeBadgeText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#0F172A',
+    color: '#28242B',
   },
   rateBadge: {
-    backgroundColor: '#0F766E',
+    backgroundColor: '#B9829A',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 4,
@@ -1126,7 +1126,7 @@ const styles = StyleSheet.create({
   },
   taxItemDesc: {
     fontSize: 12,
-    color: '#64748B',
+    color: '#77717A',
   },
   taxItemActions: {
     flexDirection: 'row',
@@ -1141,19 +1141,19 @@ const styles = StyleSheet.create({
   applyLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#475569',
+    color: '#77717A',
   },
   deleteBtn: {
     paddingVertical: 5,
     paddingHorizontal: 10,
     borderRadius: 6,
-    backgroundColor: '#FEE2E2',
+    backgroundColor: '#F7EDEE',
     cursor: 'pointer',
   },
   deleteBtnText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#DC2626',
+    color: '#B85C64',
   },
 
 
@@ -1181,13 +1181,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderBottomColor: '#E5DFE4',
+    backgroundColor: '#F8F5F7',
   },
   modalTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#28242B',
   },
   modalCloseBtn: {
     padding: 4,
@@ -1195,7 +1195,7 @@ const styles = StyleSheet.create({
   },
   modalCloseText: {
     fontSize: 16,
-    color: '#64748B',
+    color: '#77717A',
     fontWeight: '700',
   },
   modalBody: {
@@ -1205,8 +1205,8 @@ const styles = StyleSheet.create({
   modalFooter: {
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderTopColor: '#E5DFE4',
+    backgroundColor: '#F8F5F7',
     flexDirection: 'row',
     justifyContent: 'flex-end',
     gap: 10,
@@ -1216,28 +1216,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#E5DFE4',
     backgroundColor: '#FFFFFF',
     cursor: 'pointer',
   },
   cancelBtnText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#475569',
+    color: '#77717A',
   },
   restrictedContainer: {
     flex: 1,
     padding: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F8F5F7',
     minHeight: 400,
   },
   restrictedCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E5DFE4',
     padding: 32,
     alignItems: 'center',
     maxWidth: 480,
@@ -1255,19 +1255,19 @@ const styles = StyleSheet.create({
   restrictedTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#28242B',
     marginBottom: 8,
     textAlign: 'center',
   },
   restrictedDesc: {
     fontSize: 13,
-    color: '#64748B',
+    color: '#77717A',
     textAlign: 'center',
     lineHeight: 20,
     marginBottom: 20,
   },
   restrictedBackBtn: {
-    backgroundColor: '#0F766E',
+    backgroundColor: '#B9829A',
     paddingVertical: 10,
     paddingHorizontal: 18,
     borderRadius: 8,

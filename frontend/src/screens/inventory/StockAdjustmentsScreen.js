@@ -1259,7 +1259,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
               body {
                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
                 background: #fff;
-                color: #000;
+                color: #28242B;
                 ${isA4 ? "display: grid; grid-template-columns: repeat(3, 1fr); gap: 4mm; padding: 8mm;" : ""}
               }
               .label-card {
@@ -1280,7 +1280,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                 font-weight: 800;
                 text-align: center;
                 letter-spacing: 0.5px;
-                border-bottom: 0.5px solid #000;
+                border-bottom: 0.5px solid #28242B;
                 padding-bottom: 1px;
                 text-transform: uppercase;
               }
@@ -1294,7 +1294,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
               }
               .generic-name {
                 font-size: ${isShelfTag ? "8.5px" : "7px"};
-                color: #333;
+                color: #28242B;
                 white-space: nowrap;
                 overflow: hidden;
                 text-overflow: ellipsis;
@@ -1798,14 +1798,14 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                 value={searchQuery}
                 onChangeText={setSearchQuery}
                 placeholder="Search product, SKU, batch..."
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor="#77717A"
               />
               {searchQuery ? (
                 <Pressable
                   onPress={() => setSearchQuery("")}
                   style={{ padding: 4 }}
                 >
-                  <Text style={{ color: "#94A3B8", fontSize: 13 }}>✕</Text>
+                  <Text style={{ color: "#77717A", fontSize: 13 }}>✕</Text>
                 </Pressable>
               ) : null}
             </View>
@@ -1869,8 +1869,8 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
               style={[
                 styles.filterTogglePill,
                 {
-                  backgroundColor: "#0F766E",
-                  borderColor: "#0F766E",
+                  backgroundColor: "#B9829A",
+                  borderColor: "#B9829A",
                   flexDirection: "row",
                   alignItems: "center",
                 },
@@ -1894,8 +1894,8 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
         style={[
           styles.filterTogglePill,
           {
-            backgroundColor: "#2563EB",
-            borderColor: "#2563EB",
+            backgroundColor: "#B9829A",
+            borderColor: "#B9829A",
             flexDirection: "row",
             alignItems: "center",
           },
@@ -2013,7 +2013,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                   <View style={styles.mobileGridItem}>
                     <Text style={styles.mobileItemLabel}>Qty Available</Text>
                     <Text
-                      style={[styles.mobileItemValueBold, { color: "#0F766E" }]}
+                      style={[styles.mobileItemValueBold, { color: "#B9829A" }]}
                     >
                       {item.quantity} units
                     </Text>
@@ -2021,7 +2021,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                   <View style={styles.mobileGridItem}>
                     <Text style={styles.mobileItemLabel}>MRP Price</Text>
                     <Text
-                      style={[styles.mobileItemValueBold, { color: "#0F172A" }]}
+                      style={[styles.mobileItemValueBold, { color: "#28242B" }]}
                     >
                       {item.amount}
                     </Text>
@@ -2345,14 +2345,14 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
               <Pressable
                 onPress={handleCancelEdit}
                 style={{
-                  backgroundColor: "#F1F5F9",
+                  backgroundColor: "#F8F5F7",
                   paddingHorizontal: 12,
                   paddingVertical: 6,
                   borderRadius: 6,
                 }}
               >
                 <Text
-                  style={{ color: "#64748B", fontWeight: "600", fontSize: 13 }}
+                  style={{ color: "#77717A", fontWeight: "600", fontSize: 13 }}
                 >
                   Cancel Edit
                 </Text>
@@ -2379,7 +2379,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                 formErrors.medicineName && styles.formInputError,
               ]}
               placeholder="e.g., Paracetamol / Ibuprofen / Amoxicillin"
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor="#77717A"
               value={formData.medicineName}
               onChangeText={(t) => handleFormChange("medicineName", t)}
             />
@@ -2398,7 +2398,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                 formErrors.brandName && styles.formInputError,
               ]}
               placeholder="e.g., Crocin 500 / Calpol 500 / Dolo 650"
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor="#77717A"
               value={formData.brandName}
               onChangeText={(t) => handleFormChange("brandName", t)}
             />
@@ -2413,7 +2413,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
             <TextInput
               style={styles.formInput}
               placeholder="e.g., 500mg / 650mg / 400mg"
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor="#77717A"
               value={formData.strength}
               onChangeText={(t) => handleFormChange("strength", t)}
             />
@@ -2424,7 +2424,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
             <TextInput
               style={styles.formInput}
               placeholder="e.g., 15 Tablets / 10 Capsules"
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor="#77717A"
               value={formData.packSize}
               onChangeText={(t) => handleFormChange("packSize", t)}
             />
@@ -2435,7 +2435,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
             <TextInput
               style={styles.formInput}
               placeholder="e.g., GSK / Micro Labs / Abbott / Alkem"
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor="#77717A"
               value={formData.manufacturer}
               onChangeText={(t) => handleFormChange("manufacturer", t)}
             />
@@ -2447,7 +2447,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
             <TextInput
               style={styles.formInput}
               placeholder="e.g., GSK Pharmaceuticals / Sun Pharma Care / Cipla Ltd"
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor="#77717A"
               value={formData.supplierName}
               onChangeText={(t) => handleFormChange("supplierName", t)}
             />
@@ -2458,7 +2458,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
             <TextInput
               style={styles.formInput}
               placeholder="e.g., 15.00 / 24.00"
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor="#77717A"
               keyboardType="numeric"
               value={formData.amount}
               onChangeText={(t) => handleFormChange("amount", t)}
@@ -2495,7 +2495,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                 formErrors.sku && styles.formInputError,
               ]}
               placeholder="Scan or type barcode/SKU"
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor="#77717A"
               value={formData.sku}
               onChangeText={(t) => handleFormChange("sku", t)}
             />
@@ -2514,7 +2514,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                 formErrors.batchNo && styles.formInputError,
               ]}
               placeholder="e.g., B-1001"
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor="#77717A"
               value={formData.batchNo}
               onChangeText={(t) => handleFormChange("batchNo", t)}
             />
@@ -2533,7 +2533,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                 formErrors.quantity && styles.formInputError,
               ]}
               placeholder="e.g., 500"
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor="#77717A"
               keyboardType="numeric"
               value={formData.quantity}
               onChangeText={(t) => handleFormChange("quantity", t)}
@@ -2549,7 +2549,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
             <TextInput
               style={styles.formInput}
               placeholder="e.g., A1-S1"
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor="#77717A"
               value={formData.shelfLocation}
               onChangeText={(t) => handleFormChange("shelfLocation", t)}
             />
@@ -2756,7 +2756,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                       selectedItemForAction?.status === "Out of Stock") && (
                       <View
                         style={{
-                          backgroundColor: "#FEE2E2",
+                          backgroundColor: "#F7EDEE",
                           paddingHorizontal: 6,
                           paddingVertical: 2,
                           borderRadius: 4,
@@ -2766,7 +2766,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                           style={{
                             fontSize: 10,
                             fontWeight: "700",
-                            color: "#DC2626",
+                            color: "#B85C64",
                           }}
                         >
                           Reorder Alert
@@ -2803,7 +2803,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                 <Text style={styles.actionOptionIcon}>🗑️</Text>
                 <View style={styles.actionOptionTextCol}>
                   <Text
-                    style={[styles.actionOptionTitle, { color: "#DC2626" }]}
+                    style={[styles.actionOptionTitle, { color: "#B85C64" }]}
                   >
                     Deactivate / Remove Item
                   </Text>
@@ -2903,9 +2903,9 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                       paddingVertical: 10,
                       borderRadius: 8,
                       borderWidth: 2,
-                      borderColor: adjustSign === "+" ? "#16A34A" : "#E2E8F0",
+                      borderColor: adjustSign === "+" ? "#4F8A72" : "#E5DFE4",
                       backgroundColor:
-                        adjustSign === "+" ? "#DCFCE7" : "#F8FAFC",
+                        adjustSign === "+" ? "#EAF2EE" : "#F8F5F7",
                       alignItems: "center",
                       flexDirection: "row",
                       justifyContent: "center",
@@ -2917,7 +2917,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                       style={{
                         fontSize: 14,
                         fontWeight: "800",
-                        color: adjustSign === "+" ? "#15803D" : "#64748B",
+                        color: adjustSign === "+" ? "#4F8A72" : "#77717A",
                       }}
                     >
                       ➕ Add Stock (+)
@@ -2931,9 +2931,9 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                       paddingVertical: 10,
                       borderRadius: 8,
                       borderWidth: 2,
-                      borderColor: adjustSign === "-" ? "#DC2626" : "#E2E8F0",
+                      borderColor: adjustSign === "-" ? "#B85C64" : "#E5DFE4",
                       backgroundColor:
-                        adjustSign === "-" ? "#FEE2E2" : "#F8FAFC",
+                        adjustSign === "-" ? "#F7EDEE" : "#F8F5F7",
                       alignItems: "center",
                       flexDirection: "row",
                       justifyContent: "center",
@@ -2944,7 +2944,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                       style={{
                         fontSize: 14,
                         fontWeight: "800",
-                        color: adjustSign === "-" ? "#B91C1C" : "#64748B",
+                        color: adjustSign === "-" ? "#B85C64" : "#77717A",
                       }}
                     >
                       ➖ Subtract Stock (-)
@@ -2955,7 +2955,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                   <Text
                     style={{
                       fontSize: 11,
-                      color: "#DC2626",
+                      color: "#B85C64",
                       marginTop: 4,
                       fontWeight: "600",
                     }}
@@ -2968,7 +2968,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                   <Text
                     style={{
                       fontSize: 11,
-                      color: "#16A34A",
+                      color: "#4F8A72",
                       marginTop: 4,
                       fontWeight: "600",
                     }}
@@ -2989,7 +2989,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                     flexDirection: "row",
                     alignItems: "center",
                     borderWidth: 1.5,
-                    borderColor: adjustSign === "+" ? "#16A34A" : "#DC2626",
+                    borderColor: adjustSign === "+" ? "#4F8A72" : "#B85C64",
                     borderRadius: 8,
                     overflow: "hidden",
                     backgroundColor: "#FFFFFF",
@@ -2998,7 +2998,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                   <View
                     style={{
                       backgroundColor:
-                        adjustSign === "+" ? "#DCFCE7" : "#FEE2E2",
+                        adjustSign === "+" ? "#EAF2EE" : "#F7EDEE",
                       paddingHorizontal: 14,
                       paddingVertical: 12,
                       alignItems: "center",
@@ -3009,7 +3009,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                       style={{
                         fontSize: 18,
                         fontWeight: "900",
-                        color: adjustSign === "+" ? "#15803D" : "#B91C1C",
+                        color: adjustSign === "+" ? "#4F8A72" : "#B85C64",
                       }}
                     >
                       {adjustSign}
@@ -3026,7 +3026,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                     }
                     keyboardType="numeric"
                     placeholder="e.g. 10"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor="#77717A"
                   />
                 </View>
               </View>
@@ -3034,12 +3034,12 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
               {/* Live Preview: Current vs After */}
               <View
                 style={{
-                  backgroundColor: "#F1F5F9",
+                  backgroundColor: "#F8F5F7",
                   padding: 10,
                   borderRadius: 8,
                   marginBottom: 12,
                   borderWidth: 1,
-                  borderColor: "#CBD5E1",
+                  borderColor: "#E5DFE4",
                 }}
               >
                 <View
@@ -3049,14 +3049,14 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                     marginBottom: 4,
                   }}
                 >
-                  <Text style={{ fontSize: 12, color: "#64748B" }}>
+                  <Text style={{ fontSize: 12, color: "#77717A" }}>
                     Current Available Stock:
                   </Text>
                   <Text
                     style={{
                       fontSize: 12,
                       fontWeight: "700",
-                      color: "#1E293B",
+                      color: "#28242B",
                     }}
                   >
                     {selectedItemForAction?.quantity || 0} units
@@ -3069,14 +3069,14 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                     marginBottom: 4,
                   }}
                 >
-                  <Text style={{ fontSize: 12, color: "#64748B" }}>
+                  <Text style={{ fontSize: 12, color: "#77717A" }}>
                     Adjustment Change:
                   </Text>
                   <Text
                     style={{
                       fontSize: 12,
                       fontWeight: "800",
-                      color: adjustSign === "+" ? "#16A34A" : "#DC2626",
+                      color: adjustSign === "+" ? "#4F8A72" : "#B85C64",
                     }}
                   >
                     {adjustSign}{" "}
@@ -3088,7 +3088,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                     flexDirection: "row",
                     justifyContent: "space-between",
                     borderTopWidth: 1,
-                    borderTopColor: "#E2E8F0",
+                    borderTopColor: "#E5DFE4",
                     paddingTop: 4,
                   }}
                 >
@@ -3096,7 +3096,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                     style={{
                       fontSize: 13,
                       fontWeight: "700",
-                      color: "#0F172A",
+                      color: "#28242B",
                     }}
                   >
                     New Calculated Stock:
@@ -3111,8 +3111,8 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                             ? -Math.abs(parseInt(adjustDelta, 10) || 0)
                             : Math.abs(parseInt(adjustDelta, 10) || 0)) <
                         0
-                          ? "#DC2626"
-                          : "#0F766E",
+                          ? "#B85C64"
+                          : "#B9829A",
                     }}
                   >
                     {Math.max(
@@ -3136,7 +3136,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                   value={adjustReason}
                   onChangeText={setAdjustReason}
                   placeholder="Audit count recount..."
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor="#77717A"
                 />
               </View>
             </View>
@@ -3211,7 +3211,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                       setEditMedicineForm((p) => ({ ...p, brandName: v }))
                     }
                     placeholder="e.g. Crocin 500"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor="#77717A"
                   />
                 </View>
                 <View style={{ flex: 1 }}>
@@ -3229,7 +3229,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                       }))
                     }
                     placeholder="e.g. Paracetamol"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor="#77717A"
                   />
                 </View>
               </View>
@@ -3245,7 +3245,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                       setEditMedicineForm((p) => ({ ...p, strength: v }))
                     }
                     placeholder="e.g. 500mg, 100ml"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor="#77717A"
                   />
                 </View>
                 <View style={{ flex: 1 }}>
@@ -3257,7 +3257,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                       setEditMedicineForm((p) => ({ ...p, packSize: v }))
                     }
                     placeholder="e.g. 10 Tablets, 1 Strip"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor="#77717A"
                   />
                 </View>
               </View>
@@ -3273,7 +3273,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                       setEditMedicineForm((p) => ({ ...p, manufacturer: v }))
                     }
                     placeholder="e.g. Cipla, Sun Pharma, GSK"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor="#77717A"
                   />
                 </View>
                 <View style={{ flex: 1 }}>
@@ -3287,7 +3287,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                       setEditMedicineForm((p) => ({ ...p, supplierName: v }))
                     }
                     placeholder="e.g. Apex Pharma Distributors"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor="#77717A"
                   />
                 </View>
               </View>
@@ -3312,14 +3312,14 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                       style={{
                         paddingHorizontal: 6,
                         paddingVertical: 2,
-                        backgroundColor: "#EFF6FF",
+                        backgroundColor: "#E8D5DD",
                         borderRadius: 4,
                       }}
                     >
                       <Text
                         style={{
                           fontSize: 11,
-                          color: "#2563EB",
+                          color: "#B9829A",
                           fontWeight: "700",
                         }}
                       >
@@ -3334,7 +3334,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                       setEditMedicineForm((p) => ({ ...p, sku: v }))
                     }
                     placeholder="e.g. 890123456789"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor="#77717A"
                   />
                 </View>
                 <View style={{ flex: 1 }}>
@@ -3348,7 +3348,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                       setEditMedicineForm((p) => ({ ...p, batchNo: v }))
                     }
                     placeholder="e.g. B-1001"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor="#77717A"
                   />
                 </View>
               </View>
@@ -3364,7 +3364,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                       setEditMedicineForm((p) => ({ ...p, amount: v }))
                     }
                     placeholder="e.g. 25.00"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor="#77717A"
                     keyboardType="numeric"
                   />
                 </View>
@@ -3377,7 +3377,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                       setEditMedicineForm((p) => ({ ...p, quantity: v }))
                     }
                     placeholder="e.g. 100"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor="#77717A"
                     keyboardType="numeric"
                   />
                 </View>
@@ -3390,7 +3390,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                       setEditMedicineForm((p) => ({ ...p, shelfLocation: v }))
                     }
                     placeholder="e.g. A1-S1"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor="#77717A"
                   />
                 </View>
               </View>
@@ -3420,11 +3420,11 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                     borderRadius: 8,
                     borderWidth: 1,
                     borderColor: editMedicineForm.isRxRequired
-                      ? "#DC2626"
-                      : "#E2E8F0",
+                      ? "#B85C64"
+                      : "#E5DFE4",
                     backgroundColor: editMedicineForm.isRxRequired
-                      ? "#FEF2F2"
-                      : "#F8FAFC",
+                      ? "#F7EDEE"
+                      : "#F8F5F7",
                   }}
                 >
                   <Text style={{ fontSize: 16 }}>
@@ -3436,13 +3436,13 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                         fontSize: 12,
                         fontWeight: "700",
                         color: editMedicineForm.isRxRequired
-                          ? "#DC2626"
-                          : "#1E293B",
+                          ? "#B85C64"
+                          : "#28242B",
                       }}
                     >
                       Prescription Required (Rx)
                     </Text>
-                    <Text style={{ fontSize: 11, color: "#64748B" }}>
+                    <Text style={{ fontSize: 11, color: "#77717A" }}>
                       {editMedicineForm.isRxRequired
                         ? "Requires doctor prescription"
                         : "Over-the-counter (OTC)"}
@@ -3463,11 +3463,11 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                     borderRadius: 8,
                     borderWidth: 1,
                     borderColor: editMedicineForm.isActive
-                      ? "#16A34A"
-                      : "#E2E8F0",
+                      ? "#4F8A72"
+                      : "#E5DFE4",
                     backgroundColor: editMedicineForm.isActive
-                      ? "#F0FDF4"
-                      : "#F8FAFC",
+                      ? "#EAF2EE"
+                      : "#F8F5F7",
                   }}
                 >
                   <Text style={{ fontSize: 16 }}>
@@ -3479,13 +3479,13 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                         fontSize: 12,
                         fontWeight: "700",
                         color: editMedicineForm.isActive
-                          ? "#16A34A"
-                          : "#64748B",
+                          ? "#4F8A72"
+                          : "#77717A",
                       }}
                     >
                       Active in Catalog
                     </Text>
-                    <Text style={{ fontSize: 11, color: "#64748B" }}>
+                    <Text style={{ fontSize: 11, color: "#77717A" }}>
                       {editMedicineForm.isActive
                         ? "Visible in POS & store search"
                         : "Hidden from sale"}
@@ -3502,8 +3502,8 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                 gap: 12,
                 padding: 16,
                 borderTopWidth: 1,
-                borderTopColor: "#E2E8F0",
-                backgroundColor: "#F8FAFC",
+                borderTopColor: "#E5DFE4",
+                backgroundColor: "#F8F5F7",
               }}
             >
               <Pressable
@@ -3517,7 +3517,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                 onPress={handleUpdateMedicineModal}
                 style={[
                   styles.printBarcodePrimaryBtn,
-                  { backgroundColor: "#0F766E" },
+                  { backgroundColor: "#B9829A" },
                   editMedicineSaving && { opacity: 0.6 },
                 ]}
                 disabled={editMedicineSaving}
@@ -3690,7 +3690,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                                 style={{
                                   fontSize: 11,
                                   fontWeight: "800",
-                                  color: "#0F766E",
+                                  color: "#B9829A",
                                 }}
                               >
                                 SOURCE
@@ -3783,7 +3783,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                                 style={{
                                   fontSize: 11,
                                   fontWeight: "800",
-                                  color: "#2563EB",
+                                  color: "#B9829A",
                                 }}
                               >
                                 DESTINATION
@@ -3810,9 +3810,9 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                     Stock Quantity to Transfer{" "}
                     <Text style={styles.reqStar}>*</Text>
                   </Text>
-                  <Text style={{ fontSize: 12, color: "#64748B" }}>
+                  <Text style={{ fontSize: 12, color: "#77717A" }}>
                     Available:{" "}
-                    <Text style={{ fontWeight: "700", color: "#0F766E" }}>
+                    <Text style={{ fontWeight: "700", color: "#B9829A" }}>
                       {selectedItemForAction?.quantity || 0} units
                     </Text>
                   </Text>
@@ -3834,7 +3834,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                         minWidth: 140,
                         fontSize: 15,
                         fontWeight: "700",
-                        color: "#0F172A",
+                        color: "#28242B",
                       },
                     ]}
                     value={transferQty}
@@ -3879,7 +3879,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                     </Text>
                     <Text
                       style={{
-                        color: "#DC2626",
+                        color: "#B85C64",
                         fontWeight: "700",
                         fontSize: 12.5,
                       }}
@@ -3899,7 +3899,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                     </Text>
                     <Text
                       style={{
-                        color: "#16A34A",
+                        color: "#4F8A72",
                         fontWeight: "700",
                         fontSize: 12.5,
                       }}
@@ -4102,7 +4102,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                               borderRadius: 8,
                               alignItems: "center",
                               borderWidth: 1,
-                              borderColor: "#E2E8F0",
+                              borderColor: "#E5DFE4",
                             }}
                             dangerouslySetInnerHTML={{
                               __html:
@@ -4125,7 +4125,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                               padding: 6,
                               borderRadius: 8,
                               borderWidth: 1,
-                              borderColor: "#E2E8F0",
+                              borderColor: "#E5DFE4",
                             }}
                           >
                             <View
@@ -4372,7 +4372,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                       style={{
                         fontSize: 12,
                         fontWeight: "700",
-                        color: "#0F766E",
+                        color: "#B9829A",
                       }}
                     >
                       Total: {barcodeConfig.copies} Label
@@ -4563,7 +4563,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                         width: 8,
                         height: 8,
                         borderRadius: 4,
-                        backgroundColor: "#10B981",
+                        backgroundColor: "#4F8A72",
                       }}
                     />
                     <Text style={styles.apiPreviewText}>
@@ -4795,7 +4795,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                 style={{
                   fontSize: 20,
                   fontWeight: "700",
-                  color: scanError ? "#DC2626" : "#111827",
+                  color: scanError ? "#B85C64" : "#28242B",
                 }}
               >
                 {scanError ? "Product Not Found" : "Scanned Medicine Details"}
@@ -4811,7 +4811,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                 <Text
                   style={{
                     fontSize: 18,
-                    color: "#64748B",
+                    color: "#77717A",
                     fontWeight: "700",
                   }}
                 >
@@ -4820,9 +4820,9 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
               </Pressable>
             </View>
 
-            <Text style={{ color: "#6B7280", marginBottom: 16 }}>
+            <Text style={{ color: "#77717A", marginBottom: 16 }}>
               Scanned code:{" "}
-              <Text style={{ fontWeight: "700", color: "#0F766E" }}>
+              <Text style={{ fontWeight: "700", color: "#B9829A" }}>
                 {scannedCode}
               </Text>
             </Text>
@@ -4831,18 +4831,18 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
               {scanError ? (
                 <View
                   style={{
-                    backgroundColor: "#FEF2F2",
+                    backgroundColor: "#F7EDEE",
                     borderRadius: 12,
                     padding: 16,
                     borderWidth: 1,
-                    borderColor: "#FCA5A5",
+                    borderColor: "#F7EDEE",
                     alignItems: "center",
                   }}
                 >
                   <Text style={{ fontSize: 32, marginBottom: 8 }}>🔍</Text>
                   <Text
                     style={{
-                      color: "#991B1B",
+                      color: "#B85C64",
                       fontWeight: "700",
                       fontSize: 15,
                       textAlign: "center",
@@ -4880,7 +4880,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                       }
                     }}
                     style={{
-                      backgroundColor: "#0F766E",
+                      backgroundColor: "#B9829A",
                       paddingHorizontal: 16,
                       paddingVertical: 10,
                       borderRadius: 8,
@@ -4906,11 +4906,11 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                     key={String(item.id || `${item.sku}-${index}`)}
                     style={{
                       borderWidth: 1,
-                      borderColor: "#E5E7EB",
+                      borderColor: "#E5DFE4",
                       borderRadius: 12,
                       padding: 16,
                       marginBottom: 12,
-                      backgroundColor: "#FAFAFA",
+                      backgroundColor: "#F8F5F7",
                     }}
                   >
                     <View
@@ -4926,7 +4926,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                           style={{
                             fontSize: 17,
                             fontWeight: "700",
-                            color: "#0F766E",
+                            color: "#B9829A",
                           }}
                         >
                           {item.brandName ||
@@ -4934,7 +4934,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                             item.name ||
                             "Medicine"}
                         </Text>
-                        <Text style={{ fontSize: 12, color: "#64748B" }}>
+                        <Text style={{ fontSize: 12, color: "#77717A" }}>
                           {item.genericName || item.medicineName}
                         </Text>
                       </View>
@@ -4943,9 +4943,9 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                           backgroundColor:
                             Number(item.quantity) < 50
                               ? Number(item.quantity) === 0
-                                ? "#FEE2E2"
-                                : "#FEF3C7"
-                              : "#DCFCE7",
+                                ? "#F7EDEE"
+                                : "#F7F0E5"
+                              : "#EAF2EE",
                           paddingHorizontal: 8,
                           paddingVertical: 3,
                           borderRadius: 6,
@@ -4958,9 +4958,9 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                             color:
                               Number(item.quantity) < 50
                                 ? Number(item.quantity) === 0
-                                  ? "#DC2626"
-                                  : "#D97706"
-                                : "#16A34A",
+                                  ? "#B85C64"
+                                  : "#C49752"
+                                : "#4F8A72",
                           }}
                         >
                           {item.status ||
@@ -4985,15 +4985,15 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                           justifyContent: "space-between",
                           paddingVertical: 5,
                           borderBottomWidth: 1,
-                          borderBottomColor: "#F3F4F6",
+                          borderBottomColor: "#F8F5F7",
                         }}
                       >
-                        <Text style={{ color: "#6B7280", fontSize: 13 }}>
+                        <Text style={{ color: "#77717A", fontSize: 13 }}>
                           {label}
                         </Text>
                         <Text
                           style={{
-                            color: "#111827",
+                            color: "#28242B",
                             fontWeight: "600",
                             fontSize: 13,
                           }}
@@ -5049,9 +5049,9 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                           }
                         }}
                         style={{
-                          backgroundColor: "#F1F5F9",
+                          backgroundColor: "#F8F5F7",
                           borderWidth: 1,
-                          borderColor: "#CBD5E1",
+                          borderColor: "#E5DFE4",
                           paddingHorizontal: 10,
                           paddingVertical: 6,
                           borderRadius: 6,
@@ -5061,7 +5061,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                           style={{
                             fontSize: 12,
                             fontWeight: "600",
-                            color: "#334155",
+                            color: "#28242B",
                           }}
                         >
                           ✏️ Edit Form
@@ -5078,9 +5078,9 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                           setAdjustModalOpen(true);
                         }}
                         style={{
-                          backgroundColor: "#F1F5F9",
+                          backgroundColor: "#F8F5F7",
                           borderWidth: 1,
-                          borderColor: "#CBD5E1",
+                          borderColor: "#E5DFE4",
                           paddingHorizontal: 10,
                           paddingVertical: 6,
                           borderRadius: 6,
@@ -5090,7 +5090,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                           style={{
                             fontSize: 12,
                             fontWeight: "600",
-                            color: "#334155",
+                            color: "#28242B",
                           }}
                         >
                           ⚖️ Adjust Stock
@@ -5105,9 +5105,9 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                           handleOpenSupplierModal(item);
                         }}
                         style={{
-                          backgroundColor: "#FEF3C7",
+                          backgroundColor: "#F7F0E5",
                           borderWidth: 1,
-                          borderColor: "#F59E0B",
+                          borderColor: "#C49752",
                           paddingHorizontal: 10,
                           paddingVertical: 6,
                           borderRadius: 6,
@@ -5117,7 +5117,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                           style={{
                             fontSize: 12,
                             fontWeight: "700",
-                            color: "#B45309",
+                            color: "#C49752",
                           }}
                         >
                           📢 Notify Supplier
@@ -5136,7 +5136,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                 setScannedCode("");
               }}
               style={{
-                backgroundColor: "#0F766E",
+                backgroundColor: "#B9829A",
                 borderRadius: 10,
                 padding: 12,
                 alignItems: "center",
@@ -5179,8 +5179,8 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                     style={{
                       backgroundColor:
                         (Number(supplierModalItem?.quantity) || 0) <= 10
-                          ? "#FEE2E2"
-                          : "#FEF3C7",
+                          ? "#F7EDEE"
+                          : "#F7F0E5",
                       paddingHorizontal: 8,
                       paddingVertical: 2,
                       borderRadius: 12,
@@ -5192,8 +5192,8 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                         fontWeight: "700",
                         color:
                           (Number(supplierModalItem?.quantity) || 0) <= 10
-                            ? "#DC2626"
-                            : "#D97706",
+                            ? "#B85C64"
+                            : "#C49752",
                       }}
                     >
                       Stock: {supplierModalItem?.quantity || 0} units
@@ -5219,19 +5219,19 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
               {/* Medicine Summary Card */}
               <View
                 style={{
-                  backgroundColor: "#F8FAFC",
+                  backgroundColor: "#F8F5F7",
                   borderRadius: 10,
                   padding: 12,
                   marginBottom: 16,
                   borderWidth: 1,
-                  borderColor: "#E2E8F0",
+                  borderColor: "#E5DFE4",
                 }}
               >
                 <Text
                   style={{
                     fontSize: 13,
                     fontWeight: "700",
-                    color: "#1E293B",
+                    color: "#28242B",
                     marginBottom: 4,
                   }}
                 >
@@ -5244,14 +5244,14 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                     marginBottom: 4,
                   }}
                 >
-                  <Text style={{ fontSize: 12, color: "#64748B" }}>
+                  <Text style={{ fontSize: 12, color: "#77717A" }}>
                     Generic Name:
                   </Text>
                   <Text
                     style={{
                       fontSize: 12,
                       fontWeight: "600",
-                      color: "#0F172A",
+                      color: "#28242B",
                     }}
                   >
                     {supplierModalItem?.genericName ||
@@ -5266,14 +5266,14 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                     marginBottom: 4,
                   }}
                 >
-                  <Text style={{ fontSize: 12, color: "#64748B" }}>
+                  <Text style={{ fontSize: 12, color: "#77717A" }}>
                     Batch No:
                   </Text>
                   <Text
                     style={{
                       fontSize: 12,
                       fontWeight: "600",
-                      color: "#0F172A",
+                      color: "#28242B",
                     }}
                   >
                     {supplierModalItem?.batchNo ||
@@ -5288,14 +5288,14 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                     marginBottom: 4,
                   }}
                 >
-                  <Text style={{ fontSize: 12, color: "#64748B" }}>
+                  <Text style={{ fontSize: 12, color: "#77717A" }}>
                     Branch / Store:
                   </Text>
                   <Text
                     style={{
                       fontSize: 12,
                       fontWeight: "600",
-                      color: "#0F172A",
+                      color: "#28242B",
                     }}
                   >
                     {supplierModalItem?.branchName ||
@@ -5312,7 +5312,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                     justifyContent: "space-between",
                   }}
                 >
-                  <Text style={{ fontSize: 12, color: "#64748B" }}>
+                  <Text style={{ fontSize: 12, color: "#77717A" }}>
                     Current Stock Status:
                   </Text>
                   <Text
@@ -5321,8 +5321,8 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                       fontWeight: "700",
                       color:
                         (Number(supplierModalItem?.quantity) || 0) <= 10
-                          ? "#DC2626"
-                          : "#D97706",
+                          ? "#B85C64"
+                          : "#C49752",
                     }}
                   >
                     {(Number(supplierModalItem?.quantity) || 0) <= 0
@@ -5346,19 +5346,19 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                     id: "PORTAL",
                     label: "🌐 Website / Portal",
                     sub: "Posts directly to Supplier Dashboard",
-                    color: "#0D9488",
+                    color: "#A66D86",
                   },
                   {
                     id: "EMAIL",
                     label: "✉️ Email Alert",
                     sub: "Dispatches to registered vendor email",
-                    color: "#2563EB",
+                    color: "#B9829A",
                   },
                   {
                     id: "WHATSAPP",
                     label: "💬 WhatsApp Direct",
                     sub: "Instant WhatsApp dispatch link",
-                    color: "#16A34A",
+                    color: "#4F8A72",
                   },
                 ].map((ch) => {
                   const isSelected = supplierForm.channel === ch.id;
@@ -5377,8 +5377,8 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                         paddingHorizontal: 12,
                         borderRadius: 8,
                         borderWidth: 2,
-                        borderColor: isSelected ? ch.color : "#E2E8F0",
-                        backgroundColor: isSelected ? "#F0FDFA" : "#FFFFFF",
+                        borderColor: isSelected ? ch.color : "#E5DFE4",
+                        backgroundColor: isSelected ? "#E8D5DD" : "#FFFFFF",
                         alignItems: "flex-start",
                       }}
                     >
@@ -5386,7 +5386,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                         style={{
                           fontWeight: "700",
                           fontSize: 13,
-                          color: isSelected ? ch.color : "#334155",
+                          color: isSelected ? ch.color : "#28242B",
                         }}
                       >
                         {ch.label}
@@ -5394,7 +5394,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                       <Text
                         style={{
                           fontSize: 11,
-                          color: isSelected ? "#0F766E" : "#64748B",
+                          color: isSelected ? "#B9829A" : "#77717A",
                           marginTop: 2,
                         }}
                       >
@@ -5426,7 +5426,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                       style={{
                         paddingHorizontal: 8,
                         paddingVertical: 3,
-                        backgroundColor: "#E0F2FE",
+                        backgroundColor: "#E8D5DD",
                         borderRadius: 6,
                       }}
                     >
@@ -5434,7 +5434,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                         style={{
                           fontSize: 11,
                           fontWeight: "700",
-                          color: "#0369A1",
+                          color: "#A66D86",
                         }}
                       >
                         {supplierDropdownOpen
@@ -5449,7 +5449,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                   <View
                     style={{
                       borderWidth: 1,
-                      borderColor: "#CBD5E1",
+                      borderColor: "#E5DFE4",
                       borderRadius: 8,
                       backgroundColor: "#FFFFFF",
                       marginBottom: 10,
@@ -5479,11 +5479,11 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                               paddingVertical: 8,
                               paddingHorizontal: 12,
                               borderBottomWidth: 1,
-                              borderBottomColor: "#F1F5F9",
+                              borderBottomColor: "#F8F5F7",
                               flexDirection: "row",
                               justifyContent: "space-between",
                               alignItems: "center",
-                              backgroundColor: isMatch ? "#F0FDF4" : "#FFFFFF",
+                              backgroundColor: isMatch ? "#EAF2EE" : "#FFFFFF",
                             }}
                           >
                             <View>
@@ -5491,12 +5491,12 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                                 style={{
                                   fontSize: 13,
                                   fontWeight: "700",
-                                  color: "#0F172A",
+                                  color: "#28242B",
                                 }}
                               >
                                 {s.name}
                               </Text>
-                              <Text style={{ fontSize: 11, color: "#64748B" }}>
+                              <Text style={{ fontSize: 11, color: "#77717A" }}>
                                 {s.phone ? `📞 ${s.phone}` : ""}{" "}
                                 {s.email ? `✉️ ${s.email}` : ""}
                               </Text>
@@ -5504,7 +5504,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                             {isMatch && (
                               <Text
                                 style={{
-                                  color: "#16A34A",
+                                  color: "#4F8A72",
                                   fontWeight: "700",
                                   fontSize: 12,
                                 }}
@@ -5529,7 +5529,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                     }))
                   }
                   placeholder="e.g. Sun Pharma Distributors"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor="#77717A"
                 />
               </View>
 
@@ -5552,7 +5552,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                       }))
                     }
                     placeholder="orders@supplier.com"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor="#77717A"
                     keyboardType="email-address"
                     autoCapitalize="none"
                   />
@@ -5571,7 +5571,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                       }))
                     }
                     placeholder="+91 98765 43210"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor="#77717A"
                     keyboardType="phone-pad"
                   />
                 </View>
@@ -5599,7 +5599,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                       }))
                     }
                     placeholder="e.g. 100"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor="#77717A"
                     keyboardType="numeric"
                   />
                 </View>
@@ -5623,15 +5623,15 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                           borderColor:
                             supplierForm.priority === p
                               ? p === "CRITICAL"
-                                ? "#DC2626"
-                                : "#D97706"
-                              : "#CBD5E1",
+                                ? "#B85C64"
+                                : "#C49752"
+                              : "#E5DFE4",
                           backgroundColor:
                             supplierForm.priority === p
                               ? p === "CRITICAL"
-                                ? "#FEE2E2"
-                                : "#FEF3C7"
-                              : "#F8FAFC",
+                                ? "#F7EDEE"
+                                : "#F7F0E5"
+                              : "#F8F5F7",
                           alignItems: "center",
                         }}
                       >
@@ -5642,9 +5642,9 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                             color:
                               supplierForm.priority === p
                                 ? p === "CRITICAL"
-                                  ? "#DC2626"
-                                  : "#D97706"
-                                : "#64748B",
+                                  ? "#B85C64"
+                                  : "#C49752"
+                                : "#77717A",
                           }}
                         >
                           {p}
@@ -5670,7 +5670,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                     setSupplierForm((prev) => ({ ...prev, notes: val }))
                   }
                   placeholder="e.g. Please expedite dispatch via direct courier"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor="#77717A"
                   multiline
                 />
               </View>
@@ -5684,8 +5684,8 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                 gap: 12,
                 padding: 16,
                 borderTopWidth: 1,
-                borderTopColor: "#E2E8F0",
-                backgroundColor: "#F8FAFC",
+                borderTopColor: "#E5DFE4",
+                backgroundColor: "#F8F5F7",
               }}
             >
               <Pressable
@@ -5699,7 +5699,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                 onPress={handleSendSupplierNotification}
                 style={[
                   styles.printBarcodePrimaryBtn,
-                  { backgroundColor: "#0F766E" },
+                  { backgroundColor: "#B9829A" },
                   supplierSending && { opacity: 0.6 },
                 ]}
                 disabled={supplierSending}
@@ -5744,10 +5744,10 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
           >
             <View
               style={{
-                backgroundColor: "#F0FDF4",
+                backgroundColor: "#EAF2EE",
                 padding: 20,
                 borderBottomWidth: 1,
-                borderBottomColor: "#BBF7D0",
+                borderBottomColor: "#EAF2EE",
                 alignItems: "center",
               }}
             >
@@ -5756,7 +5756,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                 style={{
                   fontSize: 18,
                   fontWeight: "800",
-                  color: "#166534",
+                  color: "#4F8A72",
                   textAlign: "center",
                 }}
               >
@@ -5765,7 +5765,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
               <Text
                 style={{
                   fontSize: 13,
-                  color: "#15803D",
+                  color: "#4F8A72",
                   textAlign: "center",
                   marginTop: 4,
                 }}
@@ -5778,11 +5778,11 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
             <View style={{ padding: 20, gap: 12 }}>
               <View
                 style={{
-                  backgroundColor: "#F8FAFC",
+                  backgroundColor: "#F8F5F7",
                   borderRadius: 10,
                   padding: 12,
                   borderWidth: 1,
-                  borderColor: "#E2E8F0",
+                  borderColor: "#E5DFE4",
                 }}
               >
                 <View
@@ -5792,14 +5792,14 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                     marginBottom: 4,
                   }}
                 >
-                  <Text style={{ fontSize: 12, color: "#64748B" }}>
+                  <Text style={{ fontSize: 12, color: "#77717A" }}>
                     Medicine:
                   </Text>
                   <Text
                     style={{
                       fontSize: 12,
                       fontWeight: "700",
-                      color: "#0F172A",
+                      color: "#28242B",
                     }}
                   >
                     {notificationSuccessModal?.medicineName}
@@ -5812,14 +5812,14 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                     marginBottom: 4,
                   }}
                 >
-                  <Text style={{ fontSize: 12, color: "#64748B" }}>
+                  <Text style={{ fontSize: 12, color: "#77717A" }}>
                     Batch / SKU:
                   </Text>
                   <Text
                     style={{
                       fontSize: 12,
                       fontWeight: "600",
-                      color: "#334155",
+                      color: "#28242B",
                     }}
                   >
                     {notificationSuccessModal?.batchNo} (
@@ -5833,14 +5833,14 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                     marginBottom: 4,
                   }}
                 >
-                  <Text style={{ fontSize: 12, color: "#64748B" }}>
+                  <Text style={{ fontSize: 12, color: "#77717A" }}>
                     Reorder Quantity:
                   </Text>
                   <Text
                     style={{
                       fontSize: 12,
                       fontWeight: "800",
-                      color: "#0F766E",
+                      color: "#B9829A",
                     }}
                   >
                     {notificationSuccessModal?.reorderQuantity} Units
@@ -5852,14 +5852,14 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                     justifyContent: "space-between",
                   }}
                 >
-                  <Text style={{ fontSize: 12, color: "#64748B" }}>
+                  <Text style={{ fontSize: 12, color: "#77717A" }}>
                     Reference ID:
                   </Text>
                   <Text
                     style={{
                       fontSize: 11,
                       fontWeight: "700",
-                      color: "#64748B",
+                      color: "#77717A",
                     }}
                   >
                     {notificationSuccessModal?.referenceNumber}
@@ -5910,7 +5910,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
               <Pressable
                 onPress={() => setNotificationSuccessModal(null)}
                 style={{
-                  backgroundColor: "#F1F5F9",
+                  backgroundColor: "#F8F5F7",
                   paddingVertical: 10,
                   borderRadius: 10,
                   alignItems: "center",
@@ -5918,7 +5918,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
               >
                 <Text
                   style={{
-                    color: "#475569",
+                    color: "#77717A",
                     fontWeight: "600",
                     fontSize: 13,
                   }}
@@ -5962,7 +5962,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     overflow: "hidden",
     ...Platform.select({
       web: {
@@ -5978,16 +5978,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: "#E5DFE4",
   },
   cardTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   cardSubtitle: {
     fontSize: 12.5,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   /* Mobile Card List Styles */
@@ -5999,7 +5999,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     padding: 14,
     ...Platform.select({
       web: {
@@ -6016,7 +6016,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
     gap: 8,
   },
   mobileStockTitleCol: {
@@ -6025,12 +6025,12 @@ const styles = StyleSheet.create({
   mobileBrandName: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   mobileMedName: {
     fontSize: 12.5,
     fontWeight: "600",
-    color: "#0F766E",
+    color: "#B9829A",
     marginTop: 2,
   },
   mobileStatusBadge: {
@@ -6039,20 +6039,20 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   statusBadgeInStock: {
-    backgroundColor: "#DCFCE7",
+    backgroundColor: "#EAF2EE",
   },
   statusBadgeLow: {
-    backgroundColor: "#FEF3C7",
+    backgroundColor: "#F7F0E5",
   },
   mobileStatusText: {
     fontSize: 11,
     fontWeight: "700",
   },
   statusTextInStock: {
-    color: "#15803D",
+    color: "#4F8A72",
   },
   statusTextLow: {
-    color: "#B45309",
+    color: "#C49752",
   },
   mobileGrid: {
     flexDirection: "row",
@@ -6066,20 +6066,20 @@ const styles = StyleSheet.create({
   mobileItemLabel: {
     fontSize: 11,
     fontWeight: "600",
-    color: "#94A3B8",
+    color: "#77717A",
     textTransform: "uppercase",
     letterSpacing: 0.3,
   },
   mobileItemValue: {
     fontSize: 12.5,
     fontWeight: "500",
-    color: "#334155",
+    color: "#28242B",
     marginTop: 1,
   },
   mobileItemValueBold: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
     marginTop: 1,
   },
   mobileStockFooter: {
@@ -6088,19 +6088,19 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
+    borderTopColor: "#F8F5F7",
     marginTop: 4,
     gap: 8,
   },
   mobileUpdatedText: {
     fontSize: 11,
-    color: "#94A3B8",
+    color: "#77717A",
     flex: 1,
   },
   mobileEditBtn: {
-    backgroundColor: "#E0F2FE",
+    backgroundColor: "#E8D5DD",
     borderWidth: 1,
-    borderColor: "#BAE6FD",
+    borderColor: "#E8D5DD",
     paddingVertical: 5,
     paddingHorizontal: 12,
     borderRadius: 6,
@@ -6109,7 +6109,7 @@ const styles = StyleSheet.create({
   mobileEditBtnText: {
     fontSize: 11.5,
     fontWeight: "700",
-    color: "#0369A1",
+    color: "#A66D86",
   },
   tableWrapper: {
     minWidth: 1520,
@@ -6121,13 +6121,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderBottomColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
   },
   thCell: {
     fontSize: 11.5,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
     paddingHorizontal: 6,
     letterSpacing: 0.3,
   },
@@ -6137,53 +6137,53 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   tableRowAlt: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
   },
   tdCell: {
     fontSize: 13,
-    color: "#334155",
+    color: "#28242B",
     paddingHorizontal: 6,
   },
   medNameCell: {
     fontWeight: "700",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   brandNameCell: {
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   strengthCell: {
-    color: "#475569",
+    color: "#77717A",
     fontWeight: "500",
     fontSize: 12.5,
   },
   mfgCell: {
-    color: "#334155",
+    color: "#28242B",
     fontWeight: "600",
   },
   supplierCell: {
-    color: "#0369A1",
+    color: "#A66D86",
     fontWeight: "600",
   },
   skuCell: {
     fontWeight: "600",
-    color: "#64748B",
+    color: "#77717A",
   },
   amountCell: {
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   modifyWrapper: {
     alignItems: "center",
     justifyContent: "center",
   },
   modifyButton: {
-    backgroundColor: "#E0F2FE",
+    backgroundColor: "#E8D5DD",
     borderWidth: 1,
-    borderColor: "#BAE6FD",
+    borderColor: "#E8D5DD",
     borderRadius: 6,
     paddingVertical: 4,
     paddingHorizontal: 10,
@@ -6192,18 +6192,18 @@ const styles = StyleSheet.create({
   modifyButtonText: {
     fontSize: 11.5,
     fontWeight: "700",
-    color: "#0369A1",
+    color: "#A66D86",
   },
   formHeader: {
     paddingHorizontal: 20,
     paddingTop: 18,
     paddingBottom: 14,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   formSubtitle: {
     fontSize: 12.5,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 3,
   },
   formGrid: {
@@ -6224,30 +6224,30 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 12.5,
     fontWeight: "600",
-    color: "#334155",
+    color: "#28242B",
     marginBottom: 6,
   },
   reqStar: {
-    color: "#DC2626",
+    color: "#B85C64",
   },
   formInput: {
     height: 40,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     backgroundColor: "#FFFFFF",
     paddingHorizontal: 12,
     fontSize: 13,
-    color: "#0F172A",
+    color: "#28242B",
     outlineStyle: "none",
   },
   formInputError: {
-    borderColor: "#DC2626",
-    backgroundColor: "#FEF2F2",
+    borderColor: "#B85C64",
+    backgroundColor: "#F7EDEE",
   },
   errorText: {
     fontSize: 11,
-    color: "#DC2626",
+    color: "#B85C64",
     marginTop: 3,
     fontWeight: "500",
   },
@@ -6259,18 +6259,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     backgroundColor: "#FFFFFF",
     justifyContent: "center",
   },
   branchChipActive: {
-    backgroundColor: "#0F766E",
-    borderColor: "#0F766E",
+    backgroundColor: "#B9829A",
+    borderColor: "#B9829A",
   },
   branchChipText: {
     fontSize: 12.5,
     fontWeight: "600",
-    color: "#334155",
+    color: "#28242B",
   },
   branchChipTextActive: {
     color: "#FFFFFF",
@@ -6281,20 +6281,20 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     padding: 12,
   },
   branchModalTitle: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
     marginBottom: 8,
     paddingHorizontal: 4,
   },
   branchDropdownButton: {
     height: 40,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     backgroundColor: "#FFFFFF",
     paddingHorizontal: 12,
@@ -6305,13 +6305,13 @@ const styles = StyleSheet.create({
   branchDropdownButtonText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#0F172A",
+    color: "#28242B",
     flex: 1,
     marginRight: 8,
   },
   chevronIcon: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
   },
   branchDropdownItem: {
     flexDirection: "row",
@@ -6321,25 +6321,25 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   branchDropdownItemActive: {
-    backgroundColor: "#F0FDFA",
+    backgroundColor: "#E8D5DD",
   },
   branchDropdownItemText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#334155",
+    color: "#28242B",
     flex: 1,
     marginRight: 8,
   },
   branchDropdownItemTextActive: {
-    color: "#0F766E",
+    color: "#B9829A",
   },
   branchDropdownCheck: {
-    color: "#0F766E",
+    color: "#B9829A",
     fontWeight: "700",
   },
   formHelperText: {
     fontSize: 11.5,
-    color: "#94A3B8",
+    color: "#77717A",
     fontWeight: "500",
     marginTop: 4,
   },
@@ -6347,12 +6347,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
-    backgroundColor: "#FAFAFA",
+    borderTopColor: "#F8F5F7",
+    backgroundColor: "#F8F5F7",
     alignItems: "flex-start",
   },
   blueSubmitButton: {
-    backgroundColor: "#2563EB",
+    backgroundColor: "#B9829A",
     paddingVertical: 9,
     paddingHorizontal: 28,
     borderRadius: 8,
@@ -6378,39 +6378,39 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
-    backgroundColor: "#F8FAFC",
+    borderColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
     cursor: "pointer",
   },
   filterTogglePillActive: {
-    backgroundColor: "#F0FDFA",
-    borderColor: "#0F766E",
+    backgroundColor: "#E8D5DD",
+    borderColor: "#B9829A",
   },
   filterToggleDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: "#94A3B8",
+    backgroundColor: "#77717A",
   },
   filterToggleDotActive: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
   },
   filterToggleText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#64748B",
+    color: "#77717A",
   },
   filterToggleTextActive: {
-    color: "#0F766E",
+    color: "#B9829A",
     fontWeight: "700",
   },
   devGuideHeaderBtn: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     paddingVertical: 5,
     paddingHorizontal: 10,
     borderRadius: 8,
@@ -6422,14 +6422,14 @@ const styles = StyleSheet.create({
   devGuideHeaderBtnText: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#334155",
+    color: "#28242B",
   },
   stockSearchBox: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     paddingHorizontal: 10,
     height: 36,
@@ -6442,12 +6442,12 @@ const styles = StyleSheet.create({
   stockSearchIcon: {
     fontSize: 12,
     marginRight: 6,
-    color: "#64748B",
+    color: "#77717A",
   },
   stockSearchInput: {
     flex: 1,
     fontSize: 12.5,
-    color: "#0F172A",
+    color: "#28242B",
     ...Platform.select({ web: { outlineStyle: "none" } }),
   },
   cardHeaderMobile: {
@@ -6468,10 +6468,10 @@ const styles = StyleSheet.create({
     cursor: "pointer",
   },
   miniToggleTrackActive: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
   },
   miniToggleTrackInactive: {
-    backgroundColor: "#CBD5E1",
+    backgroundColor: "#E5DFE4",
   },
   miniToggleThumb: {
     width: 16,
@@ -6487,12 +6487,12 @@ const styles = StyleSheet.create({
   },
   mobileStockCardInactive: {
     opacity: 0.65,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
   },
   mobileDotsActionBtn: {
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     borderRadius: 6,
     paddingVertical: 4,
     paddingHorizontal: 10,
@@ -6501,11 +6501,11 @@ const styles = StyleSheet.create({
   mobileDotsActionText: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#334155",
+    color: "#28242B",
   },
   tableRowInactive: {
     opacity: 0.65,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
   },
   tdCenterCell: {
     alignItems: "center",
@@ -6521,10 +6521,10 @@ const styles = StyleSheet.create({
     cursor: "pointer",
   },
   tableToggleActive: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
   },
   tableToggleInactive: {
-    backgroundColor: "#CBD5E1",
+    backgroundColor: "#E5DFE4",
   },
   tableToggleThumb: {
     width: 16,
@@ -6545,24 +6545,24 @@ const styles = StyleSheet.create({
     cursor: "pointer",
   },
   rxTagRequired: {
-    backgroundColor: "#FEE2E2",
+    backgroundColor: "#F7EDEE",
     borderWidth: 1,
-    borderColor: "#FECACA",
+    borderColor: "#F7EDEE",
   },
   rxTagOtc: {
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
   },
   rxTagPillText: {
     fontSize: 10.5,
     fontWeight: "800",
   },
   rxTagTextRequired: {
-    color: "#DC2626",
+    color: "#B85C64",
   },
   rxTagTextOtc: {
-    color: "#64748B",
+    color: "#77717A",
   },
   actionCellWrapper: {
     alignItems: "center",
@@ -6572,17 +6572,17 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 6,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     cursor: "pointer",
   },
   actionDotsButtonText: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#334155",
+    color: "#28242B",
     lineHeight: 18,
   },
   modalBackdrop: {
@@ -6598,7 +6598,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     overflow: "hidden",
   },
   actionMenuHeader: {
@@ -6607,17 +6607,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 18,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderBottomColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
   },
   actionMenuTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   actionMenuSub: {
     fontSize: 11.5,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   closeActionBtn: {
@@ -6626,7 +6626,7 @@ const styles = StyleSheet.create({
   },
   closeActionText: {
     fontSize: 18,
-    color: "#64748B",
+    color: "#77717A",
     fontWeight: "700",
   },
   actionList: {
@@ -6643,12 +6643,12 @@ const styles = StyleSheet.create({
     cursor: "pointer",
   },
   actionOptionRowDanger: {
-    backgroundColor: "#FEF2F2",
+    backgroundColor: "#F7EDEE",
   },
   actionOptionRowDev: {
-    backgroundColor: "#F0FDFA",
+    backgroundColor: "#E8D5DD",
     borderWidth: 1,
-    borderColor: "#99F6E4",
+    borderColor: "#E8D5DD",
     marginTop: 4,
   },
   actionOptionIcon: {
@@ -6660,11 +6660,11 @@ const styles = StyleSheet.create({
   actionOptionTitle: {
     fontSize: 13.5,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   actionOptionDesc: {
     fontSize: 11.5,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 1,
   },
   adjustModalCard: {
@@ -6673,7 +6673,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     overflow: "hidden",
   },
   adjustModalHeader: {
@@ -6682,17 +6682,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 18,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderBottomColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
   },
   adjustModalTitle: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   adjustModalSubtitle: {
     fontSize: 11.5,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   adjustModalBody: {
@@ -6705,7 +6705,7 @@ const styles = StyleSheet.create({
   fieldLabelModal: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#334155",
+    color: "#28242B",
   },
   adjustTypeRow: {
     flexDirection: "row",
@@ -6716,19 +6716,19 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
     alignItems: "center",
     cursor: "pointer",
   },
   adjustTypeBtnActive: {
-    borderColor: "#0F766E",
-    backgroundColor: "#0F766E",
+    borderColor: "#B9829A",
+    backgroundColor: "#B9829A",
   },
   adjustTypeBtnText: {
     fontSize: 11.5,
     fontWeight: "600",
-    color: "#475569",
+    color: "#77717A",
   },
   adjustTypeBtnTextActive: {
     color: "#FFFFFF",
@@ -6736,7 +6736,7 @@ const styles = StyleSheet.create({
   },
   adjustInput: {
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -6744,15 +6744,15 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
   },
   apiPreviewBox: {
-    backgroundColor: "#F0FDFA",
+    backgroundColor: "#E8D5DD",
     borderWidth: 1,
-    borderColor: "#99F6E4",
+    borderColor: "#E8D5DD",
     padding: 8,
     borderRadius: 6,
   },
   apiPreviewText: {
     fontSize: 11,
-    color: "#0F766E",
+    color: "#B9829A",
     fontFamily: Platform.select({ web: "monospace", default: "System" }),
     fontWeight: "600",
   },
@@ -6762,24 +6762,24 @@ const styles = StyleSheet.create({
     gap: 10,
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderTopColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
   },
   cancelBtn: {
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     cursor: "pointer",
   },
   cancelBtnText: {
     fontSize: 12.5,
-    color: "#64748B",
+    color: "#77717A",
     fontWeight: "600",
   },
   saveAdjustBtn: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingVertical: 8,
     paddingHorizontal: 18,
     borderRadius: 6,
@@ -6807,8 +6807,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 18,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderBottomColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
   },
   devGuideTitleRow: {
     flexDirection: "row",
@@ -6819,7 +6819,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 8,
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -6829,11 +6829,11 @@ const styles = StyleSheet.create({
   devGuideModalTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   devGuideModalSubtitle: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
   },
   devGuideModalBody: {
     padding: 20,
@@ -6844,22 +6844,22 @@ const styles = StyleSheet.create({
   guideSecTitle: {
     fontSize: 14,
     fontWeight: "800",
-    color: "#0F766E",
+    color: "#B9829A",
     marginBottom: 6,
   },
   guideSecDesc: {
     fontSize: 12,
-    color: "#475569",
+    color: "#77717A",
     marginBottom: 8,
   },
   codeSnippet: {
-    backgroundColor: "#0F172A",
+    backgroundColor: "#28242B",
     borderRadius: 8,
     padding: 12,
     marginTop: 6,
   },
   codeSnippetText: {
-    color: "#38BDF8",
+    color: "#A66D86",
     fontSize: 11.5,
     fontFamily: Platform.select({
       web: "Consolas, Monaco, monospace",
@@ -6868,9 +6868,9 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
   endpointCard: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     padding: 12,
     marginBottom: 10,
@@ -6882,13 +6882,13 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   methodPatch: {
-    backgroundColor: "#8B5CF6",
+    backgroundColor: "#B9829A",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
   },
   methodPost: {
-    backgroundColor: "#16A34A",
+    backgroundColor: "#4F8A72",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -6901,22 +6901,22 @@ const styles = StyleSheet.create({
   endpointRoute: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
     fontFamily: Platform.select({ web: "monospace", default: "System" }),
   },
   endpointDesc: {
     fontSize: 12,
-    color: "#475569",
+    color: "#77717A",
   },
   devGuideModalFooter: {
     padding: 14,
     borderTopWidth: 1,
-    borderTopColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderTopColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
     alignItems: "flex-end",
   },
   closeDevGuideModalBtn: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingVertical: 8,
     paddingHorizontal: 18,
     borderRadius: 8,
@@ -6934,7 +6934,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     overflow: "hidden",
   },
   transferModalHeader: {
@@ -6943,18 +6943,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 18,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderBottomColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
   },
   transferHeaderBadge: {
     width: 32,
     height: 32,
     borderRadius: 8,
-    backgroundColor: "#EFF6FF",
+    backgroundColor: "#E8D5DD",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#BFDBFE",
+    borderColor: "#E8D5DD",
   },
   transferHeaderBadgeIcon: {
     fontSize: 16,
@@ -6962,11 +6962,11 @@ const styles = StyleSheet.create({
   transferModalTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   transferModalSubtitle: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   transferModalBody: {
@@ -6974,20 +6974,20 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   transferProductCard: {
-    backgroundColor: "#F0FDFA",
+    backgroundColor: "#E8D5DD",
     borderWidth: 1,
-    borderColor: "#99F6E4",
+    borderColor: "#E8D5DD",
     borderRadius: 10,
     padding: 14,
   },
   transferMedTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   transferMedMeta: {
     fontSize: 12,
-    color: "#334155",
+    color: "#28242B",
     marginTop: 2,
   },
   transferPillsRow: {
@@ -6999,7 +6999,7 @@ const styles = StyleSheet.create({
   transferPill: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     paddingVertical: 3,
     paddingHorizontal: 8,
     borderRadius: 6,
@@ -7007,12 +7007,12 @@ const styles = StyleSheet.create({
   transferPillText: {
     fontSize: 11.5,
     fontWeight: "600",
-    color: "#475569",
+    color: "#77717A",
   },
   transferPillTeal: {
-    backgroundColor: "#CCFBF1",
+    backgroundColor: "#E8D5DD",
     borderWidth: 1,
-    borderColor: "#5EEAD4",
+    borderColor: "#E8D5DD",
     paddingVertical: 3,
     paddingHorizontal: 8,
     borderRadius: 6,
@@ -7020,18 +7020,18 @@ const styles = StyleSheet.create({
   transferPillTextTeal: {
     fontSize: 11.5,
     fontWeight: "800",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   transferErrorAlert: {
-    backgroundColor: "#FEF2F2",
+    backgroundColor: "#F7EDEE",
     borderWidth: 1,
-    borderColor: "#FCA5A5",
+    borderColor: "#F7EDEE",
     padding: 10,
     borderRadius: 8,
   },
   transferErrorText: {
     fontSize: 12,
-    color: "#DC2626",
+    color: "#B85C64",
     fontWeight: "600",
   },
   branchSelectionGrid: {
@@ -7055,9 +7055,9 @@ const styles = StyleSheet.create({
   },
   branchPickerBox: {
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     overflow: "hidden",
     marginTop: 4,
   },
@@ -7067,55 +7067,55 @@ const styles = StyleSheet.create({
     gap: 8,
     padding: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
     backgroundColor: "#FFFFFF",
     cursor: "pointer",
   },
   branchOptionItemFromActive: {
-    backgroundColor: "#F0FDFA",
+    backgroundColor: "#E8D5DD",
     borderLeftWidth: 4,
-    borderLeftColor: "#0F766E",
+    borderLeftColor: "#B9829A",
   },
   branchOptionItemToActive: {
-    backgroundColor: "#EFF6FF",
+    backgroundColor: "#E8D5DD",
     borderLeftWidth: 4,
-    borderLeftColor: "#2563EB",
+    borderLeftColor: "#B9829A",
   },
   branchOptionDisabled: {
     opacity: 0.4,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
   },
   branchDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: "#CBD5E1",
+    backgroundColor: "#E5DFE4",
   },
   branchDotFromActive: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
   },
   branchDotToActive: {
-    backgroundColor: "#2563EB",
+    backgroundColor: "#B9829A",
   },
   branchOptionName: {
     fontSize: 12.5,
     fontWeight: "600",
-    color: "#334155",
+    color: "#28242B",
   },
   branchOptionNameFromActive: {
-    color: "#0F766E",
+    color: "#B9829A",
     fontWeight: "800",
   },
   branchOptionNameToActive: {
-    color: "#2563EB",
+    color: "#B9829A",
     fontWeight: "800",
   },
   branchOptionNameDisabled: {
-    color: "#94A3B8",
+    color: "#77717A",
   },
   branchOptionCity: {
     fontSize: 11,
-    color: "#94A3B8",
+    color: "#77717A",
   },
   transferDirectionCol: {
     justifyContent: "center",
@@ -7132,7 +7132,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: "#2563EB",
+    backgroundColor: "#B9829A",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -7146,26 +7146,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
-    backgroundColor: "#F8FAFC",
+    borderColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
     cursor: "pointer",
   },
   transferPresetBtnActive: {
-    backgroundColor: "#2563EB",
-    borderColor: "#2563EB",
+    backgroundColor: "#B9829A",
+    borderColor: "#B9829A",
   },
   transferPresetText: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#475569",
+    color: "#77717A",
   },
   transferPresetTextActive: {
     color: "#FFFFFF",
   },
   transferCalcBox: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     padding: 12,
     gap: 4,
@@ -7173,7 +7173,7 @@ const styles = StyleSheet.create({
   transferCalcTitle: {
     fontSize: 12,
     fontWeight: "800",
-    color: "#334155",
+    color: "#28242B",
   },
   transferCalcRow: {
     flexDirection: "row",
@@ -7182,11 +7182,11 @@ const styles = StyleSheet.create({
   },
   transferCalcLabel: {
     fontSize: 12,
-    color: "#475569",
+    color: "#77717A",
     fontWeight: "600",
   },
   confirmTransferBtn: {
-    backgroundColor: "#2563EB",
+    backgroundColor: "#B9829A",
     paddingVertical: 8,
     paddingHorizontal: 18,
     borderRadius: 6,
@@ -7205,7 +7205,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     overflow: "hidden",
     ...Platform.select({
       web: {
@@ -7224,39 +7224,39 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
     backgroundColor: "#FFFFFF",
   },
   barcodeHeaderBadge: {
     width: 34,
     height: 34,
     borderRadius: 8,
-    backgroundColor: "#ECFDF5",
+    backgroundColor: "#EAF2EE",
     borderWidth: 1,
-    borderColor: "#A7F3D0",
+    borderColor: "#EAF2EE",
     justifyContent: "center",
     alignItems: "center",
   },
   barcodeModalTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   barcodeModalSubtitle: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   barcodeModalBody: {
     padding: 20,
     gap: 18,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
   },
   previewSectionWrapper: {
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     padding: 16,
     alignItems: "center",
   },
@@ -7270,7 +7270,7 @@ const styles = StyleSheet.create({
   previewSectionTitle: {
     fontSize: 11,
     fontWeight: "800",
-    color: "#64748B",
+    color: "#77717A",
     letterSpacing: 0.5,
     textTransform: "uppercase",
   },
@@ -7278,23 +7278,23 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "#F0FDF4",
+    backgroundColor: "#EAF2EE",
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#BBF7D0",
+    borderColor: "#EAF2EE",
   },
   liveTagDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: "#16A34A",
+    backgroundColor: "#4F8A72",
   },
   liveTagBadgeText: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#16A34A",
+    color: "#4F8A72",
   },
   physicalLabelCard: {
     width: 320,
@@ -7302,7 +7302,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 8,
     borderWidth: 1.5,
-    borderColor: "#0F172A",
+    borderColor: "#28242B",
     borderStyle: "dashed",
     padding: 12,
     justifyContent: "space-between",
@@ -7316,7 +7316,7 @@ const styles = StyleSheet.create({
     width: 380,
     minHeight: 180,
     padding: 14,
-    borderColor: "#0F766E",
+    borderColor: "#B9829A",
   },
   physicalLabelCardA4: {
     width: 300,
@@ -7327,21 +7327,21 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     borderBottomWidth: 1,
-    borderBottomColor: "#0F172A",
+    borderBottomColor: "#28242B",
     paddingBottom: 4,
     marginBottom: 6,
   },
   labelPharmacyName: {
     fontSize: 10.5,
     fontWeight: "900",
-    color: "#0F172A",
+    color: "#28242B",
     letterSpacing: 0.5,
     textTransform: "uppercase",
   },
   labelBranchText: {
     fontSize: 9.5,
     fontWeight: "700",
-    color: "#475569",
+    color: "#77717A",
   },
   labelMedInfoRow: {
     flexDirection: "row",
@@ -7351,17 +7351,17 @@ const styles = StyleSheet.create({
   labelMedName: {
     fontSize: 13,
     fontWeight: "900",
-    color: "#0F172A",
+    color: "#28242B",
     flexShrink: 1,
   },
   labelMedStrength: {
     fontSize: 11,
     fontWeight: "800",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   labelGenericName: {
     fontSize: 10,
-    color: "#475569",
+    color: "#77717A",
     fontStyle: "italic",
     marginTop: 1,
   },
@@ -7379,25 +7379,25 @@ const styles = StyleSheet.create({
   labelMetaLabel: {
     fontSize: 9,
     fontWeight: "800",
-    color: "#64748B",
+    color: "#77717A",
   },
   labelMetaValue: {
     fontSize: 10,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   labelMetaItemPrice: {
-    backgroundColor: "#FEF3C7",
+    backgroundColor: "#F7F0E5",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
     borderWidth: 0.5,
-    borderColor: "#F59E0B",
+    borderColor: "#C49752",
   },
   labelPriceTag: {
     fontSize: 11,
     fontWeight: "900",
-    color: "#92400E",
+    color: "#C49752",
   },
   labelShelfRow: {
     flexDirection: "row",
@@ -7406,22 +7406,22 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   shelfTagBadge: {
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
     borderWidth: 0.5,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
   },
   shelfTagText: {
     fontSize: 9.5,
     fontWeight: "800",
-    color: "#334155",
+    color: "#28242B",
   },
   labelPackSizeText: {
     fontSize: 9.5,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
   },
   labelBarcodeWrapper: {
     alignItems: "center",
@@ -7429,7 +7429,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
     paddingTop: 4,
     borderTopWidth: 0.5,
-    borderTopColor: "#E2E8F0",
+    borderTopColor: "#E5DFE4",
   },
   labelBarcodeSvgBox: {
     alignItems: "center",
@@ -7451,7 +7451,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontFamily: Platform.OS === "web" ? "monospace" : "monospace",
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
     letterSpacing: 2,
     marginTop: 2,
   },
@@ -7462,13 +7462,13 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     padding: 14,
   },
   barcodeConfigCardTitle: {
     fontSize: 12.5,
     fontWeight: "800",
-    color: "#1E293B",
+    color: "#28242B",
     marginBottom: 8,
   },
   formatOptionsRow: {
@@ -7477,9 +7477,9 @@ const styles = StyleSheet.create({
   },
   formatOptionBtn: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1.5,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     paddingVertical: 10,
     paddingHorizontal: 8,
@@ -7487,20 +7487,20 @@ const styles = StyleSheet.create({
     cursor: "pointer",
   },
   formatOptionBtnActive: {
-    backgroundColor: "#F0FDF4",
-    borderColor: "#10B981",
+    backgroundColor: "#EAF2EE",
+    borderColor: "#4F8A72",
   },
   formatOptionTitle: {
     fontSize: 12,
     fontWeight: "800",
-    color: "#334155",
+    color: "#28242B",
   },
   formatOptionTitleActive: {
-    color: "#0F766E",
+    color: "#B9829A",
   },
   formatOptionDesc: {
     fontSize: 10,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
     textAlign: "center",
   },
@@ -7509,30 +7509,30 @@ const styles = StyleSheet.create({
     height: 36,
     backgroundColor: "#FFFFFF",
     borderWidth: 1.5,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     borderRadius: 6,
     textAlign: "center",
     fontSize: 14,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   presetPill: {
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     backgroundColor: "#FFFFFF",
     cursor: "pointer",
   },
   presetPillActive: {
-    backgroundColor: "#0F766E",
-    borderColor: "#0F766E",
+    backgroundColor: "#B9829A",
+    borderColor: "#B9829A",
   },
   presetPillText: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#475569",
+    color: "#77717A",
   },
   presetPillTextActive: {
     color: "#FFFFFF",
@@ -7547,21 +7547,21 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
     cursor: "pointer",
   },
   toggleChipActive: {
-    backgroundColor: "#EFF6FF",
-    borderColor: "#3B82F6",
+    backgroundColor: "#E8D5DD",
+    borderColor: "#B9829A",
   },
   toggleChipText: {
     fontSize: 11.5,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
   },
   toggleChipTextActive: {
-    color: "#1D4ED8",
+    color: "#A66D86",
   },
   barcodeModalFooter: {
     flexDirection: "row",
@@ -7570,7 +7570,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 14,
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
+    borderTopColor: "#F8F5F7",
     backgroundColor: "#FFFFFF",
     flexWrap: "wrap",
     gap: 10,
@@ -7580,17 +7580,17 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
-    backgroundColor: "#F8FAFC",
+    borderColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
     cursor: "pointer",
   },
   secondaryActionBtnText: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#334155",
+    color: "#28242B",
   },
   printBarcodePrimaryBtn: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingVertical: 9,
     paddingHorizontal: 20,
     borderRadius: 6,
@@ -7605,8 +7605,8 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   scanBarcodeInlineBtn: {
-    backgroundColor: "#EFF6FF",
-    borderColor: "#3B82F6",
+    backgroundColor: "#E8D5DD",
+    borderColor: "#B9829A",
     borderWidth: 1,
     paddingHorizontal: 8,
     paddingVertical: 3,
@@ -7616,7 +7616,7 @@ const styles = StyleSheet.create({
     cursor: "pointer",
   },
   scanBarcodeInlineBtnText: {
-    color: "#1D4ED8",
+    color: "#A66D86",
     fontSize: 11,
     fontWeight: "700",
   },

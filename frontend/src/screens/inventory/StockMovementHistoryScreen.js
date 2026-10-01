@@ -4,24 +4,24 @@ import { SkeletonTableRow, SkeletonItemCard, SkeletonKpiCard } from '../../compo
 import PaginationControls from '../../components/common/PaginationControls';
 
 const COLORS = {
-  primary: '#0F766E',
-  primaryHover: '#0D9488',
-  primaryLight: '#CCFBF1',
-  secondary: '#2563EB',
-  secondaryLight: '#DBEAFE',
-  success: '#16A34A',
-  successLight: '#DCFCE7',
-  warning: '#D97706',
-  warningLight: '#FEF3C7',
-  danger: '#DC2626',
-  dangerLight: '#FEE2E2',
-  background: '#F8FAFC',
+  primary: '#B9829A',
+  primaryHover: '#A66D86',
+  primaryLight: '#E8D5DD',
+  secondary: '#B9829A',
+  secondaryLight: '#E8D5DD',
+  success: '#4F8A72',
+  successLight: '#EAF2EE',
+  warning: '#C49752',
+  warningLight: '#F7F0E5',
+  danger: '#B85C64',
+  dangerLight: '#F7EDEE',
+  background: '#F8F5F7',
   surface: '#FFFFFF',
-  surfaceHover: '#F1F5F9',
-  textPrimary: '#0F172A',
-  textSecondary: '#64748B',
-  textMuted: '#94A3B8',
-  border: '#E2E8F0',
+  surfaceHover: '#F8F5F7',
+  textPrimary: '#28242B',
+  textSecondary: '#77717A',
+  textMuted: '#77717A',
+  border: '#E5DFE4',
 };
 
 const MOCK_MOVEMENTS = [];
@@ -87,8 +87,8 @@ export default function StockMovementHistoryScreen({ navigation, route }) {
         textColor = COLORS.secondary;
         break;
       case 'Transfer':
-        bgColor = '#EDE9FE';
-        textColor = '#7C3AED';
+        bgColor = '#E8D5DD';
+        textColor = '#B9829A';
         break;
       case 'Adjustment':
         bgColor = COLORS.warningLight;
@@ -228,9 +228,9 @@ export default function StockMovementHistoryScreen({ navigation, route }) {
             <Text style={[styles.chipLabel, { color: COLORS.warning }]}>Adjustments</Text>
             <Text style={[styles.chipValue, { color: COLORS.warning }]}>156</Text>
           </View>
-          <View style={[styles.chip, { backgroundColor: '#EDE9FE' }]}>
-            <Text style={[styles.chipLabel, { color: '#7C3AED' }]}>Transfers</Text>
-            <Text style={[styles.chipValue, { color: '#7C3AED' }]}>248</Text>
+          <View style={[styles.chip, { backgroundColor: '#E8D5DD' }]}>
+            <Text style={[styles.chipLabel, { color: '#B9829A' }]}>Transfers</Text>
+            <Text style={[styles.chipValue, { color: '#B9829A' }]}>248</Text>
           </View>
           <View style={[styles.chip, { backgroundColor: COLORS.primaryLight }]}>
             <Text style={[styles.chipLabel, { color: COLORS.primary }]}>Returns</Text>
@@ -365,7 +365,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
-    shadowColor: '#000',
+    shadowColor: '#28242B',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 3,
@@ -518,7 +518,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: 6,
-    shadowColor: '#000',
+    shadowColor: '#28242B',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 6,
@@ -594,7 +594,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   tableRowAlt: {
-    backgroundColor: '#FAFAFA',
+    backgroundColor: '#F8F5F7',
   },
   cellText: {
     fontSize: 14,

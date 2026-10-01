@@ -9,13 +9,13 @@ import {
 } from 'react-native';
 
 const VARIANT_COLORS = {
-  teal: { border: '#0F766E', dot: '#0F766E', bg: '#F0FDFA' },
-  amber: { border: '#D97706', dot: '#D97706', bg: '#FFFBEB' },
-  blue: { border: '#2563EB', dot: '#2563EB', bg: '#EFF6FF' },
-  red: { border: '#DC2626', dot: '#DC2626', bg: '#FEF2F2' },
-  orange: { border: '#EA580C', dot: '#EA580C', bg: '#FFF7ED' },
-  green: { border: '#16A34A', dot: '#16A34A', bg: '#F0FDF4' },
-  default: { border: '#0F766E', dot: '#0F766E', bg: '#F0FDFA' },
+  teal: { border: '#B9829A', dot: '#B9829A', bg: '#E8D5DD' },
+  amber: { border: '#C49752', dot: '#C49752', bg: '#F7F0E5' },
+  blue: { border: '#B9829A', dot: '#B9829A', bg: '#E8D5DD' },
+  red: { border: '#B85C64', dot: '#B85C64', bg: '#F7EDEE' },
+  orange: { border: '#C49752', dot: '#C49752', bg: '#F7F0E5' },
+  green: { border: '#4F8A72', dot: '#4F8A72', bg: '#EAF2EE' },
+  default: { border: '#B9829A', dot: '#B9829A', bg: '#E8D5DD' },
 };
 
 export default function InventoryStatCard({
@@ -94,7 +94,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E5DFE4',
     borderLeftWidth: 4,
     paddingVertical: 14,
     paddingHorizontal: 16,
@@ -121,9 +121,9 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3.5,
   },
   activeRing: {
-    borderColor: '#0F766E',
+    borderColor: '#B9829A',
     borderWidth: 2,
-    backgroundColor: '#F0FDFA',
+    backgroundColor: '#E8D5DD',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -134,7 +134,7 @@ const styles = StyleSheet.create({
   cardLabel: {
     fontSize: 11.5,
     fontWeight: '700',
-    color: '#64748B',
+    color: '#77717A',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     flex: 1,
@@ -153,7 +153,7 @@ const styles = StyleSheet.create({
   cardValue: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#28242B',
     letterSpacing: -0.5,
     marginVertical: 2,
   },
@@ -166,7 +166,7 @@ const styles = StyleSheet.create({
   cardSubtext: {
     fontSize: 11,
     fontWeight: '500',
-    color: '#64748B',
+    color: '#77717A',
   },
   cardSubtextMobile: {
     fontSize: 9.5,

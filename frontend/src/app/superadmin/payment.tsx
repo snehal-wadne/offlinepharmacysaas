@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { SuperAdminPalette as C } from '../../constants/theme';
 import {
   Pressable,
   ScrollView,
@@ -382,7 +383,7 @@ export default function PharmacyPaymentPage() {
         <Text style={styles.activeBreadcrumb}>{modeTitle}</Text>
       </View>
 
-      <StepProgress />
+      <StepProgress isMobile={isMobile} />
 
       <Text style={styles.title}>{modeTitle}</Text>
       <Text style={styles.subtitle}>
@@ -486,19 +487,19 @@ export default function PharmacyPaymentPage() {
   );
 }
 
-function StepProgress() {
+function StepProgress({ isMobile }: { isMobile: boolean }) {
   return (
-    <View style={styles.steps}>
-      <Step number="1" title="Business Details" completed />
-      <View style={styles.activeLine} />
+    <View style={[styles.steps, isMobile && styles.stepsMobile]}>
+      <Step number="1" title="Business Details" completed compact={isMobile} />
+      {!isMobile && <View style={styles.activeLine} />}
 
-      <Step number="2" title="Choose Plan" completed />
-      <View style={styles.activeLine} />
+      <Step number="2" title="Choose Plan" completed compact={isMobile} />
+      {!isMobile && <View style={styles.activeLine} />}
 
-      <Step number="3" title="Payment" active />
-      <View style={styles.inactiveLine} />
+      <Step number="3" title="Payment" active compact={isMobile} />
+      {!isMobile && <View style={styles.inactiveLine} />}
 
-      <Step number="4" title="Confirmation" />
+      <Step number="4" title="Confirmation" compact={isMobile} />
     </View>
   );
 }
@@ -508,14 +509,16 @@ function Step({
   title,
   active = false,
   completed = false,
+  compact = false,
 }: {
   number: string;
   title: string;
   active?: boolean;
   completed?: boolean;
+  compact?: boolean;
 }) {
   return (
-    <View style={styles.step}>
+    <View style={[styles.step, compact && styles.stepMobile]}>
       <View
         style={[
           styles.stepCircle,
@@ -557,7 +560,7 @@ function SummaryRow({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: C.offWhite,
   },
   content: {
     padding: 24,
@@ -574,83 +577,94 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   breadcrumbText: {
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 13,
   },
   activeBreadcrumb: {
-    color: '#1E293B',
+    color: C.charcoal,
     fontSize: 13,
     fontWeight: '800',
   },
   separator: {
-    color: '#94A3B8',
+    color: C.mutedGray,
   },
   steps: {
     minHeight: 64,
     paddingHorizontal: 20,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
+    borderColor: C.softGray,
+    backgroundColor: C.white,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 24,
+  },
+  stepsMobile: {
+    minHeight: 0,
+    padding: 12,
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
+    gap: 12,
   },
   step: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
+  stepMobile: {
+    width: '47%',
+    gap: 6,
+  },
   stepCircle: {
     width: 24,
     height: 24,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: C.softGray,
     alignItems: 'center',
     justifyContent: 'center',
   },
   activeCircle: {
-    borderColor: '#10B981',
-    backgroundColor: '#10B981',
+    borderColor: C.dustyRose,
+    backgroundColor: C.dustyRose,
   },
   stepNumber: {
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 11,
     fontWeight: '800',
   },
   activeNumber: {
-    color: '#FFFFFF',
+    color: C.white,
   },
   stepTitle: {
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 12,
   },
   activeStepTitle: {
-    color: '#047857',
+    color: C.dustyRose,
     fontWeight: '800',
   },
   activeLine: {
     flex: 1,
     height: 2,
     marginHorizontal: 15,
-    backgroundColor: '#10B981',
+    backgroundColor: C.dustyRose,
   },
   inactiveLine: {
     flex: 1,
     height: 2,
     marginHorizontal: 15,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: C.softGray,
   },
   title: {
-    color: '#172033',
+    color: C.charcoal,
     fontSize: 28,
     fontWeight: '900',
   },
   subtitle: {
     marginTop: 5,
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 14,
   },
   mainGrid: {
@@ -665,8 +679,8 @@ const styles = StyleSheet.create({
     padding: 24,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
+    borderColor: C.softGray,
+    backgroundColor: C.white,
   },
   paymentCard: {
     flex: 1,
@@ -674,16 +688,19 @@ const styles = StyleSheet.create({
     padding: 24,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
+    borderColor: C.softGray,
+    backgroundColor: C.white,
   },
   fullWidthCard: {
-    minWidth: '100%',
+    width: '100%',
+    minWidth: 0,
+    maxWidth: '100%',
+    flexBasis: '100%',
     padding: 18,
   },
   cardTitle: {
     marginBottom: 14,
-    color: '#1E293B',
+    color: C.charcoal,
     fontSize: 17,
     fontWeight: '900',
   },
@@ -691,19 +708,19 @@ const styles = StyleSheet.create({
     minHeight: 42,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: C.tableRose,
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 15,
   },
   summaryLabel: {
     flex: 1,
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 12,
   },
   summaryValue: {
     flex: 1,
-    color: '#334155',
+    color: C.mutedGray,
     fontSize: 12,
     fontWeight: '800',
     textAlign: 'right',
@@ -713,23 +730,23 @@ const styles = StyleSheet.create({
     padding: 13,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: C.softGray,
   },
   totalRow: {
     marginTop: 8,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#CBD5E1',
+    borderTopColor: C.softGray,
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
   totalLabel: {
-    color: '#172033',
+    color: C.charcoal,
     fontSize: 14,
     fontWeight: '900',
   },
   totalValue: {
-    color: '#047857',
+    color: C.sageGreen,
     fontSize: 15,
     fontWeight: '900',
   },
@@ -738,22 +755,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 6,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: C.softRose,
     marginBottom: 12,
   },
   razorpayBadgeText: {
-    color: '#2563EB',
+    color: C.dustyRose,
     fontSize: 12,
     fontWeight: '800',
   },
   infoText: {
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 13,
     lineHeight: 19,
   },
   bottomActions: {
     marginTop: 20,
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'flex-end',
     gap: 10,
   },
@@ -762,11 +780,11 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
+    borderColor: C.secondaryBorder,
+    backgroundColor: C.white,
   },
   cancelText: {
-    color: '#64748B',
+    color: C.midnightViolet,
     fontSize: 13,
     fontWeight: '800',
   },
@@ -774,10 +792,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 25,
     paddingVertical: 12,
     borderRadius: 8,
-    backgroundColor: '#059669',
+    backgroundColor: C.dustyRose,
   },
   paidText: {
-    color: '#FFFFFF',
+    color: C.white,
     fontSize: 13,
     fontWeight: '800',
   },

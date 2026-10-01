@@ -440,10 +440,10 @@ export function generateOfflineQRCodeSvg(text, size = 220) {
       }
     }
 
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${count} ${count}" width="${size}" height="${size}" shape-rendering="crispEdges"><rect width="${count}" height="${count}" fill="#FFFFFF"/><path d="${path.trim()}" fill="#0F172A"/></svg>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${count} ${count}" width="${size}" height="${size}" shape-rendering="crispEdges"><rect width="${count}" height="${count}" fill="#FFFFFF"/><path d="${path.trim()}" fill="#28242B"/></svg>`;
   } catch (err) {
     console.warn("Offline QR SVG generation error, using fallback pattern:", err);
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="${size}" height="${size}"><rect width="100" height="100" fill="#FFFFFF"/><rect x="8" y="8" width="84" height="84" fill="none" stroke="#0F766E" stroke-width="4"/><text x="50" y="50" font-family="sans-serif" font-size="8" font-weight="bold" fill="#0F766E" text-anchor="middle" dominant-baseline="middle">UPI SCANNER ACTIVE</text></svg>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="${size}" height="${size}"><rect width="100" height="100" fill="#FFFFFF"/><rect x="8" y="8" width="84" height="84" fill="none" stroke="#B9829A" stroke-width="4"/><text x="50" y="50" font-family="sans-serif" font-size="8" font-weight="bold" fill="#B9829A" text-anchor="middle" dominant-baseline="middle">UPI SCANNER ACTIVE</text></svg>`;
   }
 }
 

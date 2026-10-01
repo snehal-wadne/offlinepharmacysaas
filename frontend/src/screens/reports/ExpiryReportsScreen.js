@@ -16,10 +16,10 @@ import PaginationControls from "../../components/common/PaginationControls";
 import { fetchExpiryReport } from "../../api/reportApi";
 
 const RISK_BADGES = {
-  Critical: { bg: "#FEE2E2", text: "#B91C1C" },
-  "High Risk": { bg: "#FFEDD5", text: "#C2410C" },
-  "Medium Risk": { bg: "#FEF3C7", text: "#B45309" },
-  Expired: { bg: "#FEE2E2", text: "#991B1B" },
+  Critical: { bg: "#F7EDEE", text: "#B85C64" },
+  "High Risk": { bg: "#F7F0E5", text: "#C49752" },
+  "Medium Risk": { bg: "#F7F0E5", text: "#C49752" },
+  Expired: { bg: "#F7EDEE", text: "#B85C64" },
 };
 
 const INITIAL_KPIS = [
@@ -315,7 +315,7 @@ export default function ExpiryReportsScreen({
             <TextInput
               style={styles.searchInput}
               placeholder="Search batch number, medicine, supplier or risk level..."
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor="#77717A"
               value={searchQuery}
               onChangeText={setSearchQuery}
             />
@@ -421,7 +421,7 @@ export default function ExpiryReportsScreen({
                         <Text
                           style={[
                             styles.mobileExpiryDetailVal,
-                            { color: "#DC2626" },
+                            { color: "#B85C64" },
                           ]}
                         >
                           {item.costValue}
@@ -632,13 +632,13 @@ const styles = StyleSheet.create({
   pageTitle: {
     fontSize: 24,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
     letterSpacing: -0.4,
   },
   pageSubtitle: {
     fontSize: 13.5,
     fontWeight: "500",
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 4,
   },
   actionsRow: {
@@ -649,7 +649,7 @@ const styles = StyleSheet.create({
   exportBtnSecondary: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     paddingVertical: 9,
     paddingHorizontal: 16,
     borderRadius: 8,
@@ -658,10 +658,10 @@ const styles = StyleSheet.create({
   exportBtnTextSecondary: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#334155",
+    color: "#28242B",
   },
   exportBtnPrimary: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingVertical: 9,
     paddingHorizontal: 16,
     borderRadius: 8,
@@ -684,7 +684,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     overflow: "hidden",
     ...Platform.select({
       web: {
@@ -700,31 +700,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   cardTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   cardSubtitle: {
     fontSize: 12.5,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   filtersBar: {
     paddingHorizontal: 20,
     paddingVertical: 12,
-    backgroundColor: "#FAFAFA",
+    backgroundColor: "#F8F5F7",
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   searchBox: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     paddingHorizontal: 12,
     height: 38,
@@ -732,7 +732,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 13,
-    color: "#0F172A",
+    color: "#28242B",
     outlineStyle: "none",
   },
   clearBtn: {
@@ -740,7 +740,7 @@ const styles = StyleSheet.create({
   },
   clearBtnText: {
     fontSize: 12,
-    color: "#94A3B8",
+    color: "#77717A",
   },
   tableWrapper: {
     minWidth: 1150,
@@ -752,13 +752,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderBottomColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
   },
   thCell: {
     fontSize: 11.5,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
     paddingHorizontal: 6,
     letterSpacing: 0.3,
   },
@@ -768,34 +768,34 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   tableRowAlt: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
   },
   tdCell: {
     fontSize: 13,
-    color: "#334155",
+    color: "#28242B",
     paddingHorizontal: 6,
   },
   batchText: {
     fontWeight: "700",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   medName: {
     fontWeight: "600",
-    color: "#0F172A",
+    color: "#28242B",
   },
   daysText: {
     fontWeight: "700",
-    color: "#D97706",
+    color: "#C49752",
   },
   expiredText: {
-    color: "#DC2626",
+    color: "#B85C64",
   },
   costText: {
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   statusWrapper: {
     alignItems: "center",
@@ -811,7 +811,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   actionPillBtn: {
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     paddingVertical: 4,
     paddingHorizontal: 10,
     borderRadius: 6,
@@ -821,7 +821,7 @@ const styles = StyleSheet.create({
   actionPillText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#2563EB",
+    color: "#B9829A",
   },
   emptyState: {
     alignItems: "center",
@@ -831,11 +831,11 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   emptySubtitle: {
     fontSize: 13,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   // Mobile Batch Expiry KPI Cards
@@ -846,7 +846,7 @@ const styles = StyleSheet.create({
   mobileExpiryCard: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 12,
     padding: 14,
     ...Platform.select({
@@ -861,36 +861,36 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   mobileDaysPill: {
-    backgroundColor: "#FEF3C7",
+    backgroundColor: "#F7F0E5",
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
   },
   daysPillUrgent: {
-    backgroundColor: "#FEE2E2",
+    backgroundColor: "#F7EDEE",
   },
   mobileDaysText: {
     fontSize: 11.5,
     fontWeight: "700",
-    color: "#B45309",
+    color: "#C49752",
   },
   daysTextUrgent: {
-    color: "#B91C1C",
+    color: "#B85C64",
   },
   mobileMedName: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
     marginBottom: 3,
   },
   mobileSupplierText: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
     marginBottom: 10,
   },
   mobileExpiryDetailsGrid: {
     flexDirection: "row",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderRadius: 8,
     padding: 10,
     justifyContent: "space-between",
@@ -903,17 +903,17 @@ const styles = StyleSheet.create({
   mobileExpiryDetailLabel: {
     fontSize: 10,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
     marginBottom: 2,
     letterSpacing: 0.3,
   },
   mobileExpiryDetailVal: {
     fontSize: 13.5,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   mobileActionBtn: {
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 8,
@@ -922,6 +922,6 @@ const styles = StyleSheet.create({
   mobileActionBtnText: {
     fontSize: 12.5,
     fontWeight: "700",
-    color: "#2563EB",
+    color: "#B9829A",
   },
 });

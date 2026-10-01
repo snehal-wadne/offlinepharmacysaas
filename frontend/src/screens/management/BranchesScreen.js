@@ -648,7 +648,7 @@ export default function BranchesScreen({
           <TextInput
             style={styles.searchInput}
             placeholder="Search by branch name, code, city, DL or phone..."
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor="#77717A"
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
@@ -1640,7 +1640,7 @@ export default function BranchesScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
   },
   contentContainer: {
     padding: 24,
@@ -1665,19 +1665,19 @@ const styles = StyleSheet.create({
   pageTitle: {
     fontSize: 22,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
     letterSpacing: -0.4,
   },
   pageSubtitle: {
     fontSize: 13,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 4,
     lineHeight: 18,
   },
   addBranchButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingVertical: 10,
     paddingHorizontal: 18,
     borderRadius: 8,
@@ -1711,7 +1711,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     padding: 16,
     marginBottom: 20,
     gap: 14,
@@ -1719,9 +1719,9 @@ const styles = StyleSheet.create({
   searchBox: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     paddingHorizontal: 12,
     height: 42,
@@ -1733,7 +1733,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 13,
-    color: "#0F172A",
+    color: "#28242B",
     outlineStyle: "none",
   },
   clearSearchBtn: {
@@ -1741,7 +1741,7 @@ const styles = StyleSheet.create({
   },
   clearSearchText: {
     fontSize: 14,
-    color: "#94A3B8",
+    color: "#77717A",
   },
   filterControls: {
     flexDirection: "row",
@@ -1758,23 +1758,23 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 6,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     cursor: "pointer",
   },
   typeTabSelected: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
   },
   typeTabText: {
     fontSize: 12.5,
     fontWeight: "600",
-    color: "#475569",
+    color: "#77717A",
   },
   typeTabTextSelected: {
     color: "#FFFFFF",
   },
   statusToggleGroup: {
     flexDirection: "row",
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     padding: 3,
     borderRadius: 8,
   },
@@ -1795,23 +1795,23 @@ const styles = StyleSheet.create({
   statusPillText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#64748B",
+    color: "#77717A",
   },
   statusPillTextSelected: {
-    color: "#0F766E",
+    color: "#B9829A",
   },
   tableCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     overflow: "hidden",
   },
   tableHeaderSection: {
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   tableTitleRow: {
     flexDirection: "row",
@@ -1821,24 +1821,24 @@ const styles = StyleSheet.create({
   tableTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   countBadge: {
-    backgroundColor: "#F0FDFA",
+    backgroundColor: "#E8D5DD",
     paddingVertical: 2,
     paddingHorizontal: 8,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#99F6E4",
+    borderColor: "#E8D5DD",
   },
   countBadgeText: {
     fontSize: 11.5,
     fontWeight: "700",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   tableSubtitle: {
     fontSize: 12.5,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   tableWrapper: {
@@ -1846,16 +1846,16 @@ const styles = StyleSheet.create({
   },
   tableHeaderRow: {
     flexDirection: "row",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: "#E5DFE4",
     paddingVertical: 12,
     paddingHorizontal: 16,
   },
   thText: {
     fontSize: 11.5,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
@@ -1872,27 +1872,27 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   tableRowEven: {
-    backgroundColor: "#FAFCFF",
+    backgroundColor: "#F8F5F7",
   },
   codeBadge: {
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     paddingVertical: 4,
     paddingHorizontal: 8,
     borderRadius: 6,
     alignSelf: "flex-start",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
   },
   codeBadgeText: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#334155",
+    color: "#28242B",
   },
   mainHubPill: {
-    backgroundColor: "#EFF6FF",
+    backgroundColor: "#E8D5DD",
     paddingVertical: 2,
     paddingHorizontal: 6,
     borderRadius: 4,
@@ -1902,12 +1902,12 @@ const styles = StyleSheet.create({
   mainHubText: {
     fontSize: 10,
     fontWeight: "700",
-    color: "#2563EB",
+    color: "#B9829A",
   },
   branchNameText: {
     fontSize: 13.5,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   branchTypeRow: {
     flexDirection: "row",
@@ -1917,53 +1917,53 @@ const styles = StyleSheet.create({
   },
   branchTypeTag: {
     fontSize: 11,
-    color: "#0F766E",
+    color: "#B9829A",
     fontWeight: "600",
-    backgroundColor: "#F0FDFA",
+    backgroundColor: "#E8D5DD",
     paddingHorizontal: 6,
     paddingVertical: 1,
     borderRadius: 4,
   },
   staffCountDot: {
-    color: "#CBD5E1",
+    color: "#E5DFE4",
   },
   staffCountText: {
     fontSize: 11.5,
-    color: "#64748B",
+    color: "#77717A",
   },
   contactPersonText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#0F172A",
+    color: "#28242B",
   },
   contactPhoneText: {
     fontSize: 12,
-    color: "#334155",
+    color: "#28242B",
     marginTop: 2,
   },
   contactEmailText: {
     fontSize: 11.5,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 1,
   },
   addressText: {
     fontSize: 12.5,
-    color: "#334155",
+    color: "#28242B",
     lineHeight: 16,
   },
   cityStateText: {
     fontSize: 11.5,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   invoicePrefixText: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   taxRateText: {
     fontSize: 11.5,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   /* Full-Fledged Interactive Toggle Switch Styles */
@@ -1989,10 +1989,10 @@ const styles = StyleSheet.create({
     }),
   },
   toggleTrackActive: {
-    backgroundColor: "#10B981",
+    backgroundColor: "#4F8A72",
   },
   toggleTrackInactive: {
-    backgroundColor: "#CBD5E1",
+    backgroundColor: "#E5DFE4",
   },
   toggleThumb: {
     width: 16,
@@ -2018,10 +2018,10 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   toggleLabelActive: {
-    color: "#059669",
+    color: "#4F8A72",
   },
   toggleLabelInactive: {
-    color: "#64748B",
+    color: "#77717A",
   },
   statusBadge: {
     flexDirection: "row",
@@ -2034,10 +2034,10 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
   },
   statusBadgeActive: {
-    backgroundColor: "#DCFCE7",
+    backgroundColor: "#EAF2EE",
   },
   statusBadgeInactive: {
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
   },
   statusDot: {
     width: 6,
@@ -2045,27 +2045,27 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   statusDotActive: {
-    backgroundColor: "#16A34A",
+    backgroundColor: "#4F8A72",
   },
   statusDotInactive: {
-    backgroundColor: "#94A3B8",
+    backgroundColor: "#77717A",
   },
   statusText: {
     fontSize: 12,
     fontWeight: "700",
   },
   statusTextActive: {
-    color: "#15803D",
+    color: "#4F8A72",
   },
   statusTextInactive: {
-    color: "#64748B",
+    color: "#77717A",
   },
   actionsRow: {
     flexDirection: "row",
     gap: 8,
   },
   actionViewBtn: {
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     paddingVertical: 5,
     paddingHorizontal: 10,
     borderRadius: 6,
@@ -2074,12 +2074,12 @@ const styles = StyleSheet.create({
   actionViewBtnText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#334155",
+    color: "#28242B",
   },
   actionEditBtn: {
-    backgroundColor: "#F0FDFA",
+    backgroundColor: "#E8D5DD",
     borderWidth: 1,
-    borderColor: "#99F6E4",
+    borderColor: "#E8D5DD",
     paddingVertical: 5,
     paddingHorizontal: 10,
     borderRadius: 6,
@@ -2088,7 +2088,7 @@ const styles = StyleSheet.create({
   actionEditBtnText: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   emptyContainer: {
     padding: 40,
@@ -2102,18 +2102,18 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   emptySubtitle: {
     fontSize: 13,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 4,
     textAlign: "center",
     maxWidth: 400,
   },
   emptyAddButton: {
     marginTop: 16,
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingVertical: 8,
     paddingHorizontal: 18,
     borderRadius: 8,
@@ -2155,17 +2155,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingVertical: 18,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
-    backgroundColor: "#FAFCFF",
+    borderBottomColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
   },
   modalTitle: {
     fontSize: 17,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   modalSubtitle: {
     fontSize: 12.5,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   modalCloseButton: {
@@ -2173,7 +2173,7 @@ const styles = StyleSheet.create({
   },
   modalCloseText: {
     fontSize: 18,
-    color: "#64748B",
+    color: "#77717A",
     fontWeight: "700",
   },
   modalBodyScroll: {
@@ -2201,30 +2201,30 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 12.5,
     fontWeight: "600",
-    color: "#334155",
+    color: "#28242B",
     marginBottom: 6,
   },
   reqStar: {
-    color: "#DC2626",
+    color: "#B85C64",
   },
   formInput: {
     height: 40,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     paddingHorizontal: 12,
     fontSize: 13,
-    color: "#0F172A",
+    color: "#28242B",
     backgroundColor: "#FFFFFF",
     outlineStyle: "none",
   },
   formInputError: {
-    borderColor: "#DC2626",
-    backgroundColor: "#FEF2F2",
+    borderColor: "#B85C64",
+    backgroundColor: "#F7EDEE",
   },
   errorMsg: {
     fontSize: 11,
-    color: "#DC2626",
+    color: "#B85C64",
     marginTop: 3,
     fontWeight: "600",
   },
@@ -2237,16 +2237,16 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 6,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     cursor: "pointer",
   },
   typeChipSelected: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
   },
   typeChipText: {
     fontSize: 11.5,
     fontWeight: "600",
-    color: "#475569",
+    color: "#77717A",
   },
   typeChipTextSelected: {
     color: "#FFFFFF",
@@ -2261,30 +2261,30 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 6,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     cursor: "pointer",
   },
   statusSelectPillActive: {
-    backgroundColor: "#DCFCE7",
+    backgroundColor: "#EAF2EE",
     borderWidth: 1,
-    borderColor: "#86EFAC",
+    borderColor: "#EAF2EE",
   },
   statusSelectPillInactive: {
-    backgroundColor: "#FEE2E2",
+    backgroundColor: "#F7EDEE",
     borderWidth: 1,
-    borderColor: "#FCA5A5",
+    borderColor: "#F7EDEE",
   },
   statusSelectText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#64748B",
+    color: "#77717A",
   },
   statusSelectTextActive: {
-    color: "#15803D",
+    color: "#4F8A72",
     fontWeight: "700",
   },
   statusSelectTextInactive: {
-    color: "#B91C1C",
+    color: "#B85C64",
     fontWeight: "700",
   },
   modalFooter: {
@@ -2294,8 +2294,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingVertical: 14,
     borderTopWidth: 1,
-    borderTopColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderTopColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
     gap: 12,
   },
   modalCancelButton: {
@@ -2303,20 +2303,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     backgroundColor: "#FFFFFF",
     cursor: "pointer",
   },
   modalCancelText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#475569",
+    color: "#77717A",
   },
   modalSaveButton: {
     paddingVertical: 9,
     paddingHorizontal: 22,
     borderRadius: 8,
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     cursor: "pointer",
   },
   modalSaveText: {
@@ -2339,8 +2339,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingVertical: 18,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
-    backgroundColor: "#FAFCFF",
+    borderBottomColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
   },
   detailHeaderLeft: {
     flexDirection: "row",
@@ -2348,7 +2348,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   detailCodeBadge: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 8,
@@ -2361,11 +2361,11 @@ const styles = StyleSheet.create({
   detailTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   detailSubtitle: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   detailBody: {
@@ -2375,16 +2375,16 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   detailSectionCard: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 10,
     padding: 16,
   },
   detailSectionTitle: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#0F766E",
+    color: "#B9829A",
     textTransform: "uppercase",
     letterSpacing: 0.5,
     marginBottom: 10,
@@ -2394,17 +2394,17 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingVertical: 5,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   detailLabel: {
     fontSize: 12.5,
-    color: "#64748B",
+    color: "#77717A",
     fontWeight: "500",
   },
   detailValue: {
     fontSize: 12.5,
     fontWeight: "600",
-    color: "#0F172A",
+    color: "#28242B",
     maxWidth: "65%",
     textAlign: "right",
   },
@@ -2416,7 +2416,7 @@ const styles = StyleSheet.create({
   mobileBranchCard: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 12,
     padding: 14,
     ...Platform.select({
@@ -2433,17 +2433,17 @@ const styles = StyleSheet.create({
   mobileBranchName: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
     marginBottom: 2,
   },
   mobileBranchType: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
     marginBottom: 10,
   },
   mobileBranchDetailsGrid: {
     flexDirection: "row",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderRadius: 8,
     padding: 10,
     gap: 10,
@@ -2455,18 +2455,18 @@ const styles = StyleSheet.create({
   mobileBranchDetailLabel: {
     fontSize: 10,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
     marginBottom: 2,
     letterSpacing: 0.3,
   },
   mobileBranchDetailVal: {
     fontSize: 12.5,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   mobileBranchDetailSub: {
     fontSize: 11,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 1,
   },
   mobileBranchFooter: {
@@ -2474,7 +2474,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
+    borderTopColor: "#F8F5F7",
     paddingTop: 10,
   },
 });

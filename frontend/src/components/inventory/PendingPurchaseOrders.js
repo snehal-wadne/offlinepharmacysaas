@@ -71,7 +71,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E5DFE4',
     overflow: 'hidden',
     ...Platform.select({
       web: {
@@ -89,12 +89,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: '#F8F5F7',
   },
   cardTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#0F172A',
+    color: '#28242B',
   },
   viewAllLink: {
     paddingVertical: 4,
@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
   viewAllText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#0F766E',
+    color: '#B9829A',
   },
   ordersList: {
     paddingVertical: 4,
@@ -120,7 +120,7 @@ const styles = StyleSheet.create({
   },
   orderItemBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: '#F8F5F7',
   },
   orderLeft: {
     flexDirection: 'column',
@@ -128,13 +128,13 @@ const styles = StyleSheet.create({
   poNumber: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#0F172A',
+    color: '#28242B',
     marginBottom: 3,
   },
   supplierName: {
     fontSize: 12.5,
     fontWeight: '500',
-    color: '#64748B',
+    color: '#77717A',
   },
   orderRight: {
     flexDirection: 'column',
@@ -143,13 +143,13 @@ const styles = StyleSheet.create({
   amount: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#0F172A',
+    color: '#28242B',
     marginBottom: 3,
   },
   timeAgo: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#94A3B8',
+    color: '#77717A',
   },
   emptyContainer: {
     paddingVertical: 28,
@@ -158,7 +158,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 13,
-    color: '#94A3B8',
+    color: '#77717A',
     fontStyle: 'italic',
   },
 });

@@ -10,56 +10,56 @@ import {
 
 const TYPE_CONFIG = {
   Purchase: {
-    bgColor: '#E6F4EA',
-    textColor: '#137333',
+    bgColor: '#EAF2EE',
+    textColor: '#4F8A72',
     label: 'Purchase',
   },
   Sale: {
-    bgColor: '#E8F0FE',
-    textColor: '#1A73E8',
+    bgColor: '#E8D5DD',
+    textColor: '#B9829A',
     label: 'Sale',
   },
   Adjustment: {
-    bgColor: '#F3E8FF',
-    textColor: '#7C3AED',
+    bgColor: '#E8D5DD',
+    textColor: '#B9829A',
     label: 'Adjustment',
   },
   Transfer: {
-    bgColor: '#E0F2FE',
-    textColor: '#0369A1',
+    bgColor: '#E8D5DD',
+    textColor: '#A66D86',
     label: 'Transfer',
   },
   Return: {
-    bgColor: '#FEF3C7',
-    textColor: '#B45309',
+    bgColor: '#F7F0E5',
+    textColor: '#C49752',
     label: 'Return',
   },
 };
 
 const STATUS_CONFIG = {
   Completed: {
-    bgColor: '#DCFCE7',
-    textColor: '#15803D',
+    bgColor: '#EAF2EE',
+    textColor: '#4F8A72',
     label: 'Completed',
   },
   Approved: {
-    bgColor: '#DCFCE7',
-    textColor: '#15803D',
+    bgColor: '#EAF2EE',
+    textColor: '#4F8A72',
     label: 'Approved',
   },
   'In Transit': {
-    bgColor: '#DBEAFE',
-    textColor: '#1D4ED8',
+    bgColor: '#E8D5DD',
+    textColor: '#A66D86',
     label: 'In Transit',
   },
   Pending: {
-    bgColor: '#FEF3C7',
-    textColor: '#B45309',
+    bgColor: '#F7F0E5',
+    textColor: '#C49752',
     label: 'Pending',
   },
   Cancelled: {
-    bgColor: '#FEE2E2',
-    textColor: '#B91C1C',
+    bgColor: '#F7EDEE',
+    textColor: '#B85C64',
     label: 'Cancelled',
   },
 };
@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E5DFE4',
     overflow: 'hidden',
     ...Platform.select({
       web: {
@@ -268,12 +268,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: '#E5DFE4',
   },
   cardTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#0F172A',
+    color: '#28242B',
   },
   viewAllLink: {
     paddingVertical: 4,
@@ -284,7 +284,7 @@ const styles = StyleSheet.create({
   viewAllText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#0F766E',
+    color: '#B9829A',
   },
   tableContainer: {
     paddingHorizontal: 20,
@@ -295,12 +295,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: '#E5DFE4',
   },
   thCell: {
     fontSize: 11.5,
     fontWeight: '700',
-    color: '#64748B',
+    color: '#77717A',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -309,11 +309,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 11,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: '#F8F5F7',
     cursor: 'pointer',
   },
   tableRowAlt: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F8F5F7',
   },
   tdCell: {
     fontSize: 13,
@@ -340,24 +340,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   dateText: {
-    color: '#64748B',
+    color: '#77717A',
     fontWeight: '500',
   },
   itemText: {
-    color: '#0F172A',
+    color: '#28242B',
     fontWeight: '600',
   },
   qtyText: {
     fontWeight: '700',
   },
   qtyPositive: {
-    color: '#15803D',
+    color: '#4F8A72',
   },
   qtyNegative: {
-    color: '#DC2626',
+    color: '#B85C64',
   },
   refText: {
-    color: '#64748B',
+    color: '#77717A',
     fontWeight: '500',
   },
   badgeWrapper: {
@@ -380,7 +380,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 13,
-    color: '#94A3B8',
+    color: '#77717A',
     fontStyle: 'italic',
   },
   mobileCardsContainer: {
@@ -392,7 +392,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E5DFE4',
     padding: 12,
     marginBottom: 8,
     ...Platform.select({
@@ -412,13 +412,13 @@ const styles = StyleSheet.create({
   },
   mobileDateText: {
     fontSize: 11.5,
-    color: '#64748B',
+    color: '#77717A',
     fontWeight: '500',
   },
   mobileItemName: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#0F172A',
+    color: '#28242B',
     marginBottom: 10,
   },
   mobileCardFooter: {
@@ -427,7 +427,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: '#F8F5F7',
   },
   mobileRefPill: {
     flexDirection: 'row',
@@ -436,13 +436,13 @@ const styles = StyleSheet.create({
   },
   mobileRefLabel: {
     fontSize: 11,
-    color: '#94A3B8',
+    color: '#77717A',
     fontWeight: '600',
     textTransform: 'uppercase',
   },
   mobileRefValue: {
     fontSize: 12,
-    color: '#475569',
+    color: '#77717A',
     fontWeight: '600',
   },
   mobileQtyPill: {
@@ -451,19 +451,19 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   qtyPillPositive: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: '#EAF2EE',
   },
   qtyPillNegative: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: '#F7EDEE',
   },
   qtyPillNeutral: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#F8F5F7',
   },
   mobileQtyText: {
     fontSize: 12.5,
     fontWeight: '700',
   },
   qtyNeutral: {
-    color: '#475569',
+    color: '#77717A',
   },
 });

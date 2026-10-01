@@ -997,45 +997,45 @@ const PurchasesScreen = ({
         .toLowerCase();
 
     let background =
-      "#F1F5F9";
+      "#F8F5F7";
 
     let color =
-      "#475569";
+      "#77717A";
 
     if (
       normalized === "draft"
     ) {
-      background = "#FEF3C7";
-      color = "#92400E";
+      background = "#F7F0E5";
+      color = "#C49752";
     }
 
     if (
       normalized === "pending"
     ) {
-      background = "#DBEAFE";
-      color = "#1D4ED8";
+      background = "#E8D5DD";
+      color = "#A66D86";
     }
 
     if (
       normalized === "approved"
     ) {
-      background = "#DCFCE7";
-      color = "#166534";
+      background = "#EAF2EE";
+      color = "#4F8A72";
     }
 
     if (
       normalized === "received"
     ) {
-      background = "#D1FAE5";
-      color = "#047857";
+      background = "#EAF2EE";
+      color = "#4F8A72";
     }
 
     if (
       normalized === "rejected" ||
       normalized === "cancelled"
     ) {
-      background = "#FEE2E2";
-      color = "#B91C1C";
+      background = "#F7EDEE";
+      color = "#B85C64";
     }
 
     return (
@@ -1866,7 +1866,7 @@ const PurchasesScreen = ({
             setSearchQuery
           }
           placeholder="Search PO, supplier, medicine..."
-          placeholderTextColor="#94A3B8"
+          placeholderTextColor="#77717A"
           style={
             styles.searchInput
           }
@@ -2003,7 +2003,7 @@ const PurchasesScreen = ({
                   styles.input
                 }
                 placeholder="Supplier name"
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor="#77717A"
               />
 
 
@@ -2029,7 +2029,7 @@ const PurchasesScreen = ({
                   styles.input
                 }
                 placeholder="Branch"
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor="#77717A"
               />
 
 
@@ -2055,7 +2055,7 @@ const PurchasesScreen = ({
                   styles.input
                 }
                 placeholder="Medicine / product name"
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor="#77717A"
               />
 
 
@@ -2095,7 +2095,7 @@ const PurchasesScreen = ({
                     }
                     keyboardType="numeric"
                     placeholder="0"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor="#77717A"
                   />
                 </View>
 
@@ -2130,7 +2130,7 @@ const PurchasesScreen = ({
                     }
                     keyboardType="numeric"
                     placeholder="0"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor="#77717A"
                   />
                 </View>
               </View>
@@ -2154,7 +2154,7 @@ const PurchasesScreen = ({
                 }
                 keyboardType="numeric"
                 placeholder="0"
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor="#77717A"
               />
 
 
@@ -2181,7 +2181,7 @@ const PurchasesScreen = ({
                   styles.input
                 }
                 placeholder="05 Sep 2026"
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor="#77717A"
               />
 
 
@@ -2213,7 +2213,7 @@ const PurchasesScreen = ({
                 ]}
                 multiline
                 placeholder="Notes"
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor="#77717A"
               />
 
 
@@ -2412,7 +2412,7 @@ const PurchasesScreen = ({
                     styles.actionModalButton,
                     {
                       backgroundColor:
-                        "#FEE2E2",
+                        "#F7EDEE",
                     },
                   ]}
                   onPress={() =>
@@ -2426,7 +2426,7 @@ const PurchasesScreen = ({
                       styles.actionModalButtonText,
                       {
                         color:
-                          "#B91C1C",
+                          "#B85C64",
                       },
                     ]}
                   >
@@ -2470,7 +2470,7 @@ const PurchasesScreen = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
   },
 
   header: {
@@ -2485,17 +2485,17 @@ const styles = StyleSheet.create({
   pageTitle: {
     fontSize: 26,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
 
   pageSubtitle: {
     marginTop: 4,
     fontSize: 13,
-    color: "#64748B",
+    color: "#77717A",
   },
 
   createButton: {
-    backgroundColor: "#2563EB",
+    backgroundColor: "#B9829A",
     paddingHorizontal: 18,
     paddingVertical: 12,
     borderRadius: 8,
@@ -2518,7 +2518,7 @@ const styles = StyleSheet.create({
   summaryCard: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 10,
     padding: 16,
     minWidth: 180,
@@ -2528,7 +2528,7 @@ const styles = StyleSheet.create({
   summaryLabel: {
     fontSize: 10,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
     letterSpacing: 0.6,
   },
 
@@ -2536,7 +2536,7 @@ const styles = StyleSheet.create({
     marginTop: 7,
     fontSize: 22,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
 
   filterContainer: {
@@ -2548,12 +2548,12 @@ const styles = StyleSheet.create({
   searchInput: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 11,
     fontSize: 13,
-    color: "#0F172A",
+    color: "#28242B",
   },
 
   statusFilters: {
@@ -2564,7 +2564,7 @@ const styles = StyleSheet.create({
 
   filterButton: {
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     backgroundColor: "#FFFFFF",
     paddingHorizontal: 13,
     paddingVertical: 8,
@@ -2572,12 +2572,12 @@ const styles = StyleSheet.create({
   },
 
   filterButtonActive: {
-    backgroundColor: "#2563EB",
-    borderColor: "#2563EB",
+    backgroundColor: "#B9829A",
+    borderColor: "#B9829A",
   },
 
   filterButtonText: {
-    color: "#475569",
+    color: "#77717A",
     fontSize: 12,
     fontWeight: "600",
   },
@@ -2595,7 +2595,7 @@ const styles = StyleSheet.create({
   table: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 10,
     overflow: "hidden",
   },
@@ -2604,16 +2604,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     minHeight: 48,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: "#E5DFE4",
   },
 
   thCell: {
     paddingHorizontal: 8,
     fontSize: 10,
     fontWeight: "800",
-    color: "#475569",
+    color: "#77717A",
   },
 
   tableRow: {
@@ -2621,12 +2621,12 @@ const styles = StyleSheet.create({
     alignItems: "stretch",
     minHeight: 74,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: "#E5DFE4",
     paddingVertical: 10,
   },
 
   tableRowAlt: {
-    backgroundColor: "#FAFAFA",
+    backgroundColor: "#F8F5F7",
   },
 
   tdPrimary: {
@@ -2634,14 +2634,14 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     fontSize: 12,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
 
   tdSecondary: {
     paddingHorizontal: 8,
     alignSelf: "center",
     fontSize: 11.5,
-    color: "#64748B",
+    color: "#77717A",
   },
 
   productContainer: {
@@ -2657,19 +2657,19 @@ const styles = StyleSheet.create({
   productName: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
 
   productMeta: {
     marginTop: 2,
     fontSize: 10.5,
-    color: "#64748B",
+    color: "#77717A",
   },
 
   productUnavailable: {
     fontSize: 11.5,
     fontStyle: "italic",
-    color: "#94A3B8",
+    color: "#77717A",
   },
 
   statusBadge: {
@@ -2685,9 +2685,9 @@ const styles = StyleSheet.create({
   },
 
   actionButton: {
-    backgroundColor: "#EFF6FF",
+    backgroundColor: "#E8D5DD",
     borderWidth: 1,
-    borderColor: "#BFDBFE",
+    borderColor: "#E8D5DD",
     paddingHorizontal: 10,
     paddingVertical: 7,
     borderRadius: 6,
@@ -2696,7 +2696,7 @@ const styles = StyleSheet.create({
   actionButtonText: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#2563EB",
+    color: "#B9829A",
   },
 
   emptyState: {
@@ -2708,13 +2708,13 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#334155",
+    color: "#28242B",
   },
 
   emptySubtitle: {
     marginTop: 5,
     fontSize: 12,
-    color: "#94A3B8",
+    color: "#77717A",
   },
 
   loadingContainer: {
@@ -2726,7 +2726,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 10,
     fontSize: 13,
-    color: "#64748B",
+    color: "#77717A",
   },
 
   // ==========================================================
@@ -2736,7 +2736,7 @@ const styles = StyleSheet.create({
   mobileCard: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
@@ -2751,13 +2751,13 @@ const styles = StyleSheet.create({
   mobilePoNumber: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
 
   mobileSupplier: {
     marginTop: 4,
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
   },
 
   mobileSection: {
@@ -2767,7 +2767,7 @@ const styles = StyleSheet.create({
   mobileLabel: {
     fontSize: 9.5,
     fontWeight: "800",
-    color: "#94A3B8",
+    color: "#77717A",
     letterSpacing: 0.5,
   },
 
@@ -2775,14 +2775,14 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 12.5,
     fontWeight: "600",
-    color: "#334155",
+    color: "#28242B",
   },
 
   mobileAmount: {
     marginTop: 4,
     fontSize: 14,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
 
   mobileProductContainer: {
@@ -2801,7 +2801,7 @@ const styles = StyleSheet.create({
 
   mobileActionButton: {
     marginTop: 18,
-    backgroundColor: "#2563EB",
+    backgroundColor: "#B9829A",
     borderRadius: 8,
     paddingVertical: 11,
     alignItems: "center",
@@ -2845,7 +2845,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 20,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
     marginBottom: 20,
   },
 
@@ -2854,17 +2854,17 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 11,
     fontWeight: "700",
-    color: "#475569",
+    color: "#77717A",
   },
 
   input: {
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 13,
-    color: "#0F172A",
+    color: "#28242B",
     backgroundColor: "#FFFFFF",
   },
 
@@ -2887,7 +2887,7 @@ const styles = StyleSheet.create({
 
   cancelButton: {
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     backgroundColor: "#FFFFFF",
     borderRadius: 8,
     paddingHorizontal: 16,
@@ -2896,20 +2896,20 @@ const styles = StyleSheet.create({
   },
 
   cancelButtonText: {
-    color: "#475569",
+    color: "#77717A",
     fontSize: 12,
     fontWeight: "700",
   },
 
   draftButton: {
-    backgroundColor: "#64748B",
+    backgroundColor: "#77717A",
     borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
 
   submitButton: {
-    backgroundColor: "#2563EB",
+    backgroundColor: "#B9829A",
     borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 10,
@@ -2924,34 +2924,34 @@ const styles = StyleSheet.create({
   actionPoNumber: {
     fontSize: 17,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
 
   actionSupplier: {
     marginTop: 4,
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
   },
 
   actionProductBox: {
     marginTop: 18,
     padding: 12,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
   },
 
   actionModalButton: {
     marginTop: 10,
-    backgroundColor: "#EFF6FF",
+    backgroundColor: "#E8D5DD",
     borderRadius: 8,
     paddingVertical: 11,
     alignItems: "center",
   },
 
   actionModalButtonText: {
-    color: "#2563EB",
+    color: "#B9829A",
     fontSize: 12,
     fontWeight: "700",
   },

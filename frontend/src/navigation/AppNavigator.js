@@ -642,8 +642,8 @@ export default function AppNavigator() {
       }
       return (
         <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-          <ActivityIndicator size="large" color="#0284c7" />
-          <Text style={{ marginTop: 12, fontSize: 14, color: "#64748b" }}>
+          <ActivityIndicator size="large" color="#A66D86" />
+          <Text style={{ marginTop: 12, fontSize: 14, color: "#77717A" }}>
             Redirecting to Super Admin Razorpay Portal...
           </Text>
         </View>
@@ -936,14 +936,14 @@ export default function AppNavigator() {
           flex: 1,
           justifyContent: "center",
           alignItems: "center",
-          backgroundColor: "#F4FAF8",
+          backgroundColor: "#EAF2EE",
         }}
       >
-        <ActivityIndicator size="large" color="#0F766E" />
+        <ActivityIndicator size="large" color="#B9829A" />
         <Text
           style={{
             marginTop: 14,
-            color: "#64748B",
+            color: "#77717A",
             fontSize: 14,
             fontWeight: "600",
           }}
@@ -970,14 +970,14 @@ export default function AppNavigator() {
           flex: 1,
           justifyContent: "center",
           alignItems: "center",
-          backgroundColor: "#0F172A",
+          backgroundColor: "#28242B",
         }}
       >
-        <ActivityIndicator size="large" color="#38BDF8" />
+        <ActivityIndicator size="large" color="#A66D86" />
         <Text
           style={{
             marginTop: 14,
-            color: "#94A3B8",
+            color: "#77717A",
             fontSize: 14,
             fontWeight: "600",
           }}
@@ -1255,7 +1255,7 @@ const styles = StyleSheet.create({
   appContainer: {
     flex: 1,
     flexDirection: "row",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     ...Platform.select({
       web: {
         height: "100vh",
@@ -1267,13 +1267,13 @@ const styles = StyleSheet.create({
   mainWrapper: {
     flex: 1,
     flexDirection: "column",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     height: "100%",
   },
   toastBanner: {
-    backgroundColor: "#F0FDFA",
+    backgroundColor: "#E8D5DD",
     borderBottomWidth: 1,
-    borderBottomColor: "#99F6E4",
+    borderBottomColor: "#E8D5DD",
     paddingVertical: 9,
     paddingHorizontal: 24,
     flexDirection: "row",
@@ -1289,16 +1289,16 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
   },
   toastText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   screenContainer: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
   },
   mobileDrawerOverlay: {
     flex: 1,
@@ -1315,7 +1315,7 @@ const styles = StyleSheet.create({
     height: "100%",
     flexDirection: "column",
     overflow: "hidden",
-    shadowColor: "#000",
+    shadowColor: "#28242B",
     shadowOffset: { width: 4, height: 0 },
     shadowOpacity: 0.25,
     shadowRadius: 8,
@@ -1328,8 +1328,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: "#0D9488",
-    backgroundColor: "#0F766E",
+    borderBottomColor: "#A66D86",
+    backgroundColor: "#B9829A",
   },
   drawerBrandRow: {
     flexDirection: "row",
@@ -1340,7 +1340,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 6,
-    backgroundColor: "#14B8A6",
+    backgroundColor: "#A66D86",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1369,9 +1369,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 24,
     paddingVertical: 14,
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     borderBottomWidth: 1,
-    borderBottomColor: "#0D9488",
+    borderBottomColor: "#A66D86",
   },
   onboardingBrandRow: {
     flexDirection: "row",
@@ -1382,7 +1382,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 8,
-    backgroundColor: "#14B8A6",
+    backgroundColor: "#A66D86",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1397,7 +1397,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   onboardingSubtitle: {
-    color: "#CCFBF1",
+    color: "#E8D5DD",
     fontSize: 12,
     fontWeight: "500",
     marginTop: 2,

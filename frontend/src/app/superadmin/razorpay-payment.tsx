@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { SuperAdminPalette as C } from '../../constants/theme';
 import {
   Pressable,
   ScrollView,
@@ -562,7 +563,7 @@ export default function RazorPayPaymentsPage() {
       }}
     >
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, isMobile && styles.headerMobile]}>
         <View>
           <Text style={styles.title}>Razorpay Payment Center</Text>
           <Text style={styles.subtitle}>
@@ -609,9 +610,9 @@ export default function RazorPayPaymentsPage() {
           title="Total Collected"
           value={metrics.totalCollected}
           subtitle={`${metrics.successfulCount} successful payments`}
-          color="#DFF5ED"
-          badgeColor="#E8F8F0"
-          badgeTextColor="#047857"
+          color={C.sageTint}
+          badgeColor={C.sageTint}
+          badgeTextColor={C.sageGreen}
           badgeText="Active Revenue"
           icon="▣"
         />
@@ -620,9 +621,9 @@ export default function RazorPayPaymentsPage() {
           title="Successful"
           value={metrics.successfulValue}
           subtitle={`${metrics.successfulCount} completed`}
-          color="#E7F0FF"
-          badgeColor="#EEF4FF"
-          badgeTextColor="#1D4ED8"
+          color={C.softRose}
+          badgeColor={C.softRose}
+          badgeTextColor={C.dustyRose}
           badgeText={metrics.totalTransactions > 0 ? `${Math.round((metrics.successfulCount / metrics.totalTransactions) * 100)}% Success` : '0%'}
           icon="✓"
         />
@@ -631,9 +632,9 @@ export default function RazorPayPaymentsPage() {
           title="Pending"
           value={metrics.pendingValue}
           subtitle={`${metrics.pendingCount} awaiting bank`}
-          color="#FFF4D9"
-          badgeColor="#FEF3C7"
-          badgeTextColor="#B45309"
+          color={C.goldTint}
+          badgeColor={C.goldTint}
+          badgeTextColor={C.warmGold}
           badgeText="In Gateway"
           icon="◷"
         />
@@ -642,9 +643,9 @@ export default function RazorPayPaymentsPage() {
           title="Failed"
           value={metrics.failedValue}
           subtitle={`${metrics.failedCount} drops`}
-          color="#FEE2E2"
-          badgeColor="#FEE2E2"
-          badgeTextColor="#B91C1C"
+          color={C.redTint}
+          badgeColor={C.redTint}
+          badgeTextColor={C.mutedRed}
           badgeText="Declined"
           icon="×"
         />
@@ -653,9 +654,9 @@ export default function RazorPayPaymentsPage() {
           title="Refunded"
           value={metrics.refundedValue}
           subtitle={`${metrics.refundedCount} processed`}
-          color="#F0E8FF"
-          badgeColor="#F3E8FF"
-          badgeTextColor="#7E22CE"
+          color={C.softRose}
+          badgeColor={C.softRose}
+          badgeTextColor={C.dustyRose}
           badgeText="Reversed"
           icon="↶"
         />
@@ -719,7 +720,7 @@ export default function RazorPayPaymentsPage() {
             value={search}
             onChangeText={setSearch}
             placeholder="Search pharmacy name, Razorpay payment ID, order ID..."
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor={C.mutedGray}
             style={styles.searchInput}
           />
         </View>
@@ -751,11 +752,11 @@ export default function RazorPayPaymentsPage() {
                     }}
                   >
                     <View style={styles.dropdownItemLeft}>
-                      {item === 'Success' && <View style={[styles.statusDot, { backgroundColor: '#10B981' }]} />}
-                      {item === 'Pending' && <View style={[styles.statusDot, { backgroundColor: '#F59E0B' }]} />}
-                      {item === 'Failed' && <View style={[styles.statusDot, { backgroundColor: '#EF4444' }]} />}
-                      {item === 'Refunded' && <View style={[styles.statusDot, { backgroundColor: '#8B5CF6' }]} />}
-                      {item === 'All Status' && <View style={[styles.statusDot, { backgroundColor: '#64748B' }]} />}
+                      {item === 'Success' && <View style={[styles.statusDot, { backgroundColor: C.sageGreen }]} />}
+                      {item === 'Pending' && <View style={[styles.statusDot, { backgroundColor: C.warmGold }]} />}
+                      {item === 'Failed' && <View style={[styles.statusDot, { backgroundColor: C.mutedRed }]} />}
+                      {item === 'Refunded' && <View style={[styles.statusDot, { backgroundColor: C.dustyRose }]} />}
+                      {item === 'All Status' && <View style={[styles.statusDot, { backgroundColor: C.mutedGray }]} />}
                       <Text style={[styles.dropdownItemText, isSelected && styles.dropdownItemTextSelected]}>
                         {item}
                       </Text>
@@ -1061,7 +1062,7 @@ function PaymentKpiCard({
   return (
     <View style={styles.statCard}>
       <View style={styles.statTopRow}>
-        <View style={[styles.statIcon, { backgroundColor: color }]}>
+        <View style={[styles.statIcon, { backgroundColor: C.softRose }]}>
           <Text style={styles.statIconText}>{icon}</Text>
         </View>
         <View style={[styles.kpiBadge, { backgroundColor: badgeColor }]}>
@@ -1095,7 +1096,7 @@ function StatusBadge({ status }: { status: PaymentStatus | string }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: C.offWhite,
   },
   content: {
     padding: 24,
@@ -1112,26 +1113,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
+  headerMobile: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+  },
   title: {
-    color: '#0F172A',
+    color: C.charcoal,
     fontSize: 26,
     fontWeight: '900',
   },
   subtitle: {
     marginTop: 4,
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 13,
   },
   activeScopeBadge: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
-    backgroundColor: '#E0F2FE',
+    backgroundColor: C.softRose,
     borderWidth: 1,
-    borderColor: '#BAE6FD',
+    borderColor: C.softRose,
   },
   activeScopeText: {
-    color: '#0369A1',
+    color: C.dustyRose,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -1141,14 +1146,16 @@ const styles = StyleSheet.create({
     marginTop: 18,
     padding: 16,
     borderRadius: 12,
-    backgroundColor: '#0F172A',
+    backgroundColor: C.white,
+    borderWidth: 1,
+    borderColor: C.softGray,
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
     gap: 14,
-    shadowColor: '#0F172A',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.05,
     shadowRadius: 10,
     elevation: 4,
   },
@@ -1156,13 +1163,13 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: '#2563EB',
+    backgroundColor: C.softRose,
     alignItems: 'center',
     justifyContent: 'center',
   },
   planBannerIconText: {
     fontSize: 20,
-    color: '#FFFFFF',
+    color: C.iconRose,
   },
   planBannerInfo: {
     flex: 1,
@@ -1173,21 +1180,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 4,
-    backgroundColor: '#22C55E',
+    backgroundColor: C.softRose,
     marginBottom: 4,
   },
   planBannerTagText: {
-    color: '#FFFFFF',
+    color: C.deepDustyRose,
     fontSize: 10,
     fontWeight: '900',
   },
   planBannerTitle: {
-    color: '#FFFFFF',
+    color: C.midnightViolet,
     fontSize: 16,
     fontWeight: '800',
   },
   planBannerDesc: {
-    color: '#94A3B8',
+    color: C.mutedGray,
     fontSize: 12,
     marginTop: 2,
   },
@@ -1195,10 +1202,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 8,
-    backgroundColor: '#2563EB',
+    backgroundColor: C.dustyRose,
   },
   simulatePayBtnText: {
-    color: '#FFFFFF',
+    color: C.white,
     fontSize: 12,
     fontWeight: '800',
   },
@@ -1218,9 +1225,9 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#0F172A',
+    borderColor: C.softGray,
+    backgroundColor: C.white,
+    shadowColor: C.charcoal,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
     shadowRadius: 6,
@@ -1240,7 +1247,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   statIconText: {
-    color: '#0F172A',
+    color: C.charcoal,
     fontSize: 16,
     fontWeight: '900',
   },
@@ -1254,19 +1261,19 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   statTitle: {
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 12,
     fontWeight: '600',
   },
   statValue: {
     marginTop: 4,
-    color: '#0F172A',
+    color: C.charcoal,
     fontSize: 22,
     fontWeight: '900',
   },
   statSubtitle: {
     marginTop: 4,
-    color: '#94A3B8',
+    color: C.mutedGray,
     fontSize: 11,
   },
 
@@ -1281,28 +1288,28 @@ const styles = StyleSheet.create({
   quickMonthsLabel: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#475569',
+    color: C.mutedGray,
     marginRight: 4,
   },
   monthPill: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: C.white,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: C.softGray,
   },
   monthPillActive: {
-    backgroundColor: '#0F172A',
-    borderColor: '#0F172A',
+    backgroundColor: C.dustyRose,
+    borderColor: C.dustyRose,
   },
   monthPillText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#475569',
+    color: C.mutedGray,
   },
   monthPillTextActive: {
-    color: '#FFFFFF',
+    color: C.white,
   },
   specificDateTag: {
     flexDirection: 'row',
@@ -1311,12 +1318,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 16,
-    backgroundColor: '#FEF3C7',
+    backgroundColor: C.goldTint,
     borderWidth: 1,
-    borderColor: '#FCD34D',
+    borderColor: C.warmGold,
   },
   specificDateTagText: {
-    color: '#92400E',
+    color: C.warmGold,
     fontSize: 11,
     fontWeight: '800',
   },
@@ -1324,7 +1331,7 @@ const styles = StyleSheet.create({
     padding: 2,
   },
   clearDateBtnText: {
-    color: '#92400E',
+    color: C.warmGold,
     fontSize: 10,
     fontWeight: '900',
   },
@@ -1347,19 +1354,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
+    borderColor: C.softGray,
+    backgroundColor: C.white,
     flexDirection: 'row',
     alignItems: 'center',
   },
   searchIcon: {
     marginRight: 8,
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 18,
   },
   searchInput: {
     flex: 1,
-    color: '#0F172A',
+    color: C.charcoal,
     fontSize: 13,
   },
 
@@ -1374,19 +1381,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
+    borderColor: C.softGray,
+    backgroundColor: C.white,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   filterText: {
-    color: '#0F172A',
+    color: C.charcoal,
     fontSize: 12,
     fontWeight: '700',
   },
   arrow: {
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 14,
   },
   dropdownMenu: {
@@ -1396,10 +1403,10 @@ const styles = StyleSheet.create({
     width: 170,
     zIndex: 10001,
     elevation: 60,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: C.white,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: C.softGray,
     paddingVertical: 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 6 },
@@ -1414,7 +1421,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   dropdownItemSelected: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: C.tableRose,
   },
   dropdownItemLeft: {
     flexDirection: 'row',
@@ -1427,16 +1434,16 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   dropdownItemText: {
-    color: '#334155',
+    color: C.mutedGray,
     fontSize: 12,
     fontWeight: '600',
   },
   dropdownItemTextSelected: {
-    color: '#0F172A',
+    color: C.charcoal,
     fontWeight: '800',
   },
   checkIcon: {
-    color: '#047857',
+    color: C.sageGreen,
     fontSize: 12,
     fontWeight: '900',
   },
@@ -1451,8 +1458,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
+    borderColor: C.softGray,
+    backgroundColor: C.white,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
@@ -1461,7 +1468,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   dateFilterButtonText: {
-    color: '#0F172A',
+    color: C.charcoal,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -1474,10 +1481,10 @@ const styles = StyleSheet.create({
     width: 320,
     zIndex: 10001,
     elevation: 60,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: C.white,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: C.softGray,
     padding: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
@@ -1496,18 +1503,18 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F1F5F9',
+    backgroundColor: C.tableRose,
   },
   calNavText: {
-    color: '#0F172A',
+    color: C.charcoal,
     fontSize: 18,
     fontWeight: '900',
   },
   calNavDisabled: {
-    color: '#CBD5E1',
+    color: C.softGray,
   },
   calMonthHeading: {
-    color: '#0F172A',
+    color: C.charcoal,
     fontSize: 14,
     fontWeight: '800',
   },
@@ -1521,35 +1528,35 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 6,
     borderRadius: 6,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: C.offWhite,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: C.softGray,
     alignItems: 'center',
   },
   calMonthTabActive: {
-    backgroundColor: '#0F172A',
-    borderColor: '#0F172A',
+    backgroundColor: C.dustyRose,
+    borderColor: C.dustyRose,
   },
   calMonthTabText: {
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 11,
     fontWeight: '700',
   },
   calMonthTabTextActive: {
-    color: '#FFFFFF',
+    color: C.white,
   },
   calWeekHeader: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     paddingBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: C.tableRose,
     marginBottom: 6,
   },
   calWeekDay: {
     width: 36,
     textAlign: 'center',
-    color: '#94A3B8',
+    color: C.mutedGray,
     fontSize: 11,
     fontWeight: '800',
   },
@@ -1567,15 +1574,15 @@ const styles = StyleSheet.create({
     marginVertical: 2,
   },
   calDayCellSelected: {
-    backgroundColor: '#2563EB',
+    backgroundColor: C.dustyRose,
   },
   calDayText: {
-    color: '#334155',
+    color: C.mutedGray,
     fontSize: 12,
     fontWeight: '600',
   },
   calDayTextSelected: {
-    color: '#FFFFFF',
+    color: C.white,
     fontWeight: '900',
   },
   calEventDot: {
@@ -1584,13 +1591,13 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#10B981',
+    backgroundColor: C.sageGreen,
   },
   calFooter: {
     marginTop: 14,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: C.tableRose,
     flexDirection: 'row',
     gap: 8,
   },
@@ -1598,11 +1605,11 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 8,
     borderRadius: 6,
-    backgroundColor: '#047857',
+    backgroundColor: C.dustyRose,
     alignItems: 'center',
   },
   calFullMonthBtnText: {
-    color: '#FFFFFF',
+    color: C.white,
     fontSize: 11,
     fontWeight: '800',
   },
@@ -1610,11 +1617,11 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 6,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: C.tableRose,
     alignItems: 'center',
   },
   calResetBtnText: {
-    color: '#475569',
+    color: C.mutedGray,
     fontSize: 11,
     fontWeight: '700',
   },
@@ -1625,26 +1632,26 @@ const styles = StyleSheet.create({
     zIndex: 1,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
+    borderColor: C.softGray,
+    backgroundColor: C.white,
     overflow: 'hidden',
   },
   tableTopMeta: {
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: C.tableRose,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   tableMetaText: {
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 12,
   },
   boldText: {
     fontWeight: '800',
-    color: '#0F172A',
+    color: C.charcoal,
   },
   statusFilteredNotice: {
     flexDirection: 'row',
@@ -1653,15 +1660,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: C.tableRose,
   },
   statusFilteredNoticeText: {
-    color: '#334155',
+    color: C.mutedGray,
     fontSize: 11,
     fontWeight: '700',
   },
   clearStatusText: {
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 10,
     fontWeight: '900',
   },
@@ -1671,9 +1678,9 @@ const styles = StyleSheet.create({
   tableHeader: {
     minHeight: 46,
     paddingHorizontal: 16,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: C.offWhite,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: C.softGray,
     flexDirection: 'row',
     alignItems: 'center',
   },
@@ -1681,12 +1688,12 @@ const styles = StyleSheet.create({
     minHeight: 62,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: C.tableRose,
     flexDirection: 'row',
     alignItems: 'center',
   },
   heading: {
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 0.3,
@@ -1695,12 +1702,12 @@ const styles = StyleSheet.create({
     width: 200,
   },
   pharmacyCellName: {
-    color: '#0F172A',
+    color: C.charcoal,
     fontSize: 13,
     fontWeight: '700',
   },
   pharmacyCellSub: {
-    color: '#94A3B8',
+    color: C.mutedGray,
     fontSize: 10,
     marginTop: 2,
   },
@@ -1728,21 +1735,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 5,
-    backgroundColor: '#FEE2E2',
+    backgroundColor: C.redTint,
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: C.redTint,
   },
   refundBtnText: {
-    color: '#B91C1C',
+    color: C.mutedRed,
     fontSize: 10,
     fontWeight: '800',
   },
   cell: {
-    color: '#475569',
+    color: C.mutedGray,
     fontSize: 12,
   },
   amount: {
-    color: '#0F172A',
+    color: C.charcoal,
     fontSize: 13,
     fontWeight: '900',
   },
@@ -1756,30 +1763,30 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   successBadge: {
-    color: '#047857',
-    backgroundColor: '#D1FAE5',
+    color: C.sageGreen,
+    backgroundColor: C.sageTint,
   },
   pendingBadge: {
-    color: '#B45309',
-    backgroundColor: '#FEF3C7',
+    color: C.warmGold,
+    backgroundColor: C.goldTint,
   },
   failedBadge: {
-    color: '#B91C1C',
-    backgroundColor: '#FEE2E2',
+    color: C.mutedRed,
+    backgroundColor: C.redTint,
   },
   refundedBadge: {
-    color: '#7E22CE',
-    backgroundColor: '#F3E8FF',
+    color: C.dustyRose,
+    backgroundColor: C.softRose,
   },
   footer: {
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#FAFAFA',
+    backgroundColor: C.offWhite,
   },
   footerText: {
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 12,
   },
   pagination: {
@@ -1792,27 +1799,27 @@ const styles = StyleSheet.create({
     height: 30,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: C.softGray,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: C.white,
   },
   activePage: {
-    borderColor: '#0F172A',
-    backgroundColor: '#0F172A',
+    borderColor: C.dustyRose,
+    backgroundColor: C.dustyRose,
   },
   activePageText: {
-    color: '#FFFFFF',
+    color: C.white,
     fontWeight: '800',
     fontSize: 12,
   },
   pageText: {
-    color: '#334155',
+    color: C.mutedGray,
     fontSize: 12,
     fontWeight: '600',
   },
   pageArrow: {
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 16,
     fontWeight: '700',
   },
@@ -1826,12 +1833,12 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   emptyTitle: {
-    color: '#0F172A',
+    color: C.charcoal,
     fontSize: 16,
     fontWeight: '800',
   },
   emptyText: {
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 12,
     marginTop: 4,
     textAlign: 'center',
@@ -1842,10 +1849,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: '#0F172A',
+    backgroundColor: C.dustyRose,
   },
   resetSearchBtnText: {
-    color: '#FFFFFF',
+    color: C.white,
     fontSize: 12,
     fontWeight: '700',
   },

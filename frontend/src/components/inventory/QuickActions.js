@@ -64,7 +64,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E5DFE4',
     padding: 20,
     ...Platform.select({
       web: {
@@ -78,7 +78,7 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#0F172A',
+    color: '#28242B',
     marginBottom: 16,
   },
   actionList: {
@@ -94,12 +94,12 @@ const styles = StyleSheet.create({
     cursor: 'pointer',
   },
   actionBtnPrimary: {
-    backgroundColor: '#0F766E',
+    backgroundColor: '#B9829A',
   },
   actionBtnSecondary: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E5DFE4',
   },
   actionText: {
     fontSize: 13.5,
@@ -109,7 +109,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   actionTextSecondary: {
-    color: '#334155',
+    color: '#28242B',
   },
   arrowIcon: {
     fontSize: 14,

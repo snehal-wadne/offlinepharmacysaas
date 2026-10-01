@@ -98,7 +98,7 @@ export default function Login() {
               <View style={styles.logoBox}>
                 <Pill
                   size={25}
-                  color="#167c68"
+                  color="#B9829A"
                 />
               </View>
 
@@ -157,7 +157,7 @@ export default function Login() {
 
                         <Icon
                           size={21}
-                          color="#167c68"
+                          color="#B9829A"
                         />
 
                       </View>
@@ -195,7 +195,7 @@ export default function Login() {
 
                   <Headphones
                     size={15}
-                    color="#167c68"
+                    color="#B9829A"
                   />
 
                   <Text style={styles.footerTitle}>
@@ -217,7 +217,7 @@ export default function Login() {
 
                   <ShieldCheck
                     size={15}
-                    color="#167c68"
+                    color="#B9829A"
                   />
 
                   <Text style={styles.footerTitle}>
@@ -284,13 +284,13 @@ export default function Login() {
 
                   <User
                     size={19}
-                    color="#94a3b8"
+                    color="#77717A"
                   />
 
                   <TextInput
                     style={styles.input}
                     placeholder="Enter email or phone number"
-                    placeholderTextColor="#94a3b8"
+                    placeholderTextColor="#77717A"
                   />
 
                 </View>
@@ -310,13 +310,13 @@ export default function Login() {
 
                   <LockKeyhole
                     size={19}
-                    color="#94a3b8"
+                    color="#77717A"
                   />
 
                   <TextInput
                     style={styles.input}
                     placeholder="Enter your password"
-                    placeholderTextColor="#94a3b8"
+                    placeholderTextColor="#77717A"
                     secureTextEntry={!showPassword}
                   />
 
@@ -330,12 +330,12 @@ export default function Login() {
                     {showPassword ? (
                       <EyeOff
                         size={19}
-                        color="#64748b"
+                        color="#77717A"
                       />
                     ) : (
                       <Eye
                         size={19}
-                        color="#64748b"
+                        color="#77717A"
                       />
                     )}
 
@@ -473,7 +473,7 @@ const styles = StyleSheet.create({
 
   screen: {
     flex: 1,
-    backgroundColor: "#f4faf8",
+    backgroundColor: "#EAF2EE",
   },
 
   container: {
@@ -491,7 +491,7 @@ const styles = StyleSheet.create({
 
   leftSection: {
     flex: 1,
-    backgroundColor: "#eaf7f3",
+    backgroundColor: "#EAF2EE",
     minHeight: 600,
     overflow: "hidden",
     position: "relative",
@@ -564,7 +564,7 @@ const styles = StyleSheet.create({
 
     borderRadius: 16,
 
-    backgroundColor: "#d9f0e9",
+    backgroundColor: "#EAF2EE",
 
     alignItems: "center",
 
@@ -578,7 +578,7 @@ const styles = StyleSheet.create({
 
     letterSpacing: 1.5,
 
-    color: "#1f6f62",
+    color: "#4F8A72",
   },
 
   logoSubtitle: {
@@ -590,7 +590,7 @@ const styles = StyleSheet.create({
 
     letterSpacing: 2.5,
 
-    color: "#475569",
+    color: "#77717A",
   },
 
 
@@ -613,7 +613,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "700",
 
-    color: "#1e293b",
+    color: "#28242B",
   },
 
   greenHeading: {
@@ -623,7 +623,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "700",
 
-    color: "#167c68",
+    color: "#B9829A",
   },
 
   tagline: {
@@ -633,7 +633,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "600",
 
-    color: "#475569",
+    color: "#77717A",
   },
 
   description: {
@@ -645,7 +645,7 @@ const styles = StyleSheet.create({
 
     lineHeight: 23,
 
-    color: "#475569",
+    color: "#77717A",
   },
 
 
@@ -676,7 +676,7 @@ const styles = StyleSheet.create({
 
     borderWidth: 1,
 
-    borderColor: "#c7e4dc",
+    borderColor: "#EAF2EE",
 
     backgroundColor: "rgba(255,255,255,0.72)",
 
@@ -694,7 +694,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "600",
 
-    color: "#1e293b",
+    color: "#28242B",
   },
 
   featureDescription: {
@@ -702,7 +702,7 @@ const styles = StyleSheet.create({
 
     fontSize: 12,
 
-    color: "#64748b",
+    color: "#77717A",
   },
 
 
@@ -721,7 +721,7 @@ const styles = StyleSheet.create({
 
     borderTopWidth: 1,
 
-    borderTopColor: "#c7e4dc",
+    borderTopColor: "#EAF2EE",
   },
 
   footerItem: {
@@ -747,7 +747,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "600",
 
-    color: "#167c68",
+    color: "#B9829A",
   },
 
   footerText: {
@@ -755,7 +755,7 @@ const styles = StyleSheet.create({
 
     fontSize: 11,
 
-    color: "#475569",
+    color: "#77717A",
   },
 
 
@@ -766,7 +766,7 @@ const styles = StyleSheet.create({
   rightSection: {
     flex: 1,
 
-    backgroundColor: "#f7fbfa",
+    backgroundColor: "#F8F5F7",
   },
 
   desktopRight: {
@@ -801,7 +801,7 @@ const styles = StyleSheet.create({
 
     borderWidth: 1,
 
-    borderColor: "#e2e8f0",
+    borderColor: "#E5DFE4",
 
     backgroundColor: "#ffffff",
 
@@ -809,7 +809,7 @@ const styles = StyleSheet.create({
 
     paddingVertical: 32,
 
-    shadowColor: "#000",
+    shadowColor: "#28242B",
 
     shadowOffset: {
       width: 0,
@@ -838,7 +838,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "700",
 
-    color: "#1e293b",
+    color: "#28242B",
   },
 
   welcomeSubtext: {
@@ -846,7 +846,7 @@ const styles = StyleSheet.create({
 
     fontSize: 14,
 
-    color: "#64748b",
+    color: "#77717A",
   },
 
 
@@ -865,7 +865,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "600",
 
-    color: "#334155",
+    color: "#28242B",
   },
 
   inputWrapper: {
@@ -877,7 +877,7 @@ const styles = StyleSheet.create({
 
     borderWidth: 1,
 
-    borderColor: "#cbd5e1",
+    borderColor: "#E5DFE4",
 
     borderRadius: 12,
 
@@ -895,7 +895,7 @@ const styles = StyleSheet.create({
 
     fontSize: 14,
 
-    color: "#1e293b",
+    color: "#28242B",
   },
 
   eyeButton: {
@@ -932,7 +932,7 @@ const styles = StyleSheet.create({
 
     borderWidth: 1,
 
-    borderColor: "#cbd5e1",
+    borderColor: "#E5DFE4",
 
     borderRadius: 4,
 
@@ -942,9 +942,9 @@ const styles = StyleSheet.create({
   },
 
   checkboxSelected: {
-    backgroundColor: "#167c68",
+    backgroundColor: "#B9829A",
 
-    borderColor: "#167c68",
+    borderColor: "#B9829A",
   },
 
   checkMark: {
@@ -958,7 +958,7 @@ const styles = StyleSheet.create({
   rememberText: {
     fontSize: 13,
 
-    color: "#475569",
+    color: "#77717A",
   },
 
   forgotText: {
@@ -966,7 +966,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "500",
 
-    color: "#167c68",
+    color: "#B9829A",
   },
 
 
@@ -981,7 +981,7 @@ const styles = StyleSheet.create({
 
     borderRadius: 12,
 
-    backgroundColor: "#167c68",
+    backgroundColor: "#B9829A",
 
     alignItems: "center",
 
@@ -1016,7 +1016,7 @@ const styles = StyleSheet.create({
 
     height: 1,
 
-    backgroundColor: "#e2e8f0",
+    backgroundColor: "#E5DFE4",
   },
 
   orText: {
@@ -1024,7 +1024,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "500",
 
-    color: "#64748b",
+    color: "#77717A",
   },
 
 
@@ -1045,7 +1045,7 @@ const styles = StyleSheet.create({
 
     borderWidth: 1,
 
-    borderColor: "#cbd5e1",
+    borderColor: "#E5DFE4",
 
     borderRadius: 12,
   },
@@ -1063,7 +1063,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "500",
 
-    color: "#334155",
+    color: "#28242B",
   },
 
 
@@ -1084,7 +1084,7 @@ const styles = StyleSheet.create({
   signupText: {
     fontSize: 13,
 
-    color: "#64748b",
+    color: "#77717A",
   },
 
   signupLink: {
@@ -1092,7 +1092,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "600",
 
-    color: "#167c68",
+    color: "#B9829A",
   },
 
 });

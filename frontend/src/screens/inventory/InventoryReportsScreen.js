@@ -22,31 +22,31 @@ import { fetchInventory } from '../../services/inventoryApi';
 // ============================================================
 
 const COLORS = {
-  primary: '#0F766E',
-  primaryHover: '#0D9488',
-  primaryLight: '#CCFBF1',
+  primary: '#B9829A',
+  primaryHover: '#A66D86',
+  primaryLight: '#E8D5DD',
 
-  secondary: '#2563EB',
-  secondaryLight: '#DBEAFE',
+  secondary: '#B9829A',
+  secondaryLight: '#E8D5DD',
 
-  success: '#16A34A',
-  successLight: '#DCFCE7',
+  success: '#4F8A72',
+  successLight: '#EAF2EE',
 
-  warning: '#D97706',
-  warningLight: '#FEF3C7',
+  warning: '#C49752',
+  warningLight: '#F7F0E5',
 
-  danger: '#DC2626',
-  dangerLight: '#FEE2E2',
+  danger: '#B85C64',
+  dangerLight: '#F7EDEE',
 
-  background: '#F8FAFC',
+  background: '#F8F5F7',
   surface: '#FFFFFF',
-  surfaceHover: '#F1F5F9',
+  surfaceHover: '#F8F5F7',
 
-  textPrimary: '#0F172A',
-  textSecondary: '#64748B',
-  textMuted: '#94A3B8',
+  textPrimary: '#28242B',
+  textSecondary: '#77717A',
+  textMuted: '#77717A',
 
-  border: '#E2E8F0',
+  border: '#E5DFE4',
 };
 
 // ============================================================
@@ -2218,7 +2218,7 @@ const styles = StyleSheet.create({
     borderBottomColor:
       COLORS.border,
     elevation: 4,
-    shadowColor: '#000',
+    shadowColor: '#28242B',
     shadowOffset: {
       width: 0,
       height: 2,
@@ -2335,7 +2335,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor:
       COLORS.border,
-    shadowColor: '#000',
+    shadowColor: '#28242B',
     shadowOffset: {
       width: 0,
       height: 1,
@@ -2492,7 +2492,7 @@ const styles = StyleSheet.create({
       COLORS.border,
     borderRadius: 8,
     elevation: 5,
-    shadowColor: '#000',
+    shadowColor: '#28242B',
     shadowOffset: {
       width: 0,
       height: 4,
@@ -2627,7 +2627,7 @@ const styles = StyleSheet.create({
 
   tableRowAlt: {
     backgroundColor:
-      '#FAFAFA',
+      '#F8F5F7',
   },
 
   tableCell: {
@@ -2745,7 +2745,7 @@ const styles = StyleSheet.create({
       COLORS.dangerLight,
     borderWidth: 1,
     borderColor:
-      '#FECACA',
+      '#F7EDEE',
     borderRadius: 8,
     padding: 12,
     marginBottom: 12,

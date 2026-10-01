@@ -327,7 +327,7 @@ export default function HeldBillsScreen({
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder="Search by Bill No., Customer, or Medicine..."
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor="#77717A"
           />
           {searchQuery ? (
             <Pressable onPress={() => setSearchQuery("")}>
@@ -880,7 +880,7 @@ export default function HeldBillsScreen({
                                   <Text
                                     style={[
                                       styles.menuItemText,
-                                      { color: "#DC2626" },
+                                      { color: "#B85C64" },
                                     ]}
                                   >
                                     🗑️ Discard Draft
@@ -1058,7 +1058,7 @@ export default function HeldBillsScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
   },
   contentContainer: {
     padding: 24,
@@ -1085,11 +1085,11 @@ const styles = StyleSheet.create({
   pageTitle: {
     fontSize: 24,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   pageSubtitle: {
     fontSize: 13,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 3,
   },
   clearAllBtn: {
@@ -1097,7 +1097,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     backgroundColor: "#FFFFFF",
     paddingHorizontal: 14,
     paddingVertical: 8,
@@ -1110,7 +1110,7 @@ const styles = StyleSheet.create({
   clearAllBtnText: {
     fontSize: 12.5,
     fontWeight: "700",
-    color: "#475569",
+    color: "#77717A",
   },
 
   // 2. Metrics Cards (Image 2)
@@ -1131,7 +1131,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     padding: 18,
   },
   metricCardMobile: {
@@ -1153,21 +1153,21 @@ const styles = StyleSheet.create({
   metricLabel: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#64748B",
+    color: "#77717A",
     marginBottom: 6,
   },
   metricValueLarge: {
     fontSize: 24,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   valueGreen: {
-    color: "#0F766E",
+    color: "#B9829A",
   },
   metricValueText: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
 
   // 3. Search and Filters
@@ -1190,7 +1190,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     paddingHorizontal: 12,
     height: 40,
@@ -1205,12 +1205,12 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 13,
-    color: "#0F172A",
+    color: "#28242B",
     ...Platform.select({ web: { outlineStyle: "none" } }),
   },
   clearSearchIcon: {
     fontSize: 13,
-    color: "#94A3B8",
+    color: "#77717A",
     padding: 4,
   },
   filterDropdownWrapper: {
@@ -1223,15 +1223,15 @@ const styles = StyleSheet.create({
     gap: 6,
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     paddingHorizontal: 12,
     height: 40,
     cursor: "pointer",
   },
   filterDropdownBtnActive: {
-    borderColor: "#0F766E",
-    backgroundColor: "#F0FDFA",
+    borderColor: "#B9829A",
+    backgroundColor: "#E8D5DD",
   },
   filterDropdownIcon: {
     fontSize: 12,
@@ -1239,15 +1239,15 @@ const styles = StyleSheet.create({
   filterDropdownText: {
     fontSize: 12.5,
     fontWeight: "600",
-    color: "#334155",
+    color: "#28242B",
   },
   filterDropdownTextActive: {
-    color: "#0F766E",
+    color: "#B9829A",
     fontWeight: "750",
   },
   filterDropdownArrow: {
     fontSize: 11,
-    color: "#64748B",
+    color: "#77717A",
   },
 
   // Dropdown Popover Card
@@ -1259,9 +1259,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     padding: 8,
-    shadowColor: "#000",
+    shadowColor: "#28242B",
     shadowOpacity: 0.15,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
@@ -1271,12 +1271,12 @@ const styles = StyleSheet.create({
   dropdownSectionLabel: {
     fontSize: 10,
     fontWeight: "800",
-    color: "#64748B",
+    color: "#77717A",
     letterSpacing: 0.5,
     paddingHorizontal: 8,
     paddingVertical: 6,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
     marginBottom: 4,
   },
   dropdownMenuItem: {
@@ -1289,7 +1289,7 @@ const styles = StyleSheet.create({
     cursor: "pointer",
   },
   dropdownMenuItemActive: {
-    backgroundColor: "#F0FDFA",
+    backgroundColor: "#E8D5DD",
   },
   dropdownMenuItemLeft: {
     flexDirection: "row",
@@ -1303,45 +1303,45 @@ const styles = StyleSheet.create({
     width: 14,
   },
   dropdownItemCheckActive: {
-    color: "#0F766E",
+    color: "#B9829A",
   },
   dropdownItemLabel: {
     fontSize: 12.5,
-    color: "#334155",
+    color: "#28242B",
     fontWeight: "500",
   },
   dropdownItemLabelActive: {
-    color: "#0F766E",
+    color: "#B9829A",
     fontWeight: "750",
   },
   dropdownCountBadge: {
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 10,
   },
   dropdownCountBadgeActive: {
-    backgroundColor: "#CCFBF1",
+    backgroundColor: "#E8D5DD",
   },
   dropdownCountText: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
   },
   dropdownCountTextActive: {
-    color: "#0F766E",
+    color: "#B9829A",
   },
   resetFiltersBtn: {
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 6,
-    backgroundColor: "#FEE2E2",
+    backgroundColor: "#F7EDEE",
     cursor: "pointer",
   },
   resetFiltersBtnText: {
     fontSize: 11.5,
     fontWeight: "700",
-    color: "#DC2626",
+    color: "#B85C64",
   },
 
   // 4. Held Bills Table (Image 2)
@@ -1349,7 +1349,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     position: "relative",
     zIndex: 1,
   },
@@ -1365,10 +1365,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     padding: 14,
     gap: 10,
-    shadowColor: "#000",
+    shadowColor: "#28242B",
     shadowOpacity: 0.04,
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
@@ -1387,10 +1387,10 @@ const styles = StyleSheet.create({
   mobileBillNoText: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   mobileDraftTag: {
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -1398,7 +1398,7 @@ const styles = StyleSheet.create({
   mobileDraftTagText: {
     fontSize: 10,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
     textTransform: "uppercase",
   },
   mobileCustomerRow: {
@@ -1409,23 +1409,23 @@ const styles = StyleSheet.create({
   mobileCustName: {
     fontSize: 13.5,
     fontWeight: "700",
-    color: "#1E293B",
+    color: "#28242B",
   },
   mobileCustPhone: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
   },
   mobileItemsRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     padding: 8,
     borderRadius: 8,
   },
   mobileItemsSummary: {
     fontSize: 12,
-    color: "#334155",
+    color: "#28242B",
     flex: 1,
   },
   mobileAmountRow: {
@@ -1434,23 +1434,23 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingTop: 6,
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
+    borderTopColor: "#F8F5F7",
   },
   mobileLabel: {
     fontSize: 10,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
     letterSpacing: 0.5,
     marginBottom: 2,
   },
   mobileDateVal: {
     fontSize: 11.5,
-    color: "#334155",
+    color: "#28242B",
   },
   mobileAmountVal: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   mobileActionFooter: {
     flexDirection: "row",
@@ -1460,7 +1460,7 @@ const styles = StyleSheet.create({
   },
   mobileResumeBtn: {
     flex: 1,
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingVertical: 10,
     borderRadius: 8,
     alignItems: "center",
@@ -1481,21 +1481,21 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
-    backgroundColor: "#F8FAFC",
+    borderColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
   },
   mobileDetailsBtnText: {
     fontSize: 12.5,
     fontWeight: "700",
-    color: "#334155",
+    color: "#28242B",
   },
   mobileDiscardBtn: {
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#FECACA",
-    backgroundColor: "#FEF2F2",
+    borderColor: "#F7EDEE",
+    backgroundColor: "#F7EDEE",
   },
   mobileDiscardBtnText: {
     fontSize: 13,
@@ -1503,18 +1503,18 @@ const styles = StyleSheet.create({
   tableHeaderRow: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: "#E5DFE4",
     borderTopLeftRadius: 12,
     borderTopRightRadius: 12,
   },
   thText: {
     fontSize: 11,
     fontWeight: "800",
-    color: "#475569",
+    color: "#77717A",
     letterSpacing: 0.5,
   },
   tableBodyRow: {
@@ -1523,17 +1523,17 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
     position: "relative",
   },
   billNoText: {
     fontSize: 13.5,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   billDraftSub: {
     fontSize: 11,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 1,
   },
   customerRow: {
@@ -1547,11 +1547,11 @@ const styles = StyleSheet.create({
   custNameText: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   custPhoneText: {
     fontSize: 11.5,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 1,
   },
   itemsPreviewRow: {
@@ -1563,31 +1563,31 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     alignItems: "center",
     justifyContent: "center",
   },
   itemsCountBadgeText: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#475569",
+    color: "#77717A",
   },
   itemsSummaryDesc: {
     fontSize: 12.5,
-    color: "#334155",
+    color: "#28242B",
     flex: 1,
   },
   amountText: {
     fontSize: 14,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   heldOnDateText: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
   },
   holdBadge: {
-    backgroundColor: "#FEF3C7",
+    backgroundColor: "#F7F0E5",
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
@@ -1595,11 +1595,11 @@ const styles = StyleSheet.create({
   holdBadgeText: {
     fontSize: 11.5,
     fontWeight: "700",
-    color: "#B45309",
+    color: "#C49752",
   },
   resumeActionBtn: {
     borderWidth: 1,
-    borderColor: "#0F766E",
+    borderColor: "#B9829A",
     borderRadius: 6,
     paddingHorizontal: 12,
     paddingVertical: 5,
@@ -1609,7 +1609,7 @@ const styles = StyleSheet.create({
   resumeActionBtnText: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   actionCellContainer: {
     flex: 1.3,
@@ -1629,11 +1629,11 @@ const styles = StyleSheet.create({
     cursor: "pointer",
   },
   moreOptionsBtnActive: {
-    backgroundColor: "#E2E8F0",
+    backgroundColor: "#E5DFE4",
   },
   moreOptionsText: {
     fontSize: 16,
-    color: "#64748B",
+    color: "#77717A",
     fontWeight: "bold",
   },
   optionsMenuPopover: {
@@ -1643,8 +1643,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
-    shadowColor: "#000",
+    borderColor: "#E5DFE4",
+    shadowColor: "#28242B",
     shadowOpacity: 0.18,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
@@ -1657,14 +1657,14 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
     cursor: "pointer",
     backgroundColor: "#FFFFFF",
   },
   menuItemText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#334155",
+    color: "#28242B",
   },
 
   // Empty State
@@ -1680,11 +1680,11 @@ const styles = StyleSheet.create({
   emptyTableTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   emptyTableSubtitle: {
     fontSize: 13,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 4,
     textAlign: "center",
     maxWidth: 420,
@@ -1714,22 +1714,22 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 17,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   modalSubtitle: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   closeBtnText: {
     fontSize: 15,
     fontWeight: "750",
-    color: "#64748B",
+    color: "#77717A",
   },
   detailsItemsHeading: {
     fontSize: 12,
     fontWeight: "800",
-    color: "#475569",
+    color: "#77717A",
     marginBottom: 8,
   },
   detailItemRow: {
@@ -1737,47 +1737,47 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
     gap: 8,
   },
   detailItemName: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   detailItemSub: {
     fontSize: 11,
-    color: "#64748B",
+    color: "#77717A",
   },
   detailItemQty: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#475569",
+    color: "#77717A",
     paddingHorizontal: 8,
   },
   detailItemTotal: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   detailTotalRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     borderTopWidth: 1,
-    borderTopColor: "#E2E8F0",
+    borderTopColor: "#E5DFE4",
     paddingTop: 10,
     marginBottom: 16,
   },
   detailTotalLabel: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#475569",
+    color: "#77717A",
   },
   detailTotalAmount: {
     fontSize: 18,
     fontWeight: "900",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   detailsModalActions: {
     flexDirection: "row",
@@ -1789,16 +1789,16 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: "#FECACA",
-    backgroundColor: "#FEF2F2",
+    borderColor: "#F7EDEE",
+    backgroundColor: "#F7EDEE",
   },
   discardDraftText: {
-    color: "#DC2626",
+    color: "#B85C64",
     fontSize: 12,
     fontWeight: "700",
   },
   resumeDraftPrimaryBtn: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 6,
@@ -1820,12 +1820,12 @@ const styles = StyleSheet.create({
   confirmTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#991B1B",
+    color: "#B85C64",
     marginBottom: 8,
   },
   confirmSubtitle: {
     fontSize: 13,
-    color: "#64748B",
+    color: "#77717A",
     lineHeight: 18,
     marginBottom: 18,
   },
@@ -1838,18 +1838,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 6,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
   },
   confirmCancelText: {
     fontSize: 12.5,
     fontWeight: "600",
-    color: "#475569",
+    color: "#77717A",
   },
   confirmClearBtn: {
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 6,
-    backgroundColor: "#DC2626",
+    backgroundColor: "#B85C64",
   },
   confirmClearText: {
     fontSize: 12.5,

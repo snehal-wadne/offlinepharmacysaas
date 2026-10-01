@@ -273,7 +273,7 @@ export default function CurrentStockScreen({ onShowToast }) {
                   </View>
                   <View style={styles.mobileGridCol}>
                     <Text style={styles.mobileLabel}>Qty Available</Text>
-                    <Text style={[styles.mobileValBold, { color: "#0F766E" }]}>
+                    <Text style={[styles.mobileValBold, { color: "#B9829A" }]}>
                       {item.quantity} units
                     </Text>
                   </View>
@@ -465,7 +465,7 @@ export default function CurrentStockScreen({ onShowToast }) {
                 formErrors.medicineName && styles.formInputError,
               ]}
               placeholder="e.g., Paracetamol 500mg"
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor="#77717A"
               value={formData.medicineName}
               onChangeText={(t) => handleFormChange("medicineName", t)}
             />
@@ -482,7 +482,7 @@ export default function CurrentStockScreen({ onShowToast }) {
                 formErrors.sku && styles.formInputError,
               ]}
               placeholder="e.g., MED-2024-001"
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor="#77717A"
               value={formData.sku}
               onChangeText={(t) => handleFormChange("sku", t)}
             />
@@ -500,7 +500,7 @@ export default function CurrentStockScreen({ onShowToast }) {
                 formErrors.batchNo && styles.formInputError,
               ]}
               placeholder="e.g., BT-2024-08"
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor="#77717A"
               value={formData.batchNo}
               onChangeText={(t) => handleFormChange("batchNo", t)}
             />
@@ -517,7 +517,7 @@ export default function CurrentStockScreen({ onShowToast }) {
                 formErrors.quantity && styles.formInputError,
               ]}
               placeholder="e.g., 120"
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor="#77717A"
               keyboardType="numeric"
               value={formData.quantity}
               onChangeText={(t) => handleFormChange("quantity", t)}
@@ -533,7 +533,7 @@ export default function CurrentStockScreen({ onShowToast }) {
             <TextInput
               style={styles.formInput}
               placeholder="e.g., BR-001"
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor="#77717A"
               value={formData.branchId}
               onChangeText={(t) => handleFormChange("branchId", t)}
             />
@@ -544,7 +544,7 @@ export default function CurrentStockScreen({ onShowToast }) {
             <TextInput
               style={styles.formInput}
               placeholder="e.g., A-12-04"
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor="#77717A"
               value={formData.shelfLocation}
               onChangeText={(t) => handleFormChange("shelfLocation", t)}
             />
@@ -598,7 +598,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     overflow: "hidden",
     ...Platform.select({
       web: {
@@ -614,12 +614,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingVertical: 18,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   cardTitle: {
     fontSize: 17,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   /* Mobile Card View Styles */
   mobileCardList: {
@@ -630,7 +630,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     padding: 14,
   },
   mobileStockHeader: {
@@ -639,28 +639,28 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
     gap: 8,
   },
   mobileMedTitle: {
     fontSize: 14.5,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   mobileSkuText: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
     fontWeight: "500",
   },
   mobileInStockBadge: {
-    backgroundColor: "#DCFCE7",
+    backgroundColor: "#EAF2EE",
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
   },
   mobileInStockText: {
-    color: "#15803D",
+    color: "#4F8A72",
     fontSize: 11,
     fontWeight: "700",
   },
@@ -676,18 +676,18 @@ const styles = StyleSheet.create({
   mobileLabel: {
     fontSize: 11,
     fontWeight: "600",
-    color: "#94A3B8",
+    color: "#77717A",
     textTransform: "uppercase",
   },
   mobileVal: {
     fontSize: 12.5,
-    color: "#334155",
+    color: "#28242B",
     marginTop: 1,
   },
   mobileValBold: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
     marginTop: 1,
   },
   mobileCardFooter: {
@@ -696,15 +696,15 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
+    borderTopColor: "#F8F5F7",
     marginTop: 4,
   },
   mobileUpdatedText: {
     fontSize: 11,
-    color: "#94A3B8",
+    color: "#77717A",
   },
   mobileModBtn: {
-    backgroundColor: "#E2E8F0",
+    backgroundColor: "#E5DFE4",
     paddingVertical: 4,
     paddingHorizontal: 12,
     borderRadius: 4,
@@ -713,7 +713,7 @@ const styles = StyleSheet.create({
   mobileModBtnText: {
     fontSize: 11.5,
     fontWeight: "700",
-    color: "#334155",
+    color: "#28242B",
   },
   tableWrapper: {
     minWidth: 1100,
@@ -725,13 +725,13 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
-    backgroundColor: "#FAFAFA",
+    borderBottomColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
   },
   thCell: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#475569",
+    color: "#77717A",
     paddingHorizontal: 6,
   },
   tableRow: {
@@ -740,30 +740,30 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   tableRowAlt: {
-    backgroundColor: "#FAFAFA",
+    backgroundColor: "#F8F5F7",
   },
   tdCell: {
     fontSize: 13,
-    color: "#334155",
+    color: "#28242B",
     paddingHorizontal: 6,
   },
   medName: {
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   amountCell: {
     fontWeight: "600",
-    color: "#0F172A",
+    color: "#28242B",
   },
   modifyWrapper: {
     alignItems: "center",
     justifyContent: "center",
   },
   modifyButton: {
-    backgroundColor: "#E2E8F0",
+    backgroundColor: "#E5DFE4",
     paddingVertical: 4,
     paddingHorizontal: 10,
     borderRadius: 4,
@@ -772,7 +772,7 @@ const styles = StyleSheet.create({
   modifyButtonText: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#334155",
+    color: "#28242B",
   },
   formHeader: {
     paddingHorizontal: 22,
@@ -781,7 +781,7 @@ const styles = StyleSheet.create({
   },
   formSubtitle: {
     fontSize: 13,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   formGrid: {
@@ -798,27 +798,27 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#0F172A",
+    color: "#28242B",
     marginBottom: 8,
   },
   formInput: {
     height: 42,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     backgroundColor: "#FFFFFF",
     paddingHorizontal: 14,
     fontSize: 13,
-    color: "#0F172A",
+    color: "#28242B",
     outlineStyle: "none",
   },
   formInputError: {
-    borderColor: "#DC2626",
-    backgroundColor: "#FEF2F2",
+    borderColor: "#B85C64",
+    backgroundColor: "#F7EDEE",
   },
   errorText: {
     fontSize: 11,
-    color: "#DC2626",
+    color: "#B85C64",
     marginTop: 3,
     fontWeight: "500",
   },
@@ -828,14 +828,14 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
   },
   blueSubmitButton: {
-    backgroundColor: "#2563EB",
+    backgroundColor: "#B9829A",
     paddingVertical: 10,
     paddingHorizontal: 32,
     borderRadius: 8,
     cursor: "pointer",
   },
   blueSubmitButtonHovered: {
-    backgroundColor: "#1D4ED8",
+    backgroundColor: "#A66D86",
   },
   blueSubmitButtonText: {
     fontSize: 14,

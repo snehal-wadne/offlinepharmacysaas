@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { SuperAdminPalette as C } from '../../constants/theme';
 import {
   View,
   Text,
@@ -6,16 +7,19 @@ import {
   Pressable,
   StyleSheet,
   ActivityIndicator,
+  ScrollView,
 } from 'react-native';
 import { supabase } from '../../api/supabaseClient';
 import { fetchSuperadminMe } from '../../api/superadminApi';
 import { API_URL } from '../../config';
+import { useIsMobile } from '../../utils/responsive';
 
 interface SuperAdminLoginProps {
   onLoginSuccess?: () => void;
 }
 
 export default function SuperAdminLogin({ onLoginSuccess }: SuperAdminLoginProps) {
+  const isMobile = useIsMobile();
   const [email, setEmail] = useState('superadmin@pharmaflow.com');
   const [password, setPassword] = useState('SuperAdmin@2026');
   const [loading, setLoading] = useState(false);
@@ -92,8 +96,13 @@ export default function SuperAdminLogin({ onLoginSuccess }: SuperAdminLoginProps
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.card}>
+    <ScrollView
+      style={styles.scrollView}
+      contentContainerStyle={[styles.container, isMobile && styles.containerMobile]}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={[styles.card, isMobile && styles.cardMobile]}>
         <View style={styles.header}>
           <Text style={styles.badge}>PLATFORM CONTROL</Text>
           <Text style={styles.title}>Superadmin Access</Text>
@@ -130,7 +139,7 @@ export default function SuperAdminLogin({ onLoginSuccess }: SuperAdminLoginProps
             <TextInput
               style={styles.input}
               placeholder="admin@platform.pharmaflow.com"
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor={C.mutedGray}
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
@@ -144,7 +153,7 @@ export default function SuperAdminLogin({ onLoginSuccess }: SuperAdminLoginProps
             <TextInput
               style={styles.input}
               placeholder="••••••••••••"
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor={C.mutedGray}
               value={password}
               onChangeText={setPassword}
               secureTextEntry
@@ -158,7 +167,7 @@ export default function SuperAdminLogin({ onLoginSuccess }: SuperAdminLoginProps
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
+              <ActivityIndicator color={C.white} size="small" />
             ) : (
               <Text style={styles.buttonText}>Sign In to Control Center</Text>
             )}
@@ -176,39 +185,49 @@ export default function SuperAdminLogin({ onLoginSuccess }: SuperAdminLoginProps
           </Pressable>
         </View>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  scrollView: {
     flex: 1,
+    backgroundColor: C.offWhite,
+  },
+  container: {
+    flexGrow: 1,
     minHeight: '100%',
-    backgroundColor: '#0F172A',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
+  containerMobile: {
+    padding: 14,
+    paddingVertical: 24,
+  },
   card: {
     width: '100%',
     maxWidth: 440,
-    backgroundColor: '#1E293B',
+    backgroundColor: C.white,
     borderRadius: 16,
     padding: 32,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: C.softGray,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.08,
     shadowRadius: 20,
+  },
+  cardMobile: {
+    padding: 22,
   },
   header: {
     marginBottom: 24,
     alignItems: 'center',
   },
   badge: {
-    color: '#38BDF8',
-    backgroundColor: 'rgba(56, 189, 248, 0.12)',
+    color: C.dustyRose,
+    backgroundColor: C.softRose,
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 1.5,
@@ -220,25 +239,25 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#F8FAFC',
+    color: C.charcoal,
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 13,
-    color: '#94A3B8',
+    color: C.mutedGray,
     textAlign: 'center',
     lineHeight: 18,
   },
   errorBox: {
-    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    backgroundColor: C.redTint,
     borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.3)',
+    borderColor: C.mutedRed,
     borderRadius: 8,
     padding: 12,
     marginBottom: 20,
   },
   errorText: {
-    color: '#FCA5A5',
+    color: C.mutedRed,
     fontSize: 13,
     fontWeight: '500',
     textAlign: 'center',
@@ -252,20 +271,20 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#CBD5E1',
+    color: C.charcoal,
   },
   input: {
-    backgroundColor: '#0F172A',
+    backgroundColor: C.white,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: C.softGray,
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    color: '#F8FAFC',
+    color: C.charcoal,
     fontSize: 14,
   },
   button: {
-    backgroundColor: '#0EA5E9',
+    backgroundColor: C.dustyRose,
     borderRadius: 8,
     paddingVertical: 12,
     alignItems: 'center',
@@ -275,7 +294,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   buttonText: {
-    color: '#FFFFFF',
+    color: C.white,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -285,14 +304,14 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   backButtonText: {
-    color: '#64748B',
+    color: C.midnightViolet,
     fontSize: 12,
     fontWeight: '600',
   },
   demoBox: {
-    backgroundColor: 'rgba(56, 189, 248, 0.08)',
+    backgroundColor: C.softRose,
     borderWidth: 1,
-    borderColor: 'rgba(56, 189, 248, 0.25)',
+    borderColor: C.secondaryBorder,
     borderRadius: 10,
     padding: 12,
     marginBottom: 16,
@@ -307,19 +326,18 @@ const styles = StyleSheet.create({
   demoBadge: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#38BDF8',
+    color: C.dustyRose,
     letterSpacing: 0.5,
   },
   demoClick: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#7DD3FC',
+    color: C.deepDustyRose,
   },
   demoText: {
     fontSize: 12,
-    color: '#CBD5E1',
+    color: C.charcoal,
     fontFamily: 'monospace',
     lineHeight: 18,
   },
 });
-

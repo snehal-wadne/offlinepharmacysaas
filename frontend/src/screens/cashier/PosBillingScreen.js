@@ -457,7 +457,7 @@ export default function PosBillingScreen({
                 value={searchQuery}
                 onChangeText={setSearchQuery}
                 placeholder="Scan barcode or type medicine name, formula, SKU..."
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor="#77717A"
                 autoFocus={true}
               />
               {searchQuery ? (
@@ -474,7 +474,7 @@ export default function PosBillingScreen({
                   flexDirection: 'row',
                   alignItems: 'center',
                   gap: 4,
-                  backgroundColor: '#0F766E',
+                  backgroundColor: '#B9829A',
                   paddingHorizontal: 10,
                   paddingVertical: 7,
                   borderRadius: 6,
@@ -824,11 +824,11 @@ export default function PosBillingScreen({
             {paymentMode === "UPI" && (
               <View style={styles.paymentInputsSection}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F766E' }}>Customer UPI Scanner</Text>
-                  <Text style={{ fontSize: 18, fontWeight: '900', color: '#0F766E' }}>₹{totals.grandTotal.toFixed(2)}</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#B9829A' }}>Customer UPI Scanner</Text>
+                  <Text style={{ fontSize: 18, fontWeight: '900', color: '#B9829A' }}>₹{totals.grandTotal.toFixed(2)}</Text>
                 </View>
 
-                <View style={{ alignSelf: 'center', backgroundColor: '#FFFFFF', padding: 8, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 8, alignItems: 'center' }}>
+                <View style={{ alignSelf: 'center', backgroundColor: '#FFFFFF', padding: 8, borderRadius: 10, borderWidth: 1, borderColor: '#E5DFE4', marginBottom: 8, alignItems: 'center' }}>
                   <OfflineQRCode
                     value={`upi://pay?pa=${encodeURIComponent(
                       storeUpiId.trim() || 'pharmaflow@okhdfcbank'
@@ -837,22 +837,22 @@ export default function PosBillingScreen({
                     )}&cu=INR&tn=POS-BILL`}
                     size={170}
                   />
-                  <Text style={{ textAlign: 'center', fontSize: 11, fontWeight: '700', color: '#059669', marginTop: 4 }}>
+                  <Text style={{ textAlign: 'center', fontSize: 11, fontWeight: '700', color: '#4F8A72', marginTop: 4 }}>
                     ⚡ Scan to Pay ₹{totals.grandTotal.toFixed(2)}
                   </Text>
                 </View>
 
                 {/* VPA and supported apps */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFFFFF', padding: 6, borderRadius: 6, marginBottom: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
-                  <Text style={{ fontSize: 11, color: '#64748B' }}>UPI VPA: <Text style={{ fontWeight: '700', color: '#0F172A' }}>{storeUpiId}</Text></Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFFFFF', padding: 6, borderRadius: 6, marginBottom: 8, borderWidth: 1, borderColor: '#E5DFE4' }}>
+                  <Text style={{ fontSize: 11, color: '#77717A' }}>UPI VPA: <Text style={{ fontWeight: '700', color: '#28242B' }}>{storeUpiId}</Text></Text>
                   <Pressable onPress={() => setIsEditingUpiId(!isEditingUpiId)}>
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#0D9488' }}>{isEditingUpiId ? 'Done' : 'Edit'}</Text>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#A66D86' }}>{isEditingUpiId ? 'Done' : 'Edit'}</Text>
                   </Pressable>
                 </View>
 
                 {isEditingUpiId && (
                   <TextInput
-                    style={{ borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 6, padding: 6, fontSize: 12, backgroundColor: '#FFFFFF', marginBottom: 8 }}
+                    style={{ borderWidth: 1, borderColor: '#E5DFE4', borderRadius: 6, padding: 6, fontSize: 12, backgroundColor: '#FFFFFF', marginBottom: 8 }}
                     value={storeUpiId}
                     onChangeText={setStoreUpiId}
                     placeholder="Enter UPI ID"
@@ -862,20 +862,20 @@ export default function PosBillingScreen({
 
                 <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6, marginBottom: 8 }}>
                   {['GPay', 'PhonePe', 'Paytm', 'BHIM', 'Any App'].map((app) => (
-                    <Text key={app} style={{ fontSize: 10, fontWeight: '700', color: '#475569', backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>{app}</Text>
+                    <Text key={app} style={{ fontSize: 10, fontWeight: '700', color: '#77717A', backgroundColor: '#F8F5F7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>{app}</Text>
                   ))}
                 </View>
 
                 <TextInput
-                  style={{ borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 6, paddingHorizontal: 10, height: 36, fontSize: 12, backgroundColor: '#FFFFFF', marginBottom: 6 }}
+                  style={{ borderWidth: 1, borderColor: '#E5DFE4', borderRadius: 6, paddingHorizontal: 10, height: 36, fontSize: 12, backgroundColor: '#FFFFFF', marginBottom: 6 }}
                   placeholder="Customer UTR / Ref No. (Optional)"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor="#77717A"
                   value={upiRefNumber}
                   onChangeText={setUpiRefNumber}
                   keyboardType="numeric"
                 />
 
-                <Text style={{ fontSize: 11, color: '#92400E', backgroundColor: '#FEF3C7', padding: 6, borderRadius: 6 }}>
+                <Text style={{ fontSize: 11, color: '#C49752', backgroundColor: '#F7F0E5', padding: 6, borderRadius: 6 }}>
                   💡 Customer scans QR code above. Once payment is received, click &apos;Complete Sale &amp; Print&apos;.
                 </Text>
               </View>
@@ -1005,7 +1005,7 @@ export default function PosBillingScreen({
                   value={`INVOICE:${completedInvoice.invoiceNo}|TOTAL:₹${completedInvoice.grandTotal}|DATE:${completedInvoice.date}`}
                   size={100}
                 />
-                <Text style={{ fontSize: 10, color: '#64748B', marginTop: 4 }}>Digital E-Invoice Verification</Text>
+                <Text style={{ fontSize: 10, color: '#77717A', marginTop: 4 }}>Digital E-Invoice Verification</Text>
               </View>
 
               <Text style={styles.receiptFooterNote}>
@@ -1113,7 +1113,7 @@ export default function PosBillingScreen({
               ))}
               {customersList.length === 0 && (
                 <View style={{ padding: 16, alignItems: 'center' }}>
-                  <Text style={{ color: '#94A3B8', fontSize: 13 }}>No customers registered yet</Text>
+                  <Text style={{ color: '#77717A', fontSize: 13 }}>No customers registered yet</Text>
                 </View>
               )}
             </ScrollView>
@@ -1136,7 +1136,7 @@ export default function PosBillingScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     height: "100%",
   },
   topBar: {
@@ -1147,7 +1147,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: "#E5DFE4",
   },
   topBarMobile: {
     flexDirection: "column",
@@ -1158,7 +1158,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: "#E5DFE4",
     paddingHorizontal: 8,
     paddingVertical: 4,
     gap: 8,
@@ -1169,26 +1169,26 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 8,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
   },
   mobileTabItemActive: {
-    backgroundColor: "#0F766E",
-    borderColor: "#0F766E",
+    backgroundColor: "#B9829A",
+    borderColor: "#B9829A",
   },
   mobileTabItemText: {
     fontSize: 12.5,
     fontWeight: "700",
-    color: "#475569",
+    color: "#77717A",
   },
   mobileTabItemTextActive: {
     color: "#FFFFFF",
   },
   mobileBackBtn: {
-    backgroundColor: "#F0FDFA",
+    backgroundColor: "#E8D5DD",
     borderWidth: 1,
-    borderColor: "#CCFBF1",
+    borderColor: "#E8D5DD",
     paddingVertical: 10,
     paddingHorizontal: 14,
     borderRadius: 8,
@@ -1198,21 +1198,21 @@ const styles = StyleSheet.create({
   mobileBackBtnText: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   mobileFloatingCart: {
     position: "absolute",
     bottom: 16,
     left: 16,
     right: 16,
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     borderRadius: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingVertical: 14,
     paddingHorizontal: 18,
-    shadowColor: "#000",
+    shadowColor: "#28242B",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 8,
@@ -1233,7 +1233,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   floatingCartBadgeText: {
-    color: "#0F766E",
+    color: "#B9829A",
     fontSize: 13,
     fontWeight: "800",
   },
@@ -1253,7 +1253,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   floatingCartArrow: {
-    color: "#CCFBF1",
+    color: "#E8D5DD",
     fontSize: 13,
     fontWeight: "700",
   },
@@ -1263,22 +1263,22 @@ const styles = StyleSheet.create({
   posTitle: {
     fontSize: 20,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   posSubtitle: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
   },
   customerSelectorBtn: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     cursor: "pointer",
   },
   customerBtnIcon: {
@@ -1287,15 +1287,15 @@ const styles = StyleSheet.create({
   customerBtnName: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   customerBtnPhone: {
     fontSize: 11,
-    color: "#64748B",
+    color: "#77717A",
   },
   customerSelectorArrow: {
     fontSize: 10,
-    color: "#64748B",
+    color: "#77717A",
   },
 
   // Layout Grid
@@ -1310,14 +1310,14 @@ const styles = StyleSheet.create({
     flex: 1.4,
     padding: 16,
     borderRightWidth: 1,
-    borderRightColor: "#E2E8F0",
+    borderRightColor: "#E5DFE4",
     backgroundColor: "#FFFFFF",
   },
   rightPane: {
     flex: 1,
     display: "flex",
     flexDirection: "column",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     padding: 16,
   },
 
@@ -1325,9 +1325,9 @@ const styles = StyleSheet.create({
   searchBarRow: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     paddingHorizontal: 12,
     height: 44,
@@ -1340,14 +1340,14 @@ const styles = StyleSheet.create({
   searchBarInput: {
     flex: 1,
     fontSize: 14,
-    color: "#0F172A",
+    color: "#28242B",
     outlineStyle: "none",
   },
   clearSearchBtn: {
     padding: 4,
   },
   clearSearchText: {
-    color: "#94A3B8",
+    color: "#77717A",
     fontSize: 14,
   },
 
@@ -1363,16 +1363,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     cursor: "pointer",
   },
   categoryChipActive: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
   },
   categoryChipText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#475569",
+    color: "#77717A",
   },
   categoryChipTextActive: {
     color: "#FFFFFF",
@@ -1394,14 +1394,14 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     padding: 12,
     cursor: "pointer",
     justifyContent: "space-between",
   },
   productCardHovered: {
-    borderColor: "#0F766E",
-    shadowColor: "#000",
+    borderColor: "#B9829A",
+    shadowColor: "#28242B",
     shadowOpacity: 0.05,
     shadowRadius: 6,
     elevation: 2,
@@ -1415,11 +1415,11 @@ const styles = StyleSheet.create({
   productName: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
     flex: 1,
   },
   gstTag: {
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -1427,11 +1427,11 @@ const styles = StyleSheet.create({
   gstTagText: {
     fontSize: 10,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
   },
   productGeneric: {
     fontSize: 11,
-    color: "#64748B",
+    color: "#77717A",
     marginBottom: 8,
   },
   productBatchRow: {
@@ -1441,38 +1441,38 @@ const styles = StyleSheet.create({
   },
   productMetaText: {
     fontSize: 10,
-    color: "#94A3B8",
+    color: "#77717A",
   },
   productCardBottom: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
+    borderTopColor: "#F8F5F7",
     paddingTop: 8,
   },
   productMrp: {
     fontSize: 10,
-    color: "#94A3B8",
+    color: "#77717A",
     textDecorationLine: "line-through",
   },
   productPrice: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   addBtnCircle: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: "#E6F4EA",
+    backgroundColor: "#EAF2EE",
     alignItems: "center",
     justifyContent: "center",
   },
   addBtnPlus: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#0F5C3E",
+    color: "#4F8A72",
   },
 
   // Cart
@@ -1485,14 +1485,14 @@ const styles = StyleSheet.create({
   cartTitle: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   clearCartBtn: {
     padding: 4,
   },
   clearCartText: {
     fontSize: 12,
-    color: "#DC2626",
+    color: "#B85C64",
     fontWeight: "600",
   },
   cartItemsScroll: {
@@ -1511,11 +1511,11 @@ const styles = StyleSheet.create({
   emptyCartTitle: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
   },
   emptyCartSub: {
     fontSize: 12,
-    color: "#94A3B8",
+    color: "#77717A",
   },
   cartItemRow: {
     flexDirection: "row",
@@ -1524,7 +1524,7 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     marginBottom: 8,
   },
   cartItemDetails: {
@@ -1533,15 +1533,15 @@ const styles = StyleSheet.create({
   cartItemName: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   cartItemMeta: {
     fontSize: 10,
-    color: "#64748B",
+    color: "#77717A",
   },
   cartItemPrice: {
     fontSize: 11,
-    color: "#0F766E",
+    color: "#B9829A",
     fontWeight: "600",
   },
   qtyControlsRow: {
@@ -1554,7 +1554,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 4,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     alignItems: "center",
     justifyContent: "center",
     cursor: "pointer",
@@ -1562,12 +1562,12 @@ const styles = StyleSheet.create({
   qtyBtnText: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#334155",
+    color: "#28242B",
   },
   qtyText: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
     minWidth: 18,
     textAlign: "center",
   },
@@ -1578,7 +1578,7 @@ const styles = StyleSheet.create({
   cartItemTotal: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
 
   // Bill Summary
@@ -1586,7 +1586,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     padding: 14,
     marginTop: 10,
   },
@@ -1597,19 +1597,19 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
   },
   summaryVal: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#0F172A",
+    color: "#28242B",
   },
   discountVal: {
-    color: "#B45309",
+    color: "#C49752",
   },
   summaryDivider: {
     height: 1,
-    backgroundColor: "#E2E8F0",
+    backgroundColor: "#E5DFE4",
     marginVertical: 8,
   },
   grandTotalRow: {
@@ -1621,12 +1621,12 @@ const styles = StyleSheet.create({
   grandTotalLabel: {
     fontSize: 14,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   grandTotalVal: {
     fontSize: 20,
     fontWeight: "900",
-    color: "#0F5C3E",
+    color: "#4F8A72",
   },
   cartActionButtonsRow: {
     flexDirection: "row",
@@ -1634,9 +1634,9 @@ const styles = StyleSheet.create({
   },
   holdBtn: {
     flex: 1,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     paddingVertical: 10,
     borderRadius: 8,
     alignItems: "center",
@@ -1645,11 +1645,11 @@ const styles = StyleSheet.create({
   holdBtnText: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#334155",
+    color: "#28242B",
   },
   checkoutBtn: {
     flex: 1.5,
-    backgroundColor: "#0F5C3E",
+    backgroundColor: "#4F8A72",
     paddingVertical: 10,
     borderRadius: 8,
     alignItems: "center",
@@ -1687,15 +1687,15 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   modalSubtitle: {
     fontSize: 13,
-    color: "#64748B",
+    color: "#77717A",
   },
   modalCloseBtnText: {
     fontSize: 18,
-    color: "#94A3B8",
+    color: "#77717A",
   },
   paymentMethodTabs: {
     flexDirection: "row",
@@ -1708,18 +1708,18 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
-    backgroundColor: "#F8FAFC",
+    borderColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
     cursor: "pointer",
   },
   payModeBtnActive: {
-    backgroundColor: "#0F5C3E",
-    borderColor: "#0F5C3E",
+    backgroundColor: "#4F8A72",
+    borderColor: "#4F8A72",
   },
   payModeBtnText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#475569",
+    color: "#77717A",
   },
   payModeBtnTextActive: {
     color: "#FFFFFF",
@@ -1731,12 +1731,12 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#1E293B",
+    color: "#28242B",
     marginBottom: 6,
   },
   currencyInputBox: {
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     paddingHorizontal: 12,
     height: 42,
@@ -1747,27 +1747,27 @@ const styles = StyleSheet.create({
   changeDueRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    backgroundColor: "#ECFDF5",
+    backgroundColor: "#EAF2EE",
     padding: 10,
     borderRadius: 6,
   },
   changeDueLabel: {
     fontSize: 13,
-    color: "#065F46",
+    color: "#4F8A72",
     fontWeight: "600",
   },
   changeDueValue: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#065F46",
+    color: "#4F8A72",
   },
   qrSectionBox: {
     alignItems: "center",
     padding: 24,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     marginBottom: 16,
   },
   qrIcon: {
@@ -1777,26 +1777,26 @@ const styles = StyleSheet.create({
   qrText: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   qrSubText: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
   },
   creditWarnBox: {
     padding: 14,
-    backgroundColor: "#EFF6FF",
+    backgroundColor: "#E8D5DD",
     borderRadius: 8,
     marginBottom: 16,
   },
   creditWarnTitle: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#1E40AF",
+    color: "#30243D",
   },
   creditWarnDesc: {
     fontSize: 12,
-    color: "#3B82F6",
+    color: "#B9829A",
     marginTop: 2,
   },
   modalFooterRow: {
@@ -1809,14 +1809,14 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
   },
   cancelBtnText: {
     fontSize: 13,
-    color: "#64748B",
+    color: "#77717A",
   },
   confirmPayBtn: {
-    backgroundColor: "#0F5C3E",
+    backgroundColor: "#4F8A72",
     paddingHorizontal: 18,
     paddingVertical: 8,
     borderRadius: 6,
@@ -1842,14 +1842,14 @@ const styles = StyleSheet.create({
   pharmacyName: {
     fontSize: 16,
     fontWeight: "900",
-    color: "#0F172A",
+    color: "#28242B",
   },
   pharmacyDetails: {
     fontSize: 11,
-    color: "#64748B",
+    color: "#77717A",
   },
   receiptDividerText: {
-    color: "#94A3B8",
+    color: "#77717A",
     marginVertical: 4,
   },
   receiptMetaRow: {
@@ -1858,7 +1858,7 @@ const styles = StyleSheet.create({
   },
   receiptMeta: {
     fontSize: 11,
-    color: "#475569",
+    color: "#77717A",
   },
   receiptItemsList: {
     gap: 4,
@@ -1869,12 +1869,12 @@ const styles = StyleSheet.create({
   },
   receiptItemName: {
     fontSize: 11,
-    color: "#0F172A",
+    color: "#28242B",
   },
   receiptItemAmount: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   receiptTotalRow: {
     flexDirection: "row",
@@ -1884,17 +1884,17 @@ const styles = StyleSheet.create({
   receiptTotalLabel: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   receiptTotalAmount: {
     fontSize: 15,
     fontWeight: "900",
-    color: "#0F5C3E",
+    color: "#4F8A72",
   },
   receiptFooterNote: {
     fontSize: 11,
     textAlign: "center",
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 6,
   },
   receiptActionsRow: {
@@ -1904,7 +1904,7 @@ const styles = StyleSheet.create({
   },
   printThermalBtn: {
     flex: 1,
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingVertical: 8,
     borderRadius: 6,
     alignItems: "center",
@@ -1919,11 +1919,11 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     alignItems: "center",
   },
   doneBtnText: {
-    color: "#334155",
+    color: "#28242B",
     fontWeight: "600",
     fontSize: 12,
   },
@@ -1941,7 +1941,7 @@ const styles = StyleSheet.create({
   },
   customerSearchInput: {
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     paddingHorizontal: 12,
     height: 40,
@@ -1949,18 +1949,18 @@ const styles = StyleSheet.create({
   },
   walkInOption: {
     padding: 12,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     borderRadius: 8,
     marginBottom: 10,
   },
   walkInTitle: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   walkInSub: {
     fontSize: 11,
-    color: "#64748B",
+    color: "#77717A",
   },
   customerOptionRow: {
     flexDirection: "row",
@@ -1968,20 +1968,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   custOptionName: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   custOptionMeta: {
     fontSize: 11,
-    color: "#64748B",
+    color: "#77717A",
   },
   custOptionCredit: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#B45309",
+    color: "#C49752",
   },
 });

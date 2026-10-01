@@ -502,21 +502,21 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
   const getRoleBadgeStyle = (role) => {
     switch (role) {
       case "Administrator":
-        return { bg: "#F0FDFA", border: "#99F6E4", text: "#0F766E" };
+        return { bg: "#E8D5DD", border: "#E8D5DD", text: "#B9829A" };
       case "Chief Pharmacist":
-        return { bg: "#EFF6FF", border: "#BFDBFE", text: "#1D4ED8" };
+        return { bg: "#E8D5DD", border: "#E8D5DD", text: "#A66D86" };
       case "Pharmacist":
-        return { bg: "#F0FDF4", border: "#BBF7D0", text: "#15803D" };
+        return { bg: "#EAF2EE", border: "#EAF2EE", text: "#4F8A72" };
       case "Store Manager":
-        return { bg: "#FFFBEB", border: "#FDE68A", text: "#B45309" };
+        return { bg: "#F7F0E5", border: "#F7F0E5", text: "#C49752" };
       case "Billing / Cashier":
-        return { bg: "#FAF5FF", border: "#E9D5FF", text: "#7E22CE" };
+        return { bg: "#E8D5DD", border: "#E8D5DD", text: "#A66D86" };
       case "Inventory Clerk":
-        return { bg: "#F8FAFC", border: "#E2E8F0", text: "#475569" };
+        return { bg: "#F8F5F7", border: "#E5DFE4", text: "#77717A" };
       case "Auditor / Compliance":
-        return { bg: "#F1F5F9", border: "#CBD5E1", text: "#334155" };
+        return { bg: "#F8F5F7", border: "#E5DFE4", text: "#28242B" };
       default:
-        return { bg: "#F1F5F9", border: "#E2E8F0", text: "#475569" };
+        return { bg: "#F8F5F7", border: "#E5DFE4", text: "#77717A" };
     }
   };
 
@@ -622,7 +622,7 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
           <TextInput
             style={styles.searchInput}
             placeholder="Search by staff name, employee ID, email, phone, or PCI license..."
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor="#77717A"
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
@@ -1860,7 +1860,7 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
   },
   contentContainer: {
     padding: 24,
@@ -1885,12 +1885,12 @@ const styles = StyleSheet.create({
   pageTitle: {
     fontSize: 22,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
     letterSpacing: -0.4,
   },
   pageSubtitle: {
     fontSize: 13,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 4,
     lineHeight: 18,
   },
@@ -1903,21 +1903,21 @@ const styles = StyleSheet.create({
   exportButton: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     paddingVertical: 9,
     paddingHorizontal: 14,
     borderRadius: 8,
     cursor: "pointer",
   },
   exportButtonText: {
-    color: "#334155",
+    color: "#28242B",
     fontSize: 13,
     fontWeight: "600",
   },
   addUserButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingVertical: 10,
     paddingHorizontal: 18,
     borderRadius: 8,
@@ -1951,7 +1951,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     padding: 16,
     marginBottom: 20,
     gap: 14,
@@ -1959,9 +1959,9 @@ const styles = StyleSheet.create({
   searchBox: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     paddingHorizontal: 12,
     height: 42,
@@ -1973,7 +1973,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 13,
-    color: "#0F172A",
+    color: "#28242B",
     outlineStyle: "none",
   },
   clearSearchBtn: {
@@ -1982,7 +1982,7 @@ const styles = StyleSheet.create({
   },
   clearSearchText: {
     fontSize: 14,
-    color: "#94A3B8",
+    color: "#77717A",
   },
   filterSection: {
     gap: 6,
@@ -1990,7 +1990,7 @@ const styles = StyleSheet.create({
   filterGroupLabel: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
     letterSpacing: 0.5,
   },
   filterPillsScroll: {
@@ -2002,16 +2002,16 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 6,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     cursor: "pointer",
   },
   filterPillSelected: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
   },
   filterPillText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#475569",
+    color: "#77717A",
   },
   filterPillTextSelected: {
     color: "#FFFFFF",
@@ -2032,22 +2032,22 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     paddingHorizontal: 10,
     borderRadius: 6,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     cursor: "pointer",
   },
   branchFilterPillSelected: {
-    backgroundColor: "#F0FDFA",
-    borderColor: "#0F766E",
+    backgroundColor: "#E8D5DD",
+    borderColor: "#B9829A",
   },
   branchFilterPillText: {
     fontSize: 11.5,
     fontWeight: "600",
-    color: "#475569",
+    color: "#77717A",
   },
   branchFilterPillTextSelected: {
-    color: "#0F766E",
+    color: "#B9829A",
     fontWeight: "700",
   },
   statusFilterSection: {
@@ -2055,7 +2055,7 @@ const styles = StyleSheet.create({
   },
   statusToggleGroup: {
     flexDirection: "row",
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     padding: 3,
     borderRadius: 8,
   },
@@ -2076,10 +2076,10 @@ const styles = StyleSheet.create({
   statusTogglePillText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#64748B",
+    color: "#77717A",
   },
   statusTogglePillTextSelected: {
-    color: "#0F766E",
+    color: "#B9829A",
     fontWeight: "700",
   },
   activeFilterNoticeRow: {
@@ -2088,20 +2088,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
+    borderTopColor: "#F8F5F7",
     flexWrap: "wrap",
     gap: 8,
   },
   activeFilterNoticeText: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
   },
   activeFilterHighlight: {
-    color: "#0F766E",
+    color: "#B9829A",
     fontWeight: "700",
   },
   resetFilterBtn: {
-    backgroundColor: "#FEE2E2",
+    backgroundColor: "#F7EDEE",
     paddingVertical: 3,
     paddingHorizontal: 8,
     borderRadius: 4,
@@ -2110,20 +2110,20 @@ const styles = StyleSheet.create({
   resetFilterBtnText: {
     fontSize: 11.5,
     fontWeight: "700",
-    color: "#B91C1C",
+    color: "#B85C64",
   },
   tableCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     overflow: "hidden",
   },
   tableHeaderSection: {
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   tableTitleRow: {
     flexDirection: "row",
@@ -2133,24 +2133,24 @@ const styles = StyleSheet.create({
   tableTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   countBadge: {
-    backgroundColor: "#F0FDFA",
+    backgroundColor: "#E8D5DD",
     paddingVertical: 2,
     paddingHorizontal: 8,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#99F6E4",
+    borderColor: "#E8D5DD",
   },
   countBadgeText: {
     fontSize: 11.5,
     fontWeight: "700",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   tableSubtitle: {
     fontSize: 12.5,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   tableWrapper: {
@@ -2158,16 +2158,16 @@ const styles = StyleSheet.create({
   },
   tableHeaderRow: {
     flexDirection: "row",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: "#E5DFE4",
     paddingVertical: 12,
     paddingHorizontal: 16,
   },
   thText: {
     fontSize: 11.5,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
@@ -2184,10 +2184,10 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   tableRowEven: {
-    backgroundColor: "#FAFCFF",
+    backgroundColor: "#F8F5F7",
   },
   userCell: {
     flexDirection: "row",
@@ -2212,15 +2212,15 @@ const styles = StyleSheet.create({
   userNameText: {
     fontSize: 13.5,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   userJoinedText: {
     fontSize: 11,
-    color: "#94A3B8",
+    color: "#77717A",
     marginTop: 2,
   },
   empIdBadge: {
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     paddingVertical: 3,
     paddingHorizontal: 7,
     borderRadius: 4,
@@ -2229,7 +2229,7 @@ const styles = StyleSheet.create({
   empIdText: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#334155",
+    color: "#28242B",
   },
   regNoPill: {
     marginTop: 3,
@@ -2237,7 +2237,7 @@ const styles = StyleSheet.create({
   },
   regNoText: {
     fontSize: 11,
-    color: "#0F766E",
+    color: "#B9829A",
     fontWeight: "600",
   },
   roleBadge: {
@@ -2253,17 +2253,17 @@ const styles = StyleSheet.create({
   },
   accessLevelText: {
     fontSize: 11,
-    color: "#94A3B8",
+    color: "#77717A",
     marginTop: 2,
   },
   branchNameText: {
     fontSize: 12.5,
     fontWeight: "600",
-    color: "#0F172A",
+    color: "#28242B",
     lineHeight: 16,
   },
   multiBranchBadge: {
-    backgroundColor: "#EFF6FF",
+    backgroundColor: "#E8D5DD",
     paddingVertical: 1,
     paddingHorizontal: 6,
     borderRadius: 4,
@@ -2272,17 +2272,17 @@ const styles = StyleSheet.create({
   },
   multiBranchBadgeText: {
     fontSize: 10.5,
-    color: "#2563EB",
+    color: "#B9829A",
     fontWeight: "600",
   },
   contactEmail: {
     fontSize: 12.5,
-    color: "#334155",
+    color: "#28242B",
     fontWeight: "500",
   },
   contactPhone: {
     fontSize: 11.5,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   /* Full-Fledged Interactive Toggle Switch Styles */
@@ -2308,10 +2308,10 @@ const styles = StyleSheet.create({
     }),
   },
   toggleTrackActive: {
-    backgroundColor: "#10B981",
+    backgroundColor: "#4F8A72",
   },
   toggleTrackInactive: {
-    backgroundColor: "#CBD5E1",
+    backgroundColor: "#E5DFE4",
   },
   toggleThumb: {
     width: 16,
@@ -2337,17 +2337,17 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   toggleLabelActive: {
-    color: "#059669",
+    color: "#4F8A72",
   },
   toggleLabelInactive: {
-    color: "#64748B",
+    color: "#77717A",
   },
   modalToggleCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     padding: 10,
     gap: 12,
@@ -2359,15 +2359,15 @@ const styles = StyleSheet.create({
   modalToggleMainText: {
     fontSize: 12.5,
     fontWeight: "700",
-    color: "#334155",
+    color: "#28242B",
   },
   modalToggleSubText: {
     fontSize: 11,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 1,
   },
   statusLabelActive: {
-    color: "#059669",
+    color: "#4F8A72",
   },
   statusBadge: {
     flexDirection: "row",
@@ -2380,10 +2380,10 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
   },
   statusBadgeActive: {
-    backgroundColor: "#DCFCE7",
+    backgroundColor: "#EAF2EE",
   },
   statusBadgeInactive: {
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
   },
   statusDot: {
     width: 6,
@@ -2391,27 +2391,27 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   statusDotActive: {
-    backgroundColor: "#16A34A",
+    backgroundColor: "#4F8A72",
   },
   statusDotInactive: {
-    backgroundColor: "#94A3B8",
+    backgroundColor: "#77717A",
   },
   statusText: {
     fontSize: 12,
     fontWeight: "700",
   },
   statusTextActive: {
-    color: "#15803D",
+    color: "#4F8A72",
   },
   statusTextInactive: {
-    color: "#64748B",
+    color: "#77717A",
   },
   actionsRow: {
     flexDirection: "row",
     gap: 6,
   },
   actionViewBtn: {
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     paddingVertical: 5,
     paddingHorizontal: 8,
     borderRadius: 6,
@@ -2420,12 +2420,12 @@ const styles = StyleSheet.create({
   actionViewBtnText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#334155",
+    color: "#28242B",
   },
   actionEditBtn: {
-    backgroundColor: "#F0FDFA",
+    backgroundColor: "#E8D5DD",
     borderWidth: 1,
-    borderColor: "#99F6E4",
+    borderColor: "#E8D5DD",
     paddingVertical: 5,
     paddingHorizontal: 8,
     borderRadius: 6,
@@ -2434,12 +2434,12 @@ const styles = StyleSheet.create({
   actionEditBtnText: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   actionInviteBtn: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     paddingVertical: 5,
     paddingHorizontal: 8,
     borderRadius: 6,
@@ -2448,7 +2448,7 @@ const styles = StyleSheet.create({
   actionInviteBtnText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#475569",
+    color: "#77717A",
   },
   emptyContainer: {
     padding: 40,
@@ -2462,31 +2462,31 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   emptySubtitle: {
     fontSize: 13,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 4,
     textAlign: "center",
     maxWidth: 400,
   },
   emptyResetButton: {
     marginTop: 16,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 8,
     cursor: "pointer",
   },
   emptyResetButtonText: {
-    color: "#0F766E",
+    color: "#B9829A",
     fontWeight: "700",
     fontSize: 13,
   },
   emptyAddButton: {
     marginTop: 16,
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingVertical: 8,
     paddingHorizontal: 18,
     borderRadius: 8,
@@ -2529,17 +2529,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingVertical: 18,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
-    backgroundColor: "#FAFCFF",
+    borderBottomColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
   },
   modalTitle: {
     fontSize: 17,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   modalSubtitle: {
     fontSize: 12.5,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   modalCloseButton: {
@@ -2548,7 +2548,7 @@ const styles = StyleSheet.create({
   },
   modalCloseText: {
     fontSize: 18,
-    color: "#64748B",
+    color: "#77717A",
     fontWeight: "700",
   },
   modalBodyScroll: {
@@ -2571,30 +2571,30 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 12.5,
     fontWeight: "600",
-    color: "#334155",
+    color: "#28242B",
     marginBottom: 6,
   },
   reqStar: {
-    color: "#DC2626",
+    color: "#B85C64",
   },
   formInput: {
     height: 40,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     paddingHorizontal: 12,
     fontSize: 13,
-    color: "#0F172A",
+    color: "#28242B",
     backgroundColor: "#FFFFFF",
     outlineStyle: "none",
   },
   formInputError: {
-    borderColor: "#DC2626",
-    backgroundColor: "#FEF2F2",
+    borderColor: "#B85C64",
+    backgroundColor: "#F7EDEE",
   },
   errorMsg: {
     fontSize: 11,
-    color: "#DC2626",
+    color: "#B85C64",
     marginTop: 3,
     fontWeight: "600",
   },
@@ -2607,16 +2607,16 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     paddingHorizontal: 12,
     borderRadius: 6,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     cursor: "pointer",
   },
   roleChipSelected: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
   },
   roleChipText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#475569",
+    color: "#77717A",
   },
   roleChipTextSelected: {
     color: "#FFFFFF",
@@ -2630,16 +2630,16 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
     width: "48%",
     minWidth: 220,
     flex: 1,
     cursor: "pointer",
   },
   branchSelectCardSelected: {
-    borderColor: "#0F766E",
-    backgroundColor: "#F0FDFA",
+    borderColor: "#B9829A",
+    backgroundColor: "#E8D5DD",
   },
   branchCardHeaderRow: {
     flexDirection: "row",
@@ -2649,17 +2649,17 @@ const styles = StyleSheet.create({
   branchSelectName: {
     fontSize: 12.5,
     fontWeight: "700",
-    color: "#334155",
+    color: "#28242B",
     flex: 1,
   },
   branchSelectNameSelected: {
-    color: "#0F766E",
+    color: "#B9829A",
   },
   primaryCheckDot: {
     width: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     alignItems: "center",
     justifyContent: "center",
     marginLeft: 6,
@@ -2671,7 +2671,7 @@ const styles = StyleSheet.create({
   },
   branchSelectCode: {
     fontSize: 11,
-    color: "#94A3B8",
+    color: "#77717A",
     marginTop: 2,
   },
   multiBranchGrid: {
@@ -2686,29 +2686,29 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 6,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     cursor: "pointer",
     maxWidth: "48%",
     minWidth: 200,
   },
   multiBranchCheckChipSelected: {
-    backgroundColor: "#EFF6FF",
-    borderColor: "#93C5FD",
+    backgroundColor: "#E8D5DD",
+    borderColor: "#E8D5DD",
   },
   multiBranchCheckIcon: {
     fontSize: 13,
-    color: "#2563EB",
+    color: "#B9829A",
   },
   multiBranchCheckText: {
     fontSize: 11.5,
-    color: "#475569",
+    color: "#77717A",
     fontWeight: "500",
     flex: 1,
   },
   multiBranchCheckTextSelected: {
-    color: "#1D4ED8",
+    color: "#A66D86",
     fontWeight: "600",
   },
   statusToggleRow: {
@@ -2721,38 +2721,38 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 6,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     cursor: "pointer",
   },
   statusSelectPillActive: {
-    backgroundColor: "#DCFCE7",
+    backgroundColor: "#EAF2EE",
     borderWidth: 1,
-    borderColor: "#86EFAC",
+    borderColor: "#EAF2EE",
   },
   statusSelectPillInactive: {
-    backgroundColor: "#FEE2E2",
+    backgroundColor: "#F7EDEE",
     borderWidth: 1,
-    borderColor: "#FCA5A5",
+    borderColor: "#F7EDEE",
   },
   statusSelectText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#64748B",
+    color: "#77717A",
   },
   statusSelectTextActive: {
-    color: "#15803D",
+    color: "#4F8A72",
     fontWeight: "700",
   },
   statusSelectTextInactive: {
-    color: "#B91C1C",
+    color: "#B85C64",
     fontWeight: "700",
   },
   inviteToggleBox: {
     flexDirection: "row",
     alignItems: "flex-start",
-    backgroundColor: "#F0FDFA",
+    backgroundColor: "#E8D5DD",
     borderWidth: 1,
-    borderColor: "#99F6E4",
+    borderColor: "#E8D5DD",
     padding: 12,
     borderRadius: 8,
     gap: 10,
@@ -2760,7 +2760,7 @@ const styles = StyleSheet.create({
   },
   inviteToggleCheckbox: {
     fontSize: 16,
-    color: "#0F766E",
+    color: "#B9829A",
   },
   inviteToggleTextWrapper: {
     flex: 1,
@@ -2768,11 +2768,11 @@ const styles = StyleSheet.create({
   inviteToggleTitle: {
     fontSize: 12.5,
     fontWeight: "700",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   inviteToggleSubtitle: {
     fontSize: 11.5,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   modalFooter: {
@@ -2782,8 +2782,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingVertical: 14,
     borderTopWidth: 1,
-    borderTopColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderTopColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
     gap: 12,
   },
   modalCancelButton: {
@@ -2791,20 +2791,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     backgroundColor: "#FFFFFF",
     cursor: "pointer",
   },
   modalCancelText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#475569",
+    color: "#77717A",
   },
   modalSaveButton: {
     paddingVertical: 9,
     paddingHorizontal: 22,
     borderRadius: 8,
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     cursor: "pointer",
   },
   modalSaveText: {
@@ -2827,8 +2827,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingVertical: 18,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
-    backgroundColor: "#FAFCFF",
+    borderBottomColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
   },
   detailHeaderLeft: {
     flexDirection: "row",
@@ -2851,7 +2851,7 @@ const styles = StyleSheet.create({
   detailTitle: {
     fontSize: 17,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   detailSubtitleRow: {
     flexDirection: "row",
@@ -2863,7 +2863,7 @@ const styles = StyleSheet.create({
   detailEmpIdText: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
   },
   detailBodyScroll: {
     paddingHorizontal: 22,
@@ -2873,9 +2873,9 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   detailSectionCard: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 10,
     padding: 14,
     gap: 8,
@@ -2883,10 +2883,10 @@ const styles = StyleSheet.create({
   detailSectionTitle: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
     marginBottom: 4,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: "#E5DFE4",
     paddingBottom: 6,
   },
   detailRow: {
@@ -2898,20 +2898,20 @@ const styles = StyleSheet.create({
   detailLabel: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#64748B",
+    color: "#77717A",
     minWidth: 140,
   },
   detailValue: {
     fontSize: 12.5,
     fontWeight: "600",
-    color: "#0F172A",
+    color: "#28242B",
     flex: 1,
     textAlign: "right",
   },
   detailValueHighlight: {
     fontSize: 12.5,
     fontWeight: "700",
-    color: "#0F766E",
+    color: "#B9829A",
     flex: 1,
     textAlign: "right",
   },
@@ -2926,7 +2926,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     paddingVertical: 4,
     paddingHorizontal: 8,
     borderRadius: 6,
@@ -2934,12 +2934,12 @@ const styles = StyleSheet.create({
   },
   permissionTagCheck: {
     fontSize: 10,
-    color: "#16A34A",
+    color: "#4F8A72",
     fontWeight: "800",
   },
   permissionTagText: {
     fontSize: 11.5,
-    color: "#334155",
+    color: "#28242B",
     fontWeight: "600",
   },
   modalStatusToggleBtn: {
@@ -2950,17 +2950,17 @@ const styles = StyleSheet.create({
     cursor: "pointer",
   },
   modalStatusToggleBtnInactive: {
-    backgroundColor: "#FEF2F2",
-    borderColor: "#FCA5A5",
+    backgroundColor: "#F7EDEE",
+    borderColor: "#F7EDEE",
   },
   modalStatusToggleBtnActive: {
-    backgroundColor: "#F0FDF4",
-    borderColor: "#86EFAC",
+    backgroundColor: "#EAF2EE",
+    borderColor: "#EAF2EE",
   },
   modalStatusToggleBtnText: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#334155",
+    color: "#28242B",
   },
   // Mobile Staff Member KPI Cards
   mobileStaffList: {
@@ -2970,7 +2970,7 @@ const styles = StyleSheet.create({
   mobileStaffCard: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 12,
     padding: 14,
     ...Platform.select({
@@ -2992,7 +2992,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   mobileStaffInfoBox: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderRadius: 8,
     padding: 10,
     marginBottom: 10,
@@ -3000,7 +3000,7 @@ const styles = StyleSheet.create({
   mobileStaffInfoLabel: {
     fontSize: 10,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
     marginBottom: 2,
     letterSpacing: 0.3,
   },
@@ -3009,7 +3009,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
+    borderTopColor: "#F8F5F7",
     paddingTop: 10,
   },
 });

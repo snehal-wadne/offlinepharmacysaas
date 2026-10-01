@@ -14,7 +14,7 @@
 export function exportToCSV(headers, rows, filename) {
   // Convert headers to CSV line
   const csvHeaders = headers.map(h => `"${h.replace(/"/g, '""')}"`).join(',');
-  
+
   // Convert rows to CSV lines
   const csvRows = rows.map(row => 
     row.map(val => {
@@ -26,10 +26,10 @@ export function exportToCSV(headers, rows, filename) {
       return `"${stringVal.replace(/"/g, '""')}"`;
     }).join(',')
   );
-  
+
   const csvContent = '\uFEFF' + [csvHeaders, ...csvRows].join('\n'); // Add BOM for UTF-8 compatibility in Excel
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  
+
   if (typeof window !== 'undefined') {
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
@@ -73,7 +73,7 @@ export function exportToPDF(title, subtitle, headers, rows, filename) {
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         body {
           font-family: 'Inter', sans-serif;
-          color: #1e293b;
+          color: #28242B;
           margin: 0;
           padding: 24px;
           background-color: #ffffff;
@@ -83,10 +83,10 @@ export function exportToPDF(title, subtitle, headers, rows, filename) {
           justify-content: flex-end;
           gap: 10px;
           margin-bottom: 20px;
-          background: #f8fafc;
+          background: #F8F5F7;
           padding: 10px 14px;
           border-radius: 8px;
-          border: 1px solid #e2e8f0;
+          border: 1px solid #E5DFE4;
         }
         .btn {
           padding: 8px 14px;
@@ -96,10 +96,10 @@ export function exportToPDF(title, subtitle, headers, rows, filename) {
           cursor: pointer;
           border: none;
         }
-        .btn-print { background-color: #0d9488; color: #ffffff; }
-        .btn-close { background-color: #e2e8f0; color: #334155; }
+        .btn-print { background-color: #A66D86; color: #ffffff; }
+        .btn-close { background-color: #E5DFE4; color: #28242B; }
         .header {
-          border-bottom: 2px solid #e2e8f0;
+          border-bottom: 2px solid #E5DFE4;
           padding-bottom: 16px;
           margin-bottom: 20px;
         }
@@ -113,12 +113,12 @@ export function exportToPDF(title, subtitle, headers, rows, filename) {
         .title {
           font-size: 22px;
           font-weight: 800;
-          color: #0f172a;
+          color: #28242B;
           margin: 0 0 4px 0;
         }
         .subtitle {
           font-size: 13px;
-          color: #64748b;
+          color: #77717A;
           margin: 0;
           max-width: 600px;
           line-height: 1.4;
@@ -126,16 +126,16 @@ export function exportToPDF(title, subtitle, headers, rows, filename) {
         .meta-info {
           text-align: right;
           font-size: 11.5px;
-          color: #64748b;
+          color: #77717A;
           line-height: 1.5;
         }
         .meta-label {
           font-weight: 600;
-          color: #475569;
+          color: #77717A;
         }
         .logo {
           font-weight: 800;
-          color: #167c68;
+          color: #B9829A;
           font-size: 16px;
           margin-bottom: 4px;
         }
@@ -149,24 +149,24 @@ export function exportToPDF(title, subtitle, headers, rows, filename) {
           margin-top: 10px;
         }
         th {
-          background-color: #f1f5f9;
-          color: #475569;
+          background-color: #F8F5F7;
+          color: #77717A;
           font-weight: 700;
           font-size: 11px;
           text-transform: uppercase;
           letter-spacing: 0.5px;
           text-align: left;
           padding: 10px 12px;
-          border-bottom: 2px solid #e2e8f0;
+          border-bottom: 2px solid #E5DFE4;
         }
         td {
           padding: 10px 12px;
           font-size: 12.5px;
-          border-bottom: 1px solid #e2e8f0;
-          color: #334155;
+          border-bottom: 1px solid #E5DFE4;
+          color: #28242B;
         }
         tr:nth-child(even) td {
-          background-color: #f8fafc;
+          background-color: #F8F5F7;
         }
         .text-center { text-align: center; }
         .text-right { text-align: right; }
@@ -179,14 +179,14 @@ export function exportToPDF(title, subtitle, headers, rows, filename) {
           font-weight: 700;
           text-align: center;
         }
-        .badge-optimal { background-color: #dcfce7; color: #15803d; }
-        .badge-moderate { background-color: #fef3c7; color: #b45309; }
-        .badge-slow { background-color: #fee2e2; color: #b91c1c; }
-        .badge-critical { background-color: #fee2e2; color: #b91c1c; }
-        .badge-high { background-color: #fee2e2; color: #b91c1c; }
-        .badge-medium { background-color: #fef3c7; color: #b45309; }
-        .badge-low { background-color: #dcfce7; color: #15803d; }
-        .badge-expired { background-color: #fee2e2; color: #b91c1c; }
+        .badge-optimal { background-color: #EAF2EE; color: #4F8A72; }
+        .badge-moderate { background-color: #F7F0E5; color: #C49752; }
+        .badge-slow { background-color: #F7EDEE; color: #B85C64; }
+        .badge-critical { background-color: #F7EDEE; color: #B85C64; }
+        .badge-high { background-color: #F7EDEE; color: #B85C64; }
+        .badge-medium { background-color: #F7F0E5; color: #C49752; }
+        .badge-low { background-color: #EAF2EE; color: #4F8A72; }
+        .badge-expired { background-color: #F7EDEE; color: #B85C64; }
         @media screen and (max-width: 768px) {
           body { padding: 12px; }
           .title { font-size: 18px; }
@@ -232,15 +232,15 @@ export function exportToPDF(title, subtitle, headers, rows, filename) {
                 ${row.map((cell, cellIdx) => {
                   let cellClass = '';
                   const header = (headers[cellIdx] || '').toUpperCase();
-                  
+
                   if (header.includes('COUNT') || header.includes('POS') || header.includes('RATE') || header.includes('SCORE') || header.includes('DAYS') || header.includes('QUANTITY') || header.includes('BATCH') || header.includes('DATE')) {
                     cellClass = 'text-center';
                   } else if (header.includes('VALUATION') || header.includes('SPENT') || header.includes('REVENUE') || header.includes('VALUE') || header.includes('COST')) {
                     cellClass = 'text-right font-semibold';
                   }
-                  
+
                   const stringVal = cell === null || cell === undefined ? '' : String(cell);
-                  
+
                   if (header.includes('HEALTH') || header.includes('URGENCY') || header.includes('LEVEL') || header.includes('RISK')) {
                     let badgeClass = 'badge';
                     const valLower = stringVal.toLowerCase();
@@ -332,14 +332,14 @@ export function exportTaxInvoice(po) {
   const orderDate = po?.orderDate || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
   const medicine = po?.medicine || 'Paracetamol 500mg (Box of 100)';
   const qty = Number(po?.itemsCount || po?.quantity || 10);
-  
+
   // Calculate price and tax
   let subtotal = 0;
   let taxRateNum = 12;
   if (po?.taxRate) {
     taxRateNum = parseFloat(String(po.taxRate).replace('%', '')) || 12;
   }
-  
+
   if (po?.subtotal) {
     subtotal = Number(po.subtotal);
   } else if (po?.numericAmount) {
@@ -365,7 +365,7 @@ export function exportTaxInvoice(po) {
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         body {
           font-family: 'Inter', sans-serif;
-          color: #0f172a;
+          color: #28242B;
           margin: 0;
           padding: 20px;
           background-color: #ffffff;
@@ -375,10 +375,10 @@ export function exportTaxInvoice(po) {
           justify-content: flex-end;
           gap: 12px;
           margin-bottom: 20px;
-          background: #f8fafc;
+          background: #F8F5F7;
           padding: 12px 16px;
           border-radius: 8px;
-          border: 1px solid #e2e8f0;
+          border: 1px solid #E5DFE4;
         }
         .btn {
           padding: 8px 16px;
@@ -389,15 +389,15 @@ export function exportTaxInvoice(po) {
           border: none;
         }
         .btn-print {
-          background-color: #0d9488;
+          background-color: #A66D86;
           color: #ffffff;
         }
         .btn-close {
-          background-color: #e2e8f0;
-          color: #334155;
+          background-color: #E5DFE4;
+          color: #28242B;
         }
         .invoice-card {
-          border: 1.5px solid #cbd5e1;
+          border: 1.5px solid #E5DFE4;
           border-radius: 8px;
           padding: 28px;
           max-width: 850px;
@@ -406,18 +406,18 @@ export function exportTaxInvoice(po) {
         .invoice-header {
           display: flex;
           justify-content: space-between;
-          border-bottom: 2px solid #0f766e;
+          border-bottom: 2px solid #B9829A;
           padding-bottom: 16px;
           margin-bottom: 20px;
         }
         .company-name {
           font-size: 22px;
           font-weight: 800;
-          color: #0f766e;
+          color: #B9829A;
         }
         .company-sub {
           font-size: 11.5px;
-          color: #64748b;
+          color: #77717A;
           line-height: 1.5;
           margin-top: 4px;
         }
@@ -427,13 +427,13 @@ export function exportTaxInvoice(po) {
         .invoice-title {
           font-size: 20px;
           font-weight: 800;
-          color: #0f172a;
+          color: #28242B;
           letter-spacing: 0.5px;
         }
         .invoice-badge {
           display: inline-block;
-          background-color: #ccfbf1;
-          color: #0f766e;
+          background-color: #E8D5DD;
+          color: #B9829A;
           padding: 3px 8px;
           border-radius: 4px;
           font-size: 11px;
@@ -448,19 +448,19 @@ export function exportTaxInvoice(po) {
           font-size: 12px;
         }
         .box {
-          border: 1px solid #e2e8f0;
+          border: 1px solid #E5DFE4;
           border-radius: 6px;
           padding: 12px;
-          background: #fcfcfd;
+          background: #F8F5F7;
         }
         .box-title {
           font-weight: 700;
-          color: #475569;
+          color: #77717A;
           text-transform: uppercase;
           font-size: 10.5px;
           letter-spacing: 0.5px;
           margin-bottom: 6px;
-          border-bottom: 1px dashed #e2e8f0;
+          border-bottom: 1px dashed #E5DFE4;
           padding-bottom: 4px;
         }
         table {
@@ -470,16 +470,16 @@ export function exportTaxInvoice(po) {
           font-size: 12px;
         }
         th {
-          background-color: #f1f5f9;
-          color: #334155;
+          background-color: #F8F5F7;
+          color: #28242B;
           font-weight: 700;
           padding: 10px 12px;
           text-align: left;
-          border: 1px solid #cbd5e1;
+          border: 1px solid #E5DFE4;
         }
         td {
           padding: 10px 12px;
-          border: 1px solid #cbd5e1;
+          border: 1px solid #E5DFE4;
         }
         .text-right { text-align: right; }
         .text-center { text-align: center; }
@@ -496,16 +496,16 @@ export function exportTaxInvoice(po) {
         .totals-table tr.grand-row td {
           font-size: 14px;
           font-weight: 800;
-          color: #0f766e;
-          border-top: 2px solid #0f766e;
-          border-bottom: 2px solid #0f766e;
+          color: #B9829A;
+          border-top: 2px solid #B9829A;
+          border-bottom: 2px solid #B9829A;
         }
         .footer-note {
           margin-top: 24px;
           padding-top: 14px;
-          border-top: 1px solid #e2e8f0;
+          border-top: 1px solid #E5DFE4;
           font-size: 11px;
-          color: #64748b;
+          color: #77717A;
           display: flex;
           justify-content: space-between;
           align-items: flex-end;
@@ -515,7 +515,7 @@ export function exportTaxInvoice(po) {
           width: 180px;
         }
         .sign-line {
-          border-top: 1px solid #94a3b8;
+          border-top: 1px solid #77717A;
           margin-top: 40px;
           padding-top: 4px;
           font-weight: 600;
@@ -523,7 +523,7 @@ export function exportTaxInvoice(po) {
         }
         @media screen and (max-width: 768px) {
           body { padding: 10px; }
-          .invoice-card { padding: 14px; border: 1px solid #cbd5e1; }
+          .invoice-card { padding: 14px; border: 1px solid #E5DFE4; }
           .invoice-header { flex-direction: column; gap: 12px; }
           .invoice-title-block { text-align: left; }
           .grid-2 { grid-template-columns: 1fr; gap: 10px; }
@@ -558,7 +558,7 @@ export function exportTaxInvoice(po) {
           <div class="invoice-title-block">
             <div class="invoice-title">TAX INVOICE</div>
             <div class="invoice-badge">INPUT TAX CREDIT (ITC) ELIGIBLE</div>
-            <div style="margin-top: 8px; font-size: 12px; color: #475569;">
+            <div style="margin-top: 8px; font-size: 12px; color: #77717A;">
               <strong>Invoice #:</strong> ${poId}<br/>
               <strong>Date:</strong> ${orderDate}<br/>
               <strong>Payment:</strong> Credit / Bank Transfer
@@ -569,8 +569,8 @@ export function exportTaxInvoice(po) {
         <div class="grid-2">
           <div class="box">
             <div class="box-title">Vendor / Supplier (Billed By)</div>
-            <div style="font-size: 13px; font-weight: 700; color: #0f172a; margin-bottom: 3px;">${supplierName}</div>
-            <div style="color: #475569; line-height: 1.5;">
+            <div style="font-size: 13px; font-weight: 700; color: #28242B; margin-bottom: 3px;">${supplierName}</div>
+            <div style="color: #77717A; line-height: 1.5;">
               Authorized Pharma Distributor & Wholesaler<br/>
               GSTIN: 27AATCS9982Q1Z4 • PAN: AATCS9982Q<br/>
               State: Maharashtra (Code 27)
@@ -579,8 +579,8 @@ export function exportTaxInvoice(po) {
 
           <div class="box">
             <div class="box-title">Buyer / Consignee (Delivered To)</div>
-            <div style="font-size: 13px; font-weight: 700; color: #0f172a; margin-bottom: 3px;">PharmaFlow Pharmacy - ${po?.branch || 'Main Branch'}</div>
-            <div style="color: #475569; line-height: 1.5;">
+            <div style="font-size: 13px; font-weight: 700; color: #28242B; margin-bottom: 3px;">PharmaFlow Pharmacy - ${po?.branch || 'Main Branch'}</div>
+            <div style="color: #77717A; line-height: 1.5;">
               Central Store Pharmacy Inward Section<br/>
               GSTIN: 27AABCP1234F1Z9<br/>
               Place of Supply: Maharashtra (Code 27)
@@ -606,7 +606,7 @@ export function exportTaxInvoice(po) {
               <td class="text-center">1</td>
               <td>
                 <strong>${medicine}</strong><br/>
-                <span style="font-size: 11px; color: #64748b;">Batch: PR-${poId.slice(-4)} • Exp: Dec 2028</span>
+                <span style="font-size: 11px; color: #77717A;">Batch: PR-${poId.slice(-4)} • Exp: Dec 2028</span>
               </td>
               <td class="text-center">300490</td>
               <td class="text-center"><strong>${qty}</strong></td>
@@ -619,7 +619,7 @@ export function exportTaxInvoice(po) {
         </table>
 
         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-top: 14px;">
-          <div style="font-size: 11px; color: #475569; max-width: 420px; line-height: 1.5;">
+          <div style="font-size: 11px; color: #77717A; max-width: 420px; line-height: 1.5;">
             <strong>Tax Breakdown:</strong><br/>
             • CGST (${(taxRateNum / 2).toFixed(1)}%): ₹${cgstAmount}<br/>
             • SGST (${(taxRateNum / 2).toFixed(1)}%): ₹${sgstAmount}<br/>
@@ -709,7 +709,7 @@ export function exportCustomerLedgerStatement(account, statementRows = []) {
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         body {
           font-family: 'Inter', sans-serif;
-          color: #0f172a;
+          color: #28242B;
           margin: 0;
           padding: 20px;
           background-color: #ffffff;
@@ -719,10 +719,10 @@ export function exportCustomerLedgerStatement(account, statementRows = []) {
           justify-content: flex-end;
           gap: 12px;
           margin-bottom: 20px;
-          background: #f8fafc;
+          background: #F8F5F7;
           padding: 10px 14px;
           border-radius: 8px;
-          border: 1px solid #e2e8f0;
+          border: 1px solid #E5DFE4;
         }
         .btn {
           padding: 8px 14px;
@@ -732,10 +732,10 @@ export function exportCustomerLedgerStatement(account, statementRows = []) {
           cursor: pointer;
           border: none;
         }
-        .btn-print { background-color: #0d9488; color: #ffffff; }
-        .btn-close { background-color: #e2e8f0; color: #334155; }
+        .btn-print { background-color: #A66D86; color: #ffffff; }
+        .btn-close { background-color: #E5DFE4; color: #28242B; }
         .statement-card {
-          border: 1.5px solid #cbd5e1;
+          border: 1.5px solid #E5DFE4;
           border-radius: 8px;
           padding: 24px;
           max-width: 850px;
@@ -744,12 +744,12 @@ export function exportCustomerLedgerStatement(account, statementRows = []) {
         .header {
           display: flex;
           justify-content: space-between;
-          border-bottom: 2px solid #0f766e;
+          border-bottom: 2px solid #B9829A;
           padding-bottom: 16px;
           margin-bottom: 20px;
         }
-        .company-name { font-size: 20px; font-weight: 800; color: #0f766e; }
-        .company-sub { font-size: 11px; color: #64748b; margin-top: 4px; }
+        .company-name { font-size: 20px; font-weight: 800; color: #B9829A; }
+        .company-sub { font-size: 11px; color: #77717A; margin-top: 4px; }
         .kpi-row {
           display: grid;
           grid-template-columns: repeat(4, 1fr);
@@ -757,14 +757,14 @@ export function exportCustomerLedgerStatement(account, statementRows = []) {
           margin-bottom: 18px;
         }
         .kpi-card {
-          border: 1px solid #e2e8f0;
+          border: 1px solid #E5DFE4;
           border-radius: 6px;
           padding: 8px;
-          background: #f8fafc;
+          background: #F8F5F7;
           text-align: center;
         }
-        .kpi-label { font-size: 10px; font-weight: 600; color: #64748b; }
-        .kpi-val { font-size: 15px; font-weight: 800; color: #0f172a; margin-top: 2px; }
+        .kpi-label { font-size: 10px; font-weight: 600; color: #77717A; }
+        .kpi-val { font-size: 15px; font-weight: 800; color: #28242B; margin-top: 2px; }
         table {
           width: 100%;
           border-collapse: collapse;
@@ -772,33 +772,33 @@ export function exportCustomerLedgerStatement(account, statementRows = []) {
           font-size: 12px;
         }
         th {
-          background-color: #f1f5f9;
-          color: #334155;
+          background-color: #F8F5F7;
+          color: #28242B;
           font-weight: 700;
           padding: 8px 6px;
-          border: 1px solid #cbd5e1;
+          border: 1px solid #E5DFE4;
           text-align: left;
         }
         td {
           padding: 8px 6px;
-          border: 1px solid #e2e8f0;
+          border: 1px solid #E5DFE4;
         }
         .text-right { text-align: right; }
         .text-center { text-align: center; }
-        .debit { color: #dc2626; font-weight: 700; }
-        .credit { color: #16a34a; font-weight: 700; }
+        .debit { color: #B85C64; font-weight: 700; }
+        .credit { color: #4F8A72; font-weight: 700; }
         .footer-box {
           margin-top: 20px;
           padding-top: 14px;
-          border-top: 1px solid #e2e8f0;
+          border-top: 1px solid #E5DFE4;
           display: flex;
           justify-content: space-between;
           font-size: 11px;
-          color: #64748b;
+          color: #77717A;
         }
         @media screen and (max-width: 768px) {
           body { padding: 10px; }
-          .statement-card { padding: 12px; border: 1px solid #cbd5e1; }
+          .statement-card { padding: 12px; border: 1px solid #E5DFE4; }
           .header { flex-direction: column; gap: 10px; }
           .kpi-row { grid-template-columns: 1fr 1fr; gap: 8px; }
           table { display: block; overflow-x: auto; width: 100%; }
@@ -824,12 +824,12 @@ export function exportCustomerLedgerStatement(account, statementRows = []) {
             <div class="company-sub">Patient Credit Ledger (Khata) Statement • RX-06<br/>GSTIN: 27AABCP1234F1Z9 • Main Branch</div>
           </div>
           <div style="text-align: right;">
-            <div style="font-size: 18px; font-weight: 800; color: #0f172a;">ACCOUNT STATEMENT</div>
-            <div style="font-size: 12px; color: #64748b; margin-top: 4px;">Statement Date: ${dateStr}</div>
+            <div style="font-size: 18px; font-weight: 800; color: #28242B;">ACCOUNT STATEMENT</div>
+            <div style="font-size: 12px; color: #77717A; margin-top: 4px;">Statement Date: ${dateStr}</div>
           </div>
         </div>
 
-        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin-bottom: 16px; font-size: 12.5px;">
+        <div style="background: #F8F5F7; border: 1px solid #E5DFE4; border-radius: 6px; padding: 12px; margin-bottom: 16px; font-size: 12.5px;">
           <div style="display: flex; justify-content: space-between;">
             <div>
               <strong>Patient Name:</strong> ${custName} (${custId})<br/>
@@ -837,7 +837,7 @@ export function exportCustomerLedgerStatement(account, statementRows = []) {
               <strong>Branch:</strong> ${account.branch || 'Main Branch'}
             </div>
             <div style="text-align: right;">
-              <strong>Credit Status:</strong> <span style="color: ${status === 'Healthy' ? '#16a34a' : '#dc2626'}; font-weight: 700;">${status}</span><br/>
+              <strong>Credit Status:</strong> <span style="color: ${status === 'Healthy' ? '#4F8A72' : '#B85C64'}; font-weight: 700;">${status}</span><br/>
               <strong>Aging Bucket:</strong> ${agingBucket}<br/>
               <strong>Last Payment:</strong> ${account.lastPaymentDate || 'N/A'} (${account.lastPaymentAmount || '₹0.00'})
             </div>
@@ -851,15 +851,15 @@ export function exportCustomerLedgerStatement(account, statementRows = []) {
           </div>
           <div class="kpi-card">
             <div class="kpi-label">CURRENT OUTSTANDING</div>
-            <div class="kpi-val" style="color: #dc2626;">${currentBalance}</div>
+            <div class="kpi-val" style="color: #B85C64;">${currentBalance}</div>
           </div>
           <div class="kpi-card">
             <div class="kpi-label">LIMIT UTILIZATION</div>
-            <div class="kpi-val" style="color: #2563eb;">${account.utilizationPercent || account.utilizationPct || '62%'}</div>
+            <div class="kpi-val" style="color: #B9829A;">${account.utilizationPercent || account.utilizationPct || '62%'}</div>
           </div>
           <div class="kpi-card">
             <div class="kpi-label">SETTLEMENT STATUS</div>
-            <div class="kpi-val" style="color: #0f766e;">${agingBucket}</div>
+            <div class="kpi-val" style="color: #B9829A;">${agingBucket}</div>
           </div>
         </div>
 
@@ -897,7 +897,7 @@ export function exportCustomerLedgerStatement(account, statementRows = []) {
             • For dues clearance via UPI, please quote account ID ${custId}.
           </div>
           <div style="text-align: center; width: 160px;">
-            <div style="border-top: 1px solid #94a3b8; margin-top: 30px; padding-top: 4px; font-weight: 600;">
+            <div style="border-top: 1px solid #77717A; margin-top: 30px; padding-top: 4px; font-weight: 600;">
               Authorized Signature
             </div>
           </div>
@@ -941,10 +941,10 @@ export function printPaymentReceipt(receipt) {
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Courier+Prime:wght@400;700&display=swap');
         body {
           font-family: 'Inter', sans-serif;
-          color: #0f172a;
+          color: #28242B;
           margin: 0;
           padding: 16px;
-          background-color: #f8fafc;
+          background-color: #F8F5F7;
         }
         .toolbar {
           display: flex;
@@ -962,10 +962,10 @@ export function printPaymentReceipt(receipt) {
           cursor: pointer;
           border: none;
         }
-        .btn-print { background-color: #0d9488; color: #ffffff; }
-        .btn-close { background-color: #e2e8f0; color: #334155; }
+        .btn-print { background-color: #A66D86; color: #ffffff; }
+        .btn-close { background-color: #E5DFE4; color: #28242B; }
         .receipt-card {
-          border: 1.5px dashed #0f766e;
+          border: 1.5px dashed #B9829A;
           border-radius: 10px;
           padding: 24px;
           max-width: 440px;
@@ -974,13 +974,13 @@ export function printPaymentReceipt(receipt) {
           box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
         }
         .center { text-align: center; }
-        .pharmacy-title { font-size: 18px; font-weight: 800; color: #0f766e; }
-        .pharmacy-meta { font-size: 11px; color: #64748b; line-height: 1.4; margin-top: 4px; }
-        .divider { border-top: 1px dashed #cbd5e1; margin: 14px 0; }
+        .pharmacy-title { font-size: 18px; font-weight: 800; color: #B9829A; }
+        .pharmacy-meta { font-size: 11px; color: #77717A; line-height: 1.4; margin-top: 4px; }
+        .divider { border-top: 1px dashed #E5DFE4; margin: 14px 0; }
         .badge {
           display: inline-block;
-          background-color: #dcfce7;
-          color: #15803d;
+          background-color: #EAF2EE;
+          color: #4F8A72;
           padding: 3px 8px;
           border-radius: 4px;
           font-size: 11px;
@@ -992,19 +992,19 @@ export function printPaymentReceipt(receipt) {
           font-size: 12.5px;
           margin-bottom: 6px;
         }
-        .row-label { color: #64748b; font-weight: 500; }
-        .row-val { font-weight: 700; color: #0f172a; }
+        .row-label { color: #77717A; font-weight: 500; }
+        .row-val { font-weight: 700; color: #28242B; }
         .amount-box {
-          background: #f0fdf4;
-          border: 1px solid #bbf7d0;
+          background: #EAF2EE;
+          border: 1px solid #EAF2EE;
           border-radius: 8px;
           padding: 12px;
           text-align: center;
           margin: 14px 0;
         }
-        .amount-label { font-size: 11px; font-weight: 700; color: #166534; text-transform: uppercase; }
-        .amount-val { font-size: 24px; font-weight: 900; color: #15803d; margin-top: 4px; }
-        .footer-note { font-size: 10.5px; color: #94a3b8; text-align: center; margin-top: 14px; }
+        .amount-label { font-size: 11px; font-weight: 700; color: #4F8A72; text-transform: uppercase; }
+        .amount-val { font-size: 24px; font-weight: 900; color: #4F8A72; margin-top: 4px; }
+        .footer-note { font-size: 10.5px; color: #77717A; text-align: center; margin-top: 14px; }
         @media screen and (max-width: 768px) {
           body { padding: 8px; }
           .receipt-card { padding: 14px; width: 100%; max-width: 100%; box-sizing: border-box; }
@@ -1012,7 +1012,7 @@ export function printPaymentReceipt(receipt) {
         @media print {
           .toolbar { display: none; }
           body { padding: 0; background: none; }
-          .receipt-card { box-shadow: none; border: 1px dashed #64748b; }
+          .receipt-card { box-shadow: none; border: 1px dashed #77717A; }
         }
       </style>
     </head>
@@ -1073,7 +1073,7 @@ export function printPaymentReceipt(receipt) {
         </div>
         <div class="row" style="font-size: 11px;">
           <span class="row-label">Account Ledger:</span>
-          <span class="row-val" style="color: #0f766e;">Updated & Balanced</span>
+          <span class="row-val" style="color: #B9829A;">Updated & Balanced</span>
         </div>
 
         <div class="divider"></div>
@@ -1164,11 +1164,11 @@ export function exportAuditLogReport(logs = [], format = 'pdf', filterLabel = 'A
           width: 100%;
           max-width: 100vw;
           overflow-x: hidden;
-          background-color: #f8fafc;
+          background-color: #F8F5F7;
         }
         body {
           font-family: 'Inter', sans-serif;
-          color: #0f172a;
+          color: #28242B;
           padding: 16px;
         }
         .toolbar {
@@ -1179,7 +1179,7 @@ export function exportAuditLogReport(logs = [], format = 'pdf', filterLabel = 'A
           background: #ffffff;
           padding: 10px 14px;
           border-radius: 8px;
-          border: 1px solid #e2e8f0;
+          border: 1px solid #E5DFE4;
           max-width: 980px;
           margin: 0 auto 16px auto;
         }
@@ -1191,10 +1191,10 @@ export function exportAuditLogReport(logs = [], format = 'pdf', filterLabel = 'A
           cursor: pointer;
           border: none;
         }
-        .btn-print { background-color: #0f766e; color: #ffffff; }
-        .btn-close { background-color: #e2e8f0; color: #334155; }
+        .btn-print { background-color: #B9829A; color: #ffffff; }
+        .btn-close { background-color: #E5DFE4; color: #28242B; }
         .report-card {
-          border: 1.5px solid #cbd5e1;
+          border: 1.5px solid #E5DFE4;
           border-radius: 8px;
           padding: 24px;
           max-width: 980px;
@@ -1206,19 +1206,19 @@ export function exportAuditLogReport(logs = [], format = 'pdf', filterLabel = 'A
         .header {
           display: flex;
           justify-content: space-between;
-          border-bottom: 2px solid #0f766e;
+          border-bottom: 2px solid #B9829A;
           padding-bottom: 16px;
           margin-bottom: 16px;
           flex-wrap: wrap;
           gap: 12px;
         }
-        .company-name { font-size: 20px; font-weight: 800; color: #0f766e; }
-        .company-sub { font-size: 11px; color: #64748b; margin-top: 4px; line-height: 1.4; }
+        .company-name { font-size: 20px; font-weight: 800; color: #B9829A; }
+        .company-sub { font-size: 11px; color: #77717A; margin-top: 4px; line-height: 1.4; }
         .compliance-badge {
           display: inline-block;
-          background: #f0fdfa;
-          border: 1px solid #99f6e4;
-          color: #0f766e;
+          background: #E8D5DD;
+          border: 1px solid #E8D5DD;
+          color: #B9829A;
           font-size: 11px;
           font-weight: 800;
           padding: 4px 8px;
@@ -1232,21 +1232,21 @@ export function exportAuditLogReport(logs = [], format = 'pdf', filterLabel = 'A
           margin-bottom: 16px;
         }
         .kpi-card {
-          border: 1px solid #e2e8f0;
+          border: 1px solid #E5DFE4;
           border-radius: 6px;
           padding: 8px;
-          background: #f8fafc;
+          background: #F8F5F7;
           text-align: center;
         }
-        .kpi-label { font-size: 9.5px; font-weight: 700; color: #64748b; text-transform: uppercase; }
-        .kpi-val { font-size: 16px; font-weight: 800; color: #0f172a; margin-top: 2px; }
+        .kpi-label { font-size: 9.5px; font-weight: 700; color: #77717A; text-transform: uppercase; }
+        .kpi-val { font-size: 16px; font-weight: 800; color: #28242B; margin-top: 2px; }
         .regulatory-banner {
-          background-color: #f0fdf4;
-          border: 1px solid #bbf7d0;
+          background-color: #EAF2EE;
+          border: 1px solid #EAF2EE;
           border-radius: 6px;
           padding: 10px 14px;
           font-size: 11.5px;
-          color: #166534;
+          color: #4F8A72;
           margin-bottom: 16px;
           line-height: 1.4;
         }
@@ -1255,7 +1255,7 @@ export function exportAuditLogReport(logs = [], format = 'pdf', filterLabel = 'A
           overflow-x: auto;
           -webkit-overflow-scrolling: touch;
           margin-top: 8px;
-          border: 1px solid #e2e8f0;
+          border: 1px solid #E5DFE4;
           border-radius: 6px;
         }
         table {
@@ -1265,27 +1265,27 @@ export function exportAuditLogReport(logs = [], format = 'pdf', filterLabel = 'A
           font-size: 11.5px;
         }
         th {
-          background-color: #f1f5f9;
-          color: #334155;
+          background-color: #F8F5F7;
+          color: #28242B;
           font-weight: 700;
           padding: 8px 6px;
-          border-bottom: 2px solid #cbd5e1;
-          border-right: 1px solid #e2e8f0;
+          border-bottom: 2px solid #E5DFE4;
+          border-right: 1px solid #E5DFE4;
           text-align: left;
           text-transform: uppercase;
           font-size: 10px;
         }
         td {
           padding: 8px 6px;
-          border-bottom: 1px solid #e2e8f0;
-          border-right: 1px solid #e2e8f0;
+          border-bottom: 1px solid #E5DFE4;
+          border-right: 1px solid #E5DFE4;
           vertical-align: top;
           word-break: break-word;
         }
-        .sev-critical { color: #dc2626; font-weight: 800; }
-        .sev-warning { color: #d97706; font-weight: 700; }
-        .sev-success { color: #16a34a; font-weight: 700; }
-        .sev-normal { color: #0f766e; font-weight: 700; }
+        .sev-critical { color: #B85C64; font-weight: 800; }
+        .sev-warning { color: #C49752; font-weight: 700; }
+        .sev-success { color: #4F8A72; font-weight: 700; }
+        .sev-normal { color: #B9829A; font-weight: 700; }
         .badge {
           display: inline-block;
           padding: 2px 6px;
@@ -1296,11 +1296,11 @@ export function exportAuditLogReport(logs = [], format = 'pdf', filterLabel = 'A
         .footer-box {
           margin-top: 24px;
           padding-top: 14px;
-          border-top: 1px solid #e2e8f0;
+          border-top: 1px solid #E5DFE4;
           display: flex;
           justify-content: space-between;
           font-size: 11px;
-          color: #64748b;
+          color: #77717A;
           flex-wrap: wrap;
           gap: 12px;
         }
@@ -1349,9 +1349,9 @@ export function exportAuditLogReport(logs = [], format = 'pdf', filterLabel = 'A
             <div class="compliance-badge">🔒 CERTIFIED IMMUTABLE AUDIT LOG</div>
           </div>
           <div style="text-align: right;">
-            <div style="font-size: 17px; font-weight: 800; color: #0f172a;">AUDIT TRAIL EXPORT</div>
-            <div style="font-size: 11.5px; color: #64748b; margin-top: 3px;">Date: ${dateStr} • ${timeStr}</div>
-            <div style="font-size: 11.5px; color: #64748b;">Filter: <strong>${filterLabel}</strong> (${totalRecords} Records)</div>
+            <div style="font-size: 17px; font-weight: 800; color: #28242B;">AUDIT TRAIL EXPORT</div>
+            <div style="font-size: 11.5px; color: #77717A; margin-top: 3px;">Date: ${dateStr} • ${timeStr}</div>
+            <div style="font-size: 11.5px; color: #77717A;">Filter: <strong>${filterLabel}</strong> (${totalRecords} Records)</div>
           </div>
         </div>
 
@@ -1366,19 +1366,19 @@ export function exportAuditLogReport(logs = [], format = 'pdf', filterLabel = 'A
           </div>
           <div class="kpi-card">
             <div class="kpi-label">CRITICAL & OVERRIDES</div>
-            <div class="kpi-val" style="color: #ea580c;">${criticalCount}</div>
+            <div class="kpi-val" style="color: #C49752;">${criticalCount}</div>
           </div>
           <div class="kpi-card">
             <div class="kpi-label">STOCK MOVEMENTS</div>
-            <div class="kpi-val" style="color: #2563eb;">${stockCount}</div>
+            <div class="kpi-val" style="color: #B9829A;">${stockCount}</div>
           </div>
           <div class="kpi-card">
             <div class="kpi-label">RX VALIDATED</div>
-            <div class="kpi-val" style="color: #16a34a;">${rxCount}</div>
+            <div class="kpi-val" style="color: #4F8A72;">${rxCount}</div>
           </div>
           <div class="kpi-card">
             <div class="kpi-label">SECURITY & ROLES</div>
-            <div class="kpi-val" style="color: #d97706;">${securityCount}</div>
+            <div class="kpi-val" style="color: #C49752;">${securityCount}</div>
           </div>
         </div>
 
@@ -1402,28 +1402,28 @@ export function exportAuditLogReport(logs = [], format = 'pdf', filterLabel = 'A
                   <tr>
                     <td>
                       <strong>${l.id}</strong><br/>
-                      <span style="color: #64748b; font-size: 10px;">${l.timestamp}</span>
+                      <span style="color: #77717A; font-size: 10px;">${l.timestamp}</span>
                     </td>
                     <td>
                       <strong>${l.actor?.name || 'System'}</strong><br/>
-                      <span style="color: #64748b; font-size: 10px;">${l.actor?.role || 'Staff'}</span>
+                      <span style="color: #77717A; font-size: 10px;">${l.actor?.role || 'Staff'}</span>
                     </td>
                     <td>
-                      <span class="badge" style="background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe;">${l.actionType}</span><br/>
-                      <span style="font-size: 10px; color: #64748b;">${l.actionLabel || ''}</span>
+                      <span class="badge" style="background: #E8D5DD; color: #A66D86; border: 1px solid #E8D5DD;">${l.actionType}</span><br/>
+                      <span style="font-size: 10px; color: #77717A;">${l.actionLabel || ''}</span>
                     </td>
                     <td>
                       <strong>${l.entityRef}</strong><br/>
-                      <span style="font-size: 10px; color: #64748b;">[${l.module}]</span>
+                      <span style="font-size: 10px; color: #77717A;">[${l.module}]</span>
                     </td>
                     <td>${l.branch || 'Main'}</td>
                     <td><span class="${sevClass}">● ${l.severity || 'Normal'}</span></td>
                     <td>
                       <div>${l.reason || 'Standard transaction execution.'}</div>
                       ${l.diff?.before ? `
-                        <div style="font-size: 10px; color: #64748b; margin-top: 2px;">
-                          <span style="color: #dc2626;">Before:</span> ${JSON.stringify(l.diff.before)} ➔ 
-                          <span style="color: #16a34a;">After:</span> ${JSON.stringify(l.diff.after)}
+                        <div style="font-size: 10px; color: #77717A; margin-top: 2px;">
+                          <span style="color: #B85C64;">Before:</span> ${JSON.stringify(l.diff.before)} ➔
+                          <span style="color: #4F8A72;">After:</span> ${JSON.stringify(l.diff.after)}
                         </div>
                       ` : ''}
                     </td>
@@ -1440,7 +1440,7 @@ export function exportAuditLogReport(logs = [], format = 'pdf', filterLabel = 'A
             • Certified that no records have been altered, suppressed, or deleted.
           </div>
           <div style="text-align: center; width: 180px;">
-            <div style="border-top: 1px solid #94a3b8; margin-top: 26px; padding-top: 4px; font-weight: 700; font-size: 11px;">
+            <div style="border-top: 1px solid #77717A; margin-top: 26px; padding-top: 4px; font-weight: 700; font-size: 11px;">
               System Compliance Officer
             </div>
           </div>

@@ -25,16 +25,16 @@ import {
 } from "../../api/stockStatusApi";
 
 const STOCK_STATUS_BADGES = {
-  "In Stock": { bg: "#DCFCE7", text: "#15803D" },
-  "Low Stock": { bg: "#FEF3C7", text: "#B45309" },
-  Critical: { bg: "#FEE2E2", text: "#B91C1C" },
-  "Out of Stock": { bg: "#FEE2E2", text: "#DC2626" },
+  "In Stock": { bg: "#EAF2EE", text: "#4F8A72" },
+  "Low Stock": { bg: "#F7F0E5", text: "#C49752" },
+  Critical: { bg: "#F7EDEE", text: "#B85C64" },
+  "Out of Stock": { bg: "#F7EDEE", text: "#B85C64" },
 };
 
 const BATCH_TIMELINE_BADGES = {
-  Safe: { bg: "#DCFCE7", text: "#15803D" },
-  "Expiring Soon": { bg: "#FEF3C7", text: "#B45309" },
-  Expired: { bg: "#FEE2E2", text: "#DC2626" },
+  Safe: { bg: "#EAF2EE", text: "#4F8A72" },
+  "Expiring Soon": { bg: "#F7F0E5", text: "#C49752" },
+  Expired: { bg: "#F7EDEE", text: "#B85C64" },
 };
 
 export default function StockStatusScreen({
@@ -858,7 +858,7 @@ export default function StockStatusScreen({
                   ? "Search brand name, generic name, SKU, supplier..."
                   : "Search brand name, batch, supplier..."
               }
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor="#77717A"
               value={searchQuery}
               onChangeText={setSearchQuery}
             />
@@ -943,8 +943,8 @@ export default function StockStatusScreen({
               style={[
                 styles.filterTogglePill,
                 {
-                  backgroundColor: "#0F766E",
-                  borderColor: "#0F766E",
+                  backgroundColor: "#B9829A",
+                  borderColor: "#B9829A",
                   flexDirection: "row",
                   alignItems: "center",
                 },
@@ -1031,8 +1031,8 @@ export default function StockStatusScreen({
                           style={[
                             styles.mobileValBold,
                             isCritical
-                              ? { color: "#DC2626" }
-                              : { color: "#D97706" },
+                              ? { color: "#B85C64" }
+                              : { color: "#C49752" },
                           ]}
                         >
                           {item.currentStock} units
@@ -1307,8 +1307,8 @@ export default function StockStatusScreen({
                         <Text
                           style={[
                             styles.mobileValBold,
-                            isExpired && { color: "#DC2626" },
-                            isSoon && { color: "#D97706" },
+                            isExpired && { color: "#B85C64" },
+                            isSoon && { color: "#C49752" },
                           ]}
                         >
                           {item.expiryDate}
@@ -1555,7 +1555,7 @@ export default function StockStatusScreen({
                 <Text style={styles.actionOptionIcon}>🗑️</Text>
                 <View style={styles.actionOptionTextCol}>
                   <Text
-                    style={[styles.actionOptionTitle, { color: "#DC2626" }]}
+                    style={[styles.actionOptionTitle, { color: "#B85C64" }]}
                   >
                     {actionItemType === "expiry"
                       ? "Write-Off Expired Batch"
@@ -1641,7 +1641,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     overflow: "hidden",
     ...Platform.select({
       web: {
@@ -1662,7 +1662,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     padding: 14,
   },
   mobileStatusHeader: {
@@ -1671,17 +1671,17 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
     gap: 8,
   },
   mobileBrandTitle: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   mobileGenericSubtitle: {
     fontSize: 12.5,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   mobileGrid: {
@@ -1699,27 +1699,27 @@ const styles = StyleSheet.create({
   mobileLabel: {
     fontSize: 11,
     fontWeight: "600",
-    color: "#94A3B8",
+    color: "#77717A",
     textTransform: "uppercase",
   },
   mobileVal: {
     fontSize: 12.5,
-    color: "#334155",
+    color: "#28242B",
     marginTop: 1,
   },
   mobileValBold: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
     marginTop: 1,
   },
   mobileActionFooter: {
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
+    borderTopColor: "#F8F5F7",
   },
   mobileReorderBtn: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingVertical: 7,
     paddingHorizontal: 16,
     borderRadius: 6,
@@ -1732,9 +1732,9 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
   mobileWriteOffBtn: {
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     paddingVertical: 7,
     paddingHorizontal: 16,
     borderRadius: 6,
@@ -1742,22 +1742,22 @@ const styles = StyleSheet.create({
     cursor: "pointer",
   },
   mobileWriteOffBtnExpired: {
-    backgroundColor: "#FEE2E2",
-    borderColor: "#FECACA",
+    backgroundColor: "#F7EDEE",
+    borderColor: "#F7EDEE",
   },
   mobileWriteOffText: {
     fontSize: 12.5,
     fontWeight: "700",
-    color: "#475569",
+    color: "#77717A",
   },
   mobileWriteOffTextExpired: {
-    color: "#DC2626",
+    color: "#B85C64",
   },
   tabBar: {
     flexDirection: "row",
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderBottomColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
   },
   tabButton: {
     paddingVertical: 14,
@@ -1767,38 +1767,38 @@ const styles = StyleSheet.create({
     cursor: "pointer",
   },
   tabButtonActive: {
-    borderBottomColor: "#0F766E",
+    borderBottomColor: "#B9829A",
     backgroundColor: "#FFFFFF",
   },
   tabButtonText: {
     fontSize: 13.5,
     fontWeight: "600",
-    color: "#64748B",
+    color: "#77717A",
   },
   tabButtonTextActive: {
-    color: "#0F766E",
+    color: "#B9829A",
     fontWeight: "700",
   },
   searchBarContainer: {
     paddingHorizontal: 20,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   searchBox: {
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     paddingHorizontal: 12,
     height: 40,
   },
   searchInput: {
     flex: 1,
     fontSize: 13,
-    color: "#0F172A",
+    color: "#28242B",
     outlineStyle: "none",
   },
   clearBtn: {
@@ -1806,7 +1806,7 @@ const styles = StyleSheet.create({
   },
   clearBtnText: {
     fontSize: 12,
-    color: "#94A3B8",
+    color: "#77717A",
   },
   tableWrapper: {
     minWidth: 1240,
@@ -1818,13 +1818,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderBottomColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
   },
   thCell: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
     paddingHorizontal: 6,
     letterSpacing: 0.5,
   },
@@ -1834,44 +1834,44 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   tableRowAlt: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
   },
   tdCell: {
     fontSize: 13,
-    color: "#334155",
+    color: "#28242B",
     paddingHorizontal: 6,
   },
   brandNameCell: {
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   genericNameCell: {
-    color: "#475569",
+    color: "#77717A",
     fontWeight: "500",
   },
   skuCell: {
     fontWeight: "600",
-    color: "#64748B",
+    color: "#77717A",
   },
   currentStockNum: {
     fontWeight: "700",
-    color: "#D97706",
+    color: "#C49752",
   },
   stockCritical: {
-    color: "#DC2626",
+    color: "#B85C64",
   },
   expiryDateText: {
     fontWeight: "600",
-    color: "#334155",
+    color: "#28242B",
   },
   dateSoon: {
-    color: "#D97706",
+    color: "#C49752",
   },
   dateExpired: {
-    color: "#DC2626",
+    color: "#B85C64",
     fontWeight: "700",
   },
   statusWrapper: {
@@ -1890,7 +1890,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   reorderBtn: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingVertical: 5,
     paddingHorizontal: 12,
     borderRadius: 6,
@@ -1902,25 +1902,25 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
   writeOffBtn: {
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     paddingVertical: 5,
     paddingHorizontal: 12,
     borderRadius: 6,
     cursor: "pointer",
   },
   writeOffBtnExpired: {
-    backgroundColor: "#FEE2E2",
-    borderColor: "#FECACA",
+    backgroundColor: "#F7EDEE",
+    borderColor: "#F7EDEE",
   },
   writeOffBtnText: {
     fontSize: 11.5,
     fontWeight: "700",
-    color: "#475569",
+    color: "#77717A",
   },
   writeOffTextExpired: {
-    color: "#DC2626",
+    color: "#B85C64",
   },
   filterTogglesGroup: {
     flexDirection: "row",
@@ -1937,39 +1937,39 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
-    backgroundColor: "#F8FAFC",
+    borderColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
     cursor: "pointer",
   },
   filterTogglePillActive: {
-    backgroundColor: "#F0FDFA",
-    borderColor: "#0F766E",
+    backgroundColor: "#E8D5DD",
+    borderColor: "#B9829A",
   },
   filterToggleDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: "#94A3B8",
+    backgroundColor: "#77717A",
   },
   filterToggleDotActive: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
   },
   filterToggleText: {
     fontSize: 11.5,
     fontWeight: "600",
-    color: "#64748B",
+    color: "#77717A",
   },
   filterToggleTextActive: {
-    color: "#0F766E",
+    color: "#B9829A",
     fontWeight: "700",
   },
   devGuideTopBtn: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     paddingVertical: 5,
     paddingHorizontal: 10,
     borderRadius: 8,
@@ -1981,12 +1981,12 @@ const styles = StyleSheet.create({
   devGuideTopBtnText: {
     fontSize: 11.5,
     fontWeight: "700",
-    color: "#334155",
+    color: "#28242B",
   },
   mobileActionDotsBtn: {
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     paddingVertical: 7,
     paddingHorizontal: 14,
     borderRadius: 6,
@@ -1996,23 +1996,23 @@ const styles = StyleSheet.create({
   mobileActionDotsText: {
     fontSize: 12.5,
     fontWeight: "700",
-    color: "#334155",
+    color: "#28242B",
   },
   actionDotsButton: {
     width: 32,
     height: 32,
     borderRadius: 6,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     cursor: "pointer",
   },
   actionDotsButtonText: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#334155",
+    color: "#28242B",
     lineHeight: 18,
   },
   modalBackdrop: {
@@ -2028,7 +2028,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     overflow: "hidden",
   },
   actionMenuHeader: {
@@ -2037,17 +2037,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 18,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderBottomColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
   },
   actionMenuTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   actionMenuSub: {
     fontSize: 11.5,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   closeActionBtn: {
@@ -2056,7 +2056,7 @@ const styles = StyleSheet.create({
   },
   closeActionText: {
     fontSize: 18,
-    color: "#64748B",
+    color: "#77717A",
     fontWeight: "700",
   },
   actionList: {
@@ -2073,12 +2073,12 @@ const styles = StyleSheet.create({
     cursor: "pointer",
   },
   actionOptionRowDanger: {
-    backgroundColor: "#FEF2F2",
+    backgroundColor: "#F7EDEE",
   },
   actionOptionRowDev: {
-    backgroundColor: "#F0FDFA",
+    backgroundColor: "#E8D5DD",
     borderWidth: 1,
-    borderColor: "#99F6E4",
+    borderColor: "#E8D5DD",
     marginTop: 4,
   },
   actionOptionIcon: {
@@ -2090,11 +2090,11 @@ const styles = StyleSheet.create({
   actionOptionTitle: {
     fontSize: 13.5,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   actionOptionDesc: {
     fontSize: 11.5,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 1,
   },
   devGuideModalCard: {
@@ -2114,8 +2114,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 18,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderBottomColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
   },
   devGuideTitleRow: {
     flexDirection: "row",
@@ -2126,7 +2126,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 8,
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2136,11 +2136,11 @@ const styles = StyleSheet.create({
   devGuideModalTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   devGuideModalSubtitle: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
   },
   devGuideModalBody: {
     padding: 20,
@@ -2151,22 +2151,22 @@ const styles = StyleSheet.create({
   guideSecTitle: {
     fontSize: 14,
     fontWeight: "800",
-    color: "#0F766E",
+    color: "#B9829A",
     marginBottom: 6,
   },
   guideSecDesc: {
     fontSize: 12,
-    color: "#475569",
+    color: "#77717A",
     marginBottom: 8,
   },
   codeSnippet: {
-    backgroundColor: "#0F172A",
+    backgroundColor: "#28242B",
     borderRadius: 8,
     padding: 12,
     marginTop: 6,
   },
   codeSnippetText: {
-    color: "#38BDF8",
+    color: "#A66D86",
     fontSize: 11.5,
     fontFamily: Platform.select({
       web: "Consolas, Monaco, monospace",
@@ -2175,9 +2175,9 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
   endpointCard: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     padding: 12,
     marginBottom: 10,
@@ -2189,7 +2189,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   methodPost: {
-    backgroundColor: "#16A34A",
+    backgroundColor: "#4F8A72",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -2202,22 +2202,22 @@ const styles = StyleSheet.create({
   endpointRoute: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
     fontFamily: Platform.select({ web: "monospace", default: "System" }),
   },
   endpointDesc: {
     fontSize: 12,
-    color: "#475569",
+    color: "#77717A",
   },
   devGuideModalFooter: {
     padding: 14,
     borderTopWidth: 1,
-    borderTopColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderTopColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
     alignItems: "flex-end",
   },
   closeDevGuideModalBtn: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingVertical: 8,
     paddingHorizontal: 18,
     borderRadius: 8,

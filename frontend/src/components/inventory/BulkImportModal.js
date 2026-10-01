@@ -431,28 +431,28 @@ export default function BulkImportModal({
                 {/* Summary Chips */}
                 <View style={styles.statsRow}>
                   <View
-                    style={[styles.statChip, { backgroundColor: "#F1F5F9" }]}
+                    style={[styles.statChip, { backgroundColor: "#F8F5F7" }]}
                   >
                     <Text style={styles.statChipLabel}>TOTAL ROWS</Text>
-                    <Text style={[styles.statChipValue, { color: "#1E293B" }]}>
+                    <Text style={[styles.statChipValue, { color: "#28242B" }]}>
                       {parsedRows.length}
                     </Text>
                   </View>
                   <View
-                    style={[styles.statChip, { backgroundColor: "#DCFCE7" }]}
+                    style={[styles.statChip, { backgroundColor: "#EAF2EE" }]}
                   >
                     <Text style={styles.statChipLabel}>READY TO IMPORT</Text>
-                    <Text style={[styles.statChipValue, { color: "#15803D" }]}>
+                    <Text style={[styles.statChipValue, { color: "#4F8A72" }]}>
                       {validRowsCount}
                     </Text>
                   </View>
                   {invalidRowsCount > 0 && (
                     <View
-                      style={[styles.statChip, { backgroundColor: "#FEE2E2" }]}
+                      style={[styles.statChip, { backgroundColor: "#F7EDEE" }]}
                     >
                       <Text style={styles.statChipLabel}>ERRORS / SKIPPED</Text>
                       <Text
-                        style={[styles.statChipValue, { color: "#B91C1C" }]}
+                        style={[styles.statChipValue, { color: "#B85C64" }]}
                       >
                         {invalidRowsCount}
                       </Text>
@@ -560,15 +560,15 @@ export default function BulkImportModal({
                               styles.statusBadge,
                               {
                                 backgroundColor: row.isValid
-                                  ? "#DCFCE7"
-                                  : "#FEE2E2",
+                                  ? "#EAF2EE"
+                                  : "#F7EDEE",
                               },
                             ]}
                           >
                             <Text
                               style={[
                                 styles.statusBadgeText,
-                                { color: row.isValid ? "#15803D" : "#B91C1C" },
+                                { color: row.isValid ? "#4F8A72" : "#B85C64" },
                               ]}
                             >
                               {row.isValid ? "Valid" : row.errorMessage}
@@ -586,7 +586,7 @@ export default function BulkImportModal({
             {importing && (
               <View style={styles.progressBox}>
                 <View style={styles.progressHeader}>
-                  <ActivityIndicator size="small" color="#0F766E" />
+                  <ActivityIndicator size="small" color="#B9829A" />
                   <Text style={styles.progressText}>
                     Importing records to database... {importProgress}%
                   </Text>
@@ -649,7 +649,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 14,
     overflow: "hidden",
-    shadowColor: "#000",
+    shadowColor: "#28242B",
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.25,
     shadowRadius: 20,
@@ -668,8 +668,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderBottomColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
   },
   headerTitleGroup: {
     flexDirection: "row",
@@ -683,11 +683,11 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 17,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   headerSubtitle: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   closeBtn: {
@@ -696,7 +696,7 @@ const styles = StyleSheet.create({
   },
   closeBtnText: {
     fontSize: 18,
-    color: "#64748B",
+    color: "#77717A",
     fontWeight: "700",
   },
   modalBody: {
@@ -707,7 +707,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     padding: 16,
     marginBottom: 16,
   },
@@ -721,7 +721,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -733,11 +733,11 @@ const styles = StyleSheet.create({
   stepTitle: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   stepDescription: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   templateBtn: {
@@ -747,9 +747,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 6,
-    backgroundColor: "#F0FDFA",
+    backgroundColor: "#E8D5DD",
     borderWidth: 1,
-    borderColor: "#99F6E4",
+    borderColor: "#E8D5DD",
   },
   templateBtnIcon: {
     fontSize: 14,
@@ -757,7 +757,7 @@ const styles = StyleSheet.create({
   templateBtnText: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   browseBtn: {
     flexDirection: "row",
@@ -766,7 +766,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 6,
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
   },
   browseBtnIcon: {
     fontSize: 14,
@@ -778,10 +778,10 @@ const styles = StyleSheet.create({
   },
   previewContainer: {
     marginTop: 8,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     padding: 16,
     marginBottom: 16,
   },
@@ -801,7 +801,7 @@ const styles = StyleSheet.create({
   statChipLabel: {
     fontSize: 10,
     fontWeight: "800",
-    color: "#64748B",
+    color: "#77717A",
     letterSpacing: 0.5,
   },
   statChipValue: {
@@ -812,27 +812,27 @@ const styles = StyleSheet.create({
   previewTitle: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#334155",
+    color: "#28242B",
     marginBottom: 10,
   },
   tableScroll: {
     backgroundColor: "#FFFFFF",
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
   },
   tableHeaderRow: {
     flexDirection: "row",
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#CBD5E1",
+    borderBottomColor: "#E5DFE4",
   },
   thCell: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#475569",
+    color: "#77717A",
     letterSpacing: 0.5,
   },
   tableDataRow: {
@@ -841,17 +841,17 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   tableDataRowAlt: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
   },
   tableDataRowError: {
-    backgroundColor: "#FFF1F2",
+    backgroundColor: "#F7EDEE",
   },
   tdCell: {
     fontSize: 12,
-    color: "#1E293B",
+    color: "#28242B",
   },
   tdStatusWrap: {
     alignItems: "center",
@@ -869,10 +869,10 @@ const styles = StyleSheet.create({
   progressBox: {
     marginTop: 10,
     padding: 12,
-    backgroundColor: "#F0FDFA",
+    backgroundColor: "#E8D5DD",
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#CCFBF1",
+    borderColor: "#E8D5DD",
   },
   progressHeader: {
     flexDirection: "row",
@@ -883,17 +883,17 @@ const styles = StyleSheet.create({
   progressText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   progressBarTrack: {
     height: 6,
-    backgroundColor: "#E2E8F0",
+    backgroundColor: "#E5DFE4",
     borderRadius: 3,
     overflow: "hidden",
   },
   progressBarFill: {
     height: "100%",
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     borderRadius: 3,
   },
   footerBar: {
@@ -903,15 +903,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 14,
     borderTopWidth: 1,
-    borderTopColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderTopColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
   },
   cancelBtn: {
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     backgroundColor: "#FFFFFF",
     minHeight: 40,
     justifyContent: "center",
@@ -919,13 +919,13 @@ const styles = StyleSheet.create({
   cancelBtnText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#475569",
+    color: "#77717A",
   },
   commitBtn: {
     paddingHorizontal: 18,
     paddingVertical: 10,
     borderRadius: 6,
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     minHeight: 40,
     justifyContent: "center",
   },

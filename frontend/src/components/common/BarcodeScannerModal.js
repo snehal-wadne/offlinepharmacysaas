@@ -716,7 +716,7 @@ export default function BarcodeScannerModal({
                     ? 'Enter Invoice # (e.g. INV-1025)...'
                     : 'Enter barcode or QR text (e.g. 890114820251)...'
                 }
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor="#77717A"
                 value={manualCode}
                 onChangeText={setManualCode}
                 onSubmitEditing={() => executeScan(manualCode, { skipDedupe: true })}
@@ -821,7 +821,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 18,
-    shadowColor: '#000',
+    shadowColor: '#28242B',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.25,
     shadowRadius: 20,
@@ -853,7 +853,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 8,
-    backgroundColor: '#E6F4F1',
+    backgroundColor: '#E8D5DD',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -864,29 +864,29 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#28242B',
   },
   modalSubtitle: {
     fontSize: 11,
-    color: '#64748B',
+    color: '#77717A',
     marginTop: 1,
   },
   closeBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#F8F5F7',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#E5DFE4',
     cursor: 'pointer',
     zIndex: 99,
   },
   closeBtnText: {
     fontSize: 16,
-    color: '#1E293B',
+    color: '#28242B',
     fontWeight: '800',
   },
 
@@ -895,9 +895,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#F0FDF4',
+    backgroundColor: '#EAF2EE',
     borderWidth: 1,
-    borderColor: '#BBF7D0',
+    borderColor: '#EAF2EE',
     borderRadius: 8,
     paddingVertical: 8,
     paddingHorizontal: 12,
@@ -909,7 +909,7 @@ const styles = StyleSheet.create({
   unifiedFeatureText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#166534',
+    color: '#4F8A72',
     flex: 1,
   },
 
@@ -920,7 +920,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: 'hidden',
     position: 'relative',
-    backgroundColor: '#0F172A',
+    backgroundColor: '#28242B',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
@@ -936,14 +936,14 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   viewfinderText: {
-    color: '#E2E8F0',
+    color: '#E5DFE4',
     fontWeight: '700',
     fontSize: 13,
     textAlign: 'center',
     maxWidth: 360,
   },
   viewfinderSub: {
-    color: '#94A3B8',
+    color: '#77717A',
     fontSize: 11,
     marginTop: 4,
     textAlign: 'center',
@@ -968,7 +968,7 @@ const styles = StyleSheet.create({
     height: 28,
     borderTopWidth: 3.5,
     borderLeftWidth: 3.5,
-    borderColor: '#10B981',
+    borderColor: '#4F8A72',
   },
   cornerTR: {
     position: 'absolute',
@@ -978,7 +978,7 @@ const styles = StyleSheet.create({
     height: 28,
     borderTopWidth: 3.5,
     borderRightWidth: 3.5,
-    borderColor: '#10B981',
+    borderColor: '#4F8A72',
   },
   cornerBL: {
     position: 'absolute',
@@ -988,7 +988,7 @@ const styles = StyleSheet.create({
     height: 28,
     borderBottomWidth: 3.5,
     borderLeftWidth: 3.5,
-    borderColor: '#10B981',
+    borderColor: '#4F8A72',
   },
   cornerBR: {
     position: 'absolute',
@@ -998,7 +998,7 @@ const styles = StyleSheet.create({
     height: 28,
     borderBottomWidth: 3.5,
     borderRightWidth: 3.5,
-    borderColor: '#10B981',
+    borderColor: '#4F8A72',
   },
   laserLine: {
     position: 'absolute',
@@ -1006,8 +1006,8 @@ const styles = StyleSheet.create({
     right: 6,
     top: 0,
     height: 2.5,
-    backgroundColor: '#EF4444',
-    shadowColor: '#EF4444',
+    backgroundColor: '#B85C64',
+    shadowColor: '#B85C64',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 1,
     shadowRadius: 8,
@@ -1023,7 +1023,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   aimCrosshairText: {
-    color: '#34D399',
+    color: '#4F8A72',
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.5,
@@ -1041,7 +1041,7 @@ const styles = StyleSheet.create({
     zIndex: 4,
   },
   cameraStatusPillText: {
-    color: '#E2E8F0',
+    color: '#E5DFE4',
     fontSize: 10.5,
     fontWeight: '700',
   },
@@ -1066,9 +1066,9 @@ const styles = StyleSheet.create({
 
   // Scanned Notice
   scannedNoticeBox: {
-    backgroundColor: '#ECFDF5',
+    backgroundColor: '#EAF2EE',
     borderWidth: 1,
-    borderColor: '#A7F3D0',
+    borderColor: '#EAF2EE',
     borderRadius: 8,
     paddingVertical: 8,
     paddingHorizontal: 12,
@@ -1076,26 +1076,26 @@ const styles = StyleSheet.create({
   },
   scannedNoticeText: {
     fontSize: 12,
-    color: '#065F46',
+    color: '#4F8A72',
     fontWeight: '600',
   },
   scannedCodeText: {
     fontWeight: '800',
-    color: '#047857',
+    color: '#4F8A72',
   },
 
   // Persistent Scan Result Card
   resultCardBox: {
-    backgroundColor: '#F0FDF4',
+    backgroundColor: '#EAF2EE',
     borderWidth: 1.5,
-    borderColor: '#6EE7B7',
+    borderColor: '#EAF2EE',
     borderRadius: 10,
     padding: 12,
     marginBottom: 12,
   },
   resultCardBoxWarn: {
-    backgroundColor: '#FFFBEB',
-    borderColor: '#FCD34D',
+    backgroundColor: '#F7F0E5',
+    borderColor: '#F7F0E5',
   },
   resultCardBoxError: {
     backgroundColor: '#FEF2F2',
@@ -1110,21 +1110,21 @@ const styles = StyleSheet.create({
   resultCardTitle: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#28242B',
     flex: 1,
   },
   resultCardQtyBadge: {
     fontSize: 10.5,
     fontWeight: '800',
-    color: '#0F766E',
-    backgroundColor: '#CCFBF1',
+    color: '#B9829A',
+    backgroundColor: '#E8D5DD',
     borderRadius: 10,
     paddingHorizontal: 8,
     paddingVertical: 3,
   },
   resultCardSubtitle: {
     fontSize: 12,
-    color: '#475569',
+    color: '#77717A',
     fontWeight: '600',
     marginTop: 2,
   },
@@ -1137,17 +1137,17 @@ const styles = StyleSheet.create({
   resultCardStatLabel: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#64748B',
+    color: '#77717A',
     textTransform: 'uppercase',
   },
   resultCardStatValue: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#28242B',
     marginTop: 1,
   },
   resultCardStatValueLow: {
-    color: '#B91C1C',
+    color: '#B85C64',
   },
 
   // Manual Input
@@ -1157,7 +1157,7 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#334155',
+    color: '#28242B',
     marginBottom: 6,
   },
   inputRow: {
@@ -1167,19 +1167,19 @@ const styles = StyleSheet.create({
   textInput: {
     flex: 1,
     height: 40,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F8F5F7',
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#E5DFE4',
     borderRadius: 8,
     paddingHorizontal: 12,
     fontSize: 13,
-    color: '#0F172A',
+    color: '#28242B',
     ...Platform.select({
       web: { outlineStyle: 'none' },
     }),
   },
   scanActionBtn: {
-    backgroundColor: '#0F766E',
+    backgroundColor: '#B9829A',
     paddingHorizontal: 18,
     height: 40,
     borderRadius: 8,
@@ -1195,17 +1195,17 @@ const styles = StyleSheet.create({
 
   // Quick Test Presets
   quickTestSection: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F8F5F7',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E5DFE4',
     padding: 10,
     marginBottom: 12,
   },
   quickTestLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#475569',
+    color: '#77717A',
     marginBottom: 6,
   },
   presetsGroup: {
@@ -1214,7 +1214,7 @@ const styles = StyleSheet.create({
   presetGroupTitle: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#64748B',
+    color: '#77717A',
     marginBottom: 4,
     textTransform: 'uppercase',
   },
@@ -1226,7 +1226,7 @@ const styles = StyleSheet.create({
   presetChipInvoice: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#0F766E',
+    borderColor: '#B9829A',
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -1235,12 +1235,12 @@ const styles = StyleSheet.create({
   presetChipInvoiceText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#0F766E',
+    color: '#B9829A',
   },
   presetChipProduct: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#E5DFE4',
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -1249,7 +1249,7 @@ const styles = StyleSheet.create({
   presetChipProductText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#334155',
+    color: '#28242B',
   },
 
   // Footer
@@ -1259,20 +1259,20 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
+    borderTopColor: '#E5DFE4',
   },
   doneBtn: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#F8F5F7',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#E5DFE4',
     cursor: 'pointer',
   },
   doneBtnText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#334155',
+    color: '#28242B',
   },
 });

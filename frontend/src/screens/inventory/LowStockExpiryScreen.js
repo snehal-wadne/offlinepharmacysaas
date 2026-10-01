@@ -14,15 +14,15 @@ import PaginationControls from "../../components/common/PaginationControls";
 import { fetchInventory } from "../../api/inventoryApi";
 
 const LOW_STOCK_BADGES = {
-  "Low Stock": { bg: "#FEF3C7", text: "#B45309" },
-  Critical: { bg: "#FFEDD5", text: "#C2410C" },
-  "Out of Stock": { bg: "#FEE2E2", text: "#B91C1C" },
+  "Low Stock": { bg: "#F7F0E5", text: "#C49752" },
+  Critical: { bg: "#F7F0E5", text: "#C49752" },
+  "Out of Stock": { bg: "#F7EDEE", text: "#B85C64" },
 };
 
 const EXPIRY_BADGES = {
-  Safe: { bg: "#DCFCE7", text: "#15803D" },
-  "Expiring Soon": { bg: "#FEF3C7", text: "#B45309" },
-  Expired: { bg: "#FEE2E2", text: "#B91C1C" },
+  Safe: { bg: "#EAF2EE", text: "#4F8A72" },
+  "Expiring Soon": { bg: "#F7F0E5", text: "#C49752" },
+  Expired: { bg: "#F7EDEE", text: "#B85C64" },
 };
 
 export default function LowStockExpiryScreen({ onShowToast }) {
@@ -189,30 +189,30 @@ export default function LowStockExpiryScreen({ onShowToast }) {
 
       {/* Summary Alert Strip */}
       <View style={styles.summaryStrip}>
-        <View style={[styles.summaryCard, { borderLeftColor: "#D97706" }]}>
+        <View style={[styles.summaryCard, { borderLeftColor: "#C49752" }]}>
           <Text style={styles.summaryLabel}>LOW STOCK ITEMS</Text>
-          <Text style={[styles.summaryVal, { color: "#D97706" }]}>
+          <Text style={[styles.summaryVal, { color: "#C49752" }]}>
             {lowStockItemsList.length}
           </Text>
           <Text style={styles.summarySub}>Needs reorder</Text>
         </View>
-        <View style={[styles.summaryCard, { borderLeftColor: "#EA580C" }]}>
+        <View style={[styles.summaryCard, { borderLeftColor: "#C49752" }]}>
           <Text style={styles.summaryLabel}>CRITICAL DEFICIT</Text>
-          <Text style={[styles.summaryVal, { color: "#EA580C" }]}>
+          <Text style={[styles.summaryVal, { color: "#C49752" }]}>
             {criticalCount}
           </Text>
           <Text style={styles.summarySub}>Stock &lt; 15 units</Text>
         </View>
-        <View style={[styles.summaryCard, { borderLeftColor: "#F59E0B" }]}>
+        <View style={[styles.summaryCard, { borderLeftColor: "#C49752" }]}>
           <Text style={styles.summaryLabel}>EXPIRING SOON</Text>
-          <Text style={[styles.summaryVal, { color: "#D97706" }]}>
+          <Text style={[styles.summaryVal, { color: "#C49752" }]}>
             {expiringCount}
           </Text>
           <Text style={styles.summarySub}>Within 90 days</Text>
         </View>
-        <View style={[styles.summaryCard, { borderLeftColor: "#DC2626" }]}>
+        <View style={[styles.summaryCard, { borderLeftColor: "#B85C64" }]}>
           <Text style={styles.summaryLabel}>EXPIRED BATCHES</Text>
-          <Text style={[styles.summaryVal, { color: "#DC2626" }]}>
+          <Text style={[styles.summaryVal, { color: "#B85C64" }]}>
             {expiredCount}
           </Text>
           <Text style={styles.summarySub}>Immediate removal</Text>
@@ -268,7 +268,7 @@ export default function LowStockExpiryScreen({ onShowToast }) {
                   ? "Search low stock medicine, SKU, supplier..."
                   : "Search batch, medicine, supplier..."
               }
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor="#77717A"
               value={searchQuery}
               onChangeText={setSearchQuery}
             />
@@ -568,13 +568,13 @@ const styles = StyleSheet.create({
   pageTitle: {
     fontSize: 24,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
     letterSpacing: -0.4,
   },
   pageSubtitle: {
     fontSize: 13.5,
     fontWeight: "500",
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 4,
   },
   summaryStrip: {
@@ -588,14 +588,14 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderLeftWidth: 4,
     padding: 16,
   },
   summaryLabel: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
     letterSpacing: 0.5,
   },
   summaryVal: {
@@ -605,13 +605,13 @@ const styles = StyleSheet.create({
   },
   summarySub: {
     fontSize: 12,
-    color: "#94A3B8",
+    color: "#77717A",
   },
   cardContainer: {
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     overflow: "hidden",
     ...Platform.select({
       web: {
@@ -626,8 +626,8 @@ const styles = StyleSheet.create({
   tabBar: {
     flexDirection: "row",
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
-    backgroundColor: "#FAFAFA",
+    borderBottomColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
   },
   tabButton: {
     paddingVertical: 14,
@@ -637,30 +637,30 @@ const styles = StyleSheet.create({
     cursor: "pointer",
   },
   tabButtonActive: {
-    borderBottomColor: "#0F766E",
+    borderBottomColor: "#B9829A",
     backgroundColor: "#FFFFFF",
   },
   tabButtonText: {
     fontSize: 13.5,
     fontWeight: "600",
-    color: "#64748B",
+    color: "#77717A",
   },
   tabButtonTextActive: {
-    color: "#0F766E",
+    color: "#B9829A",
     fontWeight: "700",
   },
   searchBarContainer: {
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   searchBox: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     paddingHorizontal: 12,
     height: 38,
@@ -668,7 +668,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 13,
-    color: "#0F172A",
+    color: "#28242B",
     outlineStyle: "none",
   },
   clearBtn: {
@@ -676,7 +676,7 @@ const styles = StyleSheet.create({
   },
   clearBtnText: {
     fontSize: 12,
-    color: "#94A3B8",
+    color: "#77717A",
   },
   tableWrapper: {
     minWidth: 1080,
@@ -688,13 +688,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderBottomColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
   },
   thCell: {
     fontSize: 11.5,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
     paddingHorizontal: 6,
     letterSpacing: 0.3,
   },
@@ -704,36 +704,36 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   tableRowAlt: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
   },
   tdCell: {
     fontSize: 13,
-    color: "#334155",
+    color: "#28242B",
     paddingHorizontal: 6,
   },
   medName: {
     fontWeight: "600",
-    color: "#0F172A",
+    color: "#28242B",
   },
   currentStockNum: {
     fontWeight: "800",
-    color: "#D97706",
+    color: "#C49752",
   },
   stockCritical: {
-    color: "#DC2626",
+    color: "#B85C64",
   },
   expiryDateText: {
     fontWeight: "600",
   },
   dateExpired: {
-    color: "#DC2626",
+    color: "#B85C64",
     fontWeight: "700",
   },
   dateSoon: {
-    color: "#D97706",
+    color: "#C49752",
     fontWeight: "700",
   },
   statusWrapper: {
@@ -757,7 +757,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: 10,
     borderRadius: 6,
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     cursor: "pointer",
   },
   reorderBtnText: {
@@ -769,19 +769,19 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: 8,
     borderRadius: 6,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     cursor: "pointer",
   },
   writeOffBtnExpired: {
-    backgroundColor: "#FEE2E2",
+    backgroundColor: "#F7EDEE",
   },
   writeOffBtnText: {
     fontSize: 11.5,
     fontWeight: "600",
-    color: "#475569",
+    color: "#77717A",
   },
   writeOffTextExpired: {
-    color: "#DC2626",
+    color: "#B85C64",
     fontWeight: "700",
   },
 });

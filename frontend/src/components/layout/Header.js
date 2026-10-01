@@ -403,13 +403,13 @@ export default function Header({
             <TextInput
               style={styles.headerSearchInput}
               placeholder="Search products, customers..."
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor="#77717A"
               value={searchQuery}
               onChangeText={handleSearchChange}
               onFocus={() => setSearchOpen(true)}
               accessibilityLabel="Global search"
             />
-            {isSearching && <ActivityIndicator size="small" color="#0F766E" />}
+            {isSearching && <ActivityIndicator size="small" color="#B9829A" />}
           </View>
 
           {searchOpen && searchQuery.trim().length >= 2 && (
@@ -600,7 +600,7 @@ export default function Header({
               isMobile && styles.avatarMobile,
               (currentUser?.isOwner ||
                 (currentUser?.role || "").toUpperCase() === "OWNER") && {
-                backgroundColor: "#0D9488",
+                backgroundColor: "#A66D86",
               },
             ]}
           >
@@ -623,7 +623,7 @@ export default function Header({
                   styles.userRoleText,
                   (currentUser?.isOwner ||
                     (currentUser?.role || "").toUpperCase() === "OWNER") && {
-                    color: "#0F766E",
+                    color: "#B9829A",
                     fontWeight: "800",
                   },
                 ]}
@@ -667,7 +667,7 @@ const styles = StyleSheet.create({
     height: 64,
     backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: "#E5DFE4",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -682,12 +682,12 @@ const styles = StyleSheet.create({
     padding: 6,
     marginRight: 2,
     borderRadius: 6,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
   },
   hamburgerIcon: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   leftSection: {
     flexDirection: "row",
@@ -708,7 +708,7 @@ const styles = StyleSheet.create({
   branchLabel: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#64748B",
+    color: "#77717A",
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
@@ -717,7 +717,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     paddingVertical: 7,
     paddingHorizontal: 14,
@@ -738,7 +738,7 @@ const styles = StyleSheet.create({
   branchButtonText: {
     fontSize: 13.5,
     fontWeight: "600",
-    color: "#0F172A",
+    color: "#28242B",
   },
   branchButtonTextMobile: {
     fontSize: 11.5,
@@ -746,7 +746,7 @@ const styles = StyleSheet.create({
   },
   chevron: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
   },
   rightSection: {
     flexDirection: "row",
@@ -759,9 +759,9 @@ const styles = StyleSheet.create({
   syncBadge: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#DCFCE7",
+    backgroundColor: "#EAF2EE",
     borderWidth: 1,
-    borderColor: "#BBF7D0",
+    borderColor: "#EAF2EE",
     paddingVertical: 5,
     paddingHorizontal: 12,
     borderRadius: 20,
@@ -771,12 +771,12 @@ const styles = StyleSheet.create({
     width: 7,
     height: 7,
     borderRadius: 4,
-    backgroundColor: "#16A34A",
+    backgroundColor: "#4F8A72",
   },
   syncText: {
     fontSize: 12.5,
     fontWeight: "600",
-    color: "#15803D",
+    color: "#4F8A72",
   },
   profileContainer: {
     flexDirection: "row",
@@ -787,21 +787,21 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     alignItems: "center",
     justifyContent: "center",
   },
   avatarText: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#334155",
+    color: "#28242B",
   },
   userRole: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#0F172A",
+    color: "#28242B",
   },
   headerSearchAnchor: {
     position: "relative",
@@ -810,9 +810,9 @@ const styles = StyleSheet.create({
   headerSearchWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 7,
@@ -821,12 +821,12 @@ const styles = StyleSheet.create({
   },
   headerSearchIcon: {
     fontSize: 12,
-    color: "#94A3B8",
+    color: "#77717A",
   },
   headerSearchInput: {
     flex: 1,
     fontSize: 12.5,
-    color: "#0F172A",
+    color: "#28242B",
     padding: 0,
     ...Platform.select({
       web: { outlineStyle: "none" },
@@ -840,7 +840,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     paddingVertical: 6,
     maxHeight: 360,
     overflow: "hidden",
@@ -855,7 +855,7 @@ const styles = StyleSheet.create({
   searchSectionTitle: {
     fontSize: 10.5,
     fontWeight: "700",
-    color: "#94A3B8",
+    color: "#77717A",
     textTransform: "uppercase",
     letterSpacing: 0.5,
     paddingHorizontal: 14,
@@ -876,16 +876,16 @@ const styles = StyleSheet.create({
   searchResultTitle: {
     fontSize: 12.5,
     fontWeight: "600",
-    color: "#0F172A",
+    color: "#28242B",
   },
   searchResultSubtitle: {
     fontSize: 11,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 1,
   },
   searchNoResults: {
     fontSize: 12,
-    color: "#94A3B8",
+    color: "#77717A",
     paddingVertical: 12,
     paddingHorizontal: 14,
     textAlign: "center",
@@ -896,12 +896,12 @@ const styles = StyleSheet.create({
   userNameText: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
     lineHeight: 16,
   },
   userRoleText: {
     fontSize: 11,
-    color: "#64748B",
+    color: "#77717A",
     fontWeight: "500",
   },
   branchAnchorContainer: {
@@ -923,7 +923,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     paddingVertical: 8,
     minWidth: 260,
     zIndex: 9999,
@@ -946,7 +946,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     paddingVertical: 8,
     minWidth: 230,
     ...Platform.select({
@@ -958,7 +958,7 @@ const styles = StyleSheet.create({
   dropdownTitle: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#94A3B8",
+    color: "#77717A",
     textTransform: "uppercase",
     letterSpacing: 0.5,
     paddingHorizontal: 14,
@@ -973,51 +973,51 @@ const styles = StyleSheet.create({
     cursor: "pointer",
   },
   dropdownItemSelected: {
-    backgroundColor: "#F0FDFA",
+    backgroundColor: "#E8D5DD",
   },
   dropdownItemText: {
     fontSize: 13,
-    color: "#334155",
+    color: "#28242B",
     fontWeight: "500",
   },
   dropdownItemTextSelected: {
-    color: "#0F766E",
+    color: "#B9829A",
     fontWeight: "700",
   },
   checkmark: {
     fontSize: 12,
-    color: "#0F766E",
+    color: "#B9829A",
     fontWeight: "700",
   },
   syncBadgeOffline: {
-    backgroundColor: "#FEE2E2",
-    borderColor: "#FCA5A5",
+    backgroundColor: "#F7EDEE",
+    borderColor: "#F7EDEE",
   },
   syncDotOffline: {
-    backgroundColor: "#EF4444",
+    backgroundColor: "#B85C64",
   },
   syncTextOffline: {
-    color: "#B91C1C",
+    color: "#B85C64",
   },
   syncBadgePending: {
-    backgroundColor: "#FEF3C7",
-    borderColor: "#FDE68A",
+    backgroundColor: "#F7F0E5",
+    borderColor: "#F7F0E5",
   },
   syncDotPending: {
-    backgroundColor: "#D97706",
+    backgroundColor: "#C49752",
   },
   syncTextPending: {
-    color: "#B45309",
+    color: "#C49752",
   },
   syncBadgeSyncing: {
-    backgroundColor: "#EFF6FF",
-    borderColor: "#BFDBFE",
+    backgroundColor: "#E8D5DD",
+    borderColor: "#E8D5DD",
   },
   syncDotSyncing: {
-    backgroundColor: "#2563EB",
+    backgroundColor: "#B9829A",
   },
   syncTextSyncing: {
-    color: "#1D4ED8",
+    color: "#A66D86",
   },
   syncBadgeMobile: {
     paddingVertical: 3,
@@ -1050,7 +1050,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     backgroundColor: "#FFF",
     cursor: "pointer",
   },
@@ -1063,7 +1063,7 @@ const styles = StyleSheet.create({
   signOutText: {
     fontSize: 11.5,
     fontWeight: "600",
-    color: "#64748B",
+    color: "#77717A",
   },
   signOutTextMobile: {
     fontSize: 12,
@@ -1072,9 +1072,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "#F5F3FF",
+    backgroundColor: "#E8D5DD",
     borderWidth: 1,
-    borderColor: "#DDD6FE",
+    borderColor: "#E8D5DD",
     paddingVertical: 5,
     paddingHorizontal: 10,
     borderRadius: 8,
@@ -1086,12 +1086,12 @@ const styles = StyleSheet.create({
   headerPlanTitle: {
     fontSize: 11.5,
     fontWeight: "700",
-    color: "#6D28D9",
+    color: "#A66D86",
     lineHeight: 14,
   },
   headerPlanSubtitle: {
     fontSize: 9.5,
-    color: "#8B5CF6",
+    color: "#B9829A",
     fontWeight: "600",
   },
   branchStoreIcon: {
@@ -1108,12 +1108,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   modeTogglePillMulti: {
-    backgroundColor: "#F0FDFA",
-    borderColor: "#99F6E4",
+    backgroundColor: "#E8D5DD",
+    borderColor: "#E8D5DD",
   },
   modeTogglePillSingle: {
-    backgroundColor: "#EFF6FF",
-    borderColor: "#BFDBFE",
+    backgroundColor: "#E8D5DD",
+    borderColor: "#E8D5DD",
   },
   modeToggleIcon: {
     fontSize: 12,
@@ -1123,14 +1123,14 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   modeToggleTextMulti: {
-    color: "#0F766E",
+    color: "#B9829A",
   },
   modeToggleTextSingle: {
-    color: "#1D4ED8",
+    color: "#A66D86",
   },
   dropdownDivider: {
     height: 1,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     marginVertical: 6,
   },
   dropdownModeSection: {
@@ -1140,7 +1140,7 @@ const styles = StyleSheet.create({
   dropdownModeSectionTitle: {
     fontSize: 10,
     fontWeight: "800",
-    color: "#94A3B8",
+    color: "#77717A",
     letterSpacing: 0.5,
     marginBottom: 4,
     paddingHorizontal: 6,
@@ -1155,23 +1155,23 @@ const styles = StyleSheet.create({
     cursor: "pointer",
   },
   dropdownModeBtnActive: {
-    backgroundColor: "#F0FDFA",
+    backgroundColor: "#E8D5DD",
   },
   dropdownModeBtnText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#334155",
+    color: "#28242B",
   },
   dropdownModeBtnTextActive: {
-    color: "#0F766E",
+    color: "#B9829A",
     fontWeight: "750",
   },
   quickSettingsButton: {
     padding: 7,
     borderRadius: 8,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     cursor: "pointer",
     alignItems: "center",
     justifyContent: "center",

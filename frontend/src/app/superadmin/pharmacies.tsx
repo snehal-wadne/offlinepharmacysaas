@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { SuperAdminPalette as C } from '../../constants/theme';
 import { useIsMobile } from '../../utils/responsive';
 import {
   Pressable,
@@ -89,7 +90,7 @@ export default function PharmaciesTenantsPage() {
           value={String(pharmacies.length)}
           subtitle="View all pharmacies"
           icon="⌂"
-          color="#DFF5ED"
+          color={C.sageTint}
         />
 
         <SummaryCard
@@ -97,7 +98,7 @@ export default function PharmaciesTenantsPage() {
           value={String(activeCount)}
           subtitle="Currently active"
           icon="✓"
-          color="#E7F0FF"
+          color={C.softRose}
         />
 
         <SummaryCard
@@ -105,7 +106,7 @@ export default function PharmaciesTenantsPage() {
           value={String(expiringCount)}
           subtitle="Within next 30 days"
           icon="◷"
-          color="#FFF4D9"
+          color={C.goldTint}
         />
 
         <SummaryCard
@@ -113,19 +114,19 @@ export default function PharmaciesTenantsPage() {
           value={String(expiredCount)}
           subtitle="Subscription expired"
           icon="×"
-          color="#FEE2E2"
+          color={C.redTint}
         />
       </View>
 
       <View style={styles.filters}>
-        <View style={styles.searchBox}>
+        <View style={[styles.searchBox, isMobile && styles.searchBoxMobile]}>
           <Text style={styles.searchIcon}>⌕</Text>
 
           <TextInput
             value={search}
             onChangeText={setSearch}
             placeholder="Search pharmacy name, admin..."
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor={C.mutedGray}
             style={styles.searchInput}
           />
         </View>
@@ -282,7 +283,7 @@ function SummaryCard({
 }) {
   return (
     <View style={styles.summaryCard}>
-      <View style={[styles.summaryIcon, { backgroundColor: color }]}>
+      <View style={[styles.summaryIcon, { backgroundColor: C.softRose }]}>
         <Text style={styles.summaryIconText}>{icon}</Text>
       </View>
 
@@ -435,14 +436,14 @@ function PharmacyRow({
 
 function PlanBadge({ plan }: { plan: PlanName | string }) {
   const colors: Record<string, { bg: string; text: string }> = {
-    Basic: { bg: '#DBEAFE', text: '#2563EB' },
-    Standard: { bg: '#FEF3C7', text: '#B45309' },
-    Professional: { bg: '#EDE9FE', text: '#7C3AED' },
-    Enterprise: { bg: '#D1FAE5', text: '#047857' },
-    Custom: { bg: '#DFF5ED', text: '#047857' },
+    Basic: { bg: C.softRose, text: C.dustyRose },
+    Standard: { bg: C.goldTint, text: C.warmGold },
+    Professional: { bg: C.softRose, text: C.dustyRose },
+    Enterprise: { bg: C.sageTint, text: C.sageGreen },
+    Custom: { bg: C.sageTint, text: C.sageGreen },
   };
 
-  const scheme = (plan && colors[plan]) || { bg: '#F1F5F9', text: '#475569' };
+  const scheme = (plan && colors[plan]) || { bg: C.tableRose, text: C.mutedGray };
 
   return (
     <Text
@@ -477,7 +478,7 @@ function StatusBadge({ status }: { status: PharmacyStatus | string }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: C.offWhite,
   },
   content: {
     padding: 24,
@@ -499,23 +500,23 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   title: {
-    color: '#172033',
+    color: C.charcoal,
     fontSize: 28,
     fontWeight: '800',
   },
   subtitle: {
     marginTop: 5,
-    color: '#718096',
+    color: C.mutedGray,
     fontSize: 14,
   },
   addButton: {
     paddingHorizontal: 18,
     paddingVertical: 12,
     borderRadius: 8,
-    backgroundColor: '#047857',
+    backgroundColor: C.dustyRose,
   },
   addButtonText: {
-    color: '#FFFFFF',
+    color: C.white,
     fontSize: 13,
     fontWeight: '800',
   },
@@ -531,9 +532,9 @@ const styles = StyleSheet.create({
     minHeight: 92,
     padding: 16,
     borderRadius: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: C.white,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: C.softGray,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
@@ -546,23 +547,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   summaryIconText: {
-    color: '#047857',
+    color: C.iconRose,
     fontSize: 20,
     fontWeight: '800',
   },
   summaryTitle: {
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 12,
   },
   summaryValue: {
     marginTop: 3,
-    color: '#172033',
+    color: C.midnightViolet,
     fontSize: 24,
     fontWeight: '800',
   },
   summarySubtitle: {
     marginTop: 2,
-    color: '#94A3B8',
+    color: C.mutedGray,
     fontSize: 11,
   },
   filters: {
@@ -581,19 +582,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
+    borderColor: C.softGray,
+    backgroundColor: C.white,
     flexDirection: 'row',
     alignItems: 'center',
   },
+  searchBoxMobile: {
+    width: '100%',
+    flexBasis: '100%',
+  },
   searchIcon: {
     marginRight: 7,
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 20,
   },
   searchInput: {
     flex: 1,
-    color: '#334155',
+    color: C.mutedGray,
     fontSize: 13,
   },
   filterWrapper: {
@@ -607,26 +612,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
+    borderColor: C.softGray,
+    backgroundColor: C.white,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   activeFilterButton: {
-    borderColor: '#047857',
-    backgroundColor: '#F0FDF4',
+    borderColor: C.sageGreen,
+    backgroundColor: C.sageTint,
   },
   activeFilterText: {
-    color: '#047857',
+    color: C.sageGreen,
     fontWeight: '800',
   },
   filterText: {
-    color: '#334155',
+    color: C.mutedGray,
     fontSize: 13,
   },
   filterArrow: {
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 17,
   },
   dropdown: {
@@ -636,8 +641,8 @@ const styles = StyleSheet.create({
     minWidth: 180,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
+    borderColor: C.softGray,
+    backgroundColor: C.white,
     zIndex: 10001,
     elevation: 10001,
     shadowColor: '#000',
@@ -648,36 +653,36 @@ const styles = StyleSheet.create({
   dropdownItem: {
     padding: 11,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: C.tableRose,
   },
   activeDropdownItem: {
-    backgroundColor: '#E2F5EF',
+    backgroundColor: C.selectedRose,
   },
   activeDropdownText: {
-    color: '#047857',
+    color: C.sageGreen,
     fontWeight: '800',
   },
   dropdownText: {
-    color: '#334155',
+    color: C.mutedGray,
     fontSize: 13,
   },
   clearButton: {
     height: 42,
     paddingHorizontal: 14,
     borderRadius: 8,
-    backgroundColor: '#EEF2F7',
+    backgroundColor: C.tableRose,
     justifyContent: 'center',
   },
   clearText: {
-    color: '#475569',
+    color: C.mutedGray,
     fontSize: 13,
     fontWeight: '700',
   },
   tableCard: {
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
+    borderColor: C.softGray,
+    backgroundColor: C.white,
     overflow: 'hidden',
     position: 'relative',
     zIndex: 1,
@@ -688,9 +693,9 @@ const styles = StyleSheet.create({
   tableHeader: {
     minHeight: 48,
     paddingHorizontal: 12,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: C.offWhite,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: C.softGray,
     flexDirection: 'row',
     alignItems: 'center',
   },
@@ -698,12 +703,12 @@ const styles = StyleSheet.create({
     minHeight: 76,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: C.softGray,
     flexDirection: 'row',
     alignItems: 'center',
   },
   heading: {
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 10,
     fontWeight: '800',
   },
@@ -740,33 +745,33 @@ const styles = StyleSheet.create({
     width: 35,
     height: 35,
     borderRadius: 8,
-    backgroundColor: '#DFF5ED',
+    backgroundColor: C.sageTint,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
-    color: '#047857',
+    color: C.sageGreen,
     fontSize: 12,
     fontWeight: '800',
   },
   pharmacyName: {
-    color: '#1E293B',
+    color: C.charcoal,
     fontSize: 12,
     fontWeight: '800',
   },
   branchText: {
     marginTop: 3,
-    color: '#94A3B8',
+    color: C.mutedGray,
     fontSize: 10,
   },
   adminName: {
-    color: '#334155',
+    color: C.mutedGray,
     fontSize: 12,
     fontWeight: '700',
   },
   email: {
     marginTop: 3,
-    color: '#94A3B8',
+    color: C.mutedGray,
     fontSize: 10,
   },
   planBadge: {
@@ -779,7 +784,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   userText: {
-    color: '#334155',
+    color: C.mutedGray,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -788,33 +793,33 @@ const styles = StyleSheet.create({
     height: 4,
     marginTop: 7,
     borderRadius: 5,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: C.softGray,
   },
   progressValue: {
     height: 4,
     borderRadius: 5,
-    backgroundColor: '#16A47A',
+    backgroundColor: C.dustyRose,
   },
   cellText: {
-    color: '#334155',
+    color: C.mutedGray,
     fontSize: 12,
   },
   expiryText: {
-    color: '#334155',
+    color: C.mutedGray,
     fontSize: 11,
     fontWeight: '700',
   },
   daysText: {
     marginTop: 4,
-    color: '#059669',
+    color: C.sageGreen,
     fontSize: 10,
     fontWeight: '700',
   },
   orangeText: {
-    color: '#D97706',
+    color: C.warmGold,
   },
   redText: {
-    color: '#DC2626',
+    color: C.mutedRed,
   },
   statusBadge: {
     alignSelf: 'flex-start',
@@ -826,27 +831,27 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   activeBadge: {
-    color: '#047857',
-    backgroundColor: '#D1FAE5',
+    color: C.sageGreen,
+    backgroundColor: C.sageTint,
   },
   expiringBadge: {
-    color: '#B45309',
-    backgroundColor: '#FEF3C7',
+    color: C.warmGold,
+    backgroundColor: C.goldTint,
   },
   expiredBadge: {
-    color: '#B91C1C',
-    backgroundColor: '#FEE2E2',
+    color: C.mutedRed,
+    backgroundColor: C.redTint,
   },
   deactivatedBadge: {
-    color: '#475569',
-    backgroundColor: '#E2E8F0',
+    color: C.mutedGray,
+    backgroundColor: C.softGray,
   },
   pendingBadge: {
-    color: '#4338CA',
-    backgroundColor: '#E0E7FF',
+    color: C.dustyRose,
+    backgroundColor: C.softRose,
   },
   viewText: {
-    color: '#047857',
+    color: C.deepDustyRose,
     fontSize: 12,
     fontWeight: '800',
   },
@@ -857,7 +862,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   footerText: {
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 12,
   },
   pagination: {
@@ -870,27 +875,27 @@ const styles = StyleSheet.create({
     height: 28,
     borderRadius: 5,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
+    borderColor: C.softGray,
+    backgroundColor: C.white,
     alignItems: 'center',
     justifyContent: 'center',
   },
   activePage: {
-    borderColor: '#047857',
-    backgroundColor: '#047857',
+    borderColor: C.dustyRose,
+    backgroundColor: C.dustyRose,
   },
   activePageText: {
-    color: '#FFFFFF',
+    color: C.white,
     fontWeight: '800',
   },
   dots: {
-    color: '#64748B',
+    color: C.mutedGray,
   },
   emptyBox: {
     padding: 40,
     alignItems: 'center',
   },
   emptyText: {
-    color: '#64748B',
+    color: C.mutedGray,
   },
 });

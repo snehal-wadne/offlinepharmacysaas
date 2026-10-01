@@ -818,9 +818,9 @@ export default function LoginScreen({
               {googleOnboardingData ? (
                 <View
                   style={{
-                    backgroundColor: "#ecfdf5",
+                    backgroundColor: "#EAF2EE",
                     borderWidth: 1,
-                    borderColor: "#a7f3d0",
+                    borderColor: "#EAF2EE",
                     borderRadius: 10,
                     padding: 12,
                     marginBottom: 16,
@@ -841,7 +841,7 @@ export default function LoginScreen({
                     <View style={{ flex: 1 }}>
                       <Text
                         style={{
-                          color: "#065f46",
+                          color: "#4F8A72",
                           fontWeight: "700",
                           fontSize: 13,
                         }}
@@ -849,7 +849,7 @@ export default function LoginScreen({
                         Google ID Verified
                       </Text>
                       <Text
-                        style={{ color: "#047857", fontSize: 12 }}
+                        style={{ color: "#4F8A72", fontSize: 12 }}
                         numberOfLines={1}
                       >
                         {googleOnboardingData.email}
@@ -865,12 +865,12 @@ export default function LoginScreen({
                         borderRadius: 6,
                         backgroundColor: "#ffffff",
                         borderWidth: 1,
-                        borderColor: "#cbd5e1",
+                        borderColor: "#E5DFE4",
                       }}
                     >
                       <Text
                         style={{
-                          color: "#475569",
+                          color: "#77717A",
                           fontSize: 12,
                           fontWeight: "600",
                         }}
@@ -988,7 +988,7 @@ export default function LoginScreen({
                       <TextInput
                         style={styles.input}
                         placeholder="e.g. owner@pharmacy.com"
-                        placeholderTextColor="#94a3b8"
+                        placeholderTextColor="#77717A"
                         value={signInEmail}
                         onChangeText={(text) => {
                           setSignInEmail(text);
@@ -1010,7 +1010,7 @@ export default function LoginScreen({
                       <TextInput
                         style={styles.input}
                         placeholder="Enter your password"
-                        placeholderTextColor="#94a3b8"
+                        placeholderTextColor="#77717A"
                         secureTextEntry={!showSignInPassword}
                         value={signInPassword}
                         onChangeText={(text) => {
@@ -1060,9 +1060,9 @@ export default function LoginScreen({
                     style={{
                       flexDirection: "row",
                       alignItems: "center",
-                      backgroundColor: "#F0FDFA",
+                      backgroundColor: "#E8D5DD",
                       borderWidth: 1,
-                      borderColor: "#99F6E4",
+                      borderColor: "#E8D5DD",
                       borderRadius: 8,
                       paddingHorizontal: 12,
                       paddingVertical: 10,
@@ -1075,7 +1075,7 @@ export default function LoginScreen({
                       <Text
                         style={{
                           fontSize: 11.5,
-                          color: "#0F766E",
+                          color: "#B9829A",
                           fontWeight: "700",
                         }}
                       >
@@ -1084,7 +1084,7 @@ export default function LoginScreen({
                       <Text
                         style={{
                           fontSize: 11,
-                          color: "#334155",
+                          color: "#28242B",
                           marginTop: 2,
                         }}
                       >
@@ -1248,7 +1248,7 @@ export default function LoginScreen({
                           <TextInput
                             style={styles.input}
                             placeholder="e.g. Apex Pharma Distributor"
-                            placeholderTextColor="#94a3b8"
+                            placeholderTextColor="#77717A"
                             value={supplierCompanyName}
                             onChangeText={setSupplierCompanyName}
                             autoCapitalize="words"
@@ -1267,7 +1267,7 @@ export default function LoginScreen({
                           <TextInput
                             style={styles.input}
                             placeholder="e.g. Vikram Patel"
-                            placeholderTextColor="#94a3b8"
+                            placeholderTextColor="#77717A"
                             value={supplierContactPerson}
                             onChangeText={setSupplierContactPerson}
                             autoCapitalize="words"
@@ -1286,7 +1286,7 @@ export default function LoginScreen({
                           <TextInput
                             style={styles.input}
                             placeholder="orders@apexpharma.com"
-                            placeholderTextColor="#94a3b8"
+                            placeholderTextColor="#77717A"
                             value={supplierEmail}
                             onChangeText={setSupplierEmail}
                             keyboardType="email-address"
@@ -1304,7 +1304,7 @@ export default function LoginScreen({
                           <TextInput
                             style={styles.input}
                             placeholder="+91 98765 43210"
-                            placeholderTextColor="#94a3b8"
+                            placeholderTextColor="#77717A"
                             value={supplierPhone}
                             onChangeText={setSupplierPhone}
                             keyboardType="phone-pad"
@@ -1321,7 +1321,7 @@ export default function LoginScreen({
                           <TextInput
                             style={styles.input}
                             placeholder="e.g. Mumbai, Maharashtra"
-                            placeholderTextColor="#94a3b8"
+                            placeholderTextColor="#77717A"
                             value={supplierCity}
                             onChangeText={setSupplierCity}
                             editable={!isLoading}
@@ -1337,7 +1337,7 @@ export default function LoginScreen({
                           <TextInput
                             style={styles.input}
                             placeholder="27AABCS1429B1Z1"
-                            placeholderTextColor="#94a3b8"
+                            placeholderTextColor="#77717A"
                             value={supplierGstin}
                             onChangeText={setSupplierGstin}
                             autoCapitalize="characters"
@@ -1354,7 +1354,7 @@ export default function LoginScreen({
                           <TextInput
                             style={styles.input}
                             placeholder="Medicines & Injections"
-                            placeholderTextColor="#94a3b8"
+                            placeholderTextColor="#77717A"
                             value={supplierCategory}
                             onChangeText={setSupplierCategory}
                             editable={!isLoading}
@@ -1370,7 +1370,7 @@ export default function LoginScreen({
                           <TextInput
                             style={styles.input}
                             placeholder="At least 6 characters"
-                            placeholderTextColor="#94a3b8"
+                            placeholderTextColor="#77717A"
                             secureTextEntry={!showSupplierPassword}
                             value={supplierPassword}
                             onChangeText={setSupplierPassword}
@@ -1397,7 +1397,7 @@ export default function LoginScreen({
                           <TextInput
                             style={styles.input}
                             placeholder="Confirm your password"
-                            placeholderTextColor="#94a3b8"
+                            placeholderTextColor="#77717A"
                             secureTextEntry={!showSupplierPassword}
                             value={supplierConfirmPassword}
                             onChangeText={setSupplierConfirmPassword}
@@ -1410,7 +1410,7 @@ export default function LoginScreen({
                       <Pressable
                         style={[
                           styles.signInButton,
-                          { backgroundColor: "#0F766E" },
+                          { backgroundColor: "#B9829A" },
                           isLoading && styles.disabledButton,
                         ]}
                         onPress={handleSupplierSignUp}
@@ -1458,7 +1458,7 @@ export default function LoginScreen({
                           <TextInput
                             style={styles.input}
                             placeholder="e.g. Rahul Sharma"
-                            placeholderTextColor="#94a3b8"
+                            placeholderTextColor="#77717A"
                             value={staffName}
                             onChangeText={setStaffName}
                             autoCapitalize="words"
@@ -1475,7 +1475,7 @@ export default function LoginScreen({
                           <TextInput
                             style={styles.input}
                             placeholder="rahul.staff@pharmacy.com"
-                            placeholderTextColor="#94a3b8"
+                            placeholderTextColor="#77717A"
                             value={staffEmail}
                             onChangeText={setStaffEmail}
                             keyboardType="email-address"
@@ -1493,7 +1493,7 @@ export default function LoginScreen({
                           <TextInput
                             style={styles.input}
                             placeholder="+91 98765 43210"
-                            placeholderTextColor="#94a3b8"
+                            placeholderTextColor="#77717A"
                             value={staffPhone}
                             onChangeText={setStaffPhone}
                             keyboardType="phone-pad"
@@ -1529,9 +1529,9 @@ export default function LoginScreen({
                                   paddingHorizontal: 12,
                                   borderRadius: 8,
                                   borderWidth: 1.5,
-                                  borderColor: isSelected ? "#0D9488" : "#CBD5E1",
+                                  borderColor: isSelected ? "#A66D86" : "#E5DFE4",
                                   backgroundColor: isSelected
-                                    ? "#F0FDFA"
+                                    ? "#E8D5DD"
                                     : "#FFFFFF",
                                 }}
                               >
@@ -1539,7 +1539,7 @@ export default function LoginScreen({
                                   style={{
                                     fontSize: 12,
                                     fontWeight: "700",
-                                    color: isSelected ? "#0D9488" : "#475569",
+                                    color: isSelected ? "#A66D86" : "#77717A",
                                   }}
                                 >
                                   {role}
@@ -1558,7 +1558,7 @@ export default function LoginScreen({
                           <TextInput
                             style={styles.input}
                             placeholder="Minimum 6 characters"
-                            placeholderTextColor="#94a3b8"
+                            placeholderTextColor="#77717A"
                             secureTextEntry={!showStaffPassword}
                             value={staffPassword}
                             onChangeText={setStaffPassword}
@@ -1585,7 +1585,7 @@ export default function LoginScreen({
                           <TextInput
                             style={styles.input}
                             placeholder="Confirm your password"
-                            placeholderTextColor="#94a3b8"
+                            placeholderTextColor="#77717A"
                             secureTextEntry={!showStaffPassword}
                             value={staffConfirmPassword}
                             onChangeText={setStaffConfirmPassword}
@@ -1598,7 +1598,7 @@ export default function LoginScreen({
                       <Pressable
                         style={[
                           styles.signInButton,
-                          { backgroundColor: "#0F766E" },
+                          { backgroundColor: "#B9829A" },
                           isLoading && styles.disabledButton,
                         ]}
                         onPress={handleStaffSignUp}
@@ -1635,7 +1635,7 @@ export default function LoginScreen({
                         backgroundColor: "#FFFFFF",
                         borderRadius: 14,
                         borderWidth: 1.5,
-                        borderColor: "#CCFBF1",
+                        borderColor: "#E8D5DD",
                         padding: 24,
                         alignItems: "center",
                         marginTop: 4,
@@ -1647,9 +1647,9 @@ export default function LoginScreen({
                           width: 56,
                           height: 56,
                           borderRadius: 28,
-                          backgroundColor: "#F0FDFA",
+                          backgroundColor: "#E8D5DD",
                           borderWidth: 2,
-                          borderColor: "#99F6E4",
+                          borderColor: "#E8D5DD",
                           alignItems: "center",
                           justifyContent: "center",
                           marginBottom: 14,
@@ -1662,7 +1662,7 @@ export default function LoginScreen({
                         style={{
                           fontSize: 17,
                           fontWeight: "800",
-                          color: "#0F766E",
+                          color: "#B9829A",
                           textAlign: "center",
                           marginBottom: 6,
                         }}
@@ -1673,7 +1673,7 @@ export default function LoginScreen({
                       <Text
                         style={{
                           fontSize: 13,
-                          color: "#475569",
+                          color: "#77717A",
                           textAlign: "center",
                           lineHeight: 19,
                           marginBottom: 20,
@@ -1692,7 +1692,7 @@ export default function LoginScreen({
                             paddingVertical: 14,
                             borderRadius: 10,
                             borderWidth: 1.5,
-                            borderColor: "#CBD5E1",
+                            borderColor: "#E5DFE4",
                             backgroundColor: "#FFFFFF",
                             marginBottom: 16,
                           },
@@ -1712,10 +1712,10 @@ export default function LoginScreen({
                       {/* Direct Admin Credentials Helper note */}
                       <View
                         style={{
-                          backgroundColor: "#F8FAFC",
+                          backgroundColor: "#F8F5F7",
                           borderRadius: 8,
                           borderWidth: 1,
-                          borderColor: "#E2E8F0",
+                          borderColor: "#E5DFE4",
                           padding: 12,
                           width: "100%",
                           marginBottom: 14,
@@ -1725,19 +1725,19 @@ export default function LoginScreen({
                           style={{
                             fontSize: 11,
                             fontWeight: "700",
-                            color: "#0F766E",
+                            color: "#B9829A",
                             marginBottom: 3,
                           }}
                         >
                           🔑 Existing Default Store Admin Credentials:
                         </Text>
-                        <Text style={{ fontSize: 11.5, color: "#334155" }}>
+                        <Text style={{ fontSize: 11.5, color: "#28242B" }}>
                           Email:{" "}
                           <Text style={{ fontWeight: "700" }}>
                             admin@falahpharmacy.com
                           </Text>
                         </Text>
-                        <Text style={{ fontSize: 11.5, color: "#334155" }}>
+                        <Text style={{ fontSize: 11.5, color: "#28242B" }}>
                           Password:{" "}
                           <Text style={{ fontWeight: "700" }}>password123</Text>
                         </Text>
@@ -1774,7 +1774,7 @@ export default function LoginScreen({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#F4FAF8",
+    backgroundColor: "#EAF2EE",
   },
   container: {
     flex: 1,
@@ -1784,7 +1784,7 @@ const styles = StyleSheet.create({
   },
   leftSection: {
     flex: 1,
-    backgroundColor: "#EAF7F3",
+    backgroundColor: "#EAF2EE",
     minHeight: 650,
     overflow: "hidden",
     position: "relative",
@@ -1825,7 +1825,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: "#D9F0E9",
+    backgroundColor: "#EAF2EE",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1836,14 +1836,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "800",
     letterSpacing: 1.2,
-    color: "#0F766E",
+    color: "#B9829A",
   },
   logoSubtitle: {
     marginTop: 2,
     fontSize: 10.5,
     fontWeight: "700",
     letterSpacing: 1.5,
-    color: "#64748B",
+    color: "#77717A",
   },
   mainContent: {
     flex: 1,
@@ -1854,28 +1854,28 @@ const styles = StyleSheet.create({
     fontSize: 36,
     lineHeight: 42,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
     letterSpacing: -0.5,
   },
   greenHeading: {
     fontSize: 36,
     lineHeight: 42,
     fontWeight: "800",
-    color: "#0F766E",
+    color: "#B9829A",
     letterSpacing: -0.5,
   },
   tagline: {
     marginTop: 8,
     fontSize: 15,
     fontWeight: "600",
-    color: "#475569",
+    color: "#77717A",
   },
   description: {
     marginTop: 12,
     maxWidth: 480,
     fontSize: 13,
     lineHeight: 20,
-    color: "#64748B",
+    color: "#77717A",
   },
   featuresContainer: {
     marginTop: 24,
@@ -1894,7 +1894,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
   },
   featureEmoji: {
     fontSize: 18,
@@ -1905,11 +1905,11 @@ const styles = StyleSheet.create({
   featureTitle: {
     fontSize: 13.5,
     fontWeight: "700",
-    color: "#1E293B",
+    color: "#28242B",
   },
   featureDescription: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 1,
   },
   footer: {
@@ -1937,11 +1937,11 @@ const styles = StyleSheet.create({
   footerTitle: {
     fontSize: 12.5,
     fontWeight: "700",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   footerText: {
     fontSize: 11,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
 
@@ -1967,24 +1967,24 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: "#E5DFE4",
   },
   mobileLogoBox: {
     width: 40,
     height: 40,
     borderRadius: 10,
-    backgroundColor: "#D9F0E9",
+    backgroundColor: "#EAF2EE",
     alignItems: "center",
     justifyContent: "center",
   },
   mobileBrandTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   mobileBrandSubtitle: {
     fontSize: 11,
-    color: "#64748B",
+    color: "#77717A",
   },
   loginCard: {
     maxWidth: 480,
@@ -1997,12 +1997,12 @@ const styles = StyleSheet.create({
   welcomeText: {
     fontSize: 26,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
     letterSpacing: -0.5,
   },
   welcomeSubtext: {
     fontSize: 13,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 4,
     lineHeight: 18,
   },
@@ -2010,7 +2010,7 @@ const styles = StyleSheet.create({
   /* Tabs */
   tabContainer: {
     flexDirection: "row",
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     borderRadius: 8,
     padding: 4,
     marginBottom: 18,
@@ -2023,7 +2023,7 @@ const styles = StyleSheet.create({
   },
   tabButtonActive: {
     backgroundColor: "#FFFFFF",
-    shadowColor: "#000",
+    shadowColor: "#28242B",
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 1,
@@ -2031,10 +2031,10 @@ const styles = StyleSheet.create({
   tabText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#64748B",
+    color: "#77717A",
   },
   tabTextActive: {
-    color: "#0F766E",
+    color: "#B9829A",
     fontWeight: "700",
   },
 
@@ -2043,9 +2043,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "#FEF2F2",
+    backgroundColor: "#F7EDEE",
     borderWidth: 1,
-    borderColor: "#FECACA",
+    borderColor: "#F7EDEE",
     padding: 10,
     borderRadius: 8,
     marginBottom: 14,
@@ -2056,29 +2056,29 @@ const styles = StyleSheet.create({
   errorText: {
     flex: 1,
     fontSize: 12.5,
-    color: "#B91C1C",
+    color: "#B85C64",
     fontWeight: "500",
   },
   successContainer: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "#ECFDF5",
+    backgroundColor: "#EAF2EE",
     borderWidth: 1,
-    borderColor: "#A7F3D0",
+    borderColor: "#EAF2EE",
     padding: 10,
     borderRadius: 8,
     marginBottom: 14,
   },
   successIcon: {
     fontSize: 14,
-    color: "#059669",
+    color: "#4F8A72",
     fontWeight: "800",
   },
   successText: {
     flex: 1,
     fontSize: 12.5,
-    color: "#059669",
+    color: "#4F8A72",
     fontWeight: "600",
   },
 
@@ -2090,12 +2090,12 @@ const styles = StyleSheet.create({
     gap: 12,
     backgroundColor: "#FFFFFF",
     borderWidth: 1.5,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     paddingVertical: 11,
     paddingHorizontal: 16,
     borderRadius: 8,
     marginBottom: 16,
-    shadowColor: "#000",
+    shadowColor: "#28242B",
     shadowOpacity: 0.03,
     shadowRadius: 3,
     elevation: 1,
@@ -2104,11 +2104,11 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
   },
   googleGText: {
     fontSize: 14,
@@ -2118,7 +2118,7 @@ const styles = StyleSheet.create({
   googleButtonText: {
     fontSize: 13.5,
     fontWeight: "700",
-    color: "#1E293B",
+    color: "#28242B",
   },
 
   dividerRow: {
@@ -2130,11 +2130,11 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: "#E2E8F0",
+    backgroundColor: "#E5DFE4",
   },
   dividerText: {
     fontSize: 11.5,
-    color: "#94A3B8",
+    color: "#77717A",
     fontWeight: "500",
   },
 
@@ -2145,14 +2145,14 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 12.5,
     fontWeight: "700",
-    color: "#334155",
+    color: "#28242B",
     marginBottom: 6,
   },
   inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     backgroundColor: "#FFFFFF",
     paddingHorizontal: 10,
@@ -2166,7 +2166,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: "100%",
     fontSize: 13.5,
-    color: "#0F172A",
+    color: "#28242B",
   },
   eyeButton: {
     padding: 6,
@@ -2185,16 +2185,16 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
-    backgroundColor: "#F8FAFC",
+    borderColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
   },
   roleChipActive: {
-    backgroundColor: "#0F766E",
-    borderColor: "#0F766E",
+    backgroundColor: "#B9829A",
+    borderColor: "#B9829A",
   },
   roleChipText: {
     fontSize: 12,
-    color: "#475569",
+    color: "#77717A",
     fontWeight: "600",
   },
   roleChipTextActive: {
@@ -2210,7 +2210,7 @@ const styles = StyleSheet.create({
   },
   branchSubLabel: {
     fontSize: 11,
-    color: "#64748B",
+    color: "#77717A",
     fontWeight: "500",
   },
   branchChip: {
@@ -2220,20 +2220,20 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
-    backgroundColor: "#F8FAFC",
+    borderColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
     gap: 4,
   },
   branchChipActive: {
-    backgroundColor: "#0F766E",
-    borderColor: "#0F766E",
+    backgroundColor: "#B9829A",
+    borderColor: "#B9829A",
   },
   branchChipIcon: {
     fontSize: 12,
   },
   branchChipText: {
     fontSize: 11.5,
-    color: "#475569",
+    color: "#77717A",
     fontWeight: "600",
   },
   branchChipTextActive: {
@@ -2257,13 +2257,13 @@ const styles = StyleSheet.create({
     height: 18,
     borderRadius: 4,
     borderWidth: 1.5,
-    borderColor: "#94A3B8",
+    borderColor: "#77717A",
     alignItems: "center",
     justifyContent: "center",
   },
   checkboxSelected: {
-    backgroundColor: "#0F766E",
-    borderColor: "#0F766E",
+    backgroundColor: "#B9829A",
+    borderColor: "#B9829A",
   },
   checkMark: {
     color: "#FFFFFF",
@@ -2272,21 +2272,21 @@ const styles = StyleSheet.create({
   },
   rememberText: {
     fontSize: 12.5,
-    color: "#64748B",
+    color: "#77717A",
   },
   forgotText: {
     fontSize: 12.5,
     fontWeight: "600",
-    color: "#0F766E",
+    color: "#B9829A",
   },
 
   signInButton: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#0F766E",
+    shadowColor: "#B9829A",
     shadowOpacity: 0.25,
     shadowRadius: 5,
     elevation: 2,
@@ -2307,17 +2307,17 @@ const styles = StyleSheet.create({
   },
   switchModeText: {
     fontSize: 13,
-    color: "#64748B",
+    color: "#77717A",
     fontWeight: "500",
   },
   switchModeHighlight: {
-    color: "#0F766E",
+    color: "#B9829A",
     fontWeight: "750",
     textDecorationLine: "underline",
   },
   sectionHeaderRow: {
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: "#E5DFE4",
     paddingBottom: 6,
     marginTop: 10,
     marginBottom: 12,
@@ -2325,13 +2325,13 @@ const styles = StyleSheet.create({
   sectionHeaderTitle: {
     fontSize: 12.5,
     fontWeight: "700",
-    color: "#0F766E",
+    color: "#B9829A",
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   helperText: {
     fontSize: 11,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 4,
     marginLeft: 2,
     marginBottom: 6,
@@ -2348,16 +2348,16 @@ const styles = StyleSheet.create({
 
   demoNotice: {
     marginTop: 18,
-    backgroundColor: "#F0FDFA",
+    backgroundColor: "#E8D5DD",
     borderWidth: 1,
-    borderColor: "#CCFBF1",
+    borderColor: "#E8D5DD",
     padding: 10,
     borderRadius: 8,
     alignItems: "center",
   },
   demoNoticeText: {
     fontSize: 12,
-    color: "#0F766E",
+    color: "#B9829A",
     textAlign: "center",
   },
 
@@ -2375,7 +2375,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 16,
     padding: 20,
-    shadowColor: "#000",
+    shadowColor: "#28242B",
     shadowOpacity: 0.2,
     shadowRadius: 10,
     elevation: 5,
@@ -2395,21 +2395,21 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     alignItems: "center",
     justifyContent: "center",
   },
   googleModalTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   googleModalClose: {
     padding: 6,
   },
   googleModalSubtitle: {
     fontSize: 12.5,
-    color: "#64748B",
+    color: "#77717A",
     marginBottom: 16,
   },
   googleAccountsList: {
@@ -2423,14 +2423,14 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
   },
   googleAvatarCircle: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2442,15 +2442,15 @@ const styles = StyleSheet.create({
   googleAccName: {
     fontSize: 13.5,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   googleAccEmail: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 1,
   },
   googleAccBadge: {
-    backgroundColor: "#E0F2FE",
+    backgroundColor: "#E8D5DD",
     paddingHorizontal: 7,
     paddingVertical: 3,
     borderRadius: 6,
@@ -2458,21 +2458,21 @@ const styles = StyleSheet.create({
   googleAccBadgeText: {
     fontSize: 10.5,
     fontWeight: "700",
-    color: "#0369A1",
+    color: "#A66D86",
   },
   googleOwnerAccountItem: {
-    borderColor: "#0D9488",
-    backgroundColor: "#F0FDFA",
+    borderColor: "#A66D86",
+    backgroundColor: "#E8D5DD",
     borderWidth: 1.5,
   },
   googleOwnerAvatarCircle: {
-    backgroundColor: "#0D9488",
+    backgroundColor: "#A66D86",
   },
   googleOwnerBadge: {
-    backgroundColor: "#CCFBF1",
+    backgroundColor: "#E8D5DD",
   },
   googleOwnerBadgeText: {
-    color: "#0F766E",
+    color: "#B9829A",
     fontWeight: "800",
   },
   customGoogleBox: {
@@ -2481,13 +2481,13 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
-    backgroundColor: "#F8FAFC",
+    borderColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
   },
   customGoogleTitle: {
     fontSize: 12.5,
     fontWeight: "700",
-    color: "#334155",
+    color: "#28242B",
     marginBottom: 8,
   },
   customGoogleInputRow: {
@@ -2495,7 +2495,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     paddingHorizontal: 10,
     marginBottom: 8,
@@ -2504,7 +2504,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 38,
     fontSize: 13,
-    color: "#0F172A",
+    color: "#28242B",
   },
   ownerCheckboxRow: {
     flexDirection: "row",
@@ -2514,10 +2514,10 @@ const styles = StyleSheet.create({
   },
   ownerCheckboxText: {
     fontSize: 12,
-    color: "#334155",
+    color: "#28242B",
   },
   customGoogleSubmitBtn: {
-    backgroundColor: "#0D9488",
+    backgroundColor: "#A66D86",
     paddingVertical: 9,
     borderRadius: 8,
     alignItems: "center",
@@ -2531,17 +2531,17 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     alignItems: "center",
     borderRadius: 8,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
   },
   googleCancelBtnText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#475569",
+    color: "#77717A",
   },
   quickLoginBox: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     padding: 10,
     marginBottom: 14,
@@ -2549,7 +2549,7 @@ const styles = StyleSheet.create({
   quickLoginTitle: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
     textTransform: "uppercase",
     letterSpacing: 0.5,
     marginBottom: 6,
@@ -2562,7 +2562,7 @@ const styles = StyleSheet.create({
   quickRolePill: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     paddingHorizontal: 8,
     paddingVertical: 5,
     borderRadius: 6,
@@ -2571,16 +2571,16 @@ const styles = StyleSheet.create({
   quickRoleText: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#334155",
+    color: "#28242B",
   },
   quickRoleSupplier: {
-    backgroundColor: "#F0FDFA",
-    borderColor: "#0F766E",
+    backgroundColor: "#E8D5DD",
+    borderColor: "#B9829A",
   },
   quickRoleSupplierText: {
     fontSize: 11,
     fontWeight: "800",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   signUpTypeContainer: {
     flexDirection: "row",
@@ -2591,17 +2591,17 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1.5,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 10,
     padding: 12,
     gap: 10,
     cursor: "pointer",
   },
   signUpTypeButtonActive: {
-    backgroundColor: "#F0FDFA",
-    borderColor: "#0F766E",
+    backgroundColor: "#E8D5DD",
+    borderColor: "#B9829A",
   },
   signUpTypeIcon: {
     fontSize: 22,
@@ -2609,15 +2609,15 @@ const styles = StyleSheet.create({
   signUpTypeTitle: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#475569",
+    color: "#77717A",
   },
   signUpTypeTitleActive: {
-    color: "#0F766E",
+    color: "#B9829A",
     fontWeight: "800",
   },
   signUpTypeSub: {
     fontSize: 10,
-    color: "#94A3B8",
+    color: "#77717A",
     marginTop: 1,
   },
 });

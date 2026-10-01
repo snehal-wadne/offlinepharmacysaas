@@ -191,7 +191,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     padding: 20,
   },
   cardHeader: {
@@ -203,11 +203,11 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   cardSubtitle: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   headerActionBtn: {
@@ -217,17 +217,17 @@ const styles = StyleSheet.create({
   headerActionText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#0284C7",
+    color: "#A66D86",
   },
   mobileCardsContainer: {
     gap: 12,
   },
   mobileCategoryCard: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderRadius: 8,
     padding: 12,
     borderWidth: 1,
-    borderColor: "#F1F5F9",
+    borderColor: "#F8F5F7",
   },
   mobileCardHeader: {
     flexDirection: "row",
@@ -238,10 +238,10 @@ const styles = StyleSheet.create({
   mobileCategoryTitle: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#1E293B",
+    color: "#28242B",
   },
   totalBadge: {
-    backgroundColor: "#E2E8F0",
+    backgroundColor: "#E5DFE4",
     borderRadius: 12,
     paddingHorizontal: 8,
     paddingVertical: 2,
@@ -249,7 +249,7 @@ const styles = StyleSheet.create({
   totalBadgeText: {
     fontSize: 11,
     fontWeight: "600",
-    color: "#475569",
+    color: "#77717A",
   },
   mobileMetricsRow: {
     flexDirection: "row",
@@ -264,39 +264,39 @@ const styles = StyleSheet.create({
   mobileMetricLabel: {
     fontSize: 9,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
     marginBottom: 2,
   },
   inStockBadge: {
-    backgroundColor: "#F0FDF4",
+    backgroundColor: "#EAF2EE",
   },
   inStockVal: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#16A34A",
+    color: "#4F8A72",
   },
   lowStockBadge: {
-    backgroundColor: "#FFFBEB",
+    backgroundColor: "#F7F0E5",
   },
   lowStockVal: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#D97706",
+    color: "#C49752",
   },
   outOfStockBadge: {
-    backgroundColor: "#FEF2F2",
+    backgroundColor: "#F7EDEE",
   },
   outOfStockVal: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#DC2626",
+    color: "#B85C64",
   },
   tableContainer: {
     minWidth: 500,
   },
   tableHeaderRow: {
     flexDirection: "row",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 6,
@@ -305,18 +305,18 @@ const styles = StyleSheet.create({
   thCell: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
   },
   tableRow: {
     flexDirection: "row",
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
     alignItems: "center",
   },
   tableRowAlt: {
-    backgroundColor: "#FAFAFA",
+    backgroundColor: "#F8F5F7",
   },
   tdCell: {
     fontSize: 13,
@@ -330,26 +330,26 @@ const styles = StyleSheet.create({
   },
   categoryText: {
     fontWeight: "600",
-    color: "#334155",
+    color: "#28242B",
   },
   totalText: {
     fontWeight: "600",
-    color: "#0F172A",
+    color: "#28242B",
   },
   inStockText: {
     fontWeight: "600",
-    color: "#16A34A",
+    color: "#4F8A72",
   },
   lowStockText: {
     fontWeight: "700",
-    color: "#D97706",
+    color: "#C49752",
   },
   outOfStockText: {
     fontWeight: "700",
-    color: "#DC2626",
+    color: "#B85C64",
   },
   zeroText: {
-    color: "#94A3B8",
+    color: "#77717A",
   },
   emptyContainer: {
     paddingVertical: 24,
@@ -358,14 +358,14 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 13,
-    color: "#94A3B8",
+    color: "#77717A",
     fontStyle: "italic",
   },
   cardFooter: {
     marginTop: 16,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
+    borderTopColor: "#F8F5F7",
   },
   viewAllBtn: {
     alignItems: "center",
@@ -374,6 +374,6 @@ const styles = StyleSheet.create({
   viewAllBtnText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#0284C7",
+    color: "#A66D86",
   },
 });

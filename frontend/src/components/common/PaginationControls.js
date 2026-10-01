@@ -47,7 +47,7 @@ export default function PaginationControls({
 
         {isLoading && (
           <View style={styles.loadingBadge}>
-            <ActivityIndicator size="small" color="#0F766E" />
+            <ActivityIndicator size="small" color="#B9829A" />
             <Text style={styles.loadingText}>Loading page...</Text>
           </View>
         )}
@@ -201,7 +201,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
+    borderTopColor: '#E5DFE4',
     flexWrap: 'wrap',
     gap: 12,
   },
@@ -218,17 +218,17 @@ const styles = StyleSheet.create({
   },
   infoText: {
     fontSize: 13,
-    color: '#64748B',
+    color: '#77717A',
   },
   boldText: {
     fontWeight: '700',
-    color: '#0F172A',
+    color: '#28242B',
   },
   loadingBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#F0FDFA',
+    backgroundColor: '#E8D5DD',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
@@ -236,7 +236,7 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 11.5,
     fontWeight: '600',
-    color: '#0F766E',
+    color: '#B9829A',
   },
   controlsRow: {
     flexDirection: 'row',
@@ -255,7 +255,7 @@ const styles = StyleSheet.create({
   },
   pageSizeLabel: {
     fontSize: 12,
-    color: '#64748B',
+    color: '#77717A',
     fontWeight: '600',
     marginRight: 2,
   },
@@ -264,17 +264,17 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 4,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#F8FAFC',
+    borderColor: '#E5DFE4',
+    backgroundColor: '#F8F5F7',
   },
   pageSizeBtnActive: {
-    backgroundColor: '#0F766E',
-    borderColor: '#0F766E',
+    backgroundColor: '#B9829A',
+    borderColor: '#B9829A',
   },
   pageSizeText: {
     fontSize: 11.5,
     fontWeight: '600',
-    color: '#475569',
+    color: '#77717A',
   },
   pageSizeTextActive: {
     color: '#FFFFFF',
@@ -284,21 +284,21 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#E5DFE4',
     backgroundColor: '#FFFFFF',
   },
   navBtnDisabled: {
     opacity: 0.45,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderColor: '#E5DFE4',
+    backgroundColor: '#F8F5F7',
   },
   navBtnText: {
     fontSize: 12.5,
     fontWeight: '600',
-    color: '#1E293B',
+    color: '#28242B',
   },
   navBtnTextDisabled: {
-    color: '#94A3B8',
+    color: '#77717A',
   },
   pagesList: {
     flexDirection: 'row',
@@ -312,25 +312,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#E5DFE4',
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 6,
   },
   pageBtnActive: {
-    backgroundColor: '#0F766E',
-    borderColor: '#0F766E',
+    backgroundColor: '#B9829A',
+    borderColor: '#B9829A',
   },
   pageBtnText: {
     fontSize: 12.5,
     fontWeight: '700',
-    color: '#334155',
+    color: '#28242B',
   },
   pageBtnTextActive: {
     color: '#FFFFFF',
   },
   ellipsisText: {
     fontSize: 14,
-    color: '#94A3B8',
+    color: '#77717A',
     paddingHorizontal: 2,
   },
 });

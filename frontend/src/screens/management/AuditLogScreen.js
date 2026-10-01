@@ -257,33 +257,33 @@ export default function AuditLogScreen({
   const getActionBadgeStyle = (actionType) => {
     switch (actionType) {
       case "PRICE_OVERRIDE":
-        return { bg: "#FEF2F2", border: "#FECACA", text: "#DC2626" };
+        return { bg: "#F7EDEE", border: "#F7EDEE", text: "#B85C64" };
       case "REFUND_ISSUED":
       case "BILL_CANCELLED":
-        return { bg: "#FFF7ED", border: "#FFEDD5", text: "#EA580C" };
+        return { bg: "#F7F0E5", border: "#F7F0E5", text: "#C49752" };
       case "STOCK_ADJUSTMENT":
       case "STOCK_TRANSFER":
-        return { bg: "#EFF6FF", border: "#BFDBFE", text: "#2563EB" };
+        return { bg: "#E8D5DD", border: "#E8D5DD", text: "#B9829A" };
       case "ROLE_MODIFIED":
       case "USER_CREATED":
-        return { bg: "#F5F3FF", border: "#DDD6FE", text: "#7C3AED" };
+        return { bg: "#E8D5DD", border: "#E8D5DD", text: "#B9829A" };
       case "RX_APPROVED":
-        return { bg: "#F0FDF4", border: "#BBF7D0", text: "#15803D" };
+        return { bg: "#EAF2EE", border: "#EAF2EE", text: "#4F8A72" };
       default:
-        return { bg: "#F1F5F9", border: "#E2E8F0", text: "#475569" };
+        return { bg: "#F8F5F7", border: "#E5DFE4", text: "#77717A" };
     }
   };
 
   const getSeverityStyle = (severity) => {
     switch (severity) {
       case "Critical":
-        return { bg: "#FEF2F2", text: "#DC2626", dot: "#DC2626" };
+        return { bg: "#F7EDEE", text: "#B85C64", dot: "#B85C64" };
       case "Warning":
-        return { bg: "#FFFBEB", text: "#D97706", dot: "#D97706" };
+        return { bg: "#F7F0E5", text: "#C49752", dot: "#C49752" };
       case "Success":
-        return { bg: "#F0FDF4", text: "#16A34A", dot: "#16A34A" };
+        return { bg: "#EAF2EE", text: "#4F8A72", dot: "#4F8A72" };
       default:
-        return { bg: "#F0FDFA", text: "#0F766E", dot: "#0F766E" };
+        return { bg: "#E8D5DD", text: "#B9829A", dot: "#B9829A" };
     }
   };
 
@@ -447,7 +447,7 @@ export default function AuditLogScreen({
           <TextInput
             style={styles.searchInput}
             placeholder="Search by Event ID, User Name, Invoice #, Medicine, Batch or justification..."
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor="#77717A"
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
@@ -466,7 +466,7 @@ export default function AuditLogScreen({
           <View style={styles.activeFilterPillRow}>
             <Text style={styles.activeFilterPillText}>
               Filtering by:{" "}
-              <Text style={{ fontWeight: "800", color: "#0F766E" }}>
+              <Text style={{ fontWeight: "800", color: "#B9829A" }}>
                 {activeKpiFilter !== "ALL" ? activeKpiFilter : ""}{" "}
                 {searchQuery ? `"${searchQuery}"` : ""}
               </Text>{" "}
@@ -1002,7 +1002,7 @@ export default function AuditLogScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
   },
   contentContainer: {
     padding: 24,
@@ -1040,19 +1040,19 @@ const styles = StyleSheet.create({
   pageTitle: {
     fontSize: 22,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
     letterSpacing: -0.4,
   },
   pageSubtitle: {
     fontSize: 13,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 4,
     lineHeight: 18,
   },
   exportBtnPrimary: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingVertical: 9,
     paddingHorizontal: 16,
     borderRadius: 8,
@@ -1074,7 +1074,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     paddingVertical: 9,
     paddingHorizontal: 14,
     borderRadius: 8,
@@ -1082,7 +1082,7 @@ const styles = StyleSheet.create({
     cursor: "pointer",
   },
   exportBtnTextSecondary: {
-    color: "#334155",
+    color: "#28242B",
     fontSize: 13,
     fontWeight: "600",
   },
@@ -1092,9 +1092,9 @@ const styles = StyleSheet.create({
   complianceNoticeBanner: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F0FDF4",
+    backgroundColor: "#EAF2EE",
     borderWidth: 1,
-    borderColor: "#BBF7D0",
+    borderColor: "#EAF2EE",
     padding: 12,
     borderRadius: 10,
     marginBottom: 16,
@@ -1106,11 +1106,11 @@ const styles = StyleSheet.create({
   complianceNoticeTitle: {
     fontSize: 12.5,
     fontWeight: "800",
-    color: "#166534",
+    color: "#4F8A72",
   },
   complianceNoticeSubtitle: {
     fontSize: 11.5,
-    color: "#15803D",
+    color: "#4F8A72",
     marginTop: 2,
     lineHeight: 16,
   },
@@ -1145,14 +1145,14 @@ const styles = StyleSheet.create({
   },
   kpiCardActiveRing: {
     borderWidth: 2,
-    borderColor: "#0F766E",
+    borderColor: "#B9829A",
     borderRadius: 12,
   },
   cleanSearchCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     padding: 14,
     marginBottom: 16,
     gap: 10,
@@ -1160,9 +1160,9 @@ const styles = StyleSheet.create({
   searchBox: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     paddingHorizontal: 12,
     height: 42,
@@ -1174,7 +1174,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 13,
-    color: "#0F172A",
+    color: "#28242B",
     outlineStyle: "none",
   },
   clearSearchBtn: {
@@ -1182,47 +1182,47 @@ const styles = StyleSheet.create({
   },
   clearSearchText: {
     fontSize: 14,
-    color: "#94A3B8",
+    color: "#77717A",
   },
   activeFilterPillRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "#F0FDFA",
+    backgroundColor: "#E8D5DD",
     borderWidth: 1,
-    borderColor: "#CCFBF1",
+    borderColor: "#E8D5DD",
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 6,
   },
   activeFilterPillText: {
     fontSize: 12,
-    color: "#334155",
+    color: "#28242B",
   },
   resetKpiFilterBtn: {
     paddingHorizontal: 8,
     paddingVertical: 2,
-    backgroundColor: "#CCFBF1",
+    backgroundColor: "#E8D5DD",
     borderRadius: 4,
     cursor: "pointer",
   },
   resetKpiFilterBtnText: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   tableCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     overflow: "hidden",
   },
   tableHeaderSection: {
     paddingHorizontal: 20,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   tableTitleRow: {
     flexDirection: "row",
@@ -1232,24 +1232,24 @@ const styles = StyleSheet.create({
   tableTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   countBadge: {
-    backgroundColor: "#F0FDFA",
+    backgroundColor: "#E8D5DD",
     paddingVertical: 2,
     paddingHorizontal: 8,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#99F6E4",
+    borderColor: "#E8D5DD",
   },
   countBadgeText: {
     fontSize: 11.5,
     fontWeight: "700",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   tableSubtitle: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   tableWrapper: {
@@ -1257,16 +1257,16 @@ const styles = StyleSheet.create({
   },
   tableHeaderRow: {
     flexDirection: "row",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: "#E5DFE4",
     paddingVertical: 12,
     paddingHorizontal: 16,
   },
   thText: {
     fontSize: 11.5,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
@@ -1283,15 +1283,15 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   tableRowEven: {
-    backgroundColor: "#FAFCFF",
+    backgroundColor: "#F8F5F7",
   },
   timestampText: {
     fontSize: 12.5,
     fontWeight: "600",
-    color: "#0F172A",
+    color: "#28242B",
   },
   logIdRow: {
     flexDirection: "row",
@@ -1302,11 +1302,11 @@ const styles = StyleSheet.create({
   logIdText: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   relativeTimeText: {
     fontSize: 11,
-    color: "#94A3B8",
+    color: "#77717A",
   },
   actorCell: {
     flexDirection: "row",
@@ -1317,16 +1317,16 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     alignItems: "center",
     justifyContent: "center",
   },
   actorAvatarText: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#334155",
+    color: "#28242B",
   },
   actorInfo: {
     flex: 1,
@@ -1334,11 +1334,11 @@ const styles = StyleSheet.create({
   actorName: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   actorRole: {
     fontSize: 11,
-    color: "#64748B",
+    color: "#77717A",
   },
   actionBadge: {
     alignSelf: "flex-start",
@@ -1353,22 +1353,22 @@ const styles = StyleSheet.create({
   },
   actionSubLabel: {
     fontSize: 11,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   entityRefText: {
     fontSize: 12.5,
     fontWeight: "700",
-    color: "#1E293B",
+    color: "#28242B",
   },
   moduleNameText: {
     fontSize: 11,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 1,
   },
   branchNameText: {
     fontSize: 12,
-    color: "#475569",
+    color: "#77717A",
   },
   sevBadge: {
     flexDirection: "row",
@@ -1393,9 +1393,9 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   viewDiffBtn: {
-    backgroundColor: "#F0FDFA",
+    backgroundColor: "#E8D5DD",
     borderWidth: 1,
-    borderColor: "#99F6E4",
+    borderColor: "#E8D5DD",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 5,
@@ -1404,12 +1404,12 @@ const styles = StyleSheet.create({
   viewDiffBtnText: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   openModuleBtn: {
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 5,
@@ -1418,7 +1418,7 @@ const styles = StyleSheet.create({
   openModuleBtnText: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#475569",
+    color: "#77717A",
   },
   emptyContainer: {
     padding: 36,
@@ -1431,16 +1431,16 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   emptySubtitle: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   emptyResetBtn: {
     marginTop: 10,
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 6,
@@ -1477,7 +1477,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 18,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: "#E5DFE4",
   },
   detailHeaderLeft: {
     flexDirection: "row",
@@ -1485,26 +1485,26 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   eventBadge: {
-    backgroundColor: "#F0FDFA",
+    backgroundColor: "#E8D5DD",
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: "#99F6E4",
+    borderColor: "#E8D5DD",
   },
   eventBadgeText: {
     fontSize: 12,
     fontWeight: "800",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   detailTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   detailSubtitle: {
     fontSize: 11.5,
-    color: "#64748B",
+    color: "#77717A",
   },
   modalCloseBtn: {
     padding: 4,
@@ -1512,7 +1512,7 @@ const styles = StyleSheet.create({
   },
   modalCloseText: {
     fontSize: 16,
-    color: "#94A3B8",
+    color: "#77717A",
     fontWeight: "bold",
   },
   detailBody: {
@@ -1527,44 +1527,44 @@ const styles = StyleSheet.create({
   metaCard: {
     flex: 1,
     minWidth: 180,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderRadius: 8,
     padding: 10,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
   },
   metaLabel: {
     fontSize: 10.5,
-    color: "#64748B",
+    color: "#77717A",
     fontWeight: "700",
   },
   metaVal: {
     fontSize: 12.5,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
     marginTop: 2,
   },
   metaSubVal: {
     fontSize: 10.5,
-    color: "#94A3B8",
+    color: "#77717A",
     marginTop: 1,
   },
   reasonCard: {
-    backgroundColor: "#EFF6FF",
+    backgroundColor: "#E8D5DD",
     borderRadius: 8,
     padding: 10,
     marginBottom: 14,
     borderLeftWidth: 3,
-    borderLeftColor: "#3B82F6",
+    borderLeftColor: "#B9829A",
   },
   reasonTitle: {
     fontSize: 11,
     fontWeight: "800",
-    color: "#1E40AF",
+    color: "#30243D",
   },
   reasonText: {
     fontSize: 12,
-    color: "#1E3A8A",
+    color: "#30243D",
     marginTop: 2,
   },
   diffSection: {
@@ -1579,10 +1579,10 @@ const styles = StyleSheet.create({
   diffSectionTitle: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   diffVerifiedBadge: {
-    backgroundColor: "#F0FDF4",
+    backgroundColor: "#EAF2EE",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -1590,26 +1590,26 @@ const styles = StyleSheet.create({
   diffVerifiedText: {
     fontSize: 10,
     fontWeight: "700",
-    color: "#15803D",
+    color: "#4F8A72",
   },
   diffTable: {
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     overflow: "hidden",
   },
   diffTableHeader: {
     flexDirection: "row",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: "#E5DFE4",
   },
   diffTh: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
   },
   diffTableRow: {
     flexDirection: "row",
@@ -1617,7 +1617,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   diffColField: { flex: 1.5 },
   diffColOld: { flex: 1.2 },
@@ -1625,14 +1625,14 @@ const styles = StyleSheet.create({
   diffFieldName: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   diffFieldKey: {
     fontSize: 10,
-    color: "#94A3B8",
+    color: "#77717A",
   },
   oldValPill: {
-    backgroundColor: "#FEF2F2",
+    backgroundColor: "#F7EDEE",
     paddingHorizontal: 6,
     paddingVertical: 3,
     borderRadius: 4,
@@ -1640,11 +1640,11 @@ const styles = StyleSheet.create({
   },
   oldValText: {
     fontSize: 11,
-    color: "#DC2626",
+    color: "#B85C64",
     fontWeight: "600",
   },
   newValPill: {
-    backgroundColor: "#F0FDF4",
+    backgroundColor: "#EAF2EE",
     paddingHorizontal: 6,
     paddingVertical: 3,
     borderRadius: 4,
@@ -1652,34 +1652,34 @@ const styles = StyleSheet.create({
   },
   newValText: {
     fontSize: 11,
-    color: "#16A34A",
+    color: "#4F8A72",
     fontWeight: "700",
   },
   noDiffCard: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderRadius: 6,
     padding: 14,
     alignItems: "center",
   },
   noDiffText: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
   },
   modalFooter: {
     padding: 14,
     borderTopWidth: 1,
-    borderTopColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderTopColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
   },
   modalFooterNotice: {
     paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: "#E5DFE4",
     marginBottom: 10,
   },
   modalFooterNoticeText: {
     fontSize: 11,
-    color: "#0F766E",
+    color: "#B9829A",
     fontWeight: "700",
   },
   modalFooterActions: {
@@ -1690,7 +1690,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   modalExportPdfBtn: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 6,
@@ -1704,33 +1704,33 @@ const styles = StyleSheet.create({
   modalExportCsvBtn: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 6,
     cursor: "pointer",
   },
   modalExportCsvBtnText: {
-    color: "#334155",
+    color: "#28242B",
     fontWeight: "700",
     fontSize: 12,
   },
   openSourceBtn: {
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 6,
     cursor: "pointer",
   },
   openSourceBtnText: {
-    color: "#334155",
+    color: "#28242B",
     fontWeight: "700",
     fontSize: 12,
   },
   modalCloseBtnBottom: {
-    backgroundColor: "#E2E8F0",
+    backgroundColor: "#E5DFE4",
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 6,
@@ -1739,7 +1739,7 @@ const styles = StyleSheet.create({
   modalCloseBtnBottomText: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#334155",
+    color: "#28242B",
   },
   // Mobile Audit Log Cards
   mobileAuditList: {
@@ -1749,7 +1749,7 @@ const styles = StyleSheet.create({
   mobileAuditCard: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 12,
     padding: 14,
     ...Platform.select({
@@ -1770,10 +1770,10 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   mobileAuditEntityBox: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderRadius: 8,
     padding: 10,
     marginBottom: 10,
@@ -1781,7 +1781,7 @@ const styles = StyleSheet.create({
   mobileAuditEntityLabel: {
     fontSize: 10,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
     marginBottom: 3,
     textTransform: "uppercase",
   },

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { SuperAdminPalette as C } from '../../constants/theme';
 import {
   Pressable,
   ScrollView,
@@ -149,20 +150,20 @@ export default function PharmacyDetailsPage() {
       </View>
 
       <View style={[styles.topSection, isMobile && styles.topSectionMobile]}>
-        <View style={styles.pharmacyHeading}>
+      <View style={[styles.pharmacyHeading, isMobile && styles.pharmacyHeadingMobile]}>
           <View style={styles.largeAvatar}>
             <Text style={styles.largeAvatarText}>{pharmacy.initials}</Text>
           </View>
 
           <View>
-            <Text style={styles.title}>{pharmacy.name}</Text>
+            <Text style={[styles.title, isMobile && styles.titleMobile]}>{pharmacy.name}</Text>
             <Text style={styles.subtitle}>
               Pharmacy subscription and business details
             </Text>
           </View>
         </View>
 
-        <View style={styles.actionRow}>
+        <View style={[styles.actionRow, isMobile && styles.actionRowMobile]}>
           <Pressable
             style={styles.deactivateButton}
             onPress={toggleStatus}
@@ -195,7 +196,7 @@ export default function PharmacyDetailsPage() {
           title="Current Plan"
           value={pharmacy.plan}
           footer="View plan details"
-          color="#F0E8FF"
+          color={C.softRose}
         />
 
         <SummaryCard
@@ -204,28 +205,28 @@ export default function PharmacyDetailsPage() {
           footer={`${Math.round(
             (pharmacy.usersUsed / pharmacy.userLimit) * 100,
           )}% used`}
-          color="#E7F0FF"
+          color={C.softRose}
         />
 
         <SummaryCard
           title="Branches"
           value={String(pharmacy.branches)}
           footer="View branches"
-          color="#DFF5ED"
+          color={C.sageTint}
         />
 
         <SummaryCard
           title="Subscription Status"
           value={pharmacy.status}
           footer="365 days left"
-          color="#FFF1D9"
+          color={C.goldTint}
         />
 
         <SummaryCard
           title="Expiry Date"
           value={pharmacy.expiryDate}
           footer="View billing history"
-          color="#FEE2E2"
+          color={C.redTint}
         />
       </View>
 
@@ -352,7 +353,7 @@ export default function PharmacyDetailsPage() {
         {/* Invoice Metric KPI Cards */}
         <View style={styles.invoiceKpiGrid}>
           <View style={styles.invoiceKpiCard}>
-            <View style={[styles.invoiceKpiIcon, { backgroundColor: '#DFF5ED' }]}>
+            <View style={[styles.invoiceKpiIcon, { backgroundColor: C.sageTint }]}>
               <Text style={styles.invoiceKpiIconText}>₹</Text>
             </View>
             <Text style={styles.invoiceKpiLabel}>Total Invoiced</Text>
@@ -363,20 +364,20 @@ export default function PharmacyDetailsPage() {
           </View>
 
           <View style={styles.invoiceKpiCard}>
-            <View style={[styles.invoiceKpiIcon, { backgroundColor: '#D1FAE5' }]}>
-              <Text style={[styles.invoiceKpiIconText, { color: '#047857' }]}>✓</Text>
+            <View style={[styles.invoiceKpiIcon, { backgroundColor: C.sageTint }]}>
+              <Text style={[styles.invoiceKpiIconText, { color: C.sageGreen }]}>✓</Text>
             </View>
             <Text style={styles.invoiceKpiLabel}>Payment Status</Text>
-            <Text style={[styles.invoiceKpiValue, { color: '#047857' }]}>Paid in Full</Text>
+            <Text style={[styles.invoiceKpiValue, { color: C.sageGreen }]}>Paid in Full</Text>
             <Text style={styles.invoiceKpiSubtitle}>Settled via Razorpay UPI</Text>
           </View>
 
           <View style={styles.invoiceKpiCard}>
-            <View style={[styles.invoiceKpiIcon, { backgroundColor: '#EFF6FF' }]}>
-              <Text style={[styles.invoiceKpiIconText, { color: '#2563EB' }]}>▣</Text>
+            <View style={[styles.invoiceKpiIcon, { backgroundColor: C.softRose }]}>
+              <Text style={[styles.invoiceKpiIconText, { color: C.dustyRose }]}>▣</Text>
             </View>
             <Text style={styles.invoiceKpiLabel}>Latest Invoice</Text>
-            <Text style={[styles.invoiceKpiValue, { color: '#1E293B' }]}>
+            <Text style={[styles.invoiceKpiValue, { color: C.charcoal }]}>
               {invoices[0]?.invoice_number || 'No invoices yet'}
             </Text>
             <Text style={styles.invoiceKpiSubtitle}>
@@ -385,11 +386,11 @@ export default function PharmacyDetailsPage() {
           </View>
 
           <View style={styles.invoiceKpiCard}>
-            <View style={[styles.invoiceKpiIcon, { backgroundColor: '#FEF3C7' }]}>
-              <Text style={[styles.invoiceKpiIconText, { color: '#B45309' }]}>◷</Text>
+            <View style={[styles.invoiceKpiIcon, { backgroundColor: C.goldTint }]}>
+              <Text style={[styles.invoiceKpiIconText, { color: C.warmGold }]}>◷</Text>
             </View>
             <Text style={styles.invoiceKpiLabel}>Next Billing Cycle</Text>
-            <Text style={[styles.invoiceKpiValue, { color: '#B45309' }]}>
+            <Text style={[styles.invoiceKpiValue, { color: C.warmGold }]}>
               {pharmacy.expiryDate}
             </Text>
             <Text style={styles.invoiceKpiSubtitle}>Auto-renewal active</Text>
@@ -463,7 +464,7 @@ function SummaryCard({
 }) {
   return (
     <View style={styles.summaryCard}>
-      <View style={[styles.summaryIcon, { backgroundColor: color }]}>
+      <View style={[styles.summaryIcon, { backgroundColor: C.softRose }]}>
         <Text style={styles.summaryIconText}>✓</Text>
       </View>
 
@@ -504,7 +505,7 @@ function getPlanAmount(plan: string) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: C.offWhite,
   },
   content: {
     padding: 24,
@@ -521,14 +522,14 @@ const styles = StyleSheet.create({
     marginBottom: 22,
   },
   breadcrumbLink: {
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 13,
   },
   breadcrumbSeparator: {
-    color: '#94A3B8',
+    color: C.mutedGray,
   },
   breadcrumbCurrent: {
-    color: '#1E293B',
+    color: C.charcoal,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -542,36 +543,52 @@ const styles = StyleSheet.create({
   },
   topSectionMobile: {
     alignItems: 'flex-start',
+    width: '100%',
+    minWidth: 0,
   },
   fullWidthCard: {
-    minWidth: '100%',
+    width: '100%',
+    minWidth: 0,
+    maxWidth: '100%',
+    flexBasis: '100%',
+    padding: 16,
   },
   pharmacyHeading: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
   },
+  pharmacyHeadingMobile: {
+    width: '100%',
+    minWidth: 0,
+    alignItems: 'flex-start',
+    gap: 10,
+  },
   largeAvatar: {
     width: 58,
     height: 58,
     borderRadius: 30,
-    backgroundColor: '#DFF5ED',
+    backgroundColor: C.sageTint,
     alignItems: 'center',
     justifyContent: 'center',
   },
   largeAvatarText: {
-    color: '#047857',
+    color: C.sageGreen,
     fontSize: 19,
     fontWeight: '900',
   },
   title: {
-    color: '#172033',
+    color: C.charcoal,
     fontSize: 25,
     fontWeight: '900',
   },
+  titleMobile: {
+    flexShrink: 1,
+    fontSize: 20,
+  },
   subtitle: {
     marginTop: 4,
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 13,
   },
   actionRow: {
@@ -579,16 +596,20 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 9,
   },
+  actionRowMobile: {
+    width: '100%',
+    marginTop: 12,
+  },
   deactivateButton: {
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#FECACA',
-    backgroundColor: '#FFF1F2',
+    borderColor: C.redTint,
+    backgroundColor: C.redTint,
   },
   deactivateText: {
-    color: '#B91C1C',
+    color: C.mutedRed,
     fontWeight: '800',
     fontSize: 12,
   },
@@ -597,11 +618,11 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#93C5FD',
-    backgroundColor: '#EFF6FF',
+    borderColor: C.softRose,
+    backgroundColor: C.softRose,
   },
   upgradeText: {
-    color: '#2563EB',
+    color: C.dustyRose,
     fontWeight: '800',
     fontSize: 12,
   },
@@ -609,15 +630,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 8,
-    backgroundColor: '#DFF5ED',
+    backgroundColor: C.sageTint,
     borderWidth: 1,
-    borderColor: '#A7F3D0',
+    borderColor: C.sageTint,
   },
   disabledButton: {
     opacity: 0.45,
   },
   renewText: {
-    color: '#047857',
+    color: C.sageGreen,
     fontWeight: '800',
     fontSize: 12,
   },
@@ -634,8 +655,8 @@ const styles = StyleSheet.create({
     padding: 15,
     borderRadius: 11,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
+    borderColor: C.softGray,
+    backgroundColor: C.white,
   },
   summaryIcon: {
     width: 28,
@@ -646,23 +667,23 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   summaryIconText: {
-    color: '#047857',
+    color: C.sageGreen,
     fontWeight: '900',
   },
   summaryTitle: {
-    color: '#94A3B8',
+    color: C.mutedGray,
     fontSize: 10,
     fontWeight: '700',
   },
   summaryValue: {
     marginTop: 5,
-    color: '#172033',
+    color: C.charcoal,
     fontSize: 17,
     fontWeight: '900',
   },
   summaryFooter: {
     marginTop: 5,
-    color: '#047857',
+    color: C.sageGreen,
     fontSize: 10,
     fontWeight: '700',
   },
@@ -678,8 +699,8 @@ const styles = StyleSheet.create({
     padding: 18,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
+    borderColor: C.softGray,
+    backgroundColor: C.white,
   },
   subscriptionPanel: {
     flex: 1,
@@ -687,8 +708,8 @@ const styles = StyleSheet.create({
     padding: 18,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
+    borderColor: C.softGray,
+    backgroundColor: C.white,
   },
   panelHeader: {
     flexDirection: 'row',
@@ -697,13 +718,13 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   panelTitle: {
-    color: '#1E293B',
+    color: C.charcoal,
     fontSize: 16,
     fontWeight: '900',
     marginBottom: 10,
   },
   editText: {
-    color: '#047857',
+    color: C.sageGreen,
     fontSize: 12,
     fontWeight: '800',
   },
@@ -711,19 +732,19 @@ const styles = StyleSheet.create({
     minHeight: 42,
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: C.tableRose,
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 16,
   },
   detailLabel: {
     flex: 1,
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 12,
   },
   detailValue: {
     flex: 1.4,
-    color: '#334155',
+    color: C.mutedGray,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -731,42 +752,42 @@ const styles = StyleSheet.create({
     marginTop: 14,
     padding: 13,
     borderRadius: 8,
-    backgroundColor: '#F5F3FF',
+    backgroundColor: C.softRose,
   },
   modulesTitle: {
     marginBottom: 8,
-    color: '#7C3AED',
+    color: C.dustyRose,
     fontSize: 12,
     fontWeight: '900',
   },
   moduleItem: {
     marginTop: 5,
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 11,
   },
   invoicePanel: {
     padding: 22,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
+    borderColor: C.softGray,
+    backgroundColor: C.white,
     marginTop: 18,
   },
   invoiceSubtext: {
     marginTop: 3,
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 12,
   },
   downloadAllBtn: {
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: '#DFF5ED',
+    backgroundColor: C.sageTint,
     borderWidth: 1,
-    borderColor: '#A7F3D0',
+    borderColor: C.sageTint,
   },
   downloadAllText: {
-    color: '#047857',
+    color: C.sageGreen,
     fontSize: 12,
     fontWeight: '800',
   },
@@ -783,8 +804,8 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderColor: C.softGray,
+    backgroundColor: C.offWhite,
   },
   invoiceKpiIcon: {
     width: 34,
@@ -795,28 +816,28 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   invoiceKpiIconText: {
-    color: '#047857',
+    color: C.sageGreen,
     fontSize: 17,
     fontWeight: '900',
   },
   invoiceKpiLabel: {
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 11,
     fontWeight: '700',
   },
   invoiceKpiValue: {
     marginTop: 4,
-    color: '#172033',
+    color: C.charcoal,
     fontSize: 19,
     fontWeight: '900',
   },
   invoiceKpiSubtitle: {
     marginTop: 4,
-    color: '#94A3B8',
+    color: C.mutedGray,
     fontSize: 10,
   },
   invoiceRecordHeader: {
-    color: '#1E293B',
+    color: C.charcoal,
     fontSize: 14,
     fontWeight: '800',
     marginBottom: 12,
@@ -832,8 +853,8 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
+    borderColor: C.softGray,
+    backgroundColor: C.white,
   },
   invoiceDocTop: {
     flexDirection: 'row',
@@ -845,31 +866,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
-    backgroundColor: '#EDE9FE',
+    backgroundColor: C.softRose,
   },
   invoiceDocTagText: {
-    color: '#7C3AED',
+    color: C.dustyRose,
     fontSize: 9,
     fontWeight: '800',
   },
   invoiceDocStatus: {
-    color: '#047857',
+    color: C.sageGreen,
     fontSize: 11,
     fontWeight: '800',
   },
   invoiceDocNumber: {
-    color: '#172033',
+    color: C.charcoal,
     fontSize: 16,
     fontWeight: '900',
   },
   invoiceDocDesc: {
     marginTop: 3,
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 11,
   },
   invoiceDocDivider: {
     height: 1,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: C.tableRose,
     marginVertical: 12,
   },
   invoiceDocBottom: {
@@ -878,11 +899,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   invoiceDocDate: {
-    color: '#94A3B8',
+    color: C.mutedGray,
     fontSize: 10,
   },
   invoiceDocAmount: {
-    color: '#047857',
+    color: C.sageGreen,
     fontSize: 14,
     fontWeight: '900',
     marginTop: 2,
@@ -891,10 +912,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 7,
-    backgroundColor: '#047857',
+    backgroundColor: C.dustyRose,
   },
   invoiceDownloadBtnText: {
-    color: '#FFFFFF',
+    color: C.white,
     fontSize: 11,
     fontWeight: '800',
   },
@@ -903,20 +924,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 12,
     borderRadius: 8,
-    backgroundColor: '#047857',
+    backgroundColor: C.dustyRose,
   },
   primaryButtonText: {
-    color: '#FFFFFF',
+    color: C.white,
     fontWeight: '800',
   },
   emptyContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: C.offWhite,
   },
   emptyTitle: {
-    color: '#334155',
+    color: C.mutedGray,
     fontSize: 20,
     fontWeight: '800',
   },

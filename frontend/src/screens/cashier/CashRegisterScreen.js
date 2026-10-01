@@ -769,7 +769,7 @@ export default function CashRegisterScreen({
                   value={openingBalanceInput}
                   onChangeText={setOpeningBalanceInput}
                   placeholder="Enter opening cash in hand"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor="#77717A"
                   keyboardType="numeric"
                 />
               </View>
@@ -783,7 +783,7 @@ export default function CashRegisterScreen({
                 value={openingNote}
                 onChangeText={setOpeningNote}
                 placeholder="Enter any note for opening the register..."
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor="#77717A"
                 multiline={true}
                 numberOfLines={3}
               />
@@ -1186,7 +1186,7 @@ export default function CashRegisterScreen({
                   <Text
                     style={{
                       fontSize: 12,
-                      color: "#0F766E",
+                      color: "#B9829A",
                       fontWeight: "700",
                     }}
                   >
@@ -1287,7 +1287,7 @@ export default function CashRegisterScreen({
                         <Text
                           style={[
                             styles.mobileMovementAmount,
-                            { color: isIn ? "#059669" : "#DC2626" },
+                            { color: isIn ? "#4F8A72" : "#B85C64" },
                           ]}
                         >
                           {isIn ? "+" : "-"}₹{mov.amount.toFixed(2)}
@@ -1372,7 +1372,7 @@ export default function CashRegisterScreen({
                         <Text
                           style={[
                             styles.movementsTd,
-                            { width: 180, color: "#64748B" },
+                            { width: 180, color: "#77717A" },
                           ]}
                         >
                           {mov.time}
@@ -1404,7 +1404,7 @@ export default function CashRegisterScreen({
                             {
                               minWidth: 220,
                               flex: 1,
-                              color: "#0F172A",
+                              color: "#28242B",
                               fontWeight: "500",
                             },
                           ]}
@@ -1414,7 +1414,7 @@ export default function CashRegisterScreen({
                         <Text
                           style={[
                             styles.movementsTd,
-                            { width: 120, color: "#475569" },
+                            { width: 120, color: "#77717A" },
                           ]}
                         >
                           {mov.cashier}
@@ -1426,7 +1426,7 @@ export default function CashRegisterScreen({
                               width: 130,
                               textAlign: "right",
                               fontWeight: "700",
-                              color: isIn ? "#059669" : "#DC2626",
+                              color: isIn ? "#4F8A72" : "#B85C64",
                             },
                           ]}
                         >
@@ -1534,7 +1534,7 @@ export default function CashRegisterScreen({
                   <Text
                     style={[
                       styles.modalBreakdownValue,
-                      { color: "#059669", fontWeight: "600" },
+                      { color: "#4F8A72", fontWeight: "600" },
                     ]}
                   >
                     +₹
@@ -1589,7 +1589,7 @@ export default function CashRegisterScreen({
                   value={countedCashInput}
                   onChangeText={setCountedCashInput}
                   placeholder="Enter counted cash amount"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor="#77717A"
                   keyboardType="numeric"
                   autoFocus={true}
                 />
@@ -1627,7 +1627,7 @@ export default function CashRegisterScreen({
                 value={closingNotes}
                 onChangeText={setClosingNotes}
                 placeholder="Add any note about this closing..."
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor="#77717A"
                 multiline={true}
                 numberOfLines={3}
               />
@@ -1729,7 +1729,7 @@ export default function CashRegisterScreen({
                       <View style={styles.mobileHistoryDetailsRow}>
                         <Text style={styles.mobileHistoryLabel}>
                           Cashier:{" "}
-                          <Text style={{ color: "#0F172A", fontWeight: "600" }}>
+                          <Text style={{ color: "#28242B", fontWeight: "600" }}>
                             {item.cashier}
                           </Text>
                         </Text>
@@ -1764,7 +1764,7 @@ export default function CashRegisterScreen({
                           <Text
                             style={[
                               styles.mobileHistoryMetricVal,
-                              { fontWeight: "800", color: "#0F172A" },
+                              { fontWeight: "800", color: "#28242B" },
                             ]}
                           >
                             ₹{item.countedCash.toFixed(2)}
@@ -2025,7 +2025,7 @@ export default function CashRegisterScreen({
                     if (movementError) setMovementError("");
                   }}
                   placeholder="0.00"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor="#77717A"
                   keyboardType="numeric"
                   autoFocus={true}
                 />
@@ -2042,7 +2042,7 @@ export default function CashRegisterScreen({
                 }}
               >
                 <Text style={styles.fieldLabel}>Reason / Expense Category</Text>
-                <Text style={{ fontSize: 11, color: "#64748B" }}>
+                <Text style={{ fontSize: 11, color: "#77717A" }}>
                   {movementReason.trim()
                     ? "✓ Reason set"
                     : "(Optional - auto-defaults if blank)"}
@@ -2121,7 +2121,7 @@ export default function CashRegisterScreen({
                     ? "e.g. Cash float addition (or leave blank for default)"
                     : "e.g. Courier charges (or leave blank for default)"
                 }
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor="#77717A"
               />
             </View>
 
@@ -2157,7 +2157,7 @@ export default function CashRegisterScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
   },
   contentContainer: {
     padding: 24,
@@ -2187,13 +2187,13 @@ const styles = StyleSheet.create({
   pageTitle: {
     fontSize: 26,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
     letterSpacing: -0.5,
     marginBottom: 4,
   },
   pageSubtitle: {
     fontSize: 14,
-    color: "#64748B",
+    color: "#77717A",
     fontWeight: "500",
   },
   historyBtn: {
@@ -2202,19 +2202,19 @@ const styles = StyleSheet.create({
     gap: 8,
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 8,
-    shadowColor: "#000",
+    shadowColor: "#28242B",
     shadowOpacity: 0.03,
     shadowRadius: 4,
     elevation: 1,
     cursor: "pointer",
   },
   historyBtnHovered: {
-    backgroundColor: "#F1F5F9",
-    borderColor: "#CBD5E1",
+    backgroundColor: "#F8F5F7",
+    borderColor: "#E5DFE4",
   },
   historyBtnIcon: {
     fontSize: 14,
@@ -2222,7 +2222,7 @@ const styles = StyleSheet.create({
   historyBtnText: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#334155",
+    color: "#28242B",
   },
 
   // STATE A: REGISTER IS CLOSED (Images 1 & 2)
@@ -2235,11 +2235,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     padding: 40,
     width: "100%",
     maxWidth: 720,
-    shadowColor: "#000",
+    shadowColor: "#28242B",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.04,
     shadowRadius: 12,
@@ -2253,7 +2253,7 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: "#E6F4EA",
+    backgroundColor: "#EAF2EE",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 20,
@@ -2264,13 +2264,13 @@ const styles = StyleSheet.create({
   closedHeadline: {
     fontSize: 22,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
     marginBottom: 8,
     textAlign: "center",
   },
   closedSubtext: {
     fontSize: 14,
-    color: "#64748B",
+    color: "#77717A",
     textAlign: "center",
     marginBottom: 28,
     maxWidth: 480,
@@ -2283,40 +2283,40 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#1E293B",
+    color: "#28242B",
     marginBottom: 8,
   },
   currencyInputRow: {
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     paddingHorizontal: 14,
     height: 48,
   },
   currencySymbol: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
     marginRight: 8,
   },
   currencyInput: {
     flex: 1,
     fontSize: 15,
-    color: "#0F172A",
+    color: "#28242B",
     fontWeight: "600",
     outlineStyle: "none",
   },
   textAreaInput: {
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     padding: 12,
     fontSize: 14,
-    color: "#0F172A",
+    color: "#28242B",
     minHeight: 88,
     textAlignVertical: "top",
     outlineStyle: "none",
@@ -2325,9 +2325,9 @@ const styles = StyleSheet.create({
     width: "100%",
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#ECFDF5",
+    backgroundColor: "#EAF2EE",
     borderWidth: 1,
-    borderColor: "#A7F3D0",
+    borderColor: "#EAF2EE",
     borderRadius: 8,
     paddingVertical: 12,
     paddingHorizontal: 16,
@@ -2336,13 +2336,13 @@ const styles = StyleSheet.create({
   },
   infoBannerIcon: {
     fontSize: 16,
-    color: "#059669",
+    color: "#4F8A72",
     fontWeight: "800",
   },
   infoBannerText: {
     flex: 1,
     fontSize: 13,
-    color: "#065F46",
+    color: "#4F8A72",
     fontWeight: "500",
     lineHeight: 18,
   },
@@ -2352,18 +2352,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    backgroundColor: "#0F5C3E",
+    backgroundColor: "#4F8A72",
     height: 48,
     borderRadius: 8,
     cursor: "pointer",
-    shadowColor: "#0F5C3E",
+    shadowColor: "#4F8A72",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 2,
   },
   openRegisterBtnHovered: {
-    backgroundColor: "#0A4830",
+    backgroundColor: "#30243D",
   },
   openRegisterBtnIcon: {
     fontSize: 16,
@@ -2394,9 +2394,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     padding: 20,
-    shadowColor: "#000",
+    shadowColor: "#28242B",
     shadowOpacity: 0.03,
     shadowRadius: 6,
     elevation: 1,
@@ -2408,12 +2408,12 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: "#E6F4EA",
+    backgroundColor: "#EAF2EE",
     alignItems: "center",
     justifyContent: "center",
   },
   timeIconBox: {
-    backgroundColor: "#E0F2FE",
+    backgroundColor: "#E8D5DD",
   },
   statusCardEmoji: {
     fontSize: 22,
@@ -2424,14 +2424,14 @@ const styles = StyleSheet.create({
   statusCardLabel: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#64748B",
+    color: "#77717A",
     textTransform: "uppercase",
     letterSpacing: 0.5,
     marginBottom: 4,
   },
   openBadgeRow: {
     alignSelf: "flex-start",
-    backgroundColor: "#D1FAE5",
+    backgroundColor: "#EAF2EE",
     paddingHorizontal: 10,
     paddingVertical: 3,
     borderRadius: 6,
@@ -2440,12 +2440,12 @@ const styles = StyleSheet.create({
   openBadgeText: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#065F46",
+    color: "#4F8A72",
   },
   sessionTimeValue: {
     fontSize: 20,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
     marginBottom: 4,
   },
   lastActivityRow: {
@@ -2457,16 +2457,16 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: "#10B981",
+    backgroundColor: "#4F8A72",
   },
   statusMetaText: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
     lineHeight: 18,
   },
   statusMetaHighlight: {
     fontWeight: "700",
-    color: "#1E293B",
+    color: "#28242B",
   },
 
   // Sales Summary
@@ -2474,9 +2474,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     padding: 20,
-    shadowColor: "#000",
+    shadowColor: "#28242B",
     shadowOpacity: 0.03,
     shadowRadius: 6,
     elevation: 1,
@@ -2492,14 +2492,14 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   quickHeaderActions: {
     flexDirection: "row",
     gap: 8,
   },
   newSaleSmallBtn: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 6,
@@ -2511,16 +2511,16 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   pettyCashBtn: {
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 6,
     cursor: "pointer",
   },
   pettyCashBtnText: {
-    color: "#334155",
+    color: "#28242B",
     fontSize: 12,
     fontWeight: "700",
   },
@@ -2535,10 +2535,10 @@ const styles = StyleSheet.create({
   summaryItemCard: {
     flex: 1,
     minWidth: 140,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     padding: 14,
   },
   summaryItemHeader: {
@@ -2553,12 +2553,12 @@ const styles = StyleSheet.create({
   summaryItemLabel: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#64748B",
+    color: "#77717A",
   },
   summaryItemValue: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   badgeSummaryCard: {
     flex: 1,
@@ -2568,28 +2568,28 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   refundsCard: {
-    backgroundColor: "#FEF2F2",
-    borderColor: "#FECACA",
+    backgroundColor: "#F7EDEE",
+    borderColor: "#F7EDEE",
   },
   refundsLabel: {
-    color: "#991B1B",
+    color: "#B85C64",
   },
   refundsValue: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#B91C1C",
+    color: "#B85C64",
   },
   discountsCard: {
-    backgroundColor: "#FFFBEB",
-    borderColor: "#FDE68A",
+    backgroundColor: "#F7F0E5",
+    borderColor: "#F7F0E5",
   },
   discountsLabel: {
-    color: "#92400E",
+    color: "#C49752",
   },
   discountsValue: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#B45309",
+    color: "#C49752",
   },
 
   // Reconciliation Grid (Bottom)
@@ -2605,9 +2605,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     padding: 24,
-    shadowColor: "#000",
+    shadowColor: "#28242B",
     shadowOpacity: 0.03,
     shadowRadius: 6,
     elevation: 1,
@@ -2615,7 +2615,7 @@ const styles = StyleSheet.create({
   reconciliationTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
     marginBottom: 16,
   },
   reconciliationTable: {
@@ -2628,23 +2628,23 @@ const styles = StyleSheet.create({
   },
   reconLabel: {
     fontSize: 14,
-    color: "#64748B",
+    color: "#77717A",
     fontWeight: "500",
   },
   reconValue: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   reconPositive: {
-    color: "#059669",
+    color: "#4F8A72",
   },
   reconNegative: {
-    color: "#DC2626",
+    color: "#B85C64",
   },
   reconDivider: {
     height: 1,
-    backgroundColor: "#E2E8F0",
+    backgroundColor: "#E5DFE4",
     marginVertical: 4,
   },
   reconTotalRow: {
@@ -2656,12 +2656,12 @@ const styles = StyleSheet.create({
   reconTotalLabel: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   reconTotalValue: {
     fontSize: 22,
     fontWeight: "900",
-    color: "#0F5C3E",
+    color: "#4F8A72",
   },
 
   // Close Action Card (Right)
@@ -2670,11 +2670,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     padding: 24,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#000",
+    shadowColor: "#28242B",
     shadowOpacity: 0.03,
     shadowRadius: 6,
     elevation: 1,
@@ -2683,7 +2683,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: "#E6F4EA",
+    backgroundColor: "#EAF2EE",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 14,
@@ -2693,7 +2693,7 @@ const styles = StyleSheet.create({
   },
   closeActionHint: {
     fontSize: 13,
-    color: "#64748B",
+    color: "#77717A",
     textAlign: "center",
     marginBottom: 20,
     lineHeight: 18,
@@ -2704,7 +2704,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    backgroundColor: "#0F5C3E",
+    backgroundColor: "#4F8A72",
     paddingHorizontal: 24,
     height: 46,
     borderRadius: 8,
@@ -2712,7 +2712,7 @@ const styles = StyleSheet.create({
     cursor: "pointer",
   },
   closeRegisterPrimaryBtnHovered: {
-    backgroundColor: "#0A4830",
+    backgroundColor: "#30243D",
   },
   closeRegisterBtnIcon: {
     fontSize: 15,
@@ -2738,7 +2738,7 @@ const styles = StyleSheet.create({
     padding: 28,
     width: "100%",
     maxWidth: 520,
-    shadowColor: "#000",
+    shadowColor: "#28242B",
     shadowOpacity: 0.2,
     shadowRadius: 16,
     elevation: 8,
@@ -2755,11 +2755,11 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 20,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   modalSubtitle: {
     fontSize: 13,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   modalCloseBtn: {
@@ -2768,14 +2768,14 @@ const styles = StyleSheet.create({
   },
   modalCloseBtnText: {
     fontSize: 18,
-    color: "#94A3B8",
+    color: "#77717A",
     fontWeight: "700",
   },
   modalBreakdownSection: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     padding: 16,
     marginBottom: 20,
     gap: 10,
@@ -2787,20 +2787,20 @@ const styles = StyleSheet.create({
   },
   modalBreakdownLabel: {
     fontSize: 13,
-    color: "#64748B",
+    color: "#77717A",
     fontWeight: "500",
   },
   modalBreakdownValue: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   modalRefundsText: {
-    color: "#DC2626",
+    color: "#B85C64",
   },
   modalBreakdownDivider: {
     height: 1,
-    backgroundColor: "#E2E8F0",
+    backgroundColor: "#E5DFE4",
     marginVertical: 2,
   },
   modalBreakdownTotalRow: {
@@ -2812,18 +2812,18 @@ const styles = StyleSheet.create({
   modalExpectedLabel: {
     fontSize: 14,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   modalExpectedValue: {
     fontSize: 18,
     fontWeight: "900",
-    color: "#0F5C3E",
+    color: "#4F8A72",
   },
   varianceBox: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     borderRadius: 8,
     padding: 14,
     marginBottom: 20,
@@ -2831,24 +2831,24 @@ const styles = StyleSheet.create({
   varianceLabel: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#1E293B",
+    color: "#28242B",
   },
   varianceSubtext: {
     fontSize: 11,
-    color: "#64748B",
+    color: "#77717A",
   },
   varianceValue: {
     fontSize: 18,
     fontWeight: "900",
   },
   varianceBalanced: {
-    color: "#059669",
+    color: "#4F8A72",
   },
   varianceShortage: {
-    color: "#DC2626",
+    color: "#B85C64",
   },
   varianceOverage: {
-    color: "#2563EB",
+    color: "#B9829A",
   },
   modalFooterRow: {
     flexDirection: "row",
@@ -2861,23 +2861,23 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     cursor: "pointer",
   },
   cancelBtnText: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#64748B",
+    color: "#77717A",
   },
   confirmCloseBtn: {
-    backgroundColor: "#0F5C3E",
+    backgroundColor: "#4F8A72",
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
     cursor: "pointer",
   },
   confirmCloseBtnHovered: {
-    backgroundColor: "#0A4830",
+    backgroundColor: "#30243D",
   },
   confirmCloseBtnText: {
     fontSize: 14,
@@ -2892,7 +2892,7 @@ const styles = StyleSheet.create({
     padding: 28,
     width: "100%",
     maxWidth: 860,
-    shadowColor: "#000",
+    shadowColor: "#28242B",
     shadowOpacity: 0.2,
     shadowRadius: 16,
     elevation: 8,
@@ -2902,22 +2902,22 @@ const styles = StyleSheet.create({
   },
   historyTable: {
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     overflow: "hidden",
   },
   historyTableHeader: {
     flexDirection: "row",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: "#E5DFE4",
     paddingVertical: 12,
     paddingHorizontal: 14,
   },
   historyTh: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#475569",
+    color: "#77717A",
     textTransform: "uppercase",
   },
   historyTableRow: {
@@ -2926,20 +2926,20 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   historySessionId: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   historyDate: {
     fontSize: 11,
-    color: "#64748B",
+    color: "#77717A",
   },
   historyTd: {
     fontSize: 13,
-    color: "#334155",
+    color: "#28242B",
   },
   varianceBadge: {
     paddingHorizontal: 8,
@@ -2947,26 +2947,26 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   varBadgeBalanced: {
-    backgroundColor: "#D1FAE5",
+    backgroundColor: "#EAF2EE",
   },
   varTextBalanced: {
-    color: "#065F46",
+    color: "#4F8A72",
     fontWeight: "700",
     fontSize: 12,
   },
   varBadgeShortage: {
-    backgroundColor: "#FEE2E2",
+    backgroundColor: "#F7EDEE",
   },
   varTextShortage: {
-    color: "#991B1B",
+    color: "#B85C64",
     fontWeight: "700",
     fontSize: 12,
   },
   varBadgeOverage: {
-    backgroundColor: "#DBEAFE",
+    backgroundColor: "#E8D5DD",
   },
   varTextOverage: {
-    color: "#1E40AF",
+    color: "#30243D",
     fontWeight: "700",
     fontSize: 12,
   },
@@ -2979,7 +2979,7 @@ const styles = StyleSheet.create({
   // Movement Modal
   movementTypeSelector: {
     flexDirection: "row",
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     borderRadius: 8,
     padding: 4,
     marginBottom: 18,
@@ -2992,18 +2992,18 @@ const styles = StyleSheet.create({
     cursor: "pointer",
   },
   movementTypeBtnActiveOut: {
-    backgroundColor: "#FEE2E2",
+    backgroundColor: "#F7EDEE",
   },
   movementTypeBtnActiveIn: {
-    backgroundColor: "#D1FAE5",
+    backgroundColor: "#EAF2EE",
   },
   movementTypeBtnText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#64748B",
+    color: "#77717A",
   },
   movementTypeBtnTextActive: {
-    color: "#0F172A",
+    color: "#28242B",
     fontWeight: "800",
   },
 
@@ -3012,10 +3012,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     padding: 20,
     marginTop: 20,
-    shadowColor: "#000",
+    shadowColor: "#28242B",
     shadowOpacity: 0.02,
     shadowRadius: 6,
     elevation: 1,
@@ -3026,7 +3026,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
     marginBottom: 16,
     flexWrap: "wrap",
     gap: 12,
@@ -3044,10 +3044,10 @@ const styles = StyleSheet.create({
   pettyCashSectionTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   cashBadge: {
-    backgroundColor: "#E0F2FE",
+    backgroundColor: "#E8D5DD",
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6,
@@ -3055,11 +3055,11 @@ const styles = StyleSheet.create({
   cashBadgeText: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#0284C7",
+    color: "#A66D86",
   },
   pettyCashSectionSubtitle: {
     fontSize: 13,
-    color: "#64748B",
+    color: "#77717A",
   },
   pettyCashHeaderRight: {
     flexDirection: "row",
@@ -3084,42 +3084,42 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   pettySummaryIn: {
-    backgroundColor: "#ECFDF5",
+    backgroundColor: "#EAF2EE",
     borderWidth: 1,
-    borderColor: "#A7F3D0",
+    borderColor: "#EAF2EE",
   },
   pettySummaryOut: {
-    backgroundColor: "#FEF2F2",
+    backgroundColor: "#F7EDEE",
     borderWidth: 1,
-    borderColor: "#FECACA",
+    borderColor: "#F7EDEE",
   },
   pettySummaryChipLabel: {
     fontSize: 11,
     fontWeight: "600",
-    color: "#475569",
+    color: "#77717A",
   },
   pettySummaryChipValueIn: {
     fontSize: 12,
     fontWeight: "800",
-    color: "#059669",
+    color: "#4F8A72",
   },
   pettySummaryChipValueOut: {
     fontSize: 12,
     fontWeight: "800",
-    color: "#DC2626",
+    color: "#B85C64",
   },
   recordMovementBtn: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 8,
     cursor: "pointer",
   },
   recordMovementBtnHovered: {
-    backgroundColor: "#115E59",
+    backgroundColor: "#30243D",
   },
   recordMovementBtnIcon: {
     fontSize: 14,
@@ -3143,18 +3143,18 @@ const styles = StyleSheet.create({
   emptyMovementsTitle: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#334155",
+    color: "#28242B",
     marginBottom: 4,
   },
   emptyMovementsSubtitle: {
     fontSize: 13,
-    color: "#94A3B8",
+    color: "#77717A",
     textAlign: "center",
     maxWidth: 420,
     marginBottom: 16,
   },
   emptyRecordBtn: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 8,
@@ -3169,23 +3169,23 @@ const styles = StyleSheet.create({
     width: "100%",
     minWidth: 900,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     overflow: "hidden",
   },
   movementsTableHeader: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: "#E5DFE4",
   },
   movementsTh: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
     letterSpacing: 0.5,
   },
   movementsTableRow: {
@@ -3194,7 +3194,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
     backgroundColor: "#FFFFFF",
   },
   movementsTableRowLast: {
@@ -3203,8 +3203,8 @@ const styles = StyleSheet.create({
   movIdText: {
     fontSize: 12,
     fontWeight: "800",
-    color: "#0F766E",
-    backgroundColor: "#F0FDFA",
+    color: "#B9829A",
+    backgroundColor: "#E8D5DD",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -3219,26 +3219,26 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
   },
   badgeCashIn: {
-    backgroundColor: "#ECFDF5",
+    backgroundColor: "#EAF2EE",
   },
   badgeCashOut: {
-    backgroundColor: "#FEF2F2",
+    backgroundColor: "#F7EDEE",
   },
   movementTypeBadgeText: {
     fontSize: 11,
     fontWeight: "700",
   },
   badgeTextCashIn: {
-    color: "#059669",
+    color: "#4F8A72",
   },
   badgeTextCashOut: {
-    color: "#DC2626",
+    color: "#B85C64",
   },
   deleteMovBtn: {
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     alignItems: "center",
     justifyContent: "center",
     cursor: "pointer",
@@ -3246,18 +3246,18 @@ const styles = StyleSheet.create({
   deleteMovBtnText: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
   },
   historyMovementsRow: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   historyMovementsSummaryText: {
     fontSize: 12,
-    color: "#0F766E",
+    color: "#B9829A",
     fontWeight: "600",
   },
 
@@ -3266,9 +3266,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#ECFDF5",
+    backgroundColor: "#EAF2EE",
     borderWidth: 1,
-    borderColor: "#6EE7B7",
+    borderColor: "#EAF2EE",
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -3276,16 +3276,16 @@ const styles = StyleSheet.create({
   },
   justAddedBannerText: {
     fontSize: 13,
-    color: "#065F46",
+    color: "#4F8A72",
     fontWeight: "600",
   },
   movementsTableRowHighlight: {
-    backgroundColor: "#F0FDF4",
+    backgroundColor: "#EAF2EE",
     borderLeftWidth: 4,
-    borderLeftColor: "#059669",
+    borderLeftColor: "#4F8A72",
   },
   justAddedBadge: {
-    backgroundColor: "#059669",
+    backgroundColor: "#4F8A72",
     paddingHorizontal: 5,
     paddingVertical: 1,
     borderRadius: 4,
@@ -3297,16 +3297,16 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   modalErrorBox: {
-    backgroundColor: "#FEE2E2",
+    backgroundColor: "#F7EDEE",
     borderWidth: 1,
-    borderColor: "#FCA5A5",
+    borderColor: "#F7EDEE",
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
     marginBottom: 14,
   },
   modalErrorText: {
-    color: "#991B1B",
+    color: "#B85C64",
     fontSize: 12,
     fontWeight: "700",
   },
@@ -3317,38 +3317,38 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   quickChipBtn: {
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
     cursor: "pointer",
   },
   quickChipBtnActiveIn: {
-    backgroundColor: "#CCFBF1",
-    borderColor: "#0F766E",
+    backgroundColor: "#E8D5DD",
+    borderColor: "#B9829A",
   },
   quickChipBtnActiveOut: {
-    backgroundColor: "#FEE2E2",
-    borderColor: "#DC2626",
+    backgroundColor: "#F7EDEE",
+    borderColor: "#B85C64",
   },
   quickChipText: {
     fontSize: 11,
     fontWeight: "600",
-    color: "#475569",
+    color: "#77717A",
   },
   quickChipTextActiveIn: {
-    color: "#0F766E",
+    color: "#B9829A",
     fontWeight: "700",
   },
   quickChipTextActiveOut: {
-    color: "#DC2626",
+    color: "#B85C64",
     fontWeight: "700",
   },
   modalSubmitHint: {
     fontSize: 11,
-    color: "#64748B",
+    color: "#77717A",
     lineHeight: 16,
     marginBottom: 14,
   },
@@ -3360,7 +3360,7 @@ const styles = StyleSheet.create({
   mobileMovementCard: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 10,
     padding: 14,
     ...Platform.select({
@@ -3369,8 +3369,8 @@ const styles = StyleSheet.create({
     }),
   },
   mobileMovementCardHighlight: {
-    borderColor: "#6EE7B7",
-    backgroundColor: "#F0FDF4",
+    borderColor: "#EAF2EE",
+    backgroundColor: "#EAF2EE",
   },
   mobileMovementHeader: {
     flexDirection: "row",
@@ -3381,7 +3381,7 @@ const styles = StyleSheet.create({
   mobileMovementReason: {
     fontSize: 13.5,
     fontWeight: "600",
-    color: "#0F172A",
+    color: "#28242B",
     marginBottom: 10,
     lineHeight: 18,
   },
@@ -3391,16 +3391,16 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
+    borderTopColor: "#F8F5F7",
   },
   mobileMovementTime: {
     fontSize: 11.5,
-    color: "#64748B",
+    color: "#77717A",
     fontWeight: "500",
   },
   mobileMovementCashier: {
     fontSize: 11.5,
-    color: "#475569",
+    color: "#77717A",
     fontWeight: "600",
     marginTop: 2,
   },
@@ -3417,7 +3417,7 @@ const styles = StyleSheet.create({
   mobileHistoryCard: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 10,
     padding: 14,
     ...Platform.select({
@@ -3439,10 +3439,10 @@ const styles = StyleSheet.create({
   },
   mobileHistoryLabel: {
     fontSize: 12.5,
-    color: "#64748B",
+    color: "#77717A",
   },
   mobileHistoryShiftBadge: {
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
@@ -3450,11 +3450,11 @@ const styles = StyleSheet.create({
   mobileHistoryShiftText: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#475569",
+    color: "#77717A",
   },
   mobileHistoryMetricsGrid: {
     flexDirection: "row",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderRadius: 8,
     padding: 10,
     justifyContent: "space-between",
@@ -3465,7 +3465,7 @@ const styles = StyleSheet.create({
   },
   mobileHistoryMetricLabel: {
     fontSize: 10.5,
-    color: "#64748B",
+    color: "#77717A",
     fontWeight: "600",
     marginBottom: 2,
     textTransform: "uppercase",
@@ -3473,12 +3473,12 @@ const styles = StyleSheet.create({
   mobileHistoryMetricVal: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#334155",
+    color: "#28242B",
   },
   mobileHistoryMovementsBox: {
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
+    borderTopColor: "#F8F5F7",
   },
 });

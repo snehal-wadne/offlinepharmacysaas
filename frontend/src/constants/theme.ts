@@ -7,20 +7,88 @@ import '@/global.css';
 
 import { Platform } from 'react-native';
 
+export const FalahPalette = {
+  midnightViolet: '#30243D',
+  deepViolet: '#3D2E4D',
+  dustyRose: '#B9829A',
+  deepDustyRose: '#A66D86',
+  softRose: '#E8D5DD',
+  offWhite: '#F8F5F7',
+  white: '#FFFFFF',
+  charcoal: '#28242B',
+  mutedGray: '#77717A',
+  softGray: '#E5DFE4',
+  secondaryBorder: '#D8C9D1',
+  tableRose: '#F3E9EE',
+  selectedRose: '#FCF7F9',
+  sageGreen: '#4F8A72',
+  sageTint: '#EAF2EE',
+  warmGold: '#C49752',
+  goldTint: '#F7F0E5',
+  mutedRed: '#B85C64',
+  redTint: '#F7EDEE',
+  iconRose: '#A66D86',
+  sidebarText: '#D9D2DE',
+};
+
+export const SuperAdminPalette = FalahPalette;
+
 export const Colors = {
   light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
+    // Backgrounds
+    background: FalahPalette.offWhite,
+    backgroundElement: FalahPalette.white,
+
+    // Borders
+    border: FalahPalette.softGray,
+
+    // Text
+    textHeading: FalahPalette.charcoal,
+    text: FalahPalette.mutedGray,
+    textSecondary: FalahPalette.mutedGray,
+
+    // Brand & UI
+    primary: FalahPalette.dustyRose,
+    primaryHover: FalahPalette.deepDustyRose,
+    secondary: FalahPalette.white,
+    secondaryText: FalahPalette.midnightViolet,
+    accent: FalahPalette.softRose,
+    sidebar: FalahPalette.midnightViolet,
+    activeMenuBg: FalahPalette.deepViolet,
+    activeMenu: FalahPalette.white,
+
+    // Semantic Badges (Background, Text)
+    statusActiveBg: FalahPalette.sageTint,
+    statusActiveText: FalahPalette.sageGreen,
+    statusPendingBg: FalahPalette.goldTint,
+    statusPendingText: FalahPalette.warmGold,
+    statusPaidBg: FalahPalette.softRose,
+    statusPaidText: FalahPalette.deepDustyRose,
+    statusExpiredBg: FalahPalette.redTint,
+    statusExpiredText: FalahPalette.mutedRed,
+    statusFailedBg: FalahPalette.redTint,
+    statusFailedText: FalahPalette.mutedRed,
   },
   dark: {
-    text: '#ffffff',
+    // Fallback/Dark mappings (can be adjusted later if dark mode is requested)
     background: '#000000',
     backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
+    border: '#2E3135',
+    textHeading: '#FFFFFF',
+    text: '#B0B4BA',
+    textSecondary: FalahPalette.mutedGray,
+    primary: FalahPalette.dustyRose,
+    primaryHover: FalahPalette.deepDustyRose,
+    sidebar: FalahPalette.midnightViolet,
+    activeMenu: FalahPalette.dustyRose,
+    success: FalahPalette.sageGreen,
+    warning: FalahPalette.warmGold,
+    error: FalahPalette.mutedRed,
+    info: FalahPalette.iconRose,
+    bgImportant: FalahPalette.deepViolet,
+    bgSuccess: '#14532d',
+    bgWarning: '#78350f',
+    bgError: '#7f1d1d',
   },
 } as const;
 

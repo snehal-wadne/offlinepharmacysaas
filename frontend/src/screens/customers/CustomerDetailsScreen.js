@@ -613,7 +613,7 @@ export default function CustomerDetailsScreen({
                   <TextInput
                     style={styles.searchTextInput}
                     placeholder="Search by Invoice No."
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor="#77717A"
                     value={searchInvoice}
                     onChangeText={(t) => {
                       setSearchInvoice(t);
@@ -956,7 +956,7 @@ export default function CustomerDetailsScreen({
                         </View>
                       </View>
                       <Text
-                        style={[styles.mobileCardAmount, { color: "#DC2626" }]}
+                        style={[styles.mobileCardAmount, { color: "#B85C64" }]}
                       >
                         {ret.refundAmount}
                       </Text>
@@ -1046,7 +1046,7 @@ export default function CustomerDetailsScreen({
                       <Text
                         style={[
                           styles.tdCell,
-                          { width: 120, color: "#0F766E", fontWeight: "600" },
+                          { width: 120, color: "#B9829A", fontWeight: "600" },
                         ]}
                       >
                         {ret.originalInvoice}
@@ -1064,7 +1064,7 @@ export default function CustomerDetailsScreen({
                             width: 110,
                             textAlign: "right",
                             fontWeight: "700",
-                            color: "#DC2626",
+                            color: "#B85C64",
                           },
                         ]}
                       >
@@ -1083,7 +1083,7 @@ export default function CustomerDetailsScreen({
                       <Text
                         style={[
                           styles.tdCell,
-                          { width: 240, color: "#64748B" },
+                          { width: 240, color: "#77717A" },
                         ]}
                         numberOfLines={1}
                       >
@@ -1111,7 +1111,7 @@ export default function CustomerDetailsScreen({
               <Text style={styles.cardTitle}>Customer Financial Ledger</Text>
               <Text style={styles.cardSubtitle}>
                 Current Balance:{" "}
-                <Text style={{ color: "#D97706", fontWeight: "700" }}>
+                <Text style={{ color: "#C49752", fontWeight: "700" }}>
                   {profile.outstandingBalance || "₹250.00"}
                 </Text>{" "}
                 • Credit Limit: {profile.creditLimit || "₹2,000.00"}
@@ -1149,7 +1149,7 @@ export default function CustomerDetailsScreen({
                       </View>
                     </View>
                     <Text
-                      style={[styles.mobileCardAmount, { color: "#0F172A" }]}
+                      style={[styles.mobileCardAmount, { color: "#28242B" }]}
                     >
                       Bal: {entry.balance}
                     </Text>
@@ -1168,7 +1168,7 @@ export default function CustomerDetailsScreen({
                           styles.mobileLedgerValText,
                           {
                             color:
-                              entry.debit !== "₹0.00" ? "#DC2626" : "#64748B",
+                              entry.debit !== "₹0.00" ? "#B85C64" : "#77717A",
                           },
                         ]}
                       >
@@ -1184,7 +1184,7 @@ export default function CustomerDetailsScreen({
                           styles.mobileLedgerValText,
                           {
                             color:
-                              entry.credit !== "₹0.00" ? "#16A34A" : "#64748B",
+                              entry.credit !== "₹0.00" ? "#4F8A72" : "#77717A",
                           },
                         ]}
                       >
@@ -1196,7 +1196,7 @@ export default function CustomerDetailsScreen({
                       <Text
                         style={[
                           styles.mobileLedgerValText,
-                          { fontWeight: "800", color: "#0F172A" },
+                          { fontWeight: "800", color: "#28242B" },
                         ]}
                       >
                         {entry.balance}
@@ -1271,7 +1271,7 @@ export default function CustomerDetailsScreen({
                           width: 110,
                           textAlign: "right",
                           color:
-                            entry.debit !== "₹0.00" ? "#DC2626" : "#64748B",
+                            entry.debit !== "₹0.00" ? "#B85C64" : "#77717A",
                           fontWeight: "600",
                         },
                       ]}
@@ -1285,7 +1285,7 @@ export default function CustomerDetailsScreen({
                           width: 110,
                           textAlign: "right",
                           color:
-                            entry.credit !== "₹0.00" ? "#16A34A" : "#64748B",
+                            entry.credit !== "₹0.00" ? "#4F8A72" : "#77717A",
                           fontWeight: "600",
                         },
                       ]}
@@ -1299,7 +1299,7 @@ export default function CustomerDetailsScreen({
                           width: 120,
                           textAlign: "right",
                           fontWeight: "700",
-                          color: "#0F172A",
+                          color: "#28242B",
                         },
                       ]}
                     >
@@ -1391,7 +1391,7 @@ export default function CustomerDetailsScreen({
                   <Text
                     style={[
                       styles.infoValue,
-                      { color: "#0F766E", fontWeight: "700" },
+                      { color: "#B9829A", fontWeight: "700" },
                     ]}
                   >
                     {profile.activeRxNo || "Rx-2026-1025"}
@@ -1405,7 +1405,7 @@ export default function CustomerDetailsScreen({
                 </View>
                 <View style={styles.infoItem}>
                   <Text style={styles.infoLabel}>Reported Drug Allergies</Text>
-                  <Text style={[styles.infoValue, { color: "#DC2626" }]}>
+                  <Text style={[styles.infoValue, { color: "#B85C64" }]}>
                     {profile.allergies || "Sulfa Drugs"}
                   </Text>
                 </View>
@@ -1422,7 +1422,7 @@ export default function CustomerDetailsScreen({
                   <Text
                     style={[
                       styles.infoValue,
-                      { color: "#16A34A", fontWeight: "700" },
+                      { color: "#4F8A72", fontWeight: "700" },
                     ]}
                   >
                     {profile.status || "Active"}
@@ -1445,7 +1445,7 @@ export default function CustomerDetailsScreen({
                   <Text
                     style={[
                       styles.infoValue,
-                      { color: "#D97706", fontWeight: "700" },
+                      { color: "#C49752", fontWeight: "700" },
                     ]}
                   >
                     {profile.outstandingBalance || "₹250.00"}
@@ -1553,7 +1553,7 @@ export default function CustomerDetailsScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
   },
   contentContainer: {
     paddingHorizontal: 28,
@@ -1580,12 +1580,12 @@ const styles = StyleSheet.create({
   backLinkIcon: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   backLinkText: {
     fontSize: 13.5,
     fontWeight: "600",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   headerRow: {
     flexDirection: "row",
@@ -1604,19 +1604,19 @@ const styles = StyleSheet.create({
   pageTitle: {
     fontSize: 24,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
     letterSpacing: -0.4,
   },
   pageSubtitle: {
     fontSize: 13.5,
     fontWeight: "500",
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 4,
   },
   newSaleButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingVertical: 10,
     paddingHorizontal: 18,
     borderRadius: 8,
@@ -1642,7 +1642,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     padding: 20,
     ...Platform.select({
       web: {
@@ -1670,9 +1670,9 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: "#DCFCE7",
+    backgroundColor: "#EAF2EE",
     borderWidth: 1,
-    borderColor: "#BBF7D0",
+    borderColor: "#EAF2EE",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1690,10 +1690,10 @@ const styles = StyleSheet.create({
   customerNameText: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   activeBadge: {
-    backgroundColor: "#D1FAE5",
+    backgroundColor: "#EAF2EE",
     paddingVertical: 2,
     paddingHorizontal: 8,
     borderRadius: 12,
@@ -1701,7 +1701,7 @@ const styles = StyleSheet.create({
   activeBadgeText: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#047857",
+    color: "#4F8A72",
   },
   contactRow: {
     flexDirection: "row",
@@ -1712,11 +1712,11 @@ const styles = StyleSheet.create({
   contactItemText: {
     fontSize: 13,
     fontWeight: "500",
-    color: "#64748B",
+    color: "#77717A",
   },
   contactDivider: {
     fontSize: 12,
-    color: "#CBD5E1",
+    color: "#E5DFE4",
   },
   profileStatsRow: {
     flexDirection: "row",
@@ -1746,26 +1746,26 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 11.5,
     fontWeight: "600",
-    color: "#64748B",
+    color: "#77717A",
   },
   statLabelOrange: {
     fontSize: 11.5,
     fontWeight: "700",
-    color: "#D97706",
+    color: "#C49752",
   },
   statValueBold: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   statValueOrange: {
     fontSize: 14.5,
     fontWeight: "800",
-    color: "#D97706",
+    color: "#C49752",
   },
   tabsContainer: {
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: "#E5DFE4",
   },
   tabsScrollContent: {
     flexDirection: "row",
@@ -1780,10 +1780,10 @@ const styles = StyleSheet.create({
   tabButtonText: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#64748B",
+    color: "#77717A",
   },
   tabButtonTextActive: {
-    color: "#0F766E",
+    color: "#B9829A",
     fontWeight: "700",
   },
   activeTabIndicator: {
@@ -1792,7 +1792,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 2.5,
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     borderRadius: 2,
   },
   splitGridRow: {
@@ -1821,7 +1821,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     overflow: "hidden",
     ...Platform.select({
       web: {
@@ -1833,7 +1833,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: "#E5DFE4",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -1850,19 +1850,19 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 15.5,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   cardSubtitle: {
     fontSize: 12.5,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   searchBoxWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     paddingHorizontal: 12,
     height: 38,
@@ -1878,12 +1878,12 @@ const styles = StyleSheet.create({
   searchTextInput: {
     flex: 1,
     fontSize: 12.5,
-    color: "#0F172A",
+    color: "#28242B",
     outlineStyle: "none",
   },
   clearSearchBtn: {
     fontSize: 12,
-    color: "#94A3B8",
+    color: "#77717A",
     padding: 2,
   },
   tableWrapper: {
@@ -1892,16 +1892,16 @@ const styles = StyleSheet.create({
   tableHeader: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: "#E5DFE4",
     paddingVertical: 10,
     paddingHorizontal: 16,
   },
   thCell: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
     paddingHorizontal: 6,
     letterSpacing: 0.3,
   },
@@ -1911,34 +1911,34 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   tableRowAlt: {
-    backgroundColor: "#FBFDFF",
+    backgroundColor: "#F8F5F7",
   },
   tdCell: {
     fontSize: 13,
-    color: "#334155",
+    color: "#28242B",
     paddingHorizontal: 6,
   },
   invNoText: {
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   dateText: {
-    color: "#64748B",
+    color: "#77717A",
     fontSize: 12.5,
   },
   amountText: {
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   paymentMethodText: {
     fontWeight: "500",
-    color: "#475569",
+    color: "#77717A",
   },
   statusCompletedPill: {
-    backgroundColor: "#D1FAE5",
+    backgroundColor: "#EAF2EE",
     paddingVertical: 3,
     paddingHorizontal: 10,
     borderRadius: 12,
@@ -1946,11 +1946,11 @@ const styles = StyleSheet.create({
   statusCompletedText: {
     fontSize: 11.5,
     fontWeight: "700",
-    color: "#047857",
+    color: "#4F8A72",
   },
   viewActionBtn: {
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 6,
     paddingVertical: 4,
     paddingHorizontal: 12,
@@ -1960,21 +1960,21 @@ const styles = StyleSheet.create({
   viewActionBtnText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#334155",
+    color: "#28242B",
   },
   emptyTableBox: {
     padding: 30,
     alignItems: "center",
   },
   emptyTableText: {
-    color: "#94A3B8",
+    color: "#77717A",
     fontSize: 13,
   },
   paginationFooter: {
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
+    borderTopColor: "#F8F5F7",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -1987,7 +1987,7 @@ const styles = StyleSheet.create({
   },
   paginationText: {
     fontSize: 12.5,
-    color: "#64748B",
+    color: "#77717A",
     fontWeight: "500",
   },
   paginationControls: {
@@ -2000,7 +2000,7 @@ const styles = StyleSheet.create({
     height: 28,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#FFFFFF",
@@ -2013,30 +2013,30 @@ const styles = StyleSheet.create({
   pageNavBtnText: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#334155",
+    color: "#28242B",
   },
   pageNavBtnTextDisabled: {
-    color: "#94A3B8",
+    color: "#77717A",
   },
   pageNumberBtn: {
     width: 28,
     height: 28,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#FFFFFF",
     cursor: "pointer",
   },
   pageNumberBtnActive: {
-    backgroundColor: "#0F766E",
-    borderColor: "#0F766E",
+    backgroundColor: "#B9829A",
+    borderColor: "#B9829A",
   },
   pageNumberText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#334155",
+    color: "#28242B",
   },
   pageNumberTextActive: {
     color: "#FFFFFF",
@@ -2046,7 +2046,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     padding: 20,
     ...Platform.select({
       web: {
@@ -2057,7 +2057,7 @@ const styles = StyleSheet.create({
   summaryCardTitle: {
     fontSize: 15.5,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
     marginBottom: 16,
   },
   summaryItem: {
@@ -2066,7 +2066,7 @@ const styles = StyleSheet.create({
   summaryItemLabel: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#94A3B8",
+    color: "#77717A",
     letterSpacing: 0.5,
     textTransform: "uppercase",
     marginBottom: 4,
@@ -2074,7 +2074,7 @@ const styles = StyleSheet.create({
   summaryItemLabelOrange: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#D97706",
+    color: "#C49752",
     letterSpacing: 0.5,
     textTransform: "uppercase",
     marginBottom: 4,
@@ -2082,16 +2082,16 @@ const styles = StyleSheet.create({
   summaryItemValueBold: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   summaryItemValueOrange: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#D97706",
+    color: "#C49752",
   },
   summaryDivider: {
     height: 1,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
   },
   viewLedgerButton: {
     marginTop: 18,
@@ -2100,7 +2100,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 6,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     paddingVertical: 9,
     backgroundColor: "#FFFFFF",
@@ -2112,10 +2112,10 @@ const styles = StyleSheet.create({
   viewLedgerText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#334155",
+    color: "#28242B",
   },
   recordPaymentBtn: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingVertical: 7,
     paddingHorizontal: 14,
     borderRadius: 6,
@@ -2132,13 +2132,13 @@ const styles = StyleSheet.create({
   },
   infoSection: {
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
     paddingBottom: 16,
   },
   infoSectionHeading: {
     fontSize: 13.5,
     fontWeight: "700",
-    color: "#0F766E",
+    color: "#B9829A",
     marginBottom: 12,
   },
   infoGrid: {
@@ -2156,14 +2156,14 @@ const styles = StyleSheet.create({
   infoLabel: {
     fontSize: 11.5,
     fontWeight: "600",
-    color: "#94A3B8",
+    color: "#77717A",
     marginBottom: 3,
     textTransform: "uppercase",
   },
   infoValue: {
     fontSize: 13.5,
     fontWeight: "600",
-    color: "#0F172A",
+    color: "#28242B",
   },
   modalBackdrop: {
     flex: 1,
@@ -2186,7 +2186,7 @@ const styles = StyleSheet.create({
   modalHeader: {
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: "#E5DFE4",
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
@@ -2194,11 +2194,11 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   modalSubtitle: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   closeModalBtn: {
@@ -2206,7 +2206,7 @@ const styles = StyleSheet.create({
   },
   closeModalBtnText: {
     fontSize: 16,
-    color: "#64748B",
+    color: "#77717A",
     fontWeight: "700",
   },
   modalBody: {
@@ -2215,7 +2215,7 @@ const styles = StyleSheet.create({
   modalSectionTitle: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#334155",
+    color: "#28242B",
     marginBottom: 12,
   },
   modalItemRow: {
@@ -2224,21 +2224,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   modalItemName: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#0F172A",
+    color: "#28242B",
   },
   modalItemQty: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
   },
   modalItemPrice: {
     fontSize: 13.5,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   modalTotalRow: {
     flexDirection: "row",
@@ -2247,42 +2247,42 @@ const styles = StyleSheet.create({
     marginTop: 16,
     paddingTop: 12,
     borderTopWidth: 2,
-    borderTopColor: "#E2E8F0",
+    borderTopColor: "#E5DFE4",
   },
   modalTotalLabel: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   modalTotalValue: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   modalFooter: {
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: "#E2E8F0",
+    borderTopColor: "#E5DFE4",
     flexDirection: "row",
     justifyContent: "flex-end",
     gap: 10,
-    backgroundColor: "#FAFAFA",
+    backgroundColor: "#F8F5F7",
   },
   printReceiptBtn: {
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     backgroundColor: "#FFFFFF",
   },
   printReceiptBtnText: {
     fontSize: 12.5,
     fontWeight: "600",
-    color: "#334155",
+    color: "#28242B",
   },
   closeBtnPrimary: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 6,
@@ -2300,7 +2300,7 @@ const styles = StyleSheet.create({
   mobileCustomerCard: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 12,
     padding: 14,
     ...Platform.select({
@@ -2316,7 +2316,7 @@ const styles = StyleSheet.create({
   },
   mobileCardDate: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
     marginBottom: 8,
   },
   mobileCardFooter: {
@@ -2324,39 +2324,39 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "flex-end",
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
+    borderTopColor: "#F8F5F7",
     paddingTop: 8,
     marginTop: 6,
   },
   mobileCardSub: {
     fontSize: 12.5,
     fontWeight: "600",
-    color: "#0F172A",
+    color: "#28242B",
   },
   mobileCardMethod: {
     fontSize: 11.5,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   mobileCardAmount: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   mobileCardReasonText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#334155",
+    color: "#28242B",
     marginBottom: 4,
   },
   mobileCardReasonSub: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
     marginBottom: 4,
   },
   mobileLedgerValuesRow: {
     flexDirection: "row",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderRadius: 8,
     padding: 10,
     justifyContent: "space-between",
@@ -2369,7 +2369,7 @@ const styles = StyleSheet.create({
   mobileLedgerValLabel: {
     fontSize: 10,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
     marginBottom: 2,
     letterSpacing: 0.3,
   },

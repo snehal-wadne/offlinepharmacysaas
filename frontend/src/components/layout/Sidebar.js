@@ -6,7 +6,16 @@ import {
   ScrollView,
   StyleSheet,
   Platform,
+  LayoutAnimation,
+  UIManager,
 } from 'react-native';
+
+if (
+  Platform.OS === 'android' &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 import { usePos } from '../../context/PosContext';
 
 const SALES_SUBITEMS = [
@@ -183,6 +192,7 @@ export default function Sidebar({
   };
 
   const handleSalesClick = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setSalesExpanded(!salesExpanded);
   };
 
@@ -193,23 +203,33 @@ export default function Sidebar({
   };
 
   const handleInventoryClick = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setInventoryExpanded(!inventoryExpanded);
   };
 
   const handlePurchasesClick = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setPurchasesExpanded(!purchasesExpanded);
   };
 
   const handleCustomersClick = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setCustomersExpanded(!customersExpanded);
   };
 
   const handleManagementClick = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setManagementExpanded(!managementExpanded);
   };
 
   const handleReportsClick = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setReportsExpanded(!reportsExpanded);
+  };
+
+  const handleSettingsClick = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setSettingsExpanded(!settingsExpanded);
   };
 
   const handleSubItemClick = (key) => {
@@ -659,7 +679,7 @@ export default function Sidebar({
         {/* 7. Settings Section */}
         <View style={styles.expandableSection}>
           <Pressable
-            onPress={() => setSettingsExpanded(!settingsExpanded)}
+            onPress={handleSettingsClick}
             style={[
               styles.expandableHeader,
               isSettingsActive && styles.expandableHeaderSelected,
@@ -735,9 +755,9 @@ export default function Sidebar({
 const styles = StyleSheet.create({
   sidebarContainer: {
     width: 230,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#30243D',
     borderRightWidth: 1,
-    borderRightColor: '#E2E8F0',
+    borderRightColor: '#3D2E4D',
     flexDirection: 'column',
     height: '100%',
     ...Platform.select({
@@ -767,7 +787,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 18,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: '#3D2E4D',
     flexDirection: 'row',
     alignItems: 'center',
   },
@@ -775,7 +795,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 8,
-    backgroundColor: '#0F766E',
+    backgroundColor: '#B9829A',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
@@ -792,13 +812,13 @@ const styles = StyleSheet.create({
   brandTitle: {
     fontSize: 15,
     fontWeight: '800',
-    color: '#0F766E',
+    color: '#FFFFFF',
     letterSpacing: 0.5,
   },
   brandSubtitle: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#64748B',
+    color: '#D9D2DE',
     letterSpacing: 0.5,
     marginTop: 1,
   },
@@ -812,7 +832,7 @@ const styles = StyleSheet.create({
   },
   sectionDivider: {
     height: 1,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#3D2E4D',
     marginVertical: 8,
     marginHorizontal: 4,
   },
@@ -826,9 +846,12 @@ const styles = StyleSheet.create({
     position: 'relative',
     cursor: 'pointer',
     backgroundColor: 'transparent',
+    ...Platform.select({
+      web: { transition: 'all 0.2s ease-in-out' },
+    }),
   },
   mainNavItemActive: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#3D2E4D',
   },
   activeIndicator: {
     position: 'absolute',
@@ -836,17 +859,17 @@ const styles = StyleSheet.create({
     top: 6,
     bottom: 6,
     width: 3.5,
-    backgroundColor: '#0F766E',
+    backgroundColor: '#B9829A',
     borderRadius: 2,
   },
   mainNavText: {
     fontSize: 13.5,
     fontWeight: '600',
-    color: '#334155',
+    color: '#D9D2DE',
   },
   mainNavTextActive: {
     fontWeight: '700',
-    color: '#0F766E',
+    color: '#FFFFFF',
   },
   expandableSection: {
     marginBottom: 4,
@@ -859,25 +882,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 8,
     cursor: 'pointer',
+    ...Platform.select({
+      web: { transition: 'background-color 0.2s ease-in-out' },
+    }),
   },
   expandableHeaderSelected: {
     backgroundColor: 'transparent',
   },
   expandableTextSelected: {
-    color: '#0F172A',
+    color: '#FFFFFF',
     fontWeight: '800',
   },
   chevronText: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: '#D9D2DE',
   },
   chevronSelected: {
-    color: '#0F766E',
+    color: '#FFFFFF',
   },
   submenuContainer: {
     paddingLeft: 12,
     paddingTop: 3,
     paddingBottom: 3,
+    overflow: 'hidden',
   },
   subNavItem: {
     flexDirection: 'row',
@@ -890,9 +917,12 @@ const styles = StyleSheet.create({
     position: 'relative',
     cursor: 'pointer',
     backgroundColor: 'transparent',
+    ...Platform.select({
+      web: { transition: 'all 0.2s ease-in-out' },
+    }),
   },
   subNavItemActive: {
-    backgroundColor: '#F0FDFA',
+    backgroundColor: '#3D2E4D',
   },
   subActiveIndicator: {
     position: 'absolute',
@@ -900,20 +930,20 @@ const styles = StyleSheet.create({
     top: 5,
     bottom: 5,
     width: 3,
-    backgroundColor: '#0F766E',
+    backgroundColor: '#B9829A',
     borderRadius: 2,
   },
   subNavText: {
     fontSize: 13,
     fontWeight: '500',
-    color: '#475569',
+    color: '#D9D2DE',
   },
   subNavTextActive: {
     fontWeight: '700',
-    color: '#0F766E',
+    color: '#FFFFFF',
   },
   orangeBadge: {
-    backgroundColor: '#F59E0B',
+    backgroundColor: '#B9829A', // Coral accent
     width: 20,
     height: 20,
     borderRadius: 10,
@@ -929,7 +959,8 @@ const styles = StyleSheet.create({
   sidebarFooter: {
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
+    borderTopColor: '#3D2E4D',
+    backgroundColor: '#30243D',
   },
   onlineStatusRow: {
     flexDirection: 'row',
@@ -940,15 +971,15 @@ const styles = StyleSheet.create({
     width: 9,
     height: 9,
     borderRadius: 4.5,
-    backgroundColor: '#10B981',
+    backgroundColor: '#B9829A', // Violet for online (avoiding green)
   },
   onlineStatusText: {
     fontSize: 12.5,
     fontWeight: '700',
-    color: '#0F172A',
+    color: '#FFFFFF',
   },
   lastSyncText: {
     fontSize: 10.5,
-    color: '#64748B',
+    color: '#D9D2DE',
   },
 });

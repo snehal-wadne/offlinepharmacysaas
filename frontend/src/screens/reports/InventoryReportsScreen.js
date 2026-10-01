@@ -15,15 +15,15 @@ import PaginationControls from "../../components/common/PaginationControls";
 import { fetchInventoryReport } from "../../api/reportApi";
 
 const HEALTH_BADGES = {
-  Optimal: { bg: "#DCFCE7", text: "#15803D" },
-  Moderate: { bg: "#FEF3C7", text: "#B45309" },
-  "Slow Moving": { bg: "#FEE2E2", text: "#B91C1C" },
+  Optimal: { bg: "#EAF2EE", text: "#4F8A72" },
+  Moderate: { bg: "#F7F0E5", text: "#C49752" },
+  "Slow Moving": { bg: "#F7EDEE", text: "#B85C64" },
 };
 
 const URGENCY_BADGES = {
-  High: { bg: "#FEE2E2", text: "#B91C1C" },
-  Medium: { bg: "#FEF3C7", text: "#B45309" },
-  Low: { bg: "#DCFCE7", text: "#15803D" },
+  High: { bg: "#F7EDEE", text: "#B85C64" },
+  Medium: { bg: "#F7F0E5", text: "#C49752" },
+  Low: { bg: "#EAF2EE", text: "#4F8A72" },
 };
 
 const INITIAL_KPIS = [
@@ -382,13 +382,13 @@ export default function InventoryReportsScreen({
             @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
             body {
               font-family: 'Inter', sans-serif;
-              color: #1e293b;
+              color: #28242B;
               margin: 0;
               padding: 40px;
               background-color: #ffffff;
             }
             .header {
-              border-bottom: 2px solid #e2e8f0;
+              border-bottom: 2px solid #E5DFE4;
               padding-bottom: 20px;
               margin-bottom: 30px;
             }
@@ -400,12 +400,12 @@ export default function InventoryReportsScreen({
             .title {
               font-size: 26px;
               font-weight: 800;
-              color: #0f172a;
+              color: #28242B;
               margin: 0 0 6px 0;
             }
             .subtitle {
               font-size: 14px;
-              color: #64748b;
+              color: #77717A;
               margin: 0;
               max-width: 600px;
               line-height: 1.5;
@@ -413,23 +413,23 @@ export default function InventoryReportsScreen({
             .meta-info {
               text-align: right;
               font-size: 12px;
-              color: #64748b;
+              color: #77717A;
               line-height: 1.6;
             }
             .meta-label {
               font-weight: 600;
-              color: #475569;
+              color: #77717A;
             }
             .logo {
               font-weight: 800;
-              color: #167c68;
+              color: #B9829A;
               font-size: 18px;
               margin-bottom: 8px;
             }
             .section-title {
               font-size: 16px;
               font-weight: 700;
-              color: #1e293b;
+              color: #28242B;
               margin-top: 30px;
               margin-bottom: 12px;
               text-transform: uppercase;
@@ -441,24 +441,24 @@ export default function InventoryReportsScreen({
               margin-bottom: 30px;
             }
             th {
-              background-color: #f1f5f9;
-              color: #475569;
+              background-color: #F8F5F7;
+              color: #77717A;
               font-weight: 700;
               font-size: 11px;
               text-transform: uppercase;
               letter-spacing: 0.5px;
               text-align: left;
               padding: 10px 12px;
-              border-bottom: 2px solid #e2e8f0;
+              border-bottom: 2px solid #E5DFE4;
             }
             td {
               padding: 10px 12px;
               font-size: 12px;
-              border-bottom: 1px solid #e2e8f0;
-              color: #334155;
+              border-bottom: 1px solid #E5DFE4;
+              color: #28242B;
             }
             tr:nth-child(even) td {
-              background-color: #f8fafc;
+              background-color: #F8F5F7;
             }
             .text-center {
               text-align: center;
@@ -478,28 +478,28 @@ export default function InventoryReportsScreen({
               text-align: center;
             }
             .badge-optimal {
-              background-color: #dcfce7;
-              color: #15803d;
+              background-color: #EAF2EE;
+              color: #4F8A72;
             }
             .badge-moderate {
-              background-color: #fef3c7;
-              color: #b45309;
+              background-color: #F7F0E5;
+              color: #C49752;
             }
             .badge-slow-moving {
-              background-color: #fee2e2;
-              color: #b91c1c;
+              background-color: #F7EDEE;
+              color: #B85C64;
             }
             .badge-high {
-              background-color: #fee2e2;
-              color: #b91c1c;
+              background-color: #F7EDEE;
+              color: #B85C64;
             }
             .badge-medium {
-              background-color: #fef3c7;
-              color: #b45309;
+              background-color: #F7F0E5;
+              color: #C49752;
             }
             .badge-low {
-              background-color: #dcfce7;
-              color: #15803d;
+              background-color: #EAF2EE;
+              color: #4F8A72;
             }
             @media print {
               body {
@@ -539,7 +539,7 @@ export default function InventoryReportsScreen({
             </thead>
             <tbody>
               ${categoryData.length === 0
-          ? '<tr><td colspan="6" class="text-center" style="padding: 20px; color: #94a3b8;">No category data available</td></tr>'
+          ? '<tr><td colspan="6" class="text-center" style="padding: 20px; color: #77717A;">No category data available</td></tr>'
           : categoryData
             .map(
               (cat) => `
@@ -547,7 +547,7 @@ export default function InventoryReportsScreen({
                   <td>${cat.category}</td>
                   <td class="text-center">${cat.totalItems}</td>
                   <td class="text-right font-semibold">${cat.valuation}</td>
-                  <td class="text-center font-semibold" style="color: #0f766e">${cat.turnover}</td>
+                  <td class="text-center font-semibold" style="color: #B9829A">${cat.turnover}</td>
                   <td class="text-center">${cat.holdingPercent}</td>
                   <td class="text-center">
                     <span class="badge badge-${cat.status.toLowerCase().replace(" ", "-")}">${cat.status}</span>
@@ -574,7 +574,7 @@ export default function InventoryReportsScreen({
             </thead>
             <tbody>
               ${fastMovingItems.length === 0
-          ? '<tr><td colspan="6" class="text-center" style="padding: 20px; color: #94a3b8;">No fast-moving medicine data available</td></tr>'
+          ? '<tr><td colspan="6" class="text-center" style="padding: 20px; color: #77717A;">No fast-moving medicine data available</td></tr>'
           : fastMovingItems
             .map(
               (item) => `
@@ -734,7 +734,7 @@ export default function InventoryReportsScreen({
                         <Text
                           style={[
                             styles.mobileReportDetailVal,
-                            { color: "#0F766E" },
+                            { color: "#B9829A" },
                           ]}
                         >
                           {cat.turnover}
@@ -806,13 +806,13 @@ export default function InventoryReportsScreen({
                     style={{
                       fontSize: 14,
                       fontWeight: "600",
-                      color: "#64748B",
+                      color: "#77717A",
                     }}
                   >
                     No category valuation data found
                   </Text>
                   <Text
-                    style={{ fontSize: 12, color: "#94A3B8", marginTop: 4 }}
+                    style={{ fontSize: 12, color: "#77717A", marginTop: 4 }}
                   >
                     No inventory records for the selected branch filter.
                   </Text>
@@ -862,7 +862,7 @@ export default function InventoryReportsScreen({
                             width: 140,
                             textAlign: "center",
                             fontWeight: "700",
-                            color: "#0F766E",
+                            color: "#B9829A",
                           },
                         ]}
                       >
@@ -939,7 +939,7 @@ export default function InventoryReportsScreen({
               </View>
             ) : fastMovingItems.length === 0 ? (
               <View style={{ padding: 24, alignItems: "center" }}>
-                <Text style={{ fontSize: 13, color: "#64748B" }}>
+                <Text style={{ fontSize: 13, color: "#77717A" }}>
                   No fast-moving items recorded.
                 </Text>
               </View>
@@ -994,7 +994,7 @@ export default function InventoryReportsScreen({
                         <Text
                           style={[
                             styles.mobileReportDetailVal,
-                            { color: "#0F766E" },
+                            { color: "#B9829A" },
                           ]}
                         >
                           {item.monthlyRevenue}
@@ -1010,8 +1010,8 @@ export default function InventoryReportsScreen({
                             {
                               color:
                                 item.daysOfStockLeft <= 15
-                                  ? "#DC2626"
-                                  : "#D97706",
+                                  ? "#B85C64"
+                                  : "#C49752",
                             },
                           ]}
                         >
@@ -1072,13 +1072,13 @@ export default function InventoryReportsScreen({
                     style={{
                       fontSize: 14,
                       fontWeight: "600",
-                      color: "#64748B",
+                      color: "#77717A",
                     }}
                   >
                     No fast-moving items recorded
                   </Text>
                   <Text
-                    style={{ fontSize: 12, color: "#94A3B8", marginTop: 4 }}
+                    style={{ fontSize: 12, color: "#77717A", marginTop: 4 }}
                   >
                     Sales demand and inventory velocity will appear here once
                     transactions occur.
@@ -1190,13 +1190,13 @@ const styles = StyleSheet.create({
   pageTitle: {
     fontSize: 24,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
     letterSpacing: -0.4,
   },
   pageSubtitle: {
     fontSize: 13.5,
     fontWeight: "500",
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 4,
   },
   actionsRow: {
@@ -1207,7 +1207,7 @@ const styles = StyleSheet.create({
   exportBtnSecondary: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     paddingVertical: 9,
     paddingHorizontal: 16,
     borderRadius: 8,
@@ -1216,10 +1216,10 @@ const styles = StyleSheet.create({
   exportBtnTextSecondary: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#334155",
+    color: "#28242B",
   },
   exportBtnPrimary: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingVertical: 9,
     paddingHorizontal: 16,
     borderRadius: 8,
@@ -1242,7 +1242,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     overflow: "hidden",
     ...Platform.select({
       web: {
@@ -1258,16 +1258,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   cardTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   cardSubtitle: {
     fontSize: 12.5,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   tableWrapper: {
@@ -1280,13 +1280,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderBottomColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
   },
   thCell: {
     fontSize: 11.5,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
     paddingHorizontal: 6,
     letterSpacing: 0.3,
   },
@@ -1296,35 +1296,35 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   tableRowAlt: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
   },
   tdCell: {
     fontSize: 13,
-    color: "#334155",
+    color: "#28242B",
     paddingHorizontal: 6,
   },
   catName: {
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   valText: {
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   skuText: {
     fontWeight: "700",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   medName: {
     fontWeight: "600",
-    color: "#0F172A",
+    color: "#28242B",
   },
   revenueText: {
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   statusWrapper: {
     alignItems: "center",
@@ -1347,7 +1347,7 @@ const styles = StyleSheet.create({
   mobileReportCard: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 12,
     padding: 14,
     ...Platform.select({
@@ -1364,19 +1364,19 @@ const styles = StyleSheet.create({
   mobileCatName: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   mobileMedName: {
     fontSize: 14.5,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
     marginBottom: 10,
   },
   mobileValuationRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "#F0FDFA",
+    backgroundColor: "#E8D5DD",
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -1385,17 +1385,17 @@ const styles = StyleSheet.create({
   mobileValLabel: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#0F766E",
+    color: "#B9829A",
     letterSpacing: 0.5,
   },
   mobileValAmount: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   mobileReportDetailsGrid: {
     flexDirection: "row",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderRadius: 8,
     padding: 10,
     justifyContent: "space-between",
@@ -1407,13 +1407,13 @@ const styles = StyleSheet.create({
   mobileReportDetailLabel: {
     fontSize: 10,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
     marginBottom: 2,
     letterSpacing: 0.3,
   },
   mobileReportDetailVal: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
 });

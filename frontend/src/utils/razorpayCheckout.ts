@@ -83,7 +83,7 @@ export async function openRazorpayCheckout(options: RazorpayCheckoutOptions): Pr
     email,
     phone,
     notes = {},
-    themeColor = '#0284C7',
+    themeColor = '#A66D86',
     onSuccess,
     onDismiss,
     onError,

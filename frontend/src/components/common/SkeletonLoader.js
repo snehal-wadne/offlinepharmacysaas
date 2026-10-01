@@ -119,7 +119,7 @@ export function SkeletonItemCard({ style }) {
 
 const styles = StyleSheet.create({
   skeletonBase: {
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#E5DFE4',
   },
   kpiCard: {
     flex: 1,
@@ -130,8 +130,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#000',
+    borderColor: '#E5DFE4',
+    shadowColor: '#28242B',
     shadowOpacity: 0.04,
     shadowRadius: 4,
     elevation: 1,
@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: '#F8F5F7',
     backgroundColor: '#FFFFFF',
   },
   itemCard: {
@@ -156,8 +156,8 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#000',
+    borderColor: '#E5DFE4',
+    shadowColor: '#28242B',
     shadowOpacity: 0.03,
     shadowRadius: 3,
     elevation: 1,
@@ -175,7 +175,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderColor: '#F8FAFC',
+    borderColor: '#F8F5F7',
     marginBottom: 10,
   },
   gridCol: {

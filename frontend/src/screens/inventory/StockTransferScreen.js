@@ -24,10 +24,10 @@ import { localPersistenceService } from "../../db";
 import { syncEngine } from "../../sync";
 
 const STATUS_PILLS = {
-  Draft: { bg: "#F1F5F9", text: "#475569" },
-  "In Transit": { bg: "#DBEAFE", text: "#1D4ED8" },
-  Completed: { bg: "#DCFCE7", text: "#15803D" },
-  Cancelled: { bg: "#FEE2E2", text: "#B91C1C" },
+  Draft: { bg: "#F8F5F7", text: "#77717A" },
+  "In Transit": { bg: "#E8D5DD", text: "#A66D86" },
+  Completed: { bg: "#EAF2EE", text: "#4F8A72" },
+  Cancelled: { bg: "#F7EDEE", text: "#B85C64" },
 };
 
 const normalizeTransferStatus = (status) => {
@@ -628,7 +628,7 @@ export default function StockTransferScreen({ onShowToast }) {
             <TextInput
               style={styles.searchInput}
               placeholder="Search transfer ID, branch or reference..."
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor="#77717A"
               value={searchQuery}
               onChangeText={setSearchQuery}
             />
@@ -733,13 +733,13 @@ export default function StockTransferScreen({ onShowToast }) {
                           <View
                             style={[
                               styles.statusPill,
-                              { backgroundColor: "#FEF3C7" },
+                              { backgroundColor: "#F7F0E5" },
                             ]}
                           >
                             <Text
                               style={[
                                 styles.statusPillText,
-                                { color: "#B45309", fontSize: 10 },
+                                { color: "#C49752", fontSize: 10 },
                               ]}
                             >
                               {tr.syncStatus}
@@ -773,7 +773,7 @@ export default function StockTransferScreen({ onShowToast }) {
                       <View style={styles.mobileGridCol}>
                         <Text style={styles.mobileLabel}>Total Qty</Text>
                         <Text
-                          style={[styles.mobileValBold, { color: "#0F766E" }]}
+                          style={[styles.mobileValBold, { color: "#B9829A" }]}
                         >
                           {tr.totalQuantity} units
                         </Text>
@@ -920,7 +920,7 @@ export default function StockTransferScreen({ onShowToast }) {
                             style={[
                               styles.statusPill,
                               {
-                                backgroundColor: "#FEF3C7",
+                                backgroundColor: "#F7F0E5",
                                 paddingHorizontal: 6,
                                 paddingVertical: 2,
                               },
@@ -929,7 +929,7 @@ export default function StockTransferScreen({ onShowToast }) {
                             <Text
                               style={[
                                 styles.statusPillText,
-                                { color: "#B45309", fontSize: 10 },
+                                { color: "#C49752", fontSize: 10 },
                               ]}
                             >
                               {tr.syncStatus}
@@ -1022,7 +1022,7 @@ export default function StockTransferScreen({ onShowToast }) {
                   <TextInput
                     style={styles.medSearchInput}
                     placeholder="Search or select medicine..."
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor="#77717A"
                     value={searchMedQuery}
                     onChangeText={(text) => {
                       setSearchMedQuery(text);
@@ -1082,7 +1082,7 @@ export default function StockTransferScreen({ onShowToast }) {
                               <Text style={styles.medDropdownTitle}>
                                 {p.brandName || p.medicineName}{" "}
                                 <Text
-                                  style={{ fontSize: 11, color: "#64748B" }}
+                                  style={{ fontSize: 11, color: "#77717A" }}
                                 >
                                   ({p.strength || "500mg"})
                                 </Text>
@@ -1251,7 +1251,7 @@ export default function StockTransferScreen({ onShowToast }) {
                                 style={{
                                   fontSize: 11,
                                   fontWeight: "800",
-                                  color: "#0F766E",
+                                  color: "#B9829A",
                                 }}
                               >
                                 SOURCE
@@ -1344,7 +1344,7 @@ export default function StockTransferScreen({ onShowToast }) {
                                 style={{
                                   fontSize: 11,
                                   fontWeight: "800",
-                                  color: "#2563EB",
+                                  color: "#B9829A",
                                 }}
                               >
                                 DESTINATION
@@ -1371,9 +1371,9 @@ export default function StockTransferScreen({ onShowToast }) {
                     Stock Quantity to Transfer{" "}
                     <Text style={styles.reqStar}>*</Text>
                   </Text>
-                  <Text style={{ fontSize: 12, color: "#64748B" }}>
+                  <Text style={{ fontSize: 12, color: "#77717A" }}>
                     Available:{" "}
-                    <Text style={{ fontWeight: "700", color: "#0F766E" }}>
+                    <Text style={{ fontWeight: "700", color: "#B9829A" }}>
                       {selectedMedicine?.quantity || 0} units
                     </Text>
                   </Text>
@@ -1395,7 +1395,7 @@ export default function StockTransferScreen({ onShowToast }) {
                         minWidth: 140,
                         fontSize: 15,
                         fontWeight: "700",
-                        color: "#0F172A",
+                        color: "#28242B",
                       },
                     ]}
                     value={transferQty}
@@ -1440,7 +1440,7 @@ export default function StockTransferScreen({ onShowToast }) {
                     </Text>
                     <Text
                       style={{
-                        color: "#DC2626",
+                        color: "#B85C64",
                         fontWeight: "700",
                         fontSize: 12.5,
                       }}
@@ -1460,7 +1460,7 @@ export default function StockTransferScreen({ onShowToast }) {
                     </Text>
                     <Text
                       style={{
-                        color: "#16A34A",
+                        color: "#4F8A72",
                         fontWeight: "700",
                         fontSize: 12.5,
                       }}
@@ -1582,7 +1582,7 @@ export default function StockTransferScreen({ onShowToast }) {
               >
                 <Text style={styles.actionItemIcon}>❌</Text>
                 <View style={styles.actionItemTextCol}>
-                  <Text style={[styles.actionItemTitle, { color: "#DC2626" }]}>
+                  <Text style={[styles.actionItemTitle, { color: "#B85C64" }]}>
                     Cancel Transfer
                   </Text>
                   <Text style={styles.actionItemSubtitle}>
@@ -1629,26 +1629,26 @@ const styles = StyleSheet.create({
   pageTitle: {
     fontSize: 24,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
     letterSpacing: -0.4,
   },
   pageSubtitle: {
     fontSize: 13.5,
     fontWeight: "500",
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 4,
   },
   newTransferButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingVertical: 10,
     paddingHorizontal: 18,
     borderRadius: 8,
     cursor: "pointer",
   },
   newTransferButtonHovered: {
-    backgroundColor: "#0D9488",
+    backgroundColor: "#A66D86",
   },
   newTransferIcon: {
     color: "#FFFFFF",
@@ -1673,7 +1673,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     overflow: "hidden",
     ...Platform.select({
       web: {
@@ -1694,7 +1694,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     padding: 14,
   },
   mobileTrHeader: {
@@ -1703,12 +1703,12 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   mobileTrId: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   mobileRouteRow: {
     flexDirection: "row",
@@ -1719,18 +1719,18 @@ const styles = StyleSheet.create({
   mobileFromBranch: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#0F172A",
+    color: "#28242B",
     flex: 1,
   },
   mobileArrow: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
   },
   mobileToBranch: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#0F766E",
+    color: "#B9829A",
     flex: 1,
     textAlign: "right",
   },
@@ -1740,7 +1740,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     gap: 10,
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
+    borderTopColor: "#F8F5F7",
   },
   mobileGridCol: {
     width: "47%",
@@ -1748,18 +1748,18 @@ const styles = StyleSheet.create({
   mobileLabel: {
     fontSize: 11,
     fontWeight: "600",
-    color: "#94A3B8",
+    color: "#77717A",
     textTransform: "uppercase",
   },
   mobileVal: {
     fontSize: 12.5,
-    color: "#334155",
+    color: "#28242B",
     marginTop: 1,
   },
   mobileValBold: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
     marginTop: 1,
   },
   filtersBar: {
@@ -1768,9 +1768,9 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 20,
     paddingVertical: 12,
-    backgroundColor: "#FAFAFA",
+    backgroundColor: "#F8F5F7",
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
     gap: 12,
   },
   filtersBarCompact: {
@@ -1783,7 +1783,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     paddingHorizontal: 12,
     height: 38,
@@ -1791,7 +1791,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 13,
-    color: "#0F172A",
+    color: "#28242B",
     outlineStyle: "none",
   },
   clearBtn: {
@@ -1799,7 +1799,7 @@ const styles = StyleSheet.create({
   },
   clearBtnText: {
     fontSize: 12,
-    color: "#94A3B8",
+    color: "#77717A",
   },
   filterChipRow: {
     flexDirection: "row",
@@ -1811,17 +1811,17 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     cursor: "pointer",
   },
   filterChipActive: {
-    backgroundColor: "#0F766E",
-    borderColor: "#0F766E",
+    backgroundColor: "#B9829A",
+    borderColor: "#B9829A",
   },
   filterChipText: {
     fontSize: 12,
     fontWeight: "500",
-    color: "#64748B",
+    color: "#77717A",
   },
   filterChipTextActive: {
     fontWeight: "700",
@@ -1834,17 +1834,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   sectionTitle: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   paginationInfo: {
     fontSize: 12.5,
     fontWeight: "500",
-    color: "#64748B",
+    color: "#77717A",
   },
   tableWrapper: {
     minWidth: 1050,
@@ -1856,13 +1856,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderBottomColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
   },
   thCell: {
     fontSize: 11.5,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
     paddingHorizontal: 6,
     letterSpacing: 0.3,
   },
@@ -1872,19 +1872,19 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   tableRowAlt: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
   },
   tdCell: {
     fontSize: 13,
-    color: "#334155",
+    color: "#28242B",
     paddingHorizontal: 6,
   },
   transferId: {
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   statusCell: {
     alignItems: "center",
@@ -1907,7 +1907,7 @@ const styles = StyleSheet.create({
   actionDotsText: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
   },
   emptyState: {
     alignItems: "center",
@@ -1917,19 +1917,19 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   emptySubtitle: {
     fontSize: 13,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   paginationFooter: {
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
-    backgroundColor: "#FAFAFA",
+    borderTopColor: "#F8F5F7",
+    backgroundColor: "#F8F5F7",
     alignItems: "flex-end",
   },
   paginationRow: {
@@ -1943,7 +1943,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     alignItems: "center",
     justifyContent: "center",
     cursor: "pointer",
@@ -1951,13 +1951,13 @@ const styles = StyleSheet.create({
   pageBtnText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#475569",
+    color: "#77717A",
   },
   pageBtnActive: {
     width: 28,
     height: 28,
     borderRadius: 6,
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1970,16 +1970,16 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 6,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     alignItems: "center",
     justifyContent: "center",
     opacity: 0.5,
   },
   pageBtnTextDisabled: {
     fontSize: 12,
-    color: "#94A3B8",
+    color: "#77717A",
   },
   modalBackdrop: {
     flex: 1,
@@ -2008,19 +2008,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   modalTitle: {
     fontSize: 17,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   closeBtn: {
     padding: 6,
   },
   closeBtnText: {
     fontSize: 14,
-    color: "#94A3B8",
+    color: "#77717A",
     fontWeight: "700",
   },
   modalBody: {
@@ -2041,34 +2041,34 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 12.5,
     fontWeight: "600",
-    color: "#334155",
+    color: "#28242B",
     marginBottom: 6,
   },
   reqStar: {
-    color: "#DC2626",
+    color: "#B85C64",
   },
   modalInput: {
     height: 40,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     backgroundColor: "#FFFFFF",
     paddingHorizontal: 12,
     fontSize: 13,
-    color: "#0F172A",
+    color: "#28242B",
     outlineStyle: "none",
   },
   inputReadOnly: {
-    backgroundColor: "#F8FAFC",
-    color: "#64748B",
+    backgroundColor: "#F8F5F7",
+    color: "#77717A",
   },
   inputError: {
-    borderColor: "#DC2626",
-    backgroundColor: "#FEF2F2",
+    borderColor: "#B85C64",
+    backgroundColor: "#F7EDEE",
   },
   errorText: {
     fontSize: 11,
-    color: "#DC2626",
+    color: "#B85C64",
     marginTop: 3,
     fontWeight: "500",
   },
@@ -2084,8 +2084,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingVertical: 14,
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
-    backgroundColor: "#FAFAFA",
+    borderTopColor: "#F8F5F7",
+    backgroundColor: "#F8F5F7",
   },
   cancelButton: {
     paddingVertical: 9,
@@ -2096,10 +2096,10 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#64748B",
+    color: "#77717A",
   },
   submitModalButton: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingVertical: 9,
     paddingHorizontal: 20,
     borderRadius: 8,
@@ -2120,9 +2120,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     paddingVertical: 9,
     paddingHorizontal: 14,
     borderRadius: 8,
@@ -2134,7 +2134,7 @@ const styles = StyleSheet.create({
   devGuideBtnTopText: {
     fontSize: 12.5,
     fontWeight: "700",
-    color: "#334155",
+    color: "#28242B",
   },
   filterTogglesGroup: {
     flexDirection: "row",
@@ -2150,36 +2150,36 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     backgroundColor: "#FFFFFF",
     cursor: "pointer",
   },
   filterTogglePillActive: {
-    backgroundColor: "#F0FDFA",
-    borderColor: "#0F766E",
+    backgroundColor: "#E8D5DD",
+    borderColor: "#B9829A",
   },
   filterToggleDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: "#94A3B8",
+    backgroundColor: "#77717A",
   },
   filterToggleDotActive: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
   },
   filterToggleText: {
     fontSize: 11.5,
     fontWeight: "600",
-    color: "#64748B",
+    color: "#77717A",
   },
   filterToggleTextActive: {
-    color: "#0F766E",
+    color: "#B9829A",
     fontWeight: "700",
   },
   mobileTrDotsBtn: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     borderRadius: 6,
     paddingVertical: 3,
     paddingHorizontal: 8,
@@ -2188,7 +2188,7 @@ const styles = StyleSheet.create({
   mobileTrDotsText: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#334155",
+    color: "#28242B",
   },
   modalOverlayAction: {
     flex: 1,
@@ -2203,7 +2203,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     overflow: "hidden",
   },
   actionMenuHeader: {
@@ -2212,17 +2212,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderBottomColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
   },
   actionMenuTitle: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   actionMenuRoute: {
     fontSize: 11.5,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   closeActionBtn: {
@@ -2231,7 +2231,7 @@ const styles = StyleSheet.create({
   },
   closeActionText: {
     fontSize: 18,
-    color: "#64748B",
+    color: "#77717A",
     fontWeight: "700",
   },
   actionList: {
@@ -2248,12 +2248,12 @@ const styles = StyleSheet.create({
     cursor: "pointer",
   },
   actionItemDanger: {
-    backgroundColor: "#FEF2F2",
+    backgroundColor: "#F7EDEE",
   },
   actionItemDev: {
-    backgroundColor: "#F0FDFA",
+    backgroundColor: "#E8D5DD",
     borderWidth: 1,
-    borderColor: "#99F6E4",
+    borderColor: "#E8D5DD",
     marginTop: 4,
   },
   actionItemIcon: {
@@ -2265,11 +2265,11 @@ const styles = StyleSheet.create({
   actionItemTitle: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   actionItemSubtitle: {
     fontSize: 11,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 1,
   },
   devGuideModalCard: {
@@ -2289,8 +2289,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 18,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderBottomColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
   },
   devGuideTitleRow: {
     flexDirection: "row",
@@ -2301,7 +2301,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 8,
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2311,11 +2311,11 @@ const styles = StyleSheet.create({
   devGuideModalTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   devGuideModalSubtitle: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
   },
   devGuideModalBody: {
     padding: 20,
@@ -2326,22 +2326,22 @@ const styles = StyleSheet.create({
   guideSecTitle: {
     fontSize: 14,
     fontWeight: "800",
-    color: "#0F766E",
+    color: "#B9829A",
     marginBottom: 6,
   },
   guideSecDesc: {
     fontSize: 12,
-    color: "#475569",
+    color: "#77717A",
     marginBottom: 8,
   },
   codeSnippet: {
-    backgroundColor: "#0F172A",
+    backgroundColor: "#28242B",
     borderRadius: 8,
     padding: 12,
     marginTop: 6,
   },
   codeSnippetText: {
-    color: "#38BDF8",
+    color: "#A66D86",
     fontSize: 11.5,
     fontFamily: Platform.select({
       web: "Consolas, Monaco, monospace",
@@ -2350,9 +2350,9 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
   endpointCard: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     padding: 12,
     marginBottom: 10,
@@ -2364,13 +2364,13 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   methodPatch: {
-    backgroundColor: "#8B5CF6",
+    backgroundColor: "#B9829A",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
   },
   methodPost: {
-    backgroundColor: "#16A34A",
+    backgroundColor: "#4F8A72",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -2383,22 +2383,22 @@ const styles = StyleSheet.create({
   endpointRoute: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
     fontFamily: Platform.select({ web: "monospace", default: "System" }),
   },
   endpointDesc: {
     fontSize: 12,
-    color: "#475569",
+    color: "#77717A",
   },
   devGuideModalFooter: {
     padding: 14,
     borderTopWidth: 1,
-    borderTopColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderTopColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
     alignItems: "flex-end",
   },
   closeDevGuideModalBtn: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingVertical: 8,
     paddingHorizontal: 18,
     borderRadius: 8,
@@ -2416,7 +2416,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     overflow: "hidden",
   },
   transferModalHeader: {
@@ -2425,18 +2425,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 18,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderBottomColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
   },
   transferHeaderBadge: {
     width: 32,
     height: 32,
     borderRadius: 8,
-    backgroundColor: "#EFF6FF",
+    backgroundColor: "#E8D5DD",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#BFDBFE",
+    borderColor: "#E8D5DD",
   },
   transferHeaderBadgeIcon: {
     fontSize: 16,
@@ -2444,11 +2444,11 @@ const styles = StyleSheet.create({
   transferModalTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   transferModalSubtitle: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   transferModalBody: {
@@ -2466,12 +2466,12 @@ const styles = StyleSheet.create({
   medSearchInput: {
     height: 42,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     backgroundColor: "#FFFFFF",
     paddingHorizontal: 12,
     fontSize: 13.5,
-    color: "#0F172A",
+    color: "#28242B",
   },
   medClearBtn: {
     position: "absolute",
@@ -2481,12 +2481,12 @@ const styles = StyleSheet.create({
   },
   medClearText: {
     fontSize: 14,
-    color: "#94A3B8",
+    color: "#77717A",
     fontWeight: "700",
   },
   medDropdownCard: {
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     backgroundColor: "#FFFFFF",
     marginBottom: 8,
@@ -2499,26 +2499,26 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
     cursor: "pointer",
   },
   medDropdownItemActive: {
-    backgroundColor: "#F0FDFA",
+    backgroundColor: "#E8D5DD",
   },
   medDropdownTitle: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   medDropdownSub: {
     fontSize: 11,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 1,
   },
   medDropdownStock: {
     fontSize: 12,
     fontWeight: "800",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   quickMedChipsRow: {
     flexDirection: "row",
@@ -2530,39 +2530,39 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: 10,
     borderRadius: 14,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     cursor: "pointer",
   },
   quickMedChipActive: {
-    backgroundColor: "#0F766E",
-    borderColor: "#0F766E",
+    backgroundColor: "#B9829A",
+    borderColor: "#B9829A",
   },
   quickMedChipText: {
     fontSize: 11.5,
     fontWeight: "600",
-    color: "#475569",
+    color: "#77717A",
   },
   quickMedChipTextActive: {
     color: "#FFFFFF",
     fontWeight: "700",
   },
   transferProductCard: {
-    backgroundColor: "#F0FDFA",
+    backgroundColor: "#E8D5DD",
     borderWidth: 1,
-    borderColor: "#99F6E4",
+    borderColor: "#E8D5DD",
     borderRadius: 10,
     padding: 14,
   },
   transferMedTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   transferMedMeta: {
     fontSize: 12,
-    color: "#334155",
+    color: "#28242B",
     marginTop: 2,
   },
   transferPillsRow: {
@@ -2574,7 +2574,7 @@ const styles = StyleSheet.create({
   transferPill: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     paddingVertical: 3,
     paddingHorizontal: 8,
     borderRadius: 6,
@@ -2582,12 +2582,12 @@ const styles = StyleSheet.create({
   transferPillText: {
     fontSize: 11.5,
     fontWeight: "600",
-    color: "#475569",
+    color: "#77717A",
   },
   transferPillTeal: {
-    backgroundColor: "#CCFBF1",
+    backgroundColor: "#E8D5DD",
     borderWidth: 1,
-    borderColor: "#5EEAD4",
+    borderColor: "#E8D5DD",
     paddingVertical: 3,
     paddingHorizontal: 8,
     borderRadius: 6,
@@ -2595,18 +2595,18 @@ const styles = StyleSheet.create({
   transferPillTextTeal: {
     fontSize: 11.5,
     fontWeight: "800",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   transferErrorAlert: {
-    backgroundColor: "#FEF2F2",
+    backgroundColor: "#F7EDEE",
     borderWidth: 1,
-    borderColor: "#FCA5A5",
+    borderColor: "#F7EDEE",
     padding: 10,
     borderRadius: 8,
   },
   transferErrorText: {
     fontSize: 12,
-    color: "#DC2626",
+    color: "#B85C64",
     fontWeight: "600",
   },
   branchSelectionGrid: {
@@ -2630,9 +2630,9 @@ const styles = StyleSheet.create({
   },
   branchPickerBox: {
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     overflow: "hidden",
     marginTop: 4,
   },
@@ -2642,55 +2642,55 @@ const styles = StyleSheet.create({
     gap: 8,
     padding: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
     backgroundColor: "#FFFFFF",
     cursor: "pointer",
   },
   branchOptionItemFromActive: {
-    backgroundColor: "#F0FDFA",
+    backgroundColor: "#E8D5DD",
     borderLeftWidth: 4,
-    borderLeftColor: "#0F766E",
+    borderLeftColor: "#B9829A",
   },
   branchOptionItemToActive: {
-    backgroundColor: "#EFF6FF",
+    backgroundColor: "#E8D5DD",
     borderLeftWidth: 4,
-    borderLeftColor: "#2563EB",
+    borderLeftColor: "#B9829A",
   },
   branchOptionDisabled: {
     opacity: 0.4,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
   },
   branchDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: "#CBD5E1",
+    backgroundColor: "#E5DFE4",
   },
   branchDotFromActive: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
   },
   branchDotToActive: {
-    backgroundColor: "#2563EB",
+    backgroundColor: "#B9829A",
   },
   branchOptionName: {
     fontSize: 12.5,
     fontWeight: "600",
-    color: "#334155",
+    color: "#28242B",
   },
   branchOptionNameFromActive: {
-    color: "#0F766E",
+    color: "#B9829A",
     fontWeight: "800",
   },
   branchOptionNameToActive: {
-    color: "#2563EB",
+    color: "#B9829A",
     fontWeight: "800",
   },
   branchOptionNameDisabled: {
-    color: "#94A3B8",
+    color: "#77717A",
   },
   branchOptionCity: {
     fontSize: 11,
-    color: "#94A3B8",
+    color: "#77717A",
   },
   transferDirectionCol: {
     justifyContent: "center",
@@ -2707,7 +2707,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: "#2563EB",
+    backgroundColor: "#B9829A",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2721,26 +2721,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
-    backgroundColor: "#F8FAFC",
+    borderColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
     cursor: "pointer",
   },
   transferPresetBtnActive: {
-    backgroundColor: "#2563EB",
-    borderColor: "#2563EB",
+    backgroundColor: "#B9829A",
+    borderColor: "#B9829A",
   },
   transferPresetText: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#475569",
+    color: "#77717A",
   },
   transferPresetTextActive: {
     color: "#FFFFFF",
   },
   transferCalcBox: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     padding: 12,
     gap: 4,
@@ -2748,7 +2748,7 @@ const styles = StyleSheet.create({
   transferCalcTitle: {
     fontSize: 12,
     fontWeight: "800",
-    color: "#334155",
+    color: "#28242B",
   },
   transferCalcRow: {
     flexDirection: "row",
@@ -2757,7 +2757,7 @@ const styles = StyleSheet.create({
   },
   transferCalcLabel: {
     fontSize: 12,
-    color: "#475569",
+    color: "#77717A",
   },
   adjustModalFooter: {
     flexDirection: "row",
@@ -2767,25 +2767,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 14,
     borderTopWidth: 1,
-    borderTopColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderTopColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
   },
   cancelBtn: {
     paddingVertical: 9,
     paddingHorizontal: 16,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     backgroundColor: "#FFFFFF",
     cursor: "pointer",
   },
   cancelBtnText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#475569",
+    color: "#77717A",
   },
   confirmTransferBtn: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingVertical: 9,
     paddingHorizontal: 20,
     borderRadius: 8,
@@ -2799,7 +2799,7 @@ const styles = StyleSheet.create({
   fieldLabelModal: {
     fontSize: 12.5,
     fontWeight: "600",
-    color: "#334155",
+    color: "#28242B",
     marginBottom: 4,
   },
   formGroupModal: {
@@ -2808,11 +2808,11 @@ const styles = StyleSheet.create({
   adjustInput: {
     height: 42,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     backgroundColor: "#FFFFFF",
     paddingHorizontal: 12,
     fontSize: 13.5,
-    color: "#0F172A",
+    color: "#28242B",
   },
 });

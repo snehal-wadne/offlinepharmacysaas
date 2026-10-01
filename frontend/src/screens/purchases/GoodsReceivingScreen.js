@@ -26,16 +26,16 @@ import { localPersistenceService } from "../../db";
 import { syncEngine } from "../../sync";
 
 const GRN_STATUS_BADGES = {
-  Verified: { bg: "#DCFCE7", text: "#15803D", dot: "#16A34A" },
-  "Pending Inspection": { bg: "#FEF3C7", text: "#B45309", dot: "#F59E0B" },
-  Discrepancy: { bg: "#FEE2E2", text: "#B91C1C", dot: "#EF4444" },
+  Verified: { bg: "#EAF2EE", text: "#4F8A72", dot: "#4F8A72" },
+  "Pending Inspection": { bg: "#F7F0E5", text: "#C49752", dot: "#C49752" },
+  Discrepancy: { bg: "#F7EDEE", text: "#B85C64", dot: "#B85C64" },
 };
 
 const SYNC_STATUS_BADGES = {
-  PENDING: { bg: "#FEF3C7", text: "#B45309", label: "Local Pending" },
-  SYNCED: { bg: "#DCFCE7", text: "#15803D", label: "Synced" },
-  FAILED: { bg: "#FEE2E2", text: "#B91C1C", label: "Sync Failed" },
-  CONFLICT: { bg: "#FEE2E2", text: "#B91C1C", label: "Conflict" },
+  PENDING: { bg: "#F7F0E5", text: "#C49752", label: "Local Pending" },
+  SYNCED: { bg: "#EAF2EE", text: "#4F8A72", label: "Synced" },
+  FAILED: { bg: "#F7EDEE", text: "#B85C64", label: "Sync Failed" },
+  CONFLICT: { bg: "#F7EDEE", text: "#B85C64", label: "Conflict" },
 };
 
 export default function GoodsReceivingScreen({
@@ -705,7 +705,7 @@ export default function GoodsReceivingScreen({
             <TextInput
               style={styles.searchInput}
               placeholder="Search GRN, PO reference, supplier, invoice..."
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor="#77717A"
               value={searchQuery}
               onChangeText={setSearchQuery}
             />
@@ -803,7 +803,7 @@ export default function GoodsReceivingScreen({
                               style={[
                                 styles.statusBadge,
                                 {
-                                  backgroundColor: "#FEF3C7",
+                                  backgroundColor: "#F7F0E5",
                                   paddingVertical: 1,
                                 },
                               ]}
@@ -811,7 +811,7 @@ export default function GoodsReceivingScreen({
                               <Text
                                 style={[
                                   styles.statusBadgeText,
-                                  { color: "#B45309", fontSize: 10 },
+                                  { color: "#C49752", fontSize: 10 },
                                 ]}
                               >
                                 {grn.syncStatus}
@@ -873,7 +873,7 @@ export default function GoodsReceivingScreen({
                       <View style={styles.mobileCardFooter}>
                         <Text style={styles.mobileReceivedByText}>
                           👤 Received by:{" "}
-                          <Text style={{ fontWeight: "600", color: "#0F172A" }}>
+                          <Text style={{ fontWeight: "600", color: "#28242B" }}>
                             {grn.receivedBy}
                           </Text>
                         </Text>
@@ -1027,7 +1027,7 @@ export default function GoodsReceivingScreen({
                               style={[
                                 styles.statusBadge,
                                 {
-                                  backgroundColor: "#FEF3C7",
+                                  backgroundColor: "#F7F0E5",
                                   paddingVertical: 1,
                                 },
                               ]}
@@ -1035,7 +1035,7 @@ export default function GoodsReceivingScreen({
                               <Text
                                 style={[
                                   styles.statusBadgeText,
-                                  { color: "#B45309", fontSize: 10 },
+                                  { color: "#C49752", fontSize: 10 },
                                 ]}
                               >
                                 {grn.syncStatus}
@@ -1313,7 +1313,7 @@ export default function GoodsReceivingScreen({
                         style={styles.modalInput}
                         value={item.productName}
                         placeholder="Type medicine name or select below..."
-                        placeholderTextColor="#94A3B8"
+                        placeholderTextColor="#77717A"
                         onChangeText={(t) =>
                           handleItemChange(idx, "productName", t)
                         }
@@ -1373,7 +1373,7 @@ export default function GoodsReceivingScreen({
                           style={styles.modalInput}
                           value={item.batchNumber}
                           placeholder="BAT-1001"
-                          placeholderTextColor="#94A3B8"
+                          placeholderTextColor="#77717A"
                           onChangeText={(t) =>
                             handleItemChange(idx, "batchNumber", t)
                           }
@@ -1392,7 +1392,7 @@ export default function GoodsReceivingScreen({
                           style={styles.modalInput}
                           value={item.expiryDate}
                           placeholder="2028-12-31"
-                          placeholderTextColor="#94A3B8"
+                          placeholderTextColor="#77717A"
                           onChangeText={(t) =>
                             handleItemChange(idx, "expiryDate", t)
                           }
@@ -1454,7 +1454,7 @@ export default function GoodsReceivingScreen({
                   multiline
                   numberOfLines={3}
                   placeholder="Note package seal conditions, temperature logs..."
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor="#77717A"
                   value={formData.notes}
                   onChangeText={(t) => setFormData((p) => ({ ...p, notes: t }))}
                 />
@@ -1557,7 +1557,7 @@ export default function GoodsReceivingScreen({
                       {isSelected && (
                         <Text
                           style={{
-                            color: "#0F766E",
+                            color: "#B9829A",
                             fontWeight: "700",
                             fontSize: 14,
                           }}
@@ -1597,17 +1597,17 @@ const styles = StyleSheet.create({
   pageTitle: {
     fontSize: 24,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
     letterSpacing: -0.4,
   },
   pageSubtitle: {
     fontSize: 13.5,
     fontWeight: "500",
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 4,
   },
   receiveButton: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingVertical: 10,
     paddingHorizontal: 18,
     borderRadius: 8,
@@ -1630,7 +1630,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     overflow: "visible",
     ...Platform.select({
       web: {
@@ -1648,9 +1648,9 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 20,
     paddingVertical: 12,
-    backgroundColor: "#FAFAFA",
+    backgroundColor: "#F8F5F7",
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
     gap: 12,
   },
   filtersBarCompact: {
@@ -1663,7 +1663,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     paddingHorizontal: 12,
     height: 38,
@@ -1671,7 +1671,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 13,
-    color: "#0F172A",
+    color: "#28242B",
     outlineStyle: "none",
   },
   clearBtn: {
@@ -1679,7 +1679,7 @@ const styles = StyleSheet.create({
   },
   clearBtnText: {
     fontSize: 12,
-    color: "#94A3B8",
+    color: "#77717A",
   },
   filterChipRow: {
     flexDirection: "row",
@@ -1691,17 +1691,17 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     cursor: "pointer",
   },
   filterChipActive: {
-    backgroundColor: "#0F766E",
-    borderColor: "#0F766E",
+    backgroundColor: "#B9829A",
+    borderColor: "#B9829A",
   },
   filterChipText: {
     fontSize: 12,
     fontWeight: "500",
-    color: "#64748B",
+    color: "#77717A",
   },
   filterChipTextActive: {
     fontWeight: "700",
@@ -1717,13 +1717,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderBottomColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
   },
   thCell: {
     fontSize: 11.5,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
     paddingHorizontal: 6,
     letterSpacing: 0.3,
   },
@@ -1733,28 +1733,28 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
     position: "relative",
   },
   tableRowAlt: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
   },
   tdCell: {
     fontSize: 13,
-    color: "#334155",
+    color: "#28242B",
     paddingHorizontal: 6,
   },
   grnId: {
     fontWeight: "700",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   poRef: {
     fontWeight: "600",
-    color: "#2563EB",
+    color: "#B9829A",
   },
   supplierText: {
     fontWeight: "600",
-    color: "#0F172A",
+    color: "#28242B",
   },
   statusWrapper: {
     alignItems: "center",
@@ -1783,7 +1783,7 @@ const styles = StyleSheet.create({
   threeDotsText: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#64748B",
+    color: "#77717A",
   },
   menuPopover: {
     position: "absolute",
@@ -1792,11 +1792,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     zIndex: 1000,
     width: 170,
     paddingVertical: 6,
-    shadowColor: "#000",
+    shadowColor: "#28242B",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 10,
@@ -1811,7 +1811,7 @@ const styles = StyleSheet.create({
   menuHeaderTitle: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#94A3B8",
+    color: "#77717A",
     paddingHorizontal: 12,
     paddingVertical: 4,
     textTransform: "uppercase",
@@ -1833,11 +1833,11 @@ const styles = StyleSheet.create({
   menuItemText: {
     fontSize: 12.5,
     fontWeight: "500",
-    color: "#334155",
+    color: "#28242B",
   },
   menuItemTextActive: {
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   emptyState: {
     alignItems: "center",
@@ -1847,11 +1847,11 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   emptySubtitle: {
     fontSize: 13,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   modalBackdrop: {
@@ -1881,19 +1881,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   modalTitle: {
     fontSize: 17,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   closeBtn: {
     padding: 6,
   },
   closeBtnText: {
     fontSize: 14,
-    color: "#94A3B8",
+    color: "#77717A",
     fontWeight: "700",
   },
   modalBody: {
@@ -1914,26 +1914,26 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 12.5,
     fontWeight: "600",
-    color: "#334155",
+    color: "#28242B",
     marginBottom: 6,
   },
   reqStar: {
-    color: "#DC2626",
+    color: "#B85C64",
   },
   modalInput: {
     height: 40,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     backgroundColor: "#FFFFFF",
     paddingHorizontal: 12,
     fontSize: 13,
-    color: "#0F172A",
+    color: "#28242B",
     outlineStyle: "none",
   },
   errorText: {
     fontSize: 11,
-    color: "#DC2626",
+    color: "#B85C64",
     marginTop: 3,
     fontWeight: "500",
   },
@@ -1944,7 +1944,7 @@ const styles = StyleSheet.create({
   itemsSection: {
     marginVertical: 14,
     borderTopWidth: 1,
-    borderTopColor: "#E2E8F0",
+    borderTopColor: "#E5DFE4",
     paddingTop: 14,
   },
   itemsSectionHeader: {
@@ -1956,10 +1956,10 @@ const styles = StyleSheet.create({
   itemsSectionTitle: {
     fontSize: 13.5,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   addItemBtn: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingHorizontal: 12,
     paddingVertical: 5,
     borderRadius: 6,
@@ -1971,10 +1971,10 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   itemRowCard: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     padding: 12,
     marginBottom: 12,
   },
@@ -1987,14 +1987,14 @@ const styles = StyleSheet.create({
   itemRowNumber: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
   },
   removeItemBtn: {
     padding: 4,
     cursor: "pointer",
   },
   removeItemText: {
-    color: "#DC2626",
+    color: "#B85C64",
     fontSize: 11.5,
     fontWeight: "600",
   },
@@ -2008,7 +2008,7 @@ const styles = StyleSheet.create({
   quickProdChip: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     borderRadius: 14,
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -2016,12 +2016,12 @@ const styles = StyleSheet.create({
     cursor: "pointer",
   },
   quickProdChipActive: {
-    backgroundColor: "#0F766E",
-    borderColor: "#0F766E",
+    backgroundColor: "#B9829A",
+    borderColor: "#B9829A",
   },
   quickProdChipText: {
     fontSize: 11,
-    color: "#334155",
+    color: "#28242B",
   },
   quickProdChipTextActive: {
     color: "#FFFFFF",
@@ -2035,8 +2035,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingVertical: 14,
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
-    backgroundColor: "#FAFAFA",
+    borderTopColor: "#F8F5F7",
+    backgroundColor: "#F8F5F7",
   },
   cancelButton: {
     paddingVertical: 9,
@@ -2047,10 +2047,10 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#64748B",
+    color: "#77717A",
   },
   submitModalButton: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingVertical: 9,
     paddingHorizontal: 20,
     borderRadius: 8,
@@ -2069,7 +2069,7 @@ const styles = StyleSheet.create({
   mobileGrnCard: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 12,
     padding: 14,
     ...Platform.select({
@@ -2091,14 +2091,14 @@ const styles = StyleSheet.create({
   mobileSupplierName: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
     marginBottom: 12,
   },
   mobileDetailsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 10,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderRadius: 8,
     padding: 10,
     marginBottom: 10,
@@ -2110,23 +2110,23 @@ const styles = StyleSheet.create({
   mobileDetailLabel: {
     fontSize: 10,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
     marginBottom: 2,
     letterSpacing: 0.3,
   },
   mobileDetailVal: {
     fontSize: 12.5,
     fontWeight: "600",
-    color: "#334155",
+    color: "#28242B",
   },
   mobileCardFooter: {
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
+    borderTopColor: "#F8F5F7",
     paddingTop: 8,
   },
   mobileReceivedByText: {
     fontSize: 11.5,
-    color: "#64748B",
+    color: "#77717A",
   },
   actionSheetBackdrop: {
     flex: 1,
@@ -2157,29 +2157,29 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
     paddingBottom: 14,
     marginBottom: 12,
   },
   actionSheetTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   actionSheetSub: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
     fontWeight: "500",
   },
   actionSheetCloseBtn: {
     padding: 6,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     borderRadius: 20,
   },
   actionSheetCloseText: {
     fontSize: 13,
-    color: "#64748B",
+    color: "#77717A",
     fontWeight: "700",
   },
   actionSheetBody: {
@@ -2192,13 +2192,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderRadius: 10,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
   },
   actionSheetOptionSelected: {
-    backgroundColor: "#F0FDFA",
-    borderColor: "#0F766E",
+    backgroundColor: "#E8D5DD",
+    borderColor: "#B9829A",
   },
   actionSheetOptionDot: {
     width: 10,
@@ -2208,10 +2208,10 @@ const styles = StyleSheet.create({
   actionSheetOptionText: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#334155",
+    color: "#28242B",
   },
   actionSheetOptionTextSelected: {
-    color: "#0F766E",
+    color: "#B9829A",
     fontWeight: "700",
   },
 });

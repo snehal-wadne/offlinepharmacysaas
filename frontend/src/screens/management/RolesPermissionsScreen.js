@@ -209,7 +209,7 @@ export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
           <TextInput
             style={styles.searchInput}
             placeholder="Search permissions or modules..."
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor="#77717A"
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
@@ -391,7 +391,7 @@ export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
             <View style={styles.legendItem}>
               <View style={styles.legendDotAllowed} />
               <Text style={styles.legendLabel}>
-                <Text style={{ fontWeight: "700", color: "#0F766E" }}>
+                <Text style={{ fontWeight: "700", color: "#B9829A" }}>
                   Allowed
                 </Text>
                 : Role is granted this capability
@@ -401,7 +401,7 @@ export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
             <View style={styles.legendItem}>
               <View style={styles.legendDotDenied} />
               <Text style={styles.legendLabel}>
-                <Text style={{ fontWeight: "700", color: "#64748B" }}>
+                <Text style={{ fontWeight: "700", color: "#77717A" }}>
                   Not Allowed
                 </Text>
                 : Capability is restricted for this role
@@ -482,7 +482,7 @@ export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
   },
   contentContainer: {
     padding: 24,
@@ -498,12 +498,12 @@ const styles = StyleSheet.create({
   pageTitle: {
     fontSize: 22,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
     letterSpacing: -0.4,
   },
   pageSubtitle: {
     fontSize: 13,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 4,
   },
   controlsBar: {
@@ -520,7 +520,7 @@ const styles = StyleSheet.create({
   roleSelectorLabel: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#64748B",
+    color: "#77717A",
   },
   roleDropdownBtn: {
     flexDirection: "row",
@@ -528,7 +528,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 9,
@@ -544,18 +544,18 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     marginRight: 8,
   },
   roleDropdownBtnText: {
     flex: 1,
     fontSize: 13.5,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   roleDropdownChevron: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
     marginLeft: 10,
   },
   searchBoxWrapper: {
@@ -563,7 +563,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     paddingHorizontal: 12,
     width: 300,
@@ -576,7 +576,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 13,
-    color: "#0F172A",
+    color: "#28242B",
     outlineStyle: "none",
   },
   clearSearchBtn: {
@@ -585,13 +585,13 @@ const styles = StyleSheet.create({
   },
   clearSearchText: {
     fontSize: 13,
-    color: "#94A3B8",
+    color: "#77717A",
   },
   tableCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     overflow: "hidden",
     ...Platform.select({
       web: {
@@ -601,9 +601,9 @@ const styles = StyleSheet.create({
   },
   tableHeaderRow: {
     flexDirection: "row",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: "#E5DFE4",
     paddingVertical: 12,
     paddingHorizontal: 20,
     alignItems: "center",
@@ -614,14 +614,14 @@ const styles = StyleSheet.create({
   thText: {
     fontSize: 11,
     fontWeight: "800",
-    color: "#64748B",
+    color: "#77717A",
     textTransform: "uppercase",
     letterSpacing: 0.6,
   },
   thActionText: {
     fontSize: 11,
     fontWeight: "800",
-    color: "#64748B",
+    color: "#77717A",
     textTransform: "uppercase",
     letterSpacing: 0.6,
     textAlign: "center",
@@ -646,18 +646,18 @@ const styles = StyleSheet.create({
   },
   moduleSection: {
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   moduleHeaderRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#F0FDFA",
+    backgroundColor: "#E8D5DD",
     paddingVertical: 11,
     paddingHorizontal: 20,
     cursor: "pointer",
     borderBottomWidth: 1,
-    borderBottomColor: "#CCFBF1",
+    borderBottomColor: "#E8D5DD",
   },
   moduleTitleGroup: {
     flexDirection: "row",
@@ -667,17 +667,17 @@ const styles = StyleSheet.create({
   moduleNameText: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#0F766E",
+    color: "#B9829A",
     letterSpacing: 0.5,
   },
   modulePageCount: {
     fontSize: 11,
     fontWeight: "600",
-    color: "#14B8A6",
+    color: "#A66D86",
   },
   moduleChevron: {
     fontSize: 12,
-    color: "#0F766E",
+    color: "#B9829A",
     fontWeight: "700",
   },
   moduleActionButtons: {
@@ -686,9 +686,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   moduleAllowAllBtn: {
-    backgroundColor: "#ECFDF5",
+    backgroundColor: "#EAF2EE",
     borderWidth: 1,
-    borderColor: "#A7F3D0",
+    borderColor: "#EAF2EE",
     paddingVertical: 4,
     paddingHorizontal: 10,
     borderRadius: 6,
@@ -697,12 +697,12 @@ const styles = StyleSheet.create({
   moduleAllowAllText: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#059669",
+    color: "#4F8A72",
   },
   moduleDisallowAllBtn: {
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     paddingVertical: 4,
     paddingHorizontal: 10,
     borderRadius: 6,
@@ -711,7 +711,7 @@ const styles = StyleSheet.create({
   moduleDisallowAllText: {
     fontSize: 11,
     fontWeight: "600",
-    color: "#475569",
+    color: "#77717A",
   },
   pageRow: {
     flexDirection: "row",
@@ -719,20 +719,20 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
     backgroundColor: "#FFFFFF",
   },
   pageRowEven: {
-    backgroundColor: "#FAFCFF",
+    backgroundColor: "#F8F5F7",
   },
   pageNameText: {
     fontSize: 13.5,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   descriptionText: {
     fontSize: 12.5,
-    color: "#64748B",
+    color: "#77717A",
     lineHeight: 18,
   },
   statusBadge: {
@@ -743,24 +743,24 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   statusBadgeAllowed: {
-    backgroundColor: "#ECFDF5",
+    backgroundColor: "#EAF2EE",
     borderWidth: 1,
-    borderColor: "#A7F3D0",
+    borderColor: "#EAF2EE",
   },
   statusBadgeDenied: {
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
   },
   statusBadgeText: {
     fontSize: 11.5,
     fontWeight: "700",
   },
   statusTextAllowed: {
-    color: "#059669",
+    color: "#4F8A72",
   },
   statusTextDenied: {
-    color: "#64748B",
+    color: "#77717A",
   },
   toggleSwitchTrack: {
     width: 48,
@@ -776,10 +776,10 @@ const styles = StyleSheet.create({
     }),
   },
   toggleTrackAllowed: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
   },
   toggleTrackDenied: {
-    backgroundColor: "#CBD5E1",
+    backgroundColor: "#E5DFE4",
   },
   toggleThumb: {
     width: 22,
@@ -805,9 +805,9 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingVertical: 16,
     paddingHorizontal: 20,
-    backgroundColor: "#FAFCFF",
+    backgroundColor: "#F8F5F7",
     borderTopWidth: 1,
-    borderTopColor: "#E2E8F0",
+    borderTopColor: "#E5DFE4",
     flexWrap: "wrap",
     gap: 16,
   },
@@ -820,7 +820,7 @@ const styles = StyleSheet.create({
   legendTitle: {
     fontSize: 11,
     fontWeight: "800",
-    color: "#334155",
+    color: "#28242B",
     letterSpacing: 0.5,
   },
   legendItem: {
@@ -832,17 +832,17 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: "#10B981",
+    backgroundColor: "#4F8A72",
   },
   legendDotDenied: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: "#94A3B8",
+    backgroundColor: "#77717A",
   },
   legendLabel: {
     fontSize: 12,
-    color: "#475569",
+    color: "#77717A",
   },
   footerActionsGroup: {
     flexDirection: "row",
@@ -852,7 +852,7 @@ const styles = StyleSheet.create({
   resetBtn: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     paddingVertical: 9,
     paddingHorizontal: 16,
     borderRadius: 8,
@@ -861,10 +861,10 @@ const styles = StyleSheet.create({
   resetBtnText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#475569",
+    color: "#77717A",
   },
   saveBtn: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingVertical: 9,
     paddingHorizontal: 20,
     borderRadius: 8,
@@ -892,11 +892,11 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#1E293B",
+    color: "#28242B",
   },
   emptySubtitle: {
     fontSize: 13,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 4,
   },
   modalOverlay: {
@@ -912,7 +912,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 14,
     padding: 20,
-    shadowColor: "#000",
+    shadowColor: "#28242B",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
@@ -921,7 +921,7 @@ const styles = StyleSheet.create({
   roleDropdownHeaderTitle: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
     marginBottom: 14,
   },
   roleDropdownOption: {
@@ -933,13 +933,13 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 6,
     borderWidth: 1,
-    borderColor: "#F1F5F9",
+    borderColor: "#F8F5F7",
     backgroundColor: "#FFFFFF",
     cursor: "pointer",
   },
   roleDropdownOptionSelected: {
-    borderColor: "#99F6E4",
-    backgroundColor: "#F0FDFA",
+    borderColor: "#E8D5DD",
+    backgroundColor: "#E8D5DD",
   },
   roleOptionTextWrapper: {
     flex: 1,
@@ -948,19 +948,19 @@ const styles = StyleSheet.create({
   roleOptionName: {
     fontSize: 13.5,
     fontWeight: "700",
-    color: "#1E293B",
+    color: "#28242B",
   },
   roleOptionNameSelected: {
-    color: "#0F766E",
+    color: "#B9829A",
   },
   roleOptionDesc: {
     fontSize: 11.5,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   roleCheckmark: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#0F766E",
+    color: "#B9829A",
   },
 });

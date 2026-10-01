@@ -22,11 +22,11 @@ import { syncEngine } from "../../sync";
 import { printPaymentReceipt } from "../../utils/exportUtils";
 
 const PAYMENT_MODE_BADGES = {
-  "UPI / QR": { bg: "#DBEAFE", text: "#1D4ED8" },
-  Cash: { bg: "#FEF3C7", text: "#B45309" },
-  "Debit/Credit Card": { bg: "#F3E8FF", text: "#7E22CE" },
-  "Net Banking": { bg: "#E0F2FE", text: "#0369A1" },
-  Cheque: { bg: "#DCFCE7", text: "#15803D" },
+  "UPI / QR": { bg: "#E8D5DD", text: "#A66D86" },
+  Cash: { bg: "#F7F0E5", text: "#C49752" },
+  "Debit/Credit Card": { bg: "#E8D5DD", text: "#A66D86" },
+  "Net Banking": { bg: "#E8D5DD", text: "#A66D86" },
+  Cheque: { bg: "#EAF2EE", text: "#4F8A72" },
 };
 
 const MODE_BADGES = PAYMENT_MODE_BADGES;
@@ -394,7 +394,7 @@ export default function CustomerPaymentsScreen({ onShowToast, onNavigate }) {
             <TextInput
               style={styles.searchInput}
               placeholder="Search receipt no, customer name, transaction UTR or linked invoice..."
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor="#77717A"
               value={searchQuery}
               onChangeText={setSearchQuery}
             />
@@ -513,7 +513,7 @@ export default function CustomerPaymentsScreen({ onShowToast, onNavigate }) {
                           <Text
                             style={[
                               styles.mobileValBold,
-                              { color: "#0F766E", fontSize: 14 },
+                              { color: "#B9829A", fontSize: 14 },
                             ]}
                           >
                             {displayAmount}
@@ -544,7 +544,7 @@ export default function CustomerPaymentsScreen({ onShowToast, onNavigate }) {
                         <View style={styles.mobileGridCol}>
                           <Text style={styles.mobileLabel}>Linked Invoice</Text>
                           <Text
-                            style={[styles.mobileValBold, { color: "#334155" }]}
+                            style={[styles.mobileValBold, { color: "#28242B" }]}
                           >
                             {displayLinked}
                           </Text>
@@ -577,8 +577,8 @@ export default function CustomerPaymentsScreen({ onShowToast, onNavigate }) {
                             styles.mobilePrintBtn,
                             {
                               flex: 1,
-                              backgroundColor: "#E0F2FE",
-                              borderColor: "#BAE6FD",
+                              backgroundColor: "#E8D5DD",
+                              borderColor: "#E8D5DD",
                             },
                           ]}
                           accessibilityRole="button"
@@ -586,7 +586,7 @@ export default function CustomerPaymentsScreen({ onShowToast, onNavigate }) {
                           <Text
                             style={[
                               styles.mobilePrintBtnText,
-                              { color: "#0369A1", fontWeight: "700" },
+                              { color: "#A66D86", fontWeight: "700" },
                             ]}
                           >
                             📄 View Voucher
@@ -708,7 +708,7 @@ export default function CustomerPaymentsScreen({ onShowToast, onNavigate }) {
                         <Text
                           style={[
                             styles.tdCell,
-                            { width: 190, color: "#334155", fontWeight: "500" },
+                            { width: 190, color: "#28242B", fontWeight: "500" },
                           ]}
                         >
                           {displayLinked}
@@ -872,17 +872,17 @@ export default function CustomerPaymentsScreen({ onShowToast, onNavigate }) {
                               paddingVertical: 5,
                               borderRadius: 6,
                               backgroundColor: isSelected
-                                ? "#0F766E"
-                                : "#F1F5F9",
+                                ? "#B9829A"
+                                : "#F8F5F7",
                               borderWidth: 1,
-                              borderColor: isSelected ? "#0F766E" : "#CBD5E1",
+                              borderColor: isSelected ? "#B9829A" : "#E5DFE4",
                             }}
                           >
                             <Text
                               style={{
                                 fontSize: 12,
                                 fontWeight: "600",
-                                color: isSelected ? "#FFFFFF" : "#334155",
+                                color: isSelected ? "#FFFFFF" : "#28242B",
                               }}
                             >
                               {c.name}{" "}
@@ -908,7 +908,7 @@ export default function CustomerPaymentsScreen({ onShowToast, onNavigate }) {
                     formErrors.customerName && styles.inputError,
                   ]}
                   placeholder="e.g. Rajesh Verma"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor="#77717A"
                   value={formData.customerName}
                   onChangeText={(t) =>
                     setFormData((p) => ({ ...p, customerName: t }))
@@ -927,7 +927,7 @@ export default function CustomerPaymentsScreen({ onShowToast, onNavigate }) {
                   <TextInput
                     style={styles.modalInput}
                     placeholder="+91 98XXX XXXXX"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor="#77717A"
                     value={formData.phone}
                     onChangeText={(t) =>
                       setFormData((p) => ({ ...p, phone: t }))
@@ -946,7 +946,7 @@ export default function CustomerPaymentsScreen({ onShowToast, onNavigate }) {
                     ]}
                     keyboardType="numeric"
                     placeholder="e.g. 2000"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor="#77717A"
                     value={formData.amount}
                     onChangeText={(t) =>
                       setFormData((p) => ({ ...p, amount: t }))
@@ -964,7 +964,7 @@ export default function CustomerPaymentsScreen({ onShowToast, onNavigate }) {
                   <TextInput
                     style={styles.modalInput}
                     placeholder="UPI / QR, Cash, Card"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor="#77717A"
                     value={formData.paymentMode}
                     onChangeText={(t) =>
                       setFormData((p) => ({ ...p, paymentMode: t }))
@@ -977,7 +977,7 @@ export default function CustomerPaymentsScreen({ onShowToast, onNavigate }) {
                   <TextInput
                     style={styles.modalInput}
                     placeholder="e.g., UPI/6829103847"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor="#77717A"
                     value={formData.transactionRef}
                     onChangeText={(t) =>
                       setFormData((p) => ({ ...p, transactionRef: t }))
@@ -993,7 +993,7 @@ export default function CustomerPaymentsScreen({ onShowToast, onNavigate }) {
                 <TextInput
                   style={styles.modalInput}
                   placeholder="e.g., INV-2026-8942 / Ledger Balance"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor="#77717A"
                   value={formData.linkedRef}
                   onChangeText={(t) =>
                     setFormData((p) => ({ ...p, linkedRef: t }))
@@ -1079,7 +1079,7 @@ export default function CustomerPaymentsScreen({ onShowToast, onNavigate }) {
                     <View style={styles.voucherKpiPill}>
                       <Text style={styles.voucherKpiPillLabel}>STATUS</Text>
                       <Text
-                        style={[styles.voucherKpiPillVal, { color: "#166534" }]}
+                        style={[styles.voucherKpiPillVal, { color: "#4F8A72" }]}
                       >
                         ✓ Completed
                       </Text>
@@ -1210,13 +1210,13 @@ const styles = StyleSheet.create({
   pageTitle: {
     fontSize: 24,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
     letterSpacing: -0.4,
   },
   liveTagBadge: {
-    backgroundColor: "#CCFBF1",
+    backgroundColor: "#E8D5DD",
     borderWidth: 1,
-    borderColor: "#99F6E4",
+    borderColor: "#E8D5DD",
     paddingVertical: 3,
     paddingHorizontal: 8,
     borderRadius: 6,
@@ -1224,19 +1224,19 @@ const styles = StyleSheet.create({
   liveTagText: {
     fontSize: 10.5,
     fontWeight: "800",
-    color: "#0F766E",
+    color: "#B9829A",
     letterSpacing: 0.5,
   },
   pageSubtitle: {
     fontSize: 13.5,
     fontWeight: "500",
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 4,
   },
   recordPayBtn: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingVertical: 10,
     paddingHorizontal: 18,
     borderRadius: 8,
@@ -1256,7 +1256,7 @@ const styles = StyleSheet.create({
   exportBtnSecondary: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     paddingVertical: 9,
     paddingHorizontal: 16,
     borderRadius: 8,
@@ -1265,7 +1265,7 @@ const styles = StyleSheet.create({
   exportBtnTextSecondary: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#334155",
+    color: "#28242B",
   },
   kpiRow: {
     flexDirection: "row",
@@ -1292,7 +1292,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     padding: 14,
   },
   mobileCardHeader: {
@@ -1301,18 +1301,18 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
     gap: 8,
   },
   mobileRcptId: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   mobileRcptCust: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
     marginTop: 2,
   },
   mobileGrid: {
@@ -1327,29 +1327,29 @@ const styles = StyleSheet.create({
   mobileLabel: {
     fontSize: 11,
     fontWeight: "600",
-    color: "#94A3B8",
+    color: "#77717A",
     textTransform: "uppercase",
   },
   mobileVal: {
     fontSize: 12.5,
-    color: "#334155",
+    color: "#28242B",
     marginTop: 1,
   },
   mobileValBold: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
     marginTop: 1,
   },
   mobileCardFooter: {
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
+    borderTopColor: "#F8F5F7",
   },
   mobilePrintBtn: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#E5DFE4",
     paddingVertical: 8,
     borderRadius: 6,
     alignItems: "center",
@@ -1357,13 +1357,13 @@ const styles = StyleSheet.create({
   mobilePrintBtnText: {
     fontSize: 12.5,
     fontWeight: "600",
-    color: "#334155",
+    color: "#28242B",
   },
   cardContainer: {
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     overflow: "hidden",
     ...Platform.select({
       web: {
@@ -1381,9 +1381,9 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 20,
     paddingVertical: 12,
-    backgroundColor: "#FAFAFA",
+    backgroundColor: "#F8F5F7",
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
     gap: 12,
   },
   filtersBarCompact: {
@@ -1396,7 +1396,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     paddingHorizontal: 12,
     height: 38,
@@ -1407,7 +1407,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 13,
-    color: "#0F172A",
+    color: "#28242B",
     outlineStyle: "none",
   },
   clearBtn: {
@@ -1415,7 +1415,7 @@ const styles = StyleSheet.create({
   },
   clearBtnText: {
     fontSize: 12,
-    color: "#94A3B8",
+    color: "#77717A",
   },
   filterChipScroll: {
     maxHeight: 44,
@@ -1431,17 +1431,17 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     cursor: "pointer",
   },
   filterChipActive: {
-    backgroundColor: "#0F766E",
-    borderColor: "#0F766E",
+    backgroundColor: "#B9829A",
+    borderColor: "#B9829A",
   },
   filterChipText: {
     fontSize: 12,
     fontWeight: "500",
-    color: "#64748B",
+    color: "#77717A",
   },
   filterChipTextActive: {
     fontWeight: "700",
@@ -1454,17 +1454,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   sectionTitle: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   paginationInfo: {
     fontSize: 12.5,
     fontWeight: "500",
-    color: "#64748B",
+    color: "#77717A",
   },
   tableWrapper: {
     minWidth: 1460,
@@ -1476,13 +1476,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
+    borderBottomColor: "#E5DFE4",
+    backgroundColor: "#F8F5F7",
   },
   thCell: {
     fontSize: 11.5,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#77717A",
     paddingHorizontal: 6,
     letterSpacing: 0.3,
   },
@@ -1492,31 +1492,31 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   tableRowAlt: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F8F5F7",
   },
   tdCell: {
     fontSize: 13,
-    color: "#334155",
+    color: "#28242B",
     paddingHorizontal: 6,
   },
   receiptIdText: {
     fontWeight: "700",
-    color: "#0F766E",
+    color: "#B9829A",
   },
   custNameText: {
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   phoneSubtext: {
     fontSize: 11,
-    color: "#64748B",
+    color: "#77717A",
     paddingHorizontal: 6,
   },
   linkedRefText: {
-    color: "#0284C7",
+    color: "#A66D86",
     fontWeight: "500",
   },
   modeBadge: {
@@ -1530,14 +1530,14 @@ const styles = StyleSheet.create({
   },
   utrText: {
     fontWeight: "600",
-    color: "#475569",
+    color: "#77717A",
   },
   paidAmountText: {
     fontWeight: "800",
-    color: "#16A34A",
+    color: "#4F8A72",
   },
   statusBadgeCompleted: {
-    backgroundColor: "#DCFCE7",
+    backgroundColor: "#EAF2EE",
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
@@ -1545,10 +1545,10 @@ const styles = StyleSheet.create({
   statusBadgeTextCompleted: {
     fontSize: 11.5,
     fontWeight: "700",
-    color: "#15803D",
+    color: "#4F8A72",
   },
   statusBadgePending: {
-    backgroundColor: "#FEF3C7",
+    backgroundColor: "#F7F0E5",
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
@@ -1556,7 +1556,7 @@ const styles = StyleSheet.create({
   statusBadgeTextPending: {
     fontSize: 11.5,
     fontWeight: "700",
-    color: "#B45309",
+    color: "#C49752",
   },
   actionsCellWrapper: {
     flexDirection: "row",
@@ -1565,9 +1565,9 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   voucherBtn: {
-    backgroundColor: "#E0F2FE",
+    backgroundColor: "#E8D5DD",
     borderWidth: 1,
-    borderColor: "#BAE6FD",
+    borderColor: "#E8D5DD",
     borderRadius: 6,
     paddingVertical: 4,
     paddingHorizontal: 8,
@@ -1576,10 +1576,10 @@ const styles = StyleSheet.create({
   voucherBtnText: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#0369A1",
+    color: "#A66D86",
   },
   printBtn: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     borderRadius: 6,
     paddingVertical: 4,
     paddingHorizontal: 8,
@@ -1598,11 +1598,11 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   emptySubtitle: {
     fontSize: 13,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   modalBackdrop: {
@@ -1629,16 +1629,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#F8F5F7",
   },
   modalTitle: {
     fontSize: 17,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   modalSubtitle: {
     fontSize: 12.5,
-    color: "#64748B",
+    color: "#77717A",
     marginTop: 2,
   },
   closeBtn: {
@@ -1646,7 +1646,7 @@ const styles = StyleSheet.create({
   },
   closeBtnText: {
     fontSize: 14,
-    color: "#94A3B8",
+    color: "#77717A",
     fontWeight: "700",
   },
   modalBody: {
@@ -1671,30 +1671,30 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 12.5,
     fontWeight: "600",
-    color: "#334155",
+    color: "#28242B",
     marginBottom: 6,
   },
   reqStar: {
-    color: "#DC2626",
+    color: "#B85C64",
   },
   modalInput: {
     height: 40,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     backgroundColor: "#FFFFFF",
     paddingHorizontal: 12,
     fontSize: 13,
-    color: "#0F172A",
+    color: "#28242B",
     outlineStyle: "none",
   },
   inputError: {
-    borderColor: "#DC2626",
-    backgroundColor: "#FEF2F2",
+    borderColor: "#B85C64",
+    backgroundColor: "#F7EDEE",
   },
   errorText: {
     fontSize: 11,
-    color: "#DC2626",
+    color: "#B85C64",
     marginTop: 3,
     fontWeight: "500",
   },
@@ -1706,8 +1706,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingVertical: 14,
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
-    backgroundColor: "#FAFAFA",
+    borderTopColor: "#F8F5F7",
+    backgroundColor: "#F8F5F7",
   },
   cancelBtn: {
     paddingVertical: 9,
@@ -1718,10 +1718,10 @@ const styles = StyleSheet.create({
   cancelBtnText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#64748B",
+    color: "#77717A",
   },
   submitModalBtn: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#B9829A",
     paddingVertical: 9,
     paddingHorizontal: 20,
     borderRadius: 8,
@@ -1733,21 +1733,21 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
   voucherBox: {
-    backgroundColor: "#FAFAFA",
+    backgroundColor: "#F8F5F7",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 10,
     padding: 20,
   },
   vouchBrand: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#0F766E",
+    color: "#B9829A",
     textAlign: "center",
   },
   vouchSub: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#77717A",
     textAlign: "center",
     marginTop: 2,
   },
@@ -1760,7 +1760,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5DFE4",
     borderRadius: 8,
     paddingVertical: 8,
     paddingHorizontal: 10,
@@ -1769,18 +1769,18 @@ const styles = StyleSheet.create({
   voucherKpiPillLabel: {
     fontSize: 9.5,
     fontWeight: "800",
-    color: "#64748B",
+    color: "#77717A",
     letterSpacing: 0.5,
     marginBottom: 2,
   },
   voucherKpiPillVal: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   vouchDivider: {
     height: 1,
-    backgroundColor: "#CBD5E1",
+    backgroundColor: "#E5DFE4",
     marginVertical: 14,
   },
   vouchRow: {
@@ -1791,16 +1791,16 @@ const styles = StyleSheet.create({
   },
   vouchLabel: {
     fontSize: 12.5,
-    color: "#64748B",
+    color: "#77717A",
   },
   vouchValue: {
     fontSize: 13,
-    color: "#334155",
+    color: "#28242B",
   },
   vouchValueBold: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#28242B",
   },
   vouchRowBig: {
     flexDirection: "row",
@@ -1811,11 +1811,11 @@ const styles = StyleSheet.create({
   vouchTotalLabel: {
     fontSize: 13.5,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#28242B",
   },
   vouchTotalValue: {
     fontSize: 20,
     fontWeight: "800",
-    color: "#16A34A",
+    color: "#4F8A72",
   },
 });

@@ -1,4 +1,5 @@
 import React from 'react';
+import { SuperAdminPalette as C } from '../../constants/theme';
 import {
   Pressable,
   ScrollView,
@@ -65,7 +66,7 @@ export default function SuperAdminDashboard() {
           subtitle="+3 onboarded this month"
           trend="▲ +12% MoM"
           trendPositive={true}
-          color="#047857"
+          color={C.sageGreen}
           icon="⌂"
           onPress={() => router.push('/superadmin/pharmacies')}
         />
@@ -78,7 +79,7 @@ export default function SuperAdminDashboard() {
           )}% active retention`}
           trend="● 80% Healthy"
           trendPositive={true}
-          color="#2563EB"
+          color={C.dustyRose}
           icon="✓"
           progress={80}
           onPress={() => router.push('/superadmin/pharmacies')}
@@ -90,7 +91,7 @@ export default function SuperAdminDashboard() {
           subtitle="Expires within 7 days"
           trend="⚠ Action Needed"
           trendPositive={false}
-          color="#D97706"
+          color={C.warmGold}
           icon="◷"
           onPress={() => router.push('/superadmin/pharmacies')}
         />
@@ -101,7 +102,7 @@ export default function SuperAdminDashboard() {
           subtitle="+18.7% revenue growth"
           trend="▲ +18.7%"
           trendPositive={true}
-          color="#059669"
+          color={C.sageGreen}
           icon="₹"
           onPress={() => router.push('/superadmin/razorpay-payment')}
         />
@@ -112,7 +113,7 @@ export default function SuperAdminDashboard() {
           subtitle={`${userQuotaPercent}% platform quota used`}
           trend={`● ${userQuotaPercent}% Quota`}
           trendPositive={true}
-          color="#7C3AED"
+          color={C.dustyRose}
           icon="▦"
           progress={userQuotaPercent}
           onPress={() => router.push('/superadmin/pharmacies')}
@@ -201,16 +202,16 @@ export default function SuperAdminDashboard() {
                 key={`${plan.plan_name}-${idx}`}
                 label={plan.plan_name}
                 amount={`₹${Number(plan.total_revenue || 0).toLocaleString('en-IN')}`}
-                color={plan.color_hex || '#2563EB'}
+                color={C.dustyRose}
               />
             ))
           ) : (
             <>
-              <RevenueRow label="Professional" amount="₹5,20,000" color="#16A47A" />
-              <RevenueRow label="Standard" amount="₹3,65,000" color="#2563EB" />
-              <RevenueRow label="Custom" amount="₹1,85,000" color="#7C3AED" />
-              <RevenueRow label="Enterprise" amount="₹90,000" color="#D97706" />
-              <RevenueRow label="Basic" amount="₹85,000" color="#64748B" />
+              <RevenueRow label="Professional" amount="₹5,20,000"               color={C.sageGreen} />
+              <RevenueRow label="Standard" amount="₹3,65,000" color={C.dustyRose} />
+              <RevenueRow label="Custom" amount="₹1,85,000" color={C.dustyRose} />
+              <RevenueRow label="Enterprise" amount="₹90,000" color={C.warmGold} />
+              <RevenueRow label="Basic" amount="₹85,000" color={C.mutedGray} />
             </>
           )}
         </Panel>
@@ -309,7 +310,7 @@ function KpiCard({
   return (
     <Pressable style={styles.kpiCard} onPress={onPress}>
       <View style={styles.kpiTop}>
-        <View style={[styles.kpiIcon, { backgroundColor: color }]}>
+        <View style={[styles.kpiIcon, { backgroundColor: C.softRose }]}>
           <Text style={styles.kpiIconText}>{icon}</Text>
         </View>
 
@@ -341,7 +342,7 @@ function KpiCard({
           <View
             style={[
               styles.kpiProgressBarFill,
-              { width: `${Math.min(progress, 100)}%`, backgroundColor: color },
+              { width: `${Math.min(progress, 100)}%`, backgroundColor: C.dustyRose },
             ]}
           />
         </View>
@@ -387,7 +388,7 @@ function RevenueRow({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: C.offWhite,
   },
   content: {
     padding: 24,
@@ -404,13 +405,13 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   title: {
-    color: '#172033',
+    color: C.charcoal,
     fontSize: 29,
     fontWeight: '800',
   },
   subtitle: {
     marginTop: 5,
-    color: '#718096',
+    color: C.mutedGray,
     fontSize: 14,
   },
   adminBadge: {
@@ -424,17 +425,17 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     borderRadius: 20,
     textAlign: 'center',
-    color: '#FFFFFF',
-    backgroundColor: '#087F63',
+    color: C.white,
+    backgroundColor: C.dustyRose,
     fontWeight: '800',
   },
   adminName: {
-    color: '#1E293B',
+    color: C.charcoal,
     fontSize: 12,
     fontWeight: '800',
   },
   adminRole: {
-    color: '#94A3B8',
+    color: C.mutedGray,
     fontSize: 10,
   },
   statsGrid: {
@@ -447,9 +448,9 @@ const styles = StyleSheet.create({
     minWidth: 200,
     padding: 18,
     borderRadius: 14,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: C.white,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: C.softGray,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -469,7 +470,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   kpiIconText: {
-    color: '#FFFFFF',
+    color: C.iconRose,
     fontSize: 18,
     fontWeight: '900',
   },
@@ -479,18 +480,18 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   kpiTrendPositive: {
-    backgroundColor: '#D1FAE5',
+    backgroundColor: C.sageTint,
   },
   kpiTrendPositiveText: {
-    color: '#047857',
+    color: C.sageGreen,
     fontSize: 10,
     fontWeight: '800',
   },
   kpiTrendNegative: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: C.goldTint,
   },
   kpiTrendNegativeText: {
-    color: '#B45309',
+    color: C.warmGold,
     fontSize: 10,
     fontWeight: '800',
   },
@@ -499,24 +500,24 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   kpiTitle: {
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 12,
     fontWeight: '600',
   },
   kpiValue: {
     marginTop: 6,
-    color: '#172033',
+    color: C.midnightViolet,
     fontSize: 24,
     fontWeight: '900',
   },
   kpiSubtitle: {
     marginTop: 4,
-    color: '#94A3B8',
+    color: C.mutedGray,
     fontSize: 11,
   },
   kpiProgressBarBg: {
     height: 4,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: C.tableRose,
     borderRadius: 4,
     marginTop: 12,
     overflow: 'hidden',
@@ -536,15 +537,15 @@ const styles = StyleSheet.create({
     minWidth: 290,
     padding: 18,
     borderRadius: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: C.white,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: C.softGray,
   },
   largePanel: {
     flex: 2,
   },
   panelTitle: {
-    color: '#1F2937',
+    color: C.charcoal,
     fontSize: 15,
     fontWeight: '800',
     marginBottom: 16,
@@ -559,44 +560,44 @@ const styles = StyleSheet.create({
     height: 112,
     borderRadius: 60,
     borderWidth: 15,
-    borderColor: '#19B486',
-    borderRightColor: '#F59E0B',
-    borderBottomColor: '#CBD5E1',
+    borderColor: C.sageGreen,
+    borderRightColor: C.warmGold,
+    borderBottomColor: C.softGray,
     alignItems: 'center',
     justifyContent: 'center',
   },
   chartNumber: {
-    color: '#172033',
+    color: C.charcoal,
     fontSize: 21,
     fontWeight: '800',
   },
   chartLabel: {
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 11,
   },
   legend: {
     gap: 9,
   },
   activeLegend: {
-    color: '#16A47A',
+    color: C.sageGreen,
     fontSize: 11,
   },
   expiringLegend: {
-    color: '#D97706',
+    color: C.warmGold,
     fontSize: 11,
   },
   expiredLegend: {
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 11,
   },
   alertBox: {
     marginTop: 16,
     padding: 10,
     borderRadius: 7,
-    backgroundColor: '#E3F7F0',
+    backgroundColor: C.sageTint,
   },
   alertText: {
-    color: '#087F63',
+    color: C.sageGreen,
     fontSize: 11,
     fontWeight: '700',
   },
@@ -606,24 +607,24 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   trendText: {
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 11,
   },
   trendArrow: {
-    color: '#64748B',
+    color: C.mutedGray,
   },
   trendChart: {
     height: 120,
     marginTop: 10,
     borderBottomWidth: 1,
     borderLeftWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: C.softGray,
     position: 'relative',
   },
   trendLine: {
     position: 'absolute',
     height: 2,
-    backgroundColor: '#16A47A',
+    backgroundColor: C.sageGreen,
   },
   trendLineOne: {
     width: '27%',
@@ -655,7 +656,7 @@ const styles = StyleSheet.create({
     marginTop: 7,
   },
   dateLabelsText: {
-    color: '#94A3B8',
+    color: C.mutedGray,
     fontSize: 9,
   },
   trendFooter: {
@@ -664,11 +665,11 @@ const styles = StyleSheet.create({
     marginTop: 17,
   },
   smallText: {
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 10,
   },
   greenValue: {
-    color: '#059669',
+    color: C.sageGreen,
     fontSize: 12,
     fontWeight: '800',
   },
@@ -681,7 +682,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   revenueAmount: {
-    color: '#334155',
+    color: C.mutedGray,
     fontSize: 11,
     fontWeight: '700',
   },
@@ -695,22 +696,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingVertical: 13,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: C.tableRose,
   },
   pharmacyName: {
     flex: 1.5,
-    color: '#334155',
+    color: C.mutedGray,
     fontSize: 11,
     fontWeight: '800',
   },
   rowText: {
     flex: 1,
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 11,
   },
   activeText: {
     flex: 1,
-    color: '#059669',
+    color: C.sageGreen,
     fontSize: 11,
     fontWeight: '800',
   },
@@ -719,10 +720,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 13,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: C.tableRose,
   },
   expiringText: {
-    color: '#D97706',
+    color: C.warmGold,
     fontSize: 10,
     fontWeight: '800',
   },
@@ -731,7 +732,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   viewAllText: {
-    color: '#087F63',
+    color: C.sageGreen,
     fontSize: 11,
     fontWeight: '800',
   },

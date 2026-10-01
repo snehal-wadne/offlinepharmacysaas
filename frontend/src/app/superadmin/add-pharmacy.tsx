@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { SuperAdminPalette as C } from '../../constants/theme';
 import {
   Pressable,
   ScrollView,
@@ -164,11 +165,11 @@ export default function AddPharmacyPage() {
         <Text style={styles.breadcrumbText}>Add New Pharmacy</Text>
       </View>
 
-      <View style={styles.steps}>
-        <Step number="1" title="Business Details" active />
-        <Step number="2" title="Choose Plan" />
-        <Step number="3" title="Payment" />
-        <Step number="4" title="Confirmation" />
+      <View style={[styles.steps, isMobile && styles.stepsMobile]}>
+        <Step number="1" title="Business Details" active compact={isMobile} />
+        <Step number="2" title="Choose Plan" compact={isMobile} />
+        <Step number="3" title="Payment" compact={isMobile} />
+        <Step number="4" title="Confirmation" compact={isMobile} />
       </View>
 
       <Text style={styles.title}>Onboard New Pharmacy</Text>
@@ -335,13 +336,15 @@ function Step({
   number,
   title,
   active = false,
+  compact = false,
 }: {
   number: string;
   title: string;
   active?: boolean;
+  compact?: boolean;
 }) {
   return (
-    <View style={styles.step}>
+    <View style={[styles.step, compact && styles.stepMobile]}>
       <View style={[styles.stepCircle, active && styles.activeStepCircle]}>
         <Text style={[styles.stepNumber, active && styles.activeStepNumber]}>
           {number}
@@ -382,7 +385,7 @@ function FormField({
       <TextInput
         value={value}
         placeholder={placeholder}
-        placeholderTextColor="#94A3B8"
+        placeholderTextColor={C.mutedGray}
         keyboardType={keyboardType}
         multiline={multiline}
         numberOfLines={multiline ? 3 : 1}
@@ -396,7 +399,7 @@ function FormField({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: C.offWhite,
   },
   content: {
     padding: 24,
@@ -413,14 +416,14 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   breadcrumbLink: {
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 13,
   },
   separator: {
-    color: '#94A3B8',
+    color: C.mutedGray,
   },
   breadcrumbText: {
-    color: '#1E293B',
+    color: C.charcoal,
     fontSize: 13,
     fontWeight: '800',
   },
@@ -429,55 +432,66 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
+    borderColor: C.softGray,
+    backgroundColor: C.white,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 22,
+  },
+  stepsMobile: {
+    minHeight: 0,
+    padding: 12,
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
+    gap: 12,
   },
   step: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 9,
   },
+  stepMobile: {
+    width: '47%',
+    gap: 6,
+  },
   stepCircle: {
     width: 24,
     height: 24,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: C.softGray,
     alignItems: 'center',
     justifyContent: 'center',
   },
   activeStepCircle: {
-    borderColor: '#10B981',
-    backgroundColor: '#10B981',
+    borderColor: C.dustyRose,
+    backgroundColor: C.dustyRose,
   },
   stepNumber: {
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 11,
     fontWeight: '800',
   },
   activeStepNumber: {
-    color: '#FFFFFF',
+    color: C.white,
   },
   stepTitle: {
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 12,
   },
   activeStepTitle: {
-    color: '#047857',
+    color: C.dustyRose,
     fontWeight: '800',
   },
   title: {
-    color: '#172033',
+    color: C.charcoal,
     fontSize: 28,
     fontWeight: '900',
   },
   subtitle: {
     marginTop: 5,
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 14,
     marginBottom: 20,
   },
@@ -492,8 +506,8 @@ const styles = StyleSheet.create({
     padding: 22,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
+    borderColor: C.softGray,
+    backgroundColor: C.white,
   },
   rightColumn: {
     flex: 0.7,
@@ -501,11 +515,15 @@ const styles = StyleSheet.create({
     gap: 18,
   },
   fullWidthCard: {
-    minWidth: '100%',
+    width: '100%',
+    minWidth: 0,
+    maxWidth: '100%',
+    flexBasis: '100%',
+    padding: 16,
   },
   cardTitle: {
     marginBottom: 12,
-    color: '#1E293B',
+    color: C.charcoal,
     fontSize: 16,
     fontWeight: '900',
   },
@@ -514,21 +532,21 @@ const styles = StyleSheet.create({
   },
   label: {
     marginBottom: 6,
-    color: '#334155',
+    color: C.mutedGray,
     fontSize: 12,
     fontWeight: '800',
   },
   required: {
-    color: '#DC2626',
+    color: C.mutedRed,
   },
   input: {
     minHeight: 42,
     paddingHorizontal: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
-    color: '#1E293B',
+    borderColor: C.softGray,
+    backgroundColor: C.white,
+    color: C.charcoal,
     fontSize: 13,
   },
   multilineInput: {
@@ -539,7 +557,7 @@ const styles = StyleSheet.create({
   helperText: {
     marginTop: -6,
     marginBottom: 11,
-    color: '#94A3B8',
+    color: C.mutedGray,
     fontSize: 10,
   },
   threeFields: {
@@ -548,6 +566,7 @@ const styles = StyleSheet.create({
   },
   threeFieldsMobile: {
     flexDirection: 'column',
+    gap: 0,
   },
   cityField: {
     flex: 1,
@@ -561,17 +580,17 @@ const styles = StyleSheet.create({
   nextCard: {
     padding: 18,
     borderRadius: 12,
-    backgroundColor: '#E3F7F0',
+    backgroundColor: C.sageTint,
   },
   nextTitle: {
     marginBottom: 10,
-    color: '#047857',
+    color: C.sageGreen,
     fontSize: 14,
     fontWeight: '900',
   },
   nextItem: {
     marginTop: 8,
-    color: '#166534',
+    color: C.sageGreen,
     fontSize: 12,
     lineHeight: 18,
   },
@@ -586,11 +605,11 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
+    borderColor: C.secondaryBorder,
+    backgroundColor: C.white,
   },
   cancelText: {
-    color: '#64748B',
+    color: C.midnightViolet,
     fontSize: 13,
     fontWeight: '800',
   },
@@ -598,10 +617,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 8,
-    backgroundColor: '#059669',
+    backgroundColor: C.dustyRose,
   },
   continueText: {
-    color: '#FFFFFF',
+    color: C.white,
     fontSize: 13,
     fontWeight: '800',
   },

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeInDown, SlideInLeft } from 'react-native-reanimated';
 import { Redirect, Slot, router, usePathname, RouterProvider } from 'expo-router';
 
 import { SuperAdminProvider } from './store';
@@ -16,6 +17,7 @@ import SuperAdminLogin from './login';
 import { fetchSuperadminMe } from '../../api/superadminApi';
 import { supabase } from '../../api/supabaseClient';
 import { useIsMobile } from '../../utils/responsive';
+import { SuperAdminPalette as C } from '../../constants/theme';
 
 export default function SuperAdminLayout() {
   const [loading, setLoading] = useState(true);
@@ -78,9 +80,9 @@ export default function SuperAdminLayout() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0F172A' }}>
-        <ActivityIndicator size="large" color="#38BDF8" />
-        <Text style={{ marginTop: 12, color: '#94A3B8', fontSize: 13, fontWeight: '600' }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: C.offWhite }}>
+        <ActivityIndicator size="large" color={C.dustyRose} />
+        <Text style={{ marginTop: 12, color: C.mutedGray, fontSize: 13, fontWeight: '600' }}>
           Verifying Superadmin Clearance...
         </Text>
       </View>
@@ -163,7 +165,10 @@ function SuperAdminShell({ adminUser, onSignOut }: { adminUser?: any; onSignOut:
   return (
     <View style={[styles.shell, isMobile && styles.shellMobile]}>
       {showSidebar && (
-        <View style={[styles.sidebar, isMobile && styles.sidebarMobile]}>
+        <Animated.View
+          entering={isMobile ? SlideInLeft.duration(220) : undefined}
+          style={[styles.sidebar, isMobile && styles.sidebarMobile]}
+        >
           <View style={styles.brand}>
             <Text style={styles.brandSmall}>FALAHCODE</Text>
             <Text style={styles.brandName}>SAAS PLATFORM</Text>
@@ -202,7 +207,7 @@ function SuperAdminShell({ adminUser, onSignOut }: { adminUser?: any; onSignOut:
             </Pressable>
             <Text style={styles.date}>▣ 01 Sep - 30 Sep</Text>
           </View>
-        </View>
+        </Animated.View>
       )}
 
       {isMobile && sidebarOpen && (
@@ -231,7 +236,13 @@ function SuperAdminShell({ adminUser, onSignOut }: { adminUser?: any; onSignOut:
             </Text>
           </View>
         </View>
-        {renderSuperAdminContent(pathname)}
+        <Animated.View
+          key={pathname}
+          entering={FadeInDown.duration(260)}
+          style={styles.content}
+        >
+          {renderSuperAdminContent(pathname)}
+        </Animated.View>
       </View>
     </View>
   );
@@ -270,13 +281,13 @@ function MenuItem({
 }
 
 const styles = StyleSheet.create({
-  shell: { flex: 1, flexDirection: 'row', backgroundColor: '#F8FAFC' },
+  shell: { flex: 1, flexDirection: 'row', backgroundColor: C.offWhite },
   shellMobile: { position: 'relative' },
   sidebar: {
     width: 180,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: C.midnightViolet,
     borderRightWidth: 1,
-    borderRightColor: '#E2E8F0',
+    borderRightColor: C.deepViolet,
     paddingHorizontal: 12,
   },
   sidebarMobile: {
@@ -298,13 +309,13 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(15, 23, 42, 0.4)',
+    backgroundColor: 'rgba(48, 36, 61, 0.4)',
     zIndex: 10,
     elevation: 10,
   },
   brand: { paddingHorizontal: 14, paddingTop: 18, paddingBottom: 25 },
-  brandSmall: { color: '#627D98', fontSize: 9, fontWeight: '700' },
-  brandName: { color: '#147D64', fontSize: 15, fontWeight: '900', marginTop: 2 },
+  brandSmall: { color: C.sidebarText, fontSize: 9, fontWeight: '700' },
+  brandName: { color: C.white, fontSize: 15, fontWeight: '900', marginTop: 2 },
   menu: { gap: 4 },
   menuItem: {
     minHeight: 38,
@@ -314,38 +325,39 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 8,
   },
-  activeMenu: { backgroundColor: '#E2F5EF' },
-  menuIconText: { color: '#627D98', fontSize: 16, width: 18, textAlign: 'center' },
-  menuLabel: { color: '#52606D', fontSize: 12, fontWeight: '600' },
-  activeText: { color: '#147D64', fontWeight: '800' },
+  activeMenu: { backgroundColor: C.dustyRose },
+  menuIconText: { color: C.sidebarText, fontSize: 16, width: 18, textAlign: 'center' },
+  menuLabel: { color: C.sidebarText, fontSize: 12, fontWeight: '600' },
+  activeText: { color: C.white, fontWeight: '800' },
   sidebarFooter: { marginTop: 'auto', paddingBottom: 18, gap: 14 },
-  logout: { color: '#B94A48', fontSize: 12, fontWeight: '700', paddingHorizontal: 12 },
+  logout: { color: C.mutedRed, fontSize: 12, fontWeight: '700', paddingHorizontal: 12 },
   date: {
-    color: '#52606D',
+    color: C.sidebarText,
     fontSize: 11,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: C.deepViolet,
     borderRadius: 7,
     padding: 8,
   },
   main: { flex: 1, minWidth: 0 },
+  content: { flex: 1, minHeight: 0 },
   topbar: {
     height: 52,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: C.white,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: C.softGray,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 22,
   },
-  menuIcon: { color: '#243B53', fontSize: 18 },
+  menuIcon: { color: C.deepDustyRose, fontSize: 18 },
   admin: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  adminName: { color: '#102A43', fontSize: 12, fontWeight: '800', textAlign: 'right' },
-  adminRole: { color: '#829AB1', fontSize: 9, textAlign: 'right' },
+  adminName: { color: C.charcoal, fontSize: 12, fontWeight: '800', textAlign: 'right' },
+  adminRole: { color: C.mutedGray, fontSize: 9, textAlign: 'right' },
   avatar: {
-    color: '#FFFFFF',
-    backgroundColor: '#147D64',
+    color: C.white,
+    backgroundColor: C.dustyRose,
     borderRadius: 18,
     width: 32,
     height: 32,
@@ -356,7 +368,7 @@ const styles = StyleSheet.create({
   },
   deniedContainer: {
     flex: 1,
-    backgroundColor: '#0B1120',
+    backgroundColor: C.offWhite,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
@@ -364,15 +376,15 @@ const styles = StyleSheet.create({
   deniedCard: {
     width: '100%',
     maxWidth: 480,
-    backgroundColor: '#1E293B',
+    backgroundColor: C.white,
     borderRadius: 20,
     padding: 32,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: C.softGray,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.08,
     shadowRadius: 24,
     elevation: 8,
   },
@@ -381,8 +393,8 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   deniedBadge: {
-    color: '#F43F5E',
-    backgroundColor: 'rgba(244, 63, 94, 0.12)',
+    color: C.mutedRed,
+    backgroundColor: C.redTint,
     paddingHorizontal: 12,
     paddingVertical: 5,
     borderRadius: 20,
@@ -393,14 +405,14 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   deniedTitle: {
-    color: '#F8FAFC',
+    color: C.charcoal,
     fontSize: 22,
     fontWeight: '800',
     marginBottom: 10,
     textAlign: 'center',
   },
   deniedText: {
-    color: '#94A3B8',
+    color: C.mutedGray,
     fontSize: 14,
     lineHeight: 22,
     textAlign: 'center',
@@ -411,24 +423,24 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   deniedPrimaryBtn: {
-    backgroundColor: '#0F766E',
+    backgroundColor: C.dustyRose,
     borderRadius: 10,
     paddingVertical: 13,
     alignItems: 'center',
   },
   deniedPrimaryBtnText: {
-    color: '#FFFFFF',
+    color: C.white,
     fontSize: 14,
     fontWeight: '700',
   },
   deniedSecondaryBtn: {
-    backgroundColor: '#334155',
+    backgroundColor: C.white,
     borderRadius: 10,
     paddingVertical: 13,
     alignItems: 'center',
   },
   deniedSecondaryBtnText: {
-    color: '#CBD5E1',
+    color: C.midnightViolet,
     fontSize: 14,
     fontWeight: '600',
   },

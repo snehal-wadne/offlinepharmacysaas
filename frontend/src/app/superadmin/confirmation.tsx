@@ -1,4 +1,5 @@
 import React from 'react';
+import { SuperAdminPalette as C } from '../../constants/theme';
 import {
   Platform,
   Pressable,
@@ -110,7 +111,7 @@ export default function ConfirmationPage() {
         <Text style={styles.activeBreadcrumb}>Confirmation</Text>
       </View>
 
-      <StepProgress />
+      <StepProgress isMobile={isMobile} />
 
       <View style={[styles.successLayout, isMobile && styles.successLayoutMobile]}>
         <View style={[styles.successSection, isMobile && styles.fullWidthCard]}>
@@ -217,19 +218,19 @@ export default function ConfirmationPage() {
   );
 }
 
-function StepProgress() {
+function StepProgress({ isMobile }: { isMobile: boolean }) {
   return (
-    <View style={styles.steps}>
-      <Step number="1" title="Business Details" completed />
-      <View style={styles.activeLine} />
+    <View style={[styles.steps, isMobile && styles.stepsMobile]}>
+      <Step number="1" title="Business Details" completed compact={isMobile} />
+      {!isMobile && <View style={styles.activeLine} />}
 
-      <Step number="2" title="Choose Plan" completed />
-      <View style={styles.activeLine} />
+      <Step number="2" title="Choose Plan" completed compact={isMobile} />
+      {!isMobile && <View style={styles.activeLine} />}
 
-      <Step number="3" title="Payment" completed />
-      <View style={styles.activeLine} />
+      <Step number="3" title="Payment" completed compact={isMobile} />
+      {!isMobile && <View style={styles.activeLine} />}
 
-      <Step number="4" title="Confirmation" active />
+      <Step number="4" title="Confirmation" active compact={isMobile} />
     </View>
   );
 }
@@ -239,14 +240,16 @@ function Step({
   title,
   active = false,
   completed = false,
+  compact = false,
 }: {
   number: string;
   title: string;
   active?: boolean;
   completed?: boolean;
+  compact?: boolean;
 }) {
   return (
-    <View style={styles.step}>
+    <View style={[styles.step, compact && styles.stepMobile]}>
       <View
         style={[
           styles.stepCircle,
@@ -293,7 +296,7 @@ function getValue(value?: string | string[]) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#EFFAF6',
+    backgroundColor: C.sageTint,
   },
   content: {
     padding: 24,
@@ -310,68 +313,80 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   breadcrumbText: {
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 13,
   },
   activeBreadcrumb: {
-    color: '#1E293B',
+    color: C.charcoal,
     fontSize: 13,
     fontWeight: '800',
   },
   separator: {
-    color: '#94A3B8',
+    color: C.mutedGray,
   },
   steps: {
     minHeight: 64,
     paddingHorizontal: 20,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#D6EEE6',
-    backgroundColor: '#FFFFFF',
+    borderColor: C.sageTint,
+    backgroundColor: C.white,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 35,
+  },
+  stepsMobile: {
+    minHeight: 0,
+    padding: 12,
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
+    gap: 12,
+    marginBottom: 24,
   },
   step: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
+  stepMobile: {
+    width: '47%',
+    gap: 6,
+  },
   stepCircle: {
     width: 24,
     height: 24,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: C.softGray,
     alignItems: 'center',
     justifyContent: 'center',
   },
   activeCircle: {
-    borderColor: '#10B981',
-    backgroundColor: '#10B981',
+    borderColor: C.sageGreen,
+    backgroundColor: C.sageGreen,
   },
   stepNumber: {
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 11,
     fontWeight: '800',
   },
   activeNumber: {
-    color: '#FFFFFF',
+    color: C.white,
   },
   stepTitle: {
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 12,
   },
   activeStepTitle: {
-    color: '#047857',
+    color: C.dustyRose,
     fontWeight: '800',
   },
   activeLine: {
     flex: 1,
     height: 2,
     marginHorizontal: 15,
-    backgroundColor: '#10B981',
+    backgroundColor: C.sageGreen,
   },
   successLayout: {
     minHeight: 480,
@@ -391,15 +406,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   fullWidthCard: {
-    minWidth: '100%',
+    width: '100%',
+    minWidth: 0,
     maxWidth: '100%',
+    flexBasis: '100%',
+    padding: 16,
   },
   successCircleOuter: {
     width: 125,
     height: 125,
     borderRadius: 70,
     borderWidth: 2,
-    borderColor: '#B6EBD9',
+    borderColor: C.sageTint,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -407,27 +425,27 @@ const styles = StyleSheet.create({
     width: 82,
     height: 82,
     borderRadius: 50,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: C.white,
     borderWidth: 2,
-    borderColor: '#8DDFC5',
+    borderColor: C.sageTint,
     alignItems: 'center',
     justifyContent: 'center',
   },
   checkMark: {
-    color: '#047857',
+    color: C.sageGreen,
     fontSize: 43,
     fontWeight: '900',
   },
   successTitle: {
     marginTop: 30,
-    color: '#166534',
+    color: C.sageGreen,
     fontSize: 25,
     fontWeight: '900',
     textAlign: 'center',
   },
   successSubtitle: {
     marginTop: 8,
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 14,
     textAlign: 'center',
   },
@@ -436,17 +454,17 @@ const styles = StyleSheet.create({
     marginTop: 26,
     padding: 13,
     borderRadius: 9,
-    backgroundColor: '#DDF5EC',
+    backgroundColor: C.sageTint,
     flexDirection: 'row',
     gap: 8,
   },
   noticeIcon: {
-    color: '#047857',
+    color: C.sageGreen,
     fontSize: 14,
   },
   noticeText: {
     flex: 1,
-    color: '#166534',
+    color: C.sageGreen,
     fontSize: 12,
     lineHeight: 18,
   },
@@ -459,9 +477,9 @@ const styles = StyleSheet.create({
     maxWidth: 470,
     padding: 23,
     borderRadius: 14,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: C.white,
     borderWidth: 1,
-    borderColor: '#DCEFE8',
+    borderColor: C.sageTint,
   },
   cardHeading: {
     flexDirection: 'row',
@@ -473,17 +491,17 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 8,
-    backgroundColor: '#E3F7F0',
+    backgroundColor: C.sageTint,
     alignItems: 'center',
     justifyContent: 'center',
   },
   shieldText: {
-    color: '#047857',
+    color: C.sageGreen,
     fontSize: 20,
     fontWeight: '900',
   },
   cardTitle: {
-    color: '#1E293B',
+    color: C.charcoal,
     fontSize: 16,
     fontWeight: '900',
   },
@@ -491,16 +509,16 @@ const styles = StyleSheet.create({
     minHeight: 51,
     paddingVertical: 11,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: C.tableRose,
     justifyContent: 'center',
   },
   credentialLabel: {
-    color: '#64748B',
+    color: C.mutedGray,
     fontSize: 11,
   },
   credentialValue: {
     marginTop: 5,
-    color: '#334155',
+    color: C.mutedGray,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -509,9 +527,9 @@ const styles = StyleSheet.create({
     padding: 12,
     marginTop: 10,
     borderRadius: 8,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: C.offWhite,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: C.softGray,
     justifyContent: 'center',
   },
   passwordHeader: {
@@ -523,16 +541,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 4,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: C.softGray,
   },
   inlineCopyBtnText: {
-    color: '#0F172A',
+    color: C.charcoal,
     fontSize: 10,
     fontWeight: '800',
   },
   password: {
     marginTop: 6,
-    color: '#047857',
+    color: C.sageGreen,
     fontSize: 15,
     fontWeight: '900',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
@@ -543,12 +561,12 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 8,
-    backgroundColor: '#047857',
+    backgroundColor: C.dustyRose,
     alignItems: 'center',
     justifyContent: 'center',
   },
   copyAllButtonText: {
-    color: '#FFFFFF',
+    color: C.white,
     fontSize: 13,
     fontWeight: '800',
   },
@@ -556,13 +574,13 @@ const styles = StyleSheet.create({
     marginTop: 12,
     padding: 10,
     borderRadius: 7,
-    backgroundColor: '#E3F7F0',
+    backgroundColor: C.sageTint,
     flexDirection: 'row',
     gap: 7,
   },
   passwordNoticeText: {
     flex: 1,
-    color: '#166534',
+    color: C.sageGreen,
     fontSize: 11,
   },
   cardActions: {
@@ -575,11 +593,11 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#047857',
+    borderColor: C.sageGreen,
     alignItems: 'center',
   },
   viewButtonText: {
-    color: '#047857',
+    color: C.sageGreen,
     fontSize: 12,
     fontWeight: '800',
   },
@@ -587,11 +605,11 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 11,
     borderRadius: 8,
-    backgroundColor: '#047857',
+    backgroundColor: C.dustyRose,
     alignItems: 'center',
   },
   exportButtonText: {
-    color: '#FFFFFF',
+    color: C.white,
     fontSize: 12,
     fontWeight: '800',
   },
@@ -602,11 +620,11 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
+    borderColor: C.secondaryBorder,
+    backgroundColor: C.white,
   },
   backButtonText: {
-    color: '#64748B',
+    color: C.midnightViolet,
     fontSize: 12,
     fontWeight: '800',
   },
