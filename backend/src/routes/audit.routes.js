@@ -12,4 +12,8 @@ const { authenticate } = require('../middlewares/auth.middleware');
 // GET /api/audit-logs - Query audit trail with branch/search filtering
 router.get('/', authenticate, auditController.getAuditLogs);
 
+// POST /api/audit-logs - Record an audit log entry
+router.post('/', authenticate, auditController.createAuditLog);
+
 module.exports = router;
+

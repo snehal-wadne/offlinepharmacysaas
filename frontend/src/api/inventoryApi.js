@@ -1,5 +1,5 @@
 /**
- * Inventory API Client Service
+ * Inventory API Client Service (Online)
  *
  * Communicates with backend REST API for inventory management and stock adjustments.
  */
@@ -12,8 +12,10 @@ import { apiGet, apiPost, apiPut, apiPatch, apiDelete } from "./apiClient";
 export async function fetchInventory(params = {}) {
   const query = new URLSearchParams();
   if (params.search) query.append("search", params.search);
-  if (params.branchId && params.branchId !== "All Branches")
+  if (params.branchId && params.branchId !== "All Branches" && params.branchId !== "all")
     query.append("branchId", params.branchId);
+  if (params.limit) query.append("limit", params.limit);
+  if (params.offset) query.append("offset", params.offset);
 
   const queryString = query.toString() ? `?${query.toString()}` : "";
   return apiGet(`/inventory${queryString}`);
@@ -24,7 +26,7 @@ export async function fetchInventory(params = {}) {
  */
 export async function fetchInventorySummary(params = {}) {
   const query = new URLSearchParams();
-  if (params?.branchId && params.branchId !== "All Branches")
+  if (params?.branchId && params.branchId !== "All Branches" && params.branchId !== "all")
     query.append("branchId", params.branchId);
   const queryString = query.toString() ? `?${query.toString()}` : "";
   return apiGet(`/inventory/summary${queryString}`);
@@ -36,7 +38,7 @@ export async function fetchInventorySummary(params = {}) {
 export async function fetchStockMovements(params = {}) {
   const query = new URLSearchParams();
   if (params.limit) query.append("limit", params.limit);
-  if (params.branchId && params.branchId !== "All Branches")
+  if (params.branchId && params.branchId !== "All Branches" && params.branchId !== "all")
     query.append("branchId", params.branchId);
   const queryString = query.toString() ? `?${query.toString()}` : "";
   return apiGet(`/inventory/movements${queryString}`);
@@ -51,6 +53,7 @@ export async function recordStockMovementApi(movementData) {
 
 /**
  * POST /api/inventory
+ * Creates a new inventory entry online via backend
  */
 export async function saveInventoryEntry(itemData) {
   return apiPost("/inventory", itemData);
@@ -58,6 +61,7 @@ export async function saveInventoryEntry(itemData) {
 
 /**
  * PUT /api/inventory/:id
+ * Updates an inventory entry online via backend
  */
 export async function updateInventoryEntry(id, itemData) {
   return apiPut(`/inventory/${id}`, itemData);
@@ -72,7 +76,6 @@ export async function deleteInventoryEntry(id) {
 
 /**
  * GET /api/inventory/:id/barcode
- * Generates barcode data, SVG representation, and printable thermal HTML
  */
 export async function fetchItemBarcode(id) {
   return apiGet(`/inventory/${id}/barcode`);

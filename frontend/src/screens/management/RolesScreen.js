@@ -74,8 +74,6 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
           fetchUsers(),
           fetchRoles(),
         ]);
-        console.log(rolesRes);
-
 
         const staff = usersRes?.success
           ? usersRes.data.data.map((u) => ({
@@ -100,8 +98,6 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
             ),
           ),
         );
-        console.log(roles);
-
       } catch (e) {
         if (isMounted) {
           setStaffList([]);
@@ -219,11 +215,16 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
           description: formData.description.trim(),
           clearanceLevel: clearanceLevelCode,
         });
-        if (!res?.success) throw new Error(res?.error || "Failed to update role");
+        if (!res?.success || !res.data?.success) {
+          throw new Error(
+            res?.data?.error || res?.error || "Failed to update role",
+          );
+        }
+        const savedRole = res.data.data;
         setRoles((prev) =>
           prev.map((r) =>
             r.id === activeRoleId
-              ? mapBackendRole(res.data, r.userCount)
+              ? mapBackendRole(savedRole, r.userCount)
               : r,
           ),
         );
@@ -237,8 +238,13 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
           description: formData.description.trim(),
           clearanceLevel: clearanceLevelCode,
         });
-        if (!res?.success) throw new Error(res?.error || "Failed to create role");
-        setRoles((prev) => [...prev, mapBackendRole(res.data, 0)]);
+        if (!res?.success || !res.data?.success) {
+          throw new Error(
+            res?.data?.error || res?.error || "Failed to create role",
+          );
+        }
+        const savedRole = res.data.data;
+        setRoles((prev) => [...prev, mapBackendRole(savedRole, 0)]);
         if (onShowToast) {
           onShowToast(`✓ Custom role "${formData.name}" created successfully.`);
         }

@@ -28,6 +28,18 @@ class AuditService {
           ? ipAddress
           : null;
 
+      const isUuid = (str) =>
+        typeof str === "string" &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+
+      const safeUserId = isUuid(userId) ? userId : null;
+      const safeEntityId = isUuid(entityId) ? entityId : null;
+      const enrichedMetadata = {
+        ...metadata,
+        ...(userId && !safeUserId ? { rawUserId: userId } : {}),
+        ...(entityId && !safeEntityId ? { rawEntityId: entityId } : {}),
+      };
+
       const res = await pool.query(
         `
         INSERT INTO audit_logs (
@@ -38,11 +50,11 @@ class AuditService {
       `,
         [
           organisationId,
-          userId,
+          safeUserId,
           action,
           entityType,
-          entityId,
-          JSON.stringify(metadata),
+          safeEntityId,
+          JSON.stringify(enrichedMetadata),
           validIp,
           userAgent,
         ],

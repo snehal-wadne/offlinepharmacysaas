@@ -69,6 +69,7 @@ export default function StockAdjustmentsScreen({
   // Stock Items State for Adjustments Table with isActive and rxRequired flags
   const [stockItems, setStockItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isOfflineMode, setIsOfflineMode] = useState(false);
   const [editingItemId, setEditingItemId] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [bulkImportModalOpen, setBulkImportModalOpen] = useState(false);
@@ -124,152 +125,40 @@ export default function StockAdjustmentsScreen({
   const loadInventoryData = async () => {
     try {
       setLoading(true);
-      const tenantCtx =
-        typeof localPersistenceService?.getTenantContext === "function"
-          ? localPersistenceService.getTenantContext()
-          : { isDemo: true, branchId: "Main Store" };
+      const rawBranch =
+        typeof selectedBranch === "object" && selectedBranch !== null
+          ? selectedBranch.id
+          : selectedBranch;
+      const branchParam =
+        rawBranch &&
+        rawBranch !== "All Branches" &&
+        rawBranch !== "all" &&
+        rawBranch !== "No Active Branch"
+          ? rawBranch
+          : undefined;
 
-      // Real (non-demo) tenants are backed by the server database, which is
-      // the source of truth for medicines added/edited via the form below.
-      // Only fall back to the local offline catalog for demo mode or when
-      // the backend request below fails (e.g. device is offline).
-      if (!tenantCtx.isDemo) {
-        try {
-          const rawBranch =
-            typeof selectedBranch === "object" && selectedBranch !== null
-              ? selectedBranch.id
-              : selectedBranch;
-          const branchParam =
-            rawBranch &&
-            rawBranch !== "All Branches" &&
-            rawBranch !== "all" &&
-            rawBranch !== "No Active Branch"
-              ? rawBranch
-              : undefined;
-          const invRes = await fetchInventory({ branchId: branchParam });
-          const invList = Array.isArray(invRes?.data?.data)
-            ? invRes.data.data
-            : Array.isArray(invRes?.data)
-              ? invRes.data
-              : null;
-          if (invRes && invRes.success && invList) {
-            setStockItems(
-              invList.map((item, idx) => ({
-                ...item,
-                isActive: item.isActive !== undefined ? item.isActive : true,
-                rxRequired:
-                  item.rxRequired !== undefined
-                    ? item.rxRequired
-                    : idx % 2 === 0,
-              })),
-            );
-            return;
-          }
-          setStockItems([]);
-          return;
-        } catch (apiErr) {
-          console.warn(
-            "Failed to load inventory from server, falling back to local cache:",
-            apiErr.message,
-          );
-        }
-      }
+      const invRes = await fetchInventory({ branchId: branchParam });
+      const invList = Array.isArray(invRes?.data?.data)
+        ? invRes.data.data
+        : Array.isArray(invRes?.data)
+          ? invRes.data
+          : Array.isArray(invRes)
+            ? invRes
+            : null;
 
-      let localProds = [];
-      if (typeof localPersistenceService?.getCatalogForPos === "function") {
-        const cat = await localPersistenceService.getCatalogForPos();
-        if (Array.isArray(cat) && cat.length > 0) {
-          localProds = cat.flatMap((prod) => {
-            if (Array.isArray(prod.batches) && prod.batches.length > 0) {
-              return prod.batches.map((b, bIdx) => ({
-                id: b.id || `${prod.productId}_${b.batchNumber}`,
-                productId: prod.productId || prod.id,
-                medicineName: prod.name,
-                brandName: prod.name,
-                genericName: prod.genericName || prod.name,
-                strength: prod.strength || "",
-                packSize: prod.packSize || "",
-                manufacturer: prod.manufacturer || "Pharma Lab",
-                supplierName: b.supplierName || "Distributor",
-                sku: prod.sku || `SKU-${prod.productId?.slice(0, 4)}`,
-                batchNo: b.batchNumber,
-                batchNumber: b.batchNumber,
-                quantity: Number(b.availableQuantity ?? b.quantity ?? 0),
-                amount: `₹${Number(b.mrp || 0).toFixed(2)}`,
-                branchId: b.branchId || tenantCtx.branchId || "Main Store",
-                shelfLocation: b.shelfLocation || "A-1",
-                updatedBy: "Staff",
-                lastUpdated: new Date().toISOString().split("T")[0],
-                status:
-                  Number(b.availableQuantity) < 50
-                    ? Number(b.availableQuantity) === 0
-                      ? "Out of Stock"
-                      : "Low Stock"
-                    : "In Stock",
-                isActive: true,
-                rxRequired: bIdx % 2 === 0,
-                syncStatus: "SYNCED",
-              }));
-            }
-            return [
-              {
-                id: prod.productId || prod.id,
-                productId: prod.productId || prod.id,
-                medicineName: prod.name,
-                brandName: prod.name,
-                genericName: prod.name,
-                strength: "",
-                packSize: "",
-                manufacturer: "Pharma Lab",
-                supplierName: "Direct",
-                sku: prod.sku || "",
-                batchNo: "B-1001",
-                batchNumber: "B-1001",
-                quantity: Number(prod.stock || 0),
-                amount: `₹${Number(prod.price || 0).toFixed(2)}`,
-                branchId: tenantCtx.branchId || "Main Store",
-                shelfLocation: "A-1",
-                updatedBy: "Staff",
-                lastUpdated: new Date().toISOString().split("T")[0],
-                status: Number(prod.stock) < 50 ? "Low Stock" : "In Stock",
-                isActive: true,
-                rxRequired: false,
-                syncStatus: "SYNCED",
-              },
-            ];
-          });
-        }
-      }
-
-      if (localProds.length > 0) {
-        setStockItems(localProds);
+      if (invList) {
+        setStockItems(
+          invList.map((item, idx) => ({
+            ...item,
+            isActive: item.isActive !== undefined ? item.isActive : true,
+            rxRequired:
+              item.rxRequired !== undefined ? item.rxRequired : idx % 2 === 0,
+          })),
+        );
+        setIsOfflineMode(Boolean(invRes.isOffline));
       } else {
-        const rawBranch =
-          typeof selectedBranch === "object" && selectedBranch !== null
-            ? selectedBranch.id
-            : selectedBranch;
-        const branchParam =
-          rawBranch &&
-            rawBranch !== "All Branches" &&
-            rawBranch !== "all" &&
-            rawBranch !== "No Active Branch"
-            ? rawBranch
-            : undefined;
-        const invRes = await fetchInventory({ branchId: branchParam });
-        console.log(invRes);
-
-        if (invRes && invRes.data?.data && Array.isArray(invRes.data?.data)) {
-          setStockItems(
-            invRes.data?.data.map((item, idx) => ({
-              ...item,
-              isActive: item.isActive !== undefined ? item.isActive : true,
-              rxRequired:
-                item.rxRequired !== undefined ? item.rxRequired : idx % 2 === 0,
-            })),
-          );
-        } else {
-          setStockItems([]);
-        }
+        setStockItems([]);
+        setIsOfflineMode(false);
       }
     } catch (err) {
       console.warn("Failed to load inventory:", err.message);
@@ -278,6 +167,7 @@ export default function StockAdjustmentsScreen({
       setLoading(false);
     }
   };
+
 
   // Quick Filter Toggles State
   const [filterLowStockOnly, setFilterLowStockOnly] = useState(false);
@@ -859,27 +749,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
         notes: adjustReason,
       }).catch((e) => console.warn("Stock movement audit warning:", e.message));
 
-      // 3. Keep local persistence cache synchronized
-      if (typeof localPersistenceService?.adjustLocalStock === "function") {
-        await localPersistenceService
-          .adjustLocalStock({
-            productId:
-              selectedItemForAction.productId || selectedItemForAction.id,
-            productName:
-              selectedItemForAction.brandName ||
-              selectedItemForAction.medicineName,
-            batchNumber:
-              selectedItemForAction.batchNo ||
-              selectedItemForAction.batchNumber ||
-              "B-1001",
-            deltaQuantity: signedDelta,
-            adjustmentType: adjustType,
-            reason: adjustReason,
-          })
-          .catch(() => {});
-      }
-
-      // 4. Update in-memory table state
+      // 3. Update in-memory table state
       setStockItems((prev) =>
         prev.map((i) => {
           if (i.id === selectedItemForAction.id) {
@@ -901,6 +771,9 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
 
       refreshPosCatalog();
       setAdjustModalOpen(false);
+
+      // Re-fetch authoritative inventory from server
+      await loadInventoryData();
 
       if (onShowToast) {
         onShowToast(
@@ -1133,7 +1006,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
     setBarcodeModalOpen(true);
     setBarcodeLoading(true);
 
-    const fallbackBarcode = item.barcode || item.sku || "MED-001";
+    const fallbackBarcode = item.barcode || item.sku || item.barcodeNumber || item.barcode_number || "MED-001";
     const initialSvg = generateOfflineBarcodeSvg(fallbackBarcode, {
       barHeight: 52,
       moduleWidth: 2,
@@ -1147,13 +1020,13 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
       medicineName: item.medicineName || item.genericName || "Medicine",
       brandName: item.brandName || item.medicineName || "Medicine",
       genericName: item.genericName || item.medicineName || "",
-      strength: item.strength || "500mg",
+      strength: item.strength || "",
       packSize: item.packSize || "10 Tablets",
-      sku: item.sku || "SKU-001",
+      sku: item.sku || fallbackBarcode,
       barcode: fallbackBarcode,
-      batchNo: item.batchNo || "B-1001",
+      batchNo: item.batchNo || item.batchNumber || "B-1001",
       expiryDate: item.expiryDate || "2028-12-31",
-      mrp: item.amount || "₹25.00",
+      mrp: item.amount || item.mrp || "₹0.00",
       shelfLocation: item.shelfLocation || "Rack A1-S1",
       branchName: item.branchName || item.branchId || "Main Store",
       pharmacyName: "Falah Pharmacy",
@@ -1161,35 +1034,42 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
       qrBarcode: initialQr,
     };
     setBarcodeItemData(initialData);
+    // Show the offline-generated barcode immediately — no loading block
+    setBarcodeLoading(false);
 
-    try {
-      const res = await fetchItemBarcode(item.id || item.sku);
-      if (res?.success && res.data) {
-        const apiData = res.data;
-        const codeToUse = apiData.barcode || initialData.barcode;
-        const validSvg =
-          apiData.svgBarcode && apiData.svgBarcode.includes("<svg")
-            ? apiData.svgBarcode
-            : generateOfflineBarcodeSvg(codeToUse, {
-                barHeight: 52,
-                moduleWidth: 2,
-                quietZoneModules: 14,
-              });
-        const validQr = generateOfflineQRCodeSvg(codeToUse, 96);
+    // Background: try to enrich with server data (richer barcode, batch info etc.)
+    // This is best-effort — if the backend is offline, the offline barcode already works.
+    const enrichTimeout = setTimeout(async () => {
+      try {
+        const res = await fetchItemBarcode(item.id || item.sku);
+        if (res?.success && res.data) {
+          const apiData = res.data;
+          const codeToUse = apiData.barcode || initialData.barcode;
+          const validSvg =
+            apiData.svgBarcode && apiData.svgBarcode.includes("<svg")
+              ? apiData.svgBarcode
+              : generateOfflineBarcodeSvg(codeToUse, {
+                  barHeight: 52,
+                  moduleWidth: 2,
+                  quietZoneModules: 14,
+                });
+          const validQr = generateOfflineQRCodeSvg(codeToUse, 96);
 
-        setBarcodeItemData({
-          ...initialData,
-          ...apiData,
-          barcode: codeToUse,
-          svgBarcode: validSvg,
-          qrBarcode: validQr,
-        });
+          setBarcodeItemData((prev) => ({
+            ...prev,
+            ...apiData,
+            barcode: codeToUse,
+            svgBarcode: validSvg,
+            qrBarcode: validQr,
+          }));
+        }
+      } catch (err) {
+        // Backend unreachable — offline barcode already displayed, nothing to do
+        console.warn("Barcode API enrichment skipped (offline):", err.message);
       }
-    } catch (err) {
-      console.warn("Using local item data for barcode modal:", err.message);
-    } finally {
-      setBarcodeLoading(false);
-    }
+    }, 100);
+
+    return () => clearTimeout(enrichTimeout);
   };
 
 
@@ -1747,6 +1627,8 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
       ]}
       showsVerticalScrollIndicator={true}
     >
+
+
       {/* Top 4 KPI Cards */}
       <View style={[styles.kpiRow, isCompact && styles.kpiRowCompact]}>
         {loading ? (
@@ -2775,8 +2657,8 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                     )}
                   </View>
                   <Text style={styles.actionOptionDesc}>
-                    Send automated replenishment order / PO alert via Email,
-                    WhatsApp or SMS
+                    Send automated replenishment order / PO alert to the
+                    supplier's dashboard
                   </Text>
                 </View>
               </Pressable>
@@ -4095,13 +3977,16 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                     {Platform.OS === "web" ? (
                       <View style={{ alignItems: "center", justifyContent: "center", width: "100%" }}>
                         {barcodeConfig.codeType === "qr" ? (
-                          <View
+                          <div
                             style={{
                               backgroundColor: "#FFFFFF",
                               padding: 6,
                               borderRadius: 8,
+                              display: "flex",
                               alignItems: "center",
+                              justifyContent: "center",
                               borderWidth: 1,
+                              borderStyle: "solid",
                               borderColor: "#E5DFE4",
                             }}
                             dangerouslySetInnerHTML={{
@@ -4114,8 +3999,9 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                             }}
                           />
                         ) : barcodeConfig.codeType === "both" ? (
-                          <View
+                          <div
                             style={{
+                              display: "flex",
                               flexDirection: "row",
                               alignItems: "center",
                               justifyContent: "space-between",
@@ -4125,10 +4011,11 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                               padding: 6,
                               borderRadius: 8,
                               borderWidth: 1,
+                              borderStyle: "solid",
                               borderColor: "#E5DFE4",
                             }}
                           >
-                            <View
+                            <div
                               style={{ flex: 1, overflow: "hidden" }}
                               dangerouslySetInnerHTML={{
                                 __html:
@@ -4139,7 +4026,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                                   ),
                               }}
                             />
-                            <View
+                            <div
                               dangerouslySetInnerHTML={{
                                 __html:
                                   barcodeItemData?.qrBarcode ||
@@ -4149,13 +4036,18 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                                   ),
                               }}
                             />
-                          </View>
+                          </div>
                         ) : (
-                          <View
-                            style={[
-                              styles.labelBarcodeSvgBox,
-                              { backgroundColor: "#FFFFFF", borderRadius: 6, padding: 4 },
-                            ]}
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              width: "100%",
+                              backgroundColor: "#FFFFFF",
+                              borderRadius: 6,
+                              padding: 4,
+                            }}
                             dangerouslySetInnerHTML={{
                               __html:
                                 barcodeItemData?.svgBarcode ||
@@ -5348,18 +5240,6 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                     sub: "Posts directly to Supplier Dashboard",
                     color: "#A66D86",
                   },
-                  {
-                    id: "EMAIL",
-                    label: "✉️ Email Alert",
-                    sub: "Dispatches to registered vendor email",
-                    color: "#B9829A",
-                  },
-                  {
-                    id: "WHATSAPP",
-                    label: "💬 WhatsApp Direct",
-                    sub: "Instant WhatsApp dispatch link",
-                    color: "#4F8A72",
-                  },
                 ].map((ch) => {
                   const isSelected = supplierForm.channel === ch.id;
                   return (
@@ -5707,13 +5587,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
                 <Text style={styles.printBarcodePrimaryBtnText}>
                   {supplierSending
                     ? "Publishing Alert..."
-                    : `🚀 Send Alert via ${
-                        supplierForm.channel === "PORTAL"
-                          ? "Website Portal"
-                          : supplierForm.channel === "EMAIL"
-                            ? "Email"
-                            : "WhatsApp"
-                      }`}
+                    : "🚀 Send Alert via Website Portal"}
                 </Text>
               </Pressable>
             </View>
@@ -6578,6 +6452,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E5DFE4",
     cursor: "pointer",
+    zIndex: 5,
   },
   actionDotsButtonText: {
     fontSize: 16,
@@ -6591,6 +6466,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     padding: 16,
+    ...Platform.select({
+      web: {
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 99999,
+      },
+    }),
   },
   actionMenuCard: {
     width: "100%",

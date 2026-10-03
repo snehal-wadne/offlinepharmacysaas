@@ -1,4 +1,12 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
 import {
   fetchCashierProducts,
   fetchHeldBills,
@@ -6,6 +14,7 @@ import {
   fetchReturnHistory,
   createPosSale,
 } from "../api/cashierApi";
+import { fetchCustomers } from "../api/customerApi";
 import { localPersistenceService } from "../db";
 import { syncEngine, bootstrapService } from "../sync";
 import { getAccessToken } from "../api/supabaseClient";
@@ -80,14 +89,33 @@ export function PosProvider({
           rawBranch !== "No Active Branch"
             ? rawBranch
             : "";
-        const [liveProds, liveHeld, liveInvs, liveReturns] = await Promise.all([
+        const [liveProds, liveHeld, liveInvs, liveReturns, liveCustomers] = await Promise.all([
           fetchCashierProducts("", "", branchParam),
           fetchHeldBills(),
           fetchRecentInvoices(),
           fetchReturnHistory ? fetchReturnHistory() : Promise.resolve([]),
+          fetchCustomers ? fetchCustomers() : Promise.resolve([]),
         ]);
         if (isMounted) {
           setProducts(Array.isArray(liveProds) ? liveProds : []);
+          const rawCusts = Array.isArray(liveCustomers?.data?.data)
+            ? liveCustomers.data.data
+            : Array.isArray(liveCustomers?.data)
+              ? liveCustomers.data
+              : Array.isArray(liveCustomers)
+                ? liveCustomers
+                : [];
+          setCustomers(
+            rawCusts.map((c) => ({
+              id: c.id,
+              name: c.name || c.full_name || "Customer",
+              phone: c.phone || c.mobile || "",
+              currentBalance:
+                c.currentBalance ||
+                `₹${parseFloat(c.balance || c.outstandingBalance || 0).toFixed(2)}`,
+              category: c.category || "Regular",
+            })),
+          );
           setHeldBills(
             Array.isArray(liveHeld)
               ? liveHeld.map((b) => ({
@@ -495,11 +523,20 @@ export function PosProvider({
       ", " +
       now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-    const newInvoice = {
+    const custName =
+      saleData.customerName ||
+      saleData.customer ||
+      "Walk-in Customer";
+    const custPhone =
+      saleData.customerPhone || saleData.phone || "";
+
+    let newInvoice = {
       invoiceNo: newInvNo,
       date: dateStr,
-      customer: saleData.customer || "Walk-in Customer",
-      phone: saleData.customerPhone || "—",
+      customer: custName,
+      customerName: custName,
+      phone: custPhone,
+      customerPhone: custPhone,
       paymentMode: saleData.paymentMode || "Cash",
       subtotal: saleData.subtotal || 0,
       tax: saleData.tax || 0,
@@ -508,20 +545,53 @@ export function PosProvider({
       cashier: saleData.cashier || "Cashier 01",
       branch: saleData.branch || "Main Branch",
       items: saleData.items || [],
+      upiRefNumber: saleData.upiRefNumber || null,
+      attachedPrescription: saleData.attachedPrescription || null,
     };
 
-    // 2. AWAIT ATOMIC LOCAL COMMIT:
-    // transactions write + sync_outbox write + local inventory projection
-    // ONLY THEN is sale considered locally completed!
-    await localPersistenceService.commitLocalSale({
-      ...saleData,
-      invoiceNo: newInvNo,
-    });
+    // 2. Commit Sale Online Directly to Backend
+    try {
+      const onlineSaleRes = await createPosSale({
+        items: (saleData.items || []).map((it) => ({
+          productId: it.productId || it.id,
+          batchId: it.batchId,
+          name: it.name || it.medicineName,
+          batch: it.batch || it.batchNo,
+          qty: it.qty || it.quantity || 1,
+          price: it.sellingPrice || it.price || it.mrp || 0,
+          lineTotal:
+            (it.sellingPrice || it.price || it.mrp || 0) *
+            (it.qty || it.quantity || 1),
+        })),
+        customerId: saleData.customerId || null,
+        customerName: custName,
+        customerPhone: custPhone,
+        paymentMethod: saleData.paymentMode || "CASH",
+        subtotal: saleData.subtotal,
+        discount: saleData.discountAmount || 0,
+        tax: saleData.tax,
+        total: saleData.total,
+        branchId: activeBranch?.id || undefined,
+        notes: saleData.notes,
+      });
 
-    // Opportunistically push to server if online (non-blocking)
-    syncEngine?.sync?.().catch((err) => {
-      console.error("Sync failed:", err);
-    });
+      if (onlineSaleRes) {
+        newInvoice = {
+          ...newInvoice,
+          invoiceNo:
+            onlineSaleRes.invoiceNo ||
+            onlineSaleRes.invoiceNumber ||
+            newInvNo,
+          total: parseFloat(onlineSaleRes.total) || newInvoice.total,
+          customer: onlineSaleRes.customerName || custName,
+          customerName: onlineSaleRes.customerName || custName,
+          phone: onlineSaleRes.customerPhone || custPhone,
+          customerPhone: onlineSaleRes.customerPhone || custPhone,
+        };
+      }
+    } catch (onlineErr) {
+      console.warn("Online createPosSale failed, proceeding with local invoice:", onlineErr?.message);
+    }
 
     // 3. Update React UI state (stock, drafts, invoices) ONLY after local DB succeeds
     setProducts((prev) => {

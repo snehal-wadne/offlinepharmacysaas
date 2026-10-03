@@ -18,7 +18,9 @@ const connectionString =
   process.env.SUPABASE_DB_URL;
 
 const isRemoteOrSsl = Boolean(
-  connectionString ||
+  (connectionString &&
+    !connectionString.includes("localhost") &&
+    !connectionString.includes("127.0.0.1")) ||
   process.env.DB_SSL === "true" ||
   (process.env.DB_HOST &&
     !["localhost", "127.0.0.1"].includes(process.env.DB_HOST)),
@@ -32,7 +34,6 @@ const dbConfig = connectionString
   ? {
       connectionString,
       ssl: isRemoteOrSsl ? { rejectUnauthorized: false } : false,
-      connectionTimeoutMillis: 5000,
       connectionTimeoutMillis: 15000,
       idleTimeoutMillis: 30000,
       max: 20,
@@ -44,7 +45,6 @@ const dbConfig = connectionString
       password: process.env.DB_PASSWORD || "Snehal",
       database: process.env.DB_DATABASE || "falah_pharmacy",
       ssl: isRemoteOrSsl ? { rejectUnauthorized: false } : false,
-      connectionTimeoutMillis: 5000,
       connectionTimeoutMillis: 15000,
       idleTimeoutMillis: 30000,
       max: 20,
@@ -60,11 +60,36 @@ let reconnectTimer = null;
 
 /**
  * Handle unexpected errors on idle connections in the pool.
+ * This prevents the "Connection terminated unexpectedly" error
+ * from crashing the Node.js process.
  */
 pool.on("error", (error) => {
   // Catch idle client errors so the application does not crash
   isOnline = false;
   lastError = error.message;
+});
+
+/**
+ * Global safety net: catch any unhandled pg connection errors
+ * that escape individual query error handlers (e.g. "Connection terminated unexpectedly").
+ * Log them gracefully instead of crashing the server.
+ */
+process.on("uncaughtException", (err) => {
+  if (
+    err.message &&
+    (err.message.includes("Connection terminated") ||
+      err.message.includes("ENOTFOUND") ||
+      err.message.includes("ECONNREFUSED") ||
+      err.message.includes("connect ETIMEDOUT"))
+  ) {
+    console.warn("⚠️  [DB] Connection error caught at process level (non-fatal):", err.message);
+    isOnline = false;
+    lastError = err.message;
+  } else {
+    // For all other uncaught exceptions, re-throw to preserve original behavior
+    console.error("❌ Uncaught Exception:", err);
+    process.exit(1);
+  }
 });
 
 /**

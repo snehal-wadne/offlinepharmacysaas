@@ -26,6 +26,14 @@ export default function LoginScreen({
     googleOnboardingData ? "signup" : "signin",
   );
 
+  // Architecture Mode: 'single' | 'multi'
+  const [pharmacyMode, setPharmacyMode] = useState(() => {
+    if (typeof window !== "undefined") {
+      return window.localStorage?.getItem("pharmacyMode") || "single";
+    }
+    return "single";
+  });
+
   useEffect(() => {
     if (authError) {
       setErrorMessage(authError);
@@ -203,7 +211,7 @@ export default function LoginScreen({
           authUser = bData.user;
         } else if (backendRes.status === 400 || backendRes.status === 401) {
           setIsLoading(false);
-          setErrorMessage(bData.error || bData.message || "Invalid email or password. Please check your credentials.");
+          setErrorMessage("Invalid email or password. Please check your credentials.");
           return;
         }
       } catch (netErr) {
@@ -282,6 +290,9 @@ export default function LoginScreen({
           setSuccessMessage(
             `Welcome back, ${authUser.name || "Dr. Rajesh Sharma"}! Opening Inventory Dashboard...`,
           );
+        }
+        if (typeof window !== "undefined") {
+          window.localStorage?.setItem("pharmacyMode", pharmacyMode);
         }
         if (onLoginSuccess) {
           onLoginSuccess(authUser, token);
@@ -391,7 +402,8 @@ export default function LoginScreen({
             pincode,
             gstNumber,
             businessType,
-            createInitialBranch: false,
+            createInitialBranch: true,
+            branchName: pharmacyMode === "single" ? "Single Store" : "Main Branch",
           }),
         });
 
@@ -401,9 +413,13 @@ export default function LoginScreen({
         if (!response.ok || !data.success) {
           setErrorMessage(
             data.error ||
-              "Failed to complete pharmacy onboarding. Please try again.",
+              "Invalid email or password. Please check your credentials.",
           );
           return;
+        }
+
+        if (typeof window !== "undefined") {
+          window.localStorage?.setItem("pharmacyMode", pharmacyMode);
         }
 
         setSuccessMessage(
@@ -450,7 +466,8 @@ export default function LoginScreen({
           pincode,
           gstNumber,
           businessType,
-          createInitialBranch: false,
+          createInitialBranch: true,
+          branchName: pharmacyMode === "single" ? "Single Store" : "Main Branch",
           password: signUpPassword,
         }),
       });
@@ -460,9 +477,13 @@ export default function LoginScreen({
       if (!response.ok || !data.success) {
         setIsLoading(false);
         setErrorMessage(
-          data.error || "Failed to register pharmacy. Please try again.",
+          data.error || "Invalid email or password. Please check your credentials.",
         );
         return;
+      }
+
+      if (typeof window !== "undefined") {
+        window.localStorage?.setItem("pharmacyMode", pharmacyMode);
       }
 
       setSuccessMessage("Pharmacy registered successfully! Signing in...");
@@ -942,6 +963,120 @@ export default function LoginScreen({
                   <Text style={styles.successText}>{successMessage}</Text>
                 </View>
               ) : null}
+
+              {/* PHARMACY ARCHITECTURE TOGGLE: SINGLE SHOP vs MULTI-BRANCH */}
+              {!googleOnboardingData && (
+                <View
+                  style={{
+                    backgroundColor: "#FFFFFF",
+                    borderRadius: 10,
+                    borderWidth: 1,
+                    borderColor: "#E5DFE4",
+                    padding: 10,
+                    marginBottom: 16,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      fontWeight: "800",
+                      color: "#77717A",
+                      letterSpacing: 0.5,
+                      marginBottom: 8,
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    Select Store Architecture
+                  </Text>
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    <Pressable
+                      onPress={() => {
+                        setPharmacyMode("single");
+                        if (typeof window !== "undefined") {
+                          window.localStorage?.setItem("pharmacyMode", "single");
+                        }
+                      }}
+                      style={{
+                        flex: 1,
+                        paddingVertical: 10,
+                        paddingHorizontal: 8,
+                        borderRadius: 8,
+                        borderWidth: 1.5,
+                        borderColor:
+                          pharmacyMode === "single" ? "#B9829A" : "#E5DFE4",
+                        backgroundColor:
+                          pharmacyMode === "single" ? "#FBF7F9" : "#FFFFFF",
+                        alignItems: "center",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 13,
+                          fontWeight: "800",
+                          color:
+                            pharmacyMode === "single" ? "#744458" : "#28242B",
+                        }}
+                      >
+                        🏬 Single Shop
+                      </Text>
+                      <Text
+                        style={{
+                          fontSize: 10.5,
+                          color: "#77717A",
+                          marginTop: 2,
+                          textAlign: "center",
+                        }}
+                      >
+                        Direct Inventory & Billing
+                      </Text>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => {
+                        setPharmacyMode("multi");
+                        if (typeof window !== "undefined") {
+                          window.localStorage?.setItem("pharmacyMode", "multi");
+                        }
+                      }}
+                      style={{
+                        flex: 1,
+                        paddingVertical: 10,
+                        paddingHorizontal: 8,
+                        borderRadius: 8,
+                        borderWidth: 1.5,
+                        borderColor:
+                          pharmacyMode === "multi" ? "#B9829A" : "#E5DFE4",
+                        backgroundColor:
+                          pharmacyMode === "multi" ? "#FBF7F9" : "#FFFFFF",
+                        alignItems: "center",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 13,
+                          fontWeight: "800",
+                          color:
+                            pharmacyMode === "multi" ? "#744458" : "#28242B",
+                        }}
+                      >
+                        🏢 Multi-Branch Chain
+                      </Text>
+                      <Text
+                        style={{
+                          fontSize: 10.5,
+                          color: "#77717A",
+                          marginTop: 2,
+                          textAlign: "center",
+                        }}
+                      >
+                        Multi-branch distribution
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+              )}
 
               {/* GOOGLE SIGN IN BUTTON (Hidden during Google Onboarding) */}
               {!googleOnboardingData && (

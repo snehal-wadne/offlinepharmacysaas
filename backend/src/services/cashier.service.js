@@ -123,11 +123,16 @@ class CashierService {
     }
 
     if (customerId) {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(customerId));
       const cCheck = await pool.query(
-        "SELECT id FROM customers WHERE id = $1 AND organisation_id = $2 AND status = 'ACTIVE' LIMIT 1;",
-        [customerId, organisationId],
+        `SELECT id FROM customers 
+         WHERE (${isUuid ? "id::text = $1 OR " : ""}customer_number = $1 OR LOWER(full_name) = LOWER($1)) 
+           AND organisation_id = $2 LIMIT 1;`,
+        [String(customerId), organisationId],
       );
-      if (cCheck.rows.length === 0) {
+      if (cCheck.rows.length > 0) {
+        customerId = cCheck.rows[0].id;
+      } else {
         customerId = null;
       }
     }
@@ -815,13 +820,49 @@ class CashierService {
       notes,
     } = saleData;
 
-    const { organisationId, branchId, cashierId, customerId } =
+    let { organisationId, branchId, cashierId, customerId } =
       await this._resolveContext(
         reqOrgId,
         reqBranchId,
         reqCashierId,
         reqCustId,
       );
+
+    let resolvedCustomerName = customerName || null;
+    let resolvedCustomerPhone = customerPhone || "";
+
+    if (!customerId && customerName && customerName !== "Walk-in Customer") {
+      const matchCust = await pool.query(
+        "SELECT id, full_name, phone FROM customers WHERE (LOWER(full_name) = LOWER($1) OR phone = $2) AND organisation_id = $3 LIMIT 1;",
+        [customerName.trim(), customerPhone || "", organisationId],
+      );
+      if (matchCust.rows.length > 0) {
+        customerId = matchCust.rows[0].id;
+        resolvedCustomerName = matchCust.rows[0].full_name;
+        resolvedCustomerPhone = matchCust.rows[0].phone || resolvedCustomerPhone;
+      } else {
+        const newCustRes = await pool.query(
+          `INSERT INTO customers (organisation_id, customer_number, full_name, phone, status)
+           VALUES ($1, $2, $3, $4, 'ACTIVE') RETURNING id;`,
+          [
+            organisationId,
+            `CUST-${Math.floor(1000 + Math.random() * 9000)}`,
+            customerName.trim(),
+            customerPhone || "—",
+          ],
+        );
+        customerId = newCustRes.rows[0].id;
+      }
+    } else if (customerId && !resolvedCustomerName) {
+      const custInfo = await pool.query(
+        "SELECT full_name, phone FROM customers WHERE id = $1 LIMIT 1;",
+        [customerId],
+      );
+      if (custInfo.rows.length > 0) {
+        resolvedCustomerName = custInfo.rows[0].full_name;
+        resolvedCustomerPhone = custInfo.rows[0].phone || resolvedCustomerPhone;
+      }
+    }
 
     const client = await pool.connect();
     try {
@@ -1094,8 +1135,8 @@ class CashierService {
           invoiceNumber: invoice.invoice_number,
           receiptNumber,
           date: invoice.created_at,
-          customerName: customerName || "Walk-in Customer",
-          customerPhone: customerPhone || "",
+          customerName: resolvedCustomerName || customerName || "Walk-in Customer",
+          customerPhone: resolvedCustomerPhone || customerPhone || "",
           subtotal,
           discount: discountAmount,
           tax: taxAmount,

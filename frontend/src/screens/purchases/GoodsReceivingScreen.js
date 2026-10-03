@@ -17,13 +17,12 @@ import {
   createGoodsReceipt,
   updateGoodsReceiptStatus,
 } from "../../api/purchaseApi";
+import { fetchInventory } from "../../api/inventoryApi";
 import {
   SkeletonTableRow,
   SkeletonItemCard,
 } from "../../components/common/SkeletonLoader";
 import PaginationControls from "../../components/common/PaginationControls";
-import { localPersistenceService } from "../../db";
-import { syncEngine } from "../../sync";
 
 const GRN_STATUS_BADGES = {
   Verified: { bg: "#EAF2EE", text: "#4F8A72", dot: "#4F8A72" },
@@ -62,266 +61,123 @@ export default function GoodsReceivingScreen({
   try {
     setLoading(true);
 
-    // ============================================================
-    // 1. LOAD LOCAL GRNs
-    // ============================================================
+    const rawBranch =
+      typeof selectedBranch === "object" && selectedBranch !== null
+        ? selectedBranch.id
+        : selectedBranch;
 
-    let localRecords = [];
+    const branchParam =
+      rawBranch &&
+      rawBranch !== "All Branches" &&
+      rawBranch !== "all" &&
+      rawBranch !== "No Active Branch"
+        ? rawBranch
+        : undefined;
 
-    try {
-      if (
-        typeof localPersistenceService?.getLocalPurchaseReceipts ===
-        "function"
-      ) {
-        localRecords =
-          (await localPersistenceService.getLocalPurchaseReceipts()) || [];
-      }
-    } catch (localErr) {
-      console.warn(
-        "[GoodsReceivingScreen] Failed to load local GRNs:",
-        localErr?.message
-      );
-      localRecords = [];
-    }
+    const response = await fetchGoodsReceipts({
+      branchId: branchParam,
+    });
 
-    // ============================================================
-    // 2. LOAD SERVER GRNs
-    // ============================================================
+    const apiRecords = Array.isArray(response?.data?.data)
+      ? response.data.data
+      : Array.isArray(response?.data)
+        ? response.data
+        : Array.isArray(response)
+          ? response
+          : [];
 
-    let serverRecords = [];
+    const serverRecords = apiRecords.map((grn) => {
+      const status =
+        grn.status === "VERIFIED"
+          ? "Verified"
+          : grn.status === "DISCREPANCY"
+            ? "Discrepancy"
+            : "Pending Inspection";
 
-    try {
-      const rawBranch =
-        typeof selectedBranch === "object" && selectedBranch !== null
-          ? selectedBranch.id
-          : selectedBranch;
+      return {
+        realId: grn.id,
+        id:
+          grn.receipt_number ||
+          grn.receiptNumber ||
+          grn.id ||
+          "GRN",
+        poReference:
+          grn.purchase_number ||
+          grn.purchaseNumber ||
+          grn.poReference ||
+          "Direct GRN",
+        supplier:
+          grn.supplier_name ||
+          grn.supplierName ||
+          grn.supplier ||
+          "Supplier",
+        receivedDate: grn.received_date
+          ? new Date(grn.received_date).toLocaleDateString("en-GB", {
+              day: "2-digit",
+              month: "short",
+              year: "numeric",
+            })
+          : grn.receivedDate
+            ? grn.receivedDate
+            : grn.created_at
+              ? new Date(grn.created_at).toLocaleDateString("en-GB", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                })
+              : "Recent",
+        receivedBy:
+          grn.received_by_name ||
+          grn.receivedByName ||
+          grn.received_by ||
+          grn.receivedBy ||
+          "Staff",
+        itemsCount:
+          grn.itemsCount ??
+          (Array.isArray(grn.items) ? grn.items.length : 0),
+        packagesCount:
+          grn.package_count ??
+          grn.packageCount ??
+          1,
+        invoiceNo:
+          grn.supplier_invoice_number ||
+          grn.supplierInvoiceNumber ||
+          grn.invoiceNo ||
+          "N/A",
+        status,
+        branch:
+          grn.branch_name ||
+          grn.branchName ||
+          grn.branch ||
+          "Main Branch",
+        notes: grn.notes || "",
+        purchaseId:
+          grn.purchase_id ||
+          grn.purchaseId ||
+          null,
+        supplierId:
+          grn.supplier_id ||
+          grn.supplierId ||
+          null,
+        branchId:
+          grn.branch_id ||
+          grn.branchId ||
+          null,
+        organisationId:
+          grn.organisation_id ||
+          grn.organisationId ||
+          null,
+        rawStatus: grn.status || null,
+        syncStatus: "SYNCED",
+      };
+    });
 
-      const branchParam =
-        rawBranch &&
-        rawBranch !== "All Branches" &&
-        rawBranch !== "all" &&
-        rawBranch !== "No Active Branch"
-          ? rawBranch
-          : undefined;
-
-      const response = await fetchGoodsReceipts({
-        branchId: branchParam,
-      });
-
-      console.log(
-        "[GoodsReceivingScreen] Raw GRN API response:",
-        response
-      );
-
-      // ============================================================
-      // IMPORTANT:
-      //
-      // Axios-style response:
-      //
-      // response
-      //   └── data
-      //       └── data  <-- ACTUAL ARRAY
-      //
-      // So we MUST use response.data.data
-      // ============================================================
-
-      const apiRecords = Array.isArray(response?.data?.data)
-        ? response.data.data
-        : Array.isArray(response?.data)
-          ? response.data
-          : Array.isArray(response)
-            ? response
-            : [];
-
-      console.log(
-        "[GoodsReceivingScreen] GRN records from backend:",
-        apiRecords
-      );
-
-      console.log(
-        "[GoodsReceivingScreen] GRN count:",
-        apiRecords.length
-      );
-
-      // ============================================================
-      // 3. NORMALIZE BACKEND DATA FOR UI
-      // ============================================================
-
-      serverRecords = apiRecords.map((grn) => {
-        const status =
-          grn.status === "VERIFIED"
-            ? "Verified"
-            : grn.status === "DISCREPANCY"
-              ? "Discrepancy"
-              : "Pending Inspection";
-
-        return {
-          // Backend UUID
-          realId: grn.id,
-
-          // GRN number
-          id:
-            grn.receipt_number ||
-            grn.receiptNumber ||
-            grn.id ||
-            "GRN",
-
-          // Purchase Order reference
-          poReference:
-            grn.purchase_number ||
-            grn.purchaseNumber ||
-            grn.poReference ||
-            "Direct GRN",
-
-          // Supplier
-          supplier:
-            grn.supplier_name ||
-            grn.supplierName ||
-            grn.supplier ||
-            "Supplier",
-
-          // Received date
-          receivedDate: grn.received_date
-            ? new Date(grn.received_date).toLocaleDateString("en-GB", {
-                day: "2-digit",
-                month: "short",
-                year: "numeric",
-              })
-            : grn.receivedDate
-              ? grn.receivedDate
-              : grn.created_at
-                ? new Date(grn.created_at).toLocaleDateString("en-GB", {
-                    day: "2-digit",
-                    month: "short",
-                    year: "numeric",
-                  })
-                : "Recent",
-
-          // Received by
-          receivedBy:
-            grn.received_by_name ||
-            grn.receivedByName ||
-            grn.received_by ||
-            grn.receivedBy ||
-            "Staff",
-
-          // Backend currently gives package_count,
-          // but does NOT give itemsCount in the sample response.
-          itemsCount:
-            grn.itemsCount ??
-            (Array.isArray(grn.items) ? grn.items.length : 0),
-
-          // Package count
-          packagesCount:
-            grn.package_count ??
-            grn.packageCount ??
-            1,
-
-          // Supplier invoice
-          invoiceNo:
-            grn.supplier_invoice_number ||
-            grn.supplierInvoiceNumber ||
-            grn.invoiceNo ||
-            "N/A",
-
-          // Status
-          status,
-
-          // Branch
-          branch:
-            grn.branch_name ||
-            grn.branchName ||
-            grn.branch ||
-            "Main Branch",
-
-          // Notes
-          notes: grn.notes || "",
-
-          // Backend IDs
-          purchaseId:
-            grn.purchase_id ||
-            grn.purchaseId ||
-            null,
-
-          supplierId:
-            grn.supplier_id ||
-            grn.supplierId ||
-            null,
-
-          branchId:
-            grn.branch_id ||
-            grn.branchId ||
-            null,
-
-          organisationId:
-            grn.organisation_id ||
-            grn.organisationId ||
-            null,
-
-          // Keep original backend status
-          rawStatus: grn.status || null,
-
-          // Server record
-          syncStatus: "SYNCED",
-        };
-      });
-
-      console.log(
-        "[GoodsReceivingScreen] Normalized GRN records:",
-        serverRecords
-      );
-    } catch (err) {
-      console.warn(
-        "[GoodsReceivingScreen] Failed to fetch GRNs from backend:",
-        err?.message || err
-      );
-
-      serverRecords = [];
-    }
-
-    // ============================================================
-    // 4. MERGE LOCAL + SERVER RECORDS
-    // ============================================================
-
-    const combined = [...localRecords];
-
-    const existingIds = new Set(
-      localRecords
-        .map((record) => record?.id || record?.realId)
-        .filter(Boolean)
-    );
-
-    for (const serverRecord of serverRecords) {
-      const serverId =
-        serverRecord.id || serverRecord.realId;
-
-      const alreadyExists = existingIds.has(serverId);
-
-      if (!alreadyExists) {
-        combined.push(serverRecord);
-
-        if (serverId) {
-          existingIds.add(serverId);
-        }
-      }
-    }
-
-    console.log(
-      "[GoodsReceivingScreen] Final GRN list:",
-      combined
-    );
-
-    // ============================================================
-    // 5. UPDATE UI
-    // ============================================================
-
-    setGrnList(combined);
+    setGrnList(serverRecords);
   } catch (err) {
     console.warn(
       "[GoodsReceivingScreen] Error loading GRN list:",
       err
     );
-
     setGrnList([]);
   } finally {
     setLoading(false);
@@ -334,32 +190,31 @@ export default function GoodsReceivingScreen({
 
     async function loadProducts() {
       try {
-        if (typeof localPersistenceService?.getCatalogForPos === "function") {
-          const prods = await localPersistenceService.getCatalogForPos();
-          if (isMounted && prods && prods.length > 0) {
-            setAvailableProducts(prods);
-          }
+        const invRes = await fetchInventory();
+        const items = Array.isArray(invRes?.data?.data)
+          ? invRes.data.data
+          : Array.isArray(invRes?.data)
+            ? invRes.data
+            : Array.isArray(invRes)
+              ? invRes
+              : [];
+        if (isMounted && items.length > 0) {
+          const mapped = items.map((it) => ({
+            id: it.productId || it.id,
+            productId: it.productId || it.id,
+            name: it.brandName || it.medicineName || it.genericName || "Medicine",
+            mrp: parseFloat(String(it.amount || it.mrp || 0).replace(/[^0-9.]/g, "")) || 100,
+          }));
+          setAvailableProducts(mapped);
         }
-      } catch (err) {}
+      } catch (err) {
+        console.warn("[GoodsReceivingScreen] Error fetching products for selector:", err);
+      }
     }
     loadProducts();
 
-    const subscribeFn =
-      typeof syncEngine?.onStateChange === "function"
-        ? syncEngine.onStateChange.bind(syncEngine)
-        : typeof syncEngine?.subscribe === "function"
-          ? syncEngine.subscribe.bind(syncEngine)
-          : null;
-
-    const unsubscribe = subscribeFn
-      ? subscribeFn(() => {
-          if (isMounted) loadGRNs();
-        })
-      : null;
-
     return () => {
       isMounted = false;
-      if (unsubscribe) unsubscribe();
     };
   }, [selectedBranch]);
 
@@ -567,57 +422,39 @@ export default function GoodsReceivingScreen({
     }
 
     try {
-      if (typeof localPersistenceService?.receiveLocalPurchase === "function") {
-        await localPersistenceService.receiveLocalPurchase({
-          purchaseNumber: formData.poReference.trim(),
-          supplierInvoiceNumber: formData.invoiceNo.trim(),
-          supplierName: formData.supplier.trim(),
-          packageCount: Number(formData.packagesCount || 1),
-          notes: formData.notes.trim(),
-          items: validatedItems,
-        });
+      const rawBranch =
+        typeof selectedBranch === "object" && selectedBranch !== null
+          ? selectedBranch.id
+          : selectedBranch;
+      const branchId =
+        rawBranch &&
+        rawBranch !== "All Branches" &&
+        rawBranch !== "all" &&
+        rawBranch !== "No Active Branch"
+          ? rawBranch
+          : undefined;
 
+      const receiptPayload = {
+        poReference: formData.poReference.trim(),
+        supplierInvoiceNumber: formData.invoiceNo.trim(),
+        supplierName: formData.supplier.trim(),
+        packageCount: Number(formData.packagesCount || 1),
+        notes: formData.notes.trim(),
+        branchId,
+        items: validatedItems,
+      };
+
+      const res = await createGoodsReceipt(receiptPayload);
+      if (res && res.success !== false) {
         await loadGRNs();
         setModalVisible(false);
-
         if (onShowToast) {
           onShowToast(
-            `✓ Received Goods Note logged locally (${validatedItems.length} items)!`,
+            `✓ Received Goods Note created & inventory updated (${validatedItems.length} items)!`,
           );
-        }
-
-        // Opportunistic sync
-        if (typeof syncEngine?.sync === "function") {
-          syncEngine.sync().catch(() => {});
         }
       } else {
-        // Fallback for mock mode
-        const generatedId = `GRN-2026-0${90 + grnList.length}`;
-        const newGRN = {
-          realId: generatedId,
-          id: generatedId,
-          poReference: formData.poReference,
-          supplier: formData.supplier,
-          receivedDate: new Date().toLocaleDateString("en-GB", {
-            day: "2-digit",
-            month: "short",
-            year: "numeric",
-          }),
-          receivedBy: "Manager (HP)",
-          itemsCount: validatedItems.length,
-          packagesCount: Number(formData.packagesCount || 8),
-          invoiceNo: formData.invoiceNo,
-          status: "Verified",
-          branch: formData.branch || "Main Branch",
-        };
-        setGrnList((prev) => [newGRN, ...prev]);
-        setModalVisible(false);
-
-        if (onShowToast) {
-          onShowToast(
-            `✓ Logged Goods Received Note ${newGRN.id} for ${newGRN.poReference}!`,
-          );
-        }
+        throw new Error(res?.error || "Failed to create goods receipt");
       }
     } catch (err) {
       console.error(
@@ -626,7 +463,7 @@ export default function GoodsReceivingScreen({
       );
       if (onShowToast) {
         onShowToast(
-          `Error saving receipt: ${err.message || "Local persistence failure"}`,
+          `Error saving receipt: ${err.message || "Failed to connect to server"}`,
         );
       }
     }

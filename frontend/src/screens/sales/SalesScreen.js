@@ -11,6 +11,7 @@ import {
   View
 } from "react-native";
 import { fetchCashierProducts, saveHeldBill } from "../../api/cashierApi";
+import { fetchCustomers } from "../../api/customerApi";
 import BarcodeScannerModal from "../../components/common/BarcodeScannerModal";
 import OfflineQRCode from "../../components/common/OfflineQRCode";
 import PaginationControls from "../../components/common/PaginationControls";
@@ -204,18 +205,59 @@ export default function SalesScreen({
   const [customerModalVisible, setCustomerModalVisible] = useState(false);
   const [customerSearchQuery, setCustomerSearchQuery] = useState("");
   useEffect(() => {
-  if (!selectedCustomerId || !customers?.length) return;
+    if (!selectedCustomerId) return;
 
-  const customer = customers.find(
-    (c) => String(c.id) === String(selectedCustomerId)
-  );
-  console.log("POS customer check:", selectedCustomerId, customer);
+    let isMounted = true;
+    (async () => {
+      let customer = (customers || []).find(
+        (c) =>
+          String(c.id) === String(selectedCustomerId) ||
+          String(c.customerNumber) === String(selectedCustomerId),
+      );
 
-  if (customer) {
-    setSelectedCustomer(customer);
-    setCustomCustomerInput(customer.name || "");
-  }
-}, [selectedCustomerId, customers]);
+      if (!customer) {
+        try {
+          const res = await fetchCustomers({ search: selectedCustomerId });
+          const rawList = Array.isArray(res?.data?.data)
+            ? res.data.data
+            : Array.isArray(res?.data)
+              ? res.data
+              : Array.isArray(res)
+                ? res
+                : [];
+          const match =
+            rawList.find(
+              (c) =>
+                String(c.id) === String(selectedCustomerId) ||
+                String(c.customerNumber) === String(selectedCustomerId),
+            ) || rawList[0];
+
+          if (match) {
+            customer = {
+              id: match.id,
+              name: match.name || match.full_name || "Customer",
+              phone: match.phone || match.mobile || "",
+              currentBalance:
+                match.currentBalance ||
+                `₹${parseFloat(match.balance || match.outstandingBalance || 0).toFixed(2)}`,
+              category: match.category || "Regular",
+            };
+          }
+        } catch (err) {
+          console.warn("Failed to fetch customer for POS:", err);
+        }
+      }
+
+      if (isMounted && customer) {
+        setSelectedCustomer(customer);
+        setCustomCustomerInput(customer.name || "");
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedCustomerId, customers]);
 
   // Active Billing Cart State
   const [cart, setCart] = useState(draft.cart || []);
@@ -1737,8 +1779,13 @@ const handleHoldBillAction = async () => {
                 </Text>
               </View>
               <Text style={styles.receiptMetaText}>
-                Customer: {completedInvoice.customer}
+                Customer: {completedInvoice.customer || completedInvoice.customerName || "Walk-in Customer"}
               </Text>
+              {(completedInvoice.phone || completedInvoice.customerPhone) && (completedInvoice.phone !== "—") ? (
+                <Text style={styles.receiptMetaText}>
+                  Phone: {completedInvoice.phone || completedInvoice.customerPhone}
+                </Text>
+              ) : null}
               <Text style={styles.receiptMetaText}>
                 Payment: {completedInvoice.paymentMode}
               </Text>

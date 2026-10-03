@@ -4,7 +4,7 @@
  * Communicates with backend REST API for GxP/HIPAA compliance audit events.
  */
 
-import { apiGet } from "./apiClient";
+import { apiGet, apiPost } from "./apiClient";
 
 /**
  * GET /api/audit-logs
@@ -30,3 +30,11 @@ export async function fetchAuditLogs(params = {}) {
   const queryString = query.toString() ? `?${query.toString()}` : "";
   return apiGet(`/audit-logs${queryString}`);
 }
+
+/**
+ * POST /api/audit-logs
+ */
+export async function createAuditLog(data) {
+  return apiPost("/audit-logs", data);
+}
+

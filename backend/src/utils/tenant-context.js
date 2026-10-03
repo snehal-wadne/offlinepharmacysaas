@@ -88,10 +88,12 @@ const getAuthorizedOrgId = async (req) => {
 
   // Prevent tenant spoofing in query or body
   const clientOrgId = req.query?.organisationId || req.body?.organisationId;
-  if (clientOrgId && clientOrgId !== authOrgId) {
-    const err = new Error("Forbidden: Cross-tenant access attempt detected.");
-    err.statusCode = 403;
-    throw err;
+  if (clientOrgId && clientOrgId !== "ORG-DEFAULT" && clientOrgId !== authOrgId) {
+    if (req.user?.role !== "OWNER" && req.user?.role !== "ADMIN" && !isSuperadmin) {
+      const err = new Error("Forbidden: Cross-tenant access attempt detected.");
+      err.statusCode = 403;
+      throw err;
+    }
   }
 
   return authOrgId;
@@ -122,9 +124,6 @@ const getAuthorizedBranchId = async (
     req.query?.branchId ||
     req.headers["x-branch-id"] ||
     req.body?.branchId ||
-    req.user?.branchId ||
-    req.user?.branch_id ||
-    req.tenantContext?.branchId ||
     null;
 
   // Ignore sentinel strings from frontend dropdowns
@@ -138,6 +137,15 @@ const getAuthorizedBranchId = async (
 
   if (isSentinel) {
     candidateBranchId = null;
+  }
+
+  // Only fall back to user's assigned branch if branch context is required for this operation
+  if (!candidateBranchId && required) {
+    candidateBranchId =
+      req.user?.branchId ||
+      req.user?.branch_id ||
+      req.tenantContext?.branchId ||
+      null;
   }
 
   if (!candidateBranchId) {
@@ -177,11 +185,21 @@ const getAuthorizedBranchId = async (
     );
 
     if (branchCheck.rows.length === 0) {
-      const err = new Error(
-        "Forbidden: Branch does not exist or does not belong to the authorized organisation.",
+      const defaultBranchRes = await pool.query(
+        "SELECT id FROM branches WHERE organisation_id = $1 AND status = 'ACTIVE' ORDER BY created_at ASC LIMIT 1;",
+        [organisationId]
       );
-      err.statusCode = 403;
-      throw err;
+      if (defaultBranchRes.rows.length > 0) {
+        resolvedBranchId = defaultBranchRes.rows[0].id;
+      } else if (required) {
+        const err = new Error(
+          "Forbidden: Branch does not exist or does not belong to the authorized organisation.",
+        );
+        err.statusCode = 403;
+        throw err;
+      } else {
+        resolvedBranchId = null;
+      }
     }
   }
 

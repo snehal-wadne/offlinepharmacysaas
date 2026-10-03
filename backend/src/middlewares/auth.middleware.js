@@ -41,26 +41,16 @@ const authenticate = async (req, res, next) => {
 
         const userRes = await pool.query(
           `SELECT id, name, email, phone, staff_id AS "staffId", status, 
-                  is_platform_superadmin, supabase_auth_id, role, supplier_id
+                  is_platform_superadmin
            FROM users
-           WHERE (supabase_auth_id = $1 OR LOWER(email) = LOWER($2))
+           WHERE LOWER(email) = LOWER($1)
              AND status = 'ACTIVE'
            LIMIT 1;`,
-          [subUuid, supabaseDecoded.email || ""],
+          [supabaseDecoded.email || ""],
         );
 
         if (userRes.rows.length > 0) {
           user = userRes.rows[0];
-          // JIT link if supabase_auth_id differs
-          if (user.supabase_auth_id !== subUuid) {
-            await pool
-              .query("UPDATE users SET supabase_auth_id = $1 WHERE id = $2;", [
-                subUuid,
-                user.id,
-              ])
-              .catch(() => {});
-            user.supabase_auth_id = subUuid;
-          }
         } else if (supabaseDecoded.email) {
           // Automatic JIT provisioning for Google Auth Admin (Zero-form onboarding)
           const googleEmail = supabaseDecoded.email.trim().toLowerCase();
@@ -140,7 +130,7 @@ const authenticate = async (req, res, next) => {
         if (legacyDecoded && legacyDecoded.userId) {
           const userRes = await pool.query(
             `SELECT id, name, email, phone, staff_id AS "staffId", status, 
-                    is_platform_superadmin, supabase_auth_id, role, supplier_id
+                    is_platform_superadmin
              FROM users
              WHERE id = $1 AND status = 'ACTIVE'
              LIMIT 1;`,
@@ -197,16 +187,15 @@ const authenticate = async (req, res, next) => {
     }
 
     // Check if authenticated user is a Supplier (isolated from internal pharmacy memberships)
-    if (user.role === "SUPPLIER" || user.supplier_id) {
-      const supRes = await pool.query(
-        "SELECT id, name, email, phone, organisation_id FROM suppliers WHERE id = $1 OR LOWER(email) = $2 LIMIT 1;",
-        [user.supplier_id || "00000000-0000-0000-0000-000000000000", user.email],
-      );
+    const supRes = await pool.query(
+      "SELECT id, name, email, phone, organisation_id FROM suppliers WHERE LOWER(email) = $1 LIMIT 1;",
+      [user.email],
+    );
+    if (supRes.rows.length > 0) {
       const supplierInfo = supRes.rows[0];
-
       req.user = {
         id: user.id,
-        supabaseAuthId: user.supabase_auth_id || null,
+        supabaseAuthId: null,
         name: user.name,
         email: user.email,
         phone: user.phone,
@@ -215,9 +204,9 @@ const authenticate = async (req, res, next) => {
         role: "SUPPLIER",
         roleName: "Medicine Supplier",
         roleId: null,
-        supplierId: supplierInfo?.id || user.supplier_id || null,
-        supplierName: supplierInfo?.name || null,
-        organisationId: supplierInfo?.organisation_id || null,
+        supplierId: supplierInfo.id,
+        supplierName: supplierInfo.name,
+        organisationId: supplierInfo.organisation_id || null,
         branchId: null,
       };
       return next();
@@ -284,6 +273,27 @@ const authenticate = async (req, res, next) => {
       // No header provided: use user's first legitimate active membership if exists
       if (memberships.length > 0) {
         selectedMembership = memberships[0];
+      } else {
+        // Fallback: Check if user is owner of an active organisation
+        const ownerOrgRes = await pool.query(
+          "SELECT id, name, owner_id FROM organisations WHERE owner_id = $1 AND status = 'ACTIVE' LIMIT 1;",
+          [user.id]
+        );
+        if (ownerOrgRes.rows.length > 0) {
+          const ownerOrg = ownerOrgRes.rows[0];
+          const defaultBranchRes = await pool.query(
+            "SELECT id FROM branches WHERE organisation_id = $1 AND status = 'ACTIVE' ORDER BY created_at ASC LIMIT 1;",
+            [ownerOrg.id]
+          );
+          selectedMembership = {
+            organisation_id: ownerOrg.id,
+            organisation_name: ownerOrg.name,
+            owner_id: ownerOrg.owner_id,
+            branch_id: defaultBranchRes.rows[0]?.id || null,
+            role_name: "Owner",
+            role_identifier: "OWNER",
+          };
+        }
       }
     }
 
@@ -359,6 +369,24 @@ const authenticate = async (req, res, next) => {
     next();
   } catch (err) {
     console.error("Auth middleware error:", err.message);
+
+    // Handle DB connectivity errors gracefully (offline mode)
+    const isDbConnError =
+      err.message &&
+      (err.message.includes("Connection terminated") ||
+        err.message.includes("ENOTFOUND") ||
+        err.message.includes("ECONNREFUSED") ||
+        err.message.includes("connect ETIMEDOUT") ||
+        err.message.includes("connection timeout"));
+
+    if (isDbConnError) {
+      return res.status(503).json({
+        success: false,
+        message: "Backend database is currently unreachable. Running in offline mode.",
+        offlineMode: true,
+      });
+    }
+
     return res.status(500).json({
       success: false,
       message: "Authentication error occurred.",

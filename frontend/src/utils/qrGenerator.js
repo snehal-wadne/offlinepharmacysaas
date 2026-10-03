@@ -537,7 +537,7 @@ export function generateOfflineBarcodeSvg(text, options = {}) {
     ? `<text x="${textX}" y="${textY}" text-anchor="middle" font-family="'Courier New', Courier, monospace" font-size="${fontSize}" font-weight="700" fill="#0F172A" letter-spacing="1.4">${clean}</text>`
     : "";
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${svgWidth} ${svgHeight}" width="${svgWidth}" height="${svgHeight}" style="background-color: #FFFFFF; shape-rendering: crispEdges;">
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${svgWidth} ${svgHeight}" width="100%" height="${svgHeight}" style="max-width: 100%; height: auto; background-color: #FFFFFF; shape-rendering: crispEdges; display: block; margin: 0 auto;">
   <rect width="100%" height="100%" fill="#FFFFFF" />
   ${rects}
   ${textElement}

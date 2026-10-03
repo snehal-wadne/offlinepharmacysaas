@@ -123,12 +123,17 @@ export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
         activeRole.id,
         Array.from(assignedPermissionIds),
       );
-      if (res?.success) {
+      if (res?.success && res.data?.success) {
+        const savedPermissions = res.data.data || [];
         setOriginalPermissionIds(new Set(assignedPermissionIds));
         setRoles((prev) =>
           prev.map((r) =>
             r.id === activeRole.id
-              ? { ...r, permissions: res.data, permission_count: res.data.length }
+              ? {
+                  ...r,
+                  permissions: savedPermissions,
+                  permission_count: savedPermissions.length,
+                }
               : r,
           ),
         );
@@ -138,7 +143,9 @@ export default function RolesPermissionsScreen({ onShowToast, onNavigate }) {
           );
         }
       } else {
-        throw new Error(res?.error || "Failed to save permissions");
+        throw new Error(
+          res?.data?.error || res?.error || "Failed to save permissions",
+        );
       }
     } catch (err) {
       if (onShowToast) onShowToast(`⚠️ ${err.message}`);

@@ -5,6 +5,7 @@
  */
 
 const { pool } = require("../db/connection");
+const auditService = require("./audit.service");
 
 const getInventory = async ({
   organisationId,
@@ -114,51 +115,126 @@ const saveOrUpdateInventory = async (organisationId, itemData) => {
     strength = "500mg",
     packSize = "15 Tablets",
     manufacturer = "GSK",
-    supplierName = "GSK Pharmaceuticals",
+    supplierName,
     amount = "15.00",
-    sku = "SKU-001",
-    batchNo = "B-1001",
+    sku,
+    batchNo,
     quantity = 100,
-    branchId = "Main Store",
-    shelfLocation = "A1-S1",
+    branchId,
+    shelfLocation,
   } = itemData;
 
   if (!organisationId) {
     throw new Error("organisationId is required");
   }
 
-  const medName = medicineName || genericName || brandName;
-  const brdName = brandName || medicineName;
+  const medName = medicineName || genericName || brandName || "Medicine";
+  const brdName = brandName || medicineName || medName;
   const numMrp = parseFloat(String(amount).replace(/[^0-9.]/g, "")) || 15.0;
   const numQty = parseInt(quantity, 10) || 0;
 
-  // 1. Resolve Supplier
-  let sId;
-  const sRes = await pool.query(
-    `SELECT id FROM suppliers WHERE organisation_id = $1 AND LOWER(name) = LOWER($2) LIMIT 1;`,
-    [organisationId, supplierName],
-  );
-  if (sRes.rows.length > 0) {
-    sId = sRes.rows[0].id;
-  } else {
-    const newS = await pool.query(
-      `INSERT INTO suppliers (organisation_id, name) VALUES ($1, $2) RETURNING id;`,
-      [organisationId, supplierName],
+  // 1. Look up existing batch if ID, batch number, or SKU is provided
+  let existingBatch = null;
+  let productId = null;
+  let previousQty = null;
+  const targetLookupBatch = batchNo || itemData.batchNumber || null;
+
+  if (id) {
+    // An explicit batch id (e.g. from the Stock Adjustments table) must match
+    // that exact row only — OR-ing in a batch-number/product-id fallback here
+    // let an unrelated batch sharing the same (often default "B-1001") batch
+    // number win the "ORDER BY updated_at DESC LIMIT 1" tie-break, silently
+    // updating the wrong row instead of the one the user selected.
+    const batchRes = await pool.query(
+      `SELECT ib.id, ib.product_id, ib.supplier_id, ib.branch_id, ib.batch_number,
+              ib.quantity, ib.mrp, ib.shelf_location,
+              p.medicine_name, p.brand_name
+       FROM inventory_batches ib
+       JOIN products p ON p.id = ib.product_id
+       WHERE ib.id::text = $1
+         AND p.organisation_id = $2
+       LIMIT 1;`,
+      [id, organisationId],
     );
-    sId = newS.rows[0].id;
+    if (batchRes.rows.length > 0) {
+      existingBatch = batchRes.rows[0];
+      productId = existingBatch.product_id;
+      previousQty = Number(existingBatch.quantity);
+    }
+  } else if (targetLookupBatch) {
+    const batchRes = await pool.query(
+      `SELECT ib.id, ib.product_id, ib.supplier_id, ib.branch_id, ib.batch_number,
+              ib.quantity, ib.mrp, ib.shelf_location,
+              p.medicine_name, p.brand_name
+       FROM inventory_batches ib
+       JOIN products p ON p.id = ib.product_id
+       WHERE ib.batch_number = $1
+         AND p.organisation_id = $2
+       ORDER BY ib.updated_at DESC
+       LIMIT 1;`,
+      [targetLookupBatch, organisationId],
+    );
+    if (batchRes.rows.length > 0) {
+      existingBatch = batchRes.rows[0];
+      productId = existingBatch.product_id;
+      previousQty = Number(existingBatch.quantity);
+    }
   }
 
-  // 2. Resolve Branch
-  let bId;
-  const targetBranchName = branchId || "Main Branch";
-  const bRes = await pool.query(
-    `SELECT id FROM branches WHERE organisation_id = $1 AND (id::text = $2 OR name ILIKE $2) LIMIT 1;`,
-    [organisationId, targetBranchName],
-  );
-  if (bRes.rows.length > 0) {
-    bId = bRes.rows[0].id;
-  } else {
-    // Fallback: check if any active branch exists in this organisation
+
+  // 2. Resolve Supplier (preserve existing supplier if none supplied)
+  let sId = existingBatch?.supplier_id || null;
+  const cleanSupplierName = supplierName ? String(supplierName).trim() : "";
+  if (cleanSupplierName) {
+    const sRes = await pool.query(
+      `SELECT id FROM suppliers WHERE organisation_id = $1 AND LOWER(name) = LOWER($2) LIMIT 1;`,
+      [organisationId, cleanSupplierName],
+    );
+    if (sRes.rows.length > 0) {
+      sId = sRes.rows[0].id;
+    } else {
+      const newS = await pool.query(
+        `INSERT INTO suppliers (organisation_id, name) VALUES ($1, $2) RETURNING id;`,
+        [organisationId, cleanSupplierName],
+      );
+      sId = newS.rows[0].id;
+    }
+  } else if (!sId) {
+    // Find or create default supplier for the organisation
+    const anyS = await pool.query(
+      `SELECT id FROM suppliers WHERE organisation_id = $1 LIMIT 1;`,
+      [organisationId],
+    );
+    if (anyS.rows.length > 0) {
+      sId = anyS.rows[0].id;
+    } else {
+      const newS = await pool.query(
+        `INSERT INTO suppliers (organisation_id, name) VALUES ($1, 'General Distributor') RETURNING id;`,
+        [organisationId],
+      );
+      sId = newS.rows[0].id;
+    }
+  }
+
+  // 3. Resolve Branch
+  let bId = existingBatch?.branch_id || null;
+  const isSentinelBranch =
+    !branchId ||
+    branchId === "all" ||
+    branchId === "All Branches" ||
+    branchId === "No Active Branch";
+
+  if (!isSentinelBranch) {
+    const bRes = await pool.query(
+      `SELECT id FROM branches WHERE organisation_id = $1 AND (id::text = $2 OR name ILIKE $2) LIMIT 1;`,
+      [organisationId, branchId],
+    );
+    if (bRes.rows.length > 0) {
+      bId = bRes.rows[0].id;
+    }
+  }
+
+  if (!bId) {
     const anyB = await pool.query(
       `SELECT id FROM branches WHERE organisation_id = $1 AND status = 'ACTIVE' ORDER BY created_at ASC LIMIT 1;`,
       [organisationId],
@@ -167,46 +243,33 @@ const saveOrUpdateInventory = async (organisationId, itemData) => {
       bId = anyB.rows[0].id;
     } else {
       const newB = await pool.query(
-        `INSERT INTO branches (organisation_id, name) VALUES ($1, $2) RETURNING id;`,
-        [organisationId, targetBranchName],
+        `INSERT INTO branches (organisation_id, name) VALUES ($1, 'Main Branch') RETURNING id;`,
+        [organisationId],
       );
       bId = newB.rows[0].id;
     }
   }
 
-  // 3. Resolve or Update Product
-  let productId;
-  let existingBatch;
-
-  if (id) {
-    const batchRes = await pool.query(
-      `SELECT ib.id, ib.product_id 
-       FROM inventory_batches ib
-       JOIN products p ON p.id = ib.product_id
-       WHERE (ib.id::text = $1 OR ib.batch_number = $1)
-         AND p.organisation_id = $2
-       LIMIT 1;`,
-      [id, organisationId],
-    );
-    if (batchRes.rows.length > 0) {
-      existingBatch = batchRes.rows[0];
-      productId = existingBatch.product_id;
-    }
-  }
+  // 4. Resolve or Update Product
+  const itemSku = sku ? String(sku).trim() : `SKU-${Math.floor(1000 + Math.random() * 9000)}`;
 
   if (productId) {
-    // Update existing product in products table
     await pool.query(
       `UPDATE products
-       SET medicine_name = $1, brand_name = $2, strength = $3, pack_size = $4, manufacturer = $5, sku = $6, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $7;`,
-      [medName, brdName, strength, packSize, manufacturer, sku, productId],
+       SET medicine_name = COALESCE($1, medicine_name),
+           brand_name = COALESCE($2, brand_name),
+           strength = COALESCE($3, strength),
+           pack_size = COALESCE($4, pack_size),
+           manufacturer = COALESCE($5, manufacturer),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $6;`,
+      [medName, brdName, strength, packSize, manufacturer, productId],
     );
   } else {
-    // Search by SKU or brand name
+    // Search existing product by SKU or brand name
     const pRes = await pool.query(
       `SELECT id FROM products WHERE organisation_id = $1 AND (LOWER(sku) = LOWER($2) OR LOWER(brand_name) = LOWER($3)) LIMIT 1;`,
-      [organisationId, sku, brdName],
+      [organisationId, itemSku, brdName],
     );
 
     if (pRes.rows.length > 0) {
@@ -228,27 +291,34 @@ const saveOrUpdateInventory = async (organisationId, itemData) => {
           strength,
           packSize,
           manufacturer,
-          sku,
+          itemSku,
         ],
       );
       productId = newP.rows[0].id;
     }
   }
 
-  // 4. Create or Update Inventory Batch
+  // 5. Create or Update Inventory Batch
   let batchRecord;
+  const targetBatchNo = batchNo || existingBatch?.batch_number || `BAT-${Math.floor(1000 + Math.random() * 9000)}`;
+  const targetShelf = shelfLocation !== undefined ? shelfLocation : (existingBatch?.shelf_location || "A1-S1");
+
   if (existingBatch) {
     const updated = await pool.query(
       `UPDATE inventory_batches
-       SET product_id = $1, supplier_id = $2, batch_number = $3, mrp = $4, quantity = $5, shelf_location = $6, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $7 RETURNING *;`,
+       SET supplier_id = COALESCE($1, supplier_id),
+           batch_number = COALESCE($2, batch_number),
+           mrp = $3,
+           quantity = $4,
+           shelf_location = COALESCE($5, shelf_location),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $6 RETURNING *;`,
       [
-        productId,
         sId,
-        batchNo,
+        targetBatchNo,
         numMrp,
         numQty,
-        shelfLocation,
+        targetShelf,
         existingBatch.id,
       ],
     );
@@ -264,11 +334,11 @@ const saveOrUpdateInventory = async (organisationId, itemData) => {
         productId,
         bId,
         sId,
-        batchNo,
+        targetBatchNo,
         expiryDate.toISOString().split("T")[0],
         numMrp,
         numQty,
-        shelfLocation,
+        targetShelf,
       ],
     );
     batchRecord = inserted.rows[0];
@@ -281,17 +351,50 @@ const saveOrUpdateInventory = async (organisationId, itemData) => {
   const isActive = productFlags.rows[0]?.isActive !== false;
   const rxRequired = Boolean(productFlags.rows[0]?.isRxRequired);
 
-  // Record activity in stock_movements table
-  const movementType = id ? "Adjustment" : "Purchase";
-  const qtyDisplay = numQty >= 0 ? `+${numQty}` : `${numQty}`;
+  // 6. Record in stock_movements & audit_logs
+  const diffQty = numQty - (previousQty !== null ? previousQty : 0);
+  const auditAction = diffQty >= 0 ? "STOCK_INCREASE" : "STOCK_DECREASE";
+
+  // Stock movement history
   recordStockMovement(organisationId, {
     branchName: branchId || "Main Branch",
-    type: movementType,
+    type: id ? (diffQty >= 0 ? "Stock Increase" : "Stock Decrease") : "New Stock Entry",
     item: `${brdName} (${strength})`,
-    quantity: qtyDisplay,
-    reference: batchNo || "ADJ-1001",
+    quantity: diffQty >= 0 ? `+${Math.abs(diffQty)}` : `-${Math.abs(diffQty)}`,
+    reference: targetBatchNo,
     status: "Completed",
+    notes: itemData.reason || "Stock quantity adjustment",
   });
+
+  // Persistent Compliance Audit Log
+  try {
+    await auditService.log({
+      organisationId,
+      userId: itemData.updatedBy || null,
+      action: "STOCK_ADJUSTMENT",
+      entityType: "STOCK_ADJUSTMENT",
+      entityId: String(batchRecord.id),
+      metadata: {
+        actionType: auditAction,
+        productName: brdName || medName,
+        batchNumber: targetBatchNo,
+        previousQuantity: previousQty !== null ? previousQty : 0,
+        newQuantity: numQty,
+        delta: diffQty,
+        branchName: branchId || "Main Branch",
+        reason: itemData.reason || (diffQty >= 0 ? "Manual stock increase" : "Manual stock deduction"),
+        diff: [
+          {
+            field: "Stock Quantity",
+            oldValue: previousQty !== null ? `${previousQty} units` : "0 units",
+            newValue: `${numQty} units`,
+          },
+        ],
+      },
+    });
+  } catch (auditErr) {
+    console.warn("Failed to write stock adjustment audit log:", auditErr.message);
+  }
 
   return {
     id: batchRecord.id,
@@ -302,13 +405,13 @@ const saveOrUpdateInventory = async (organisationId, itemData) => {
     strength,
     packSize,
     manufacturer,
-    supplierName,
+    supplierName: cleanSupplierName || "Distributor",
     amount: `₹${numMrp.toFixed(2)}`,
-    sku,
-    batchNo,
+    sku: itemSku,
+    batchNo: targetBatchNo,
     quantity: numQty,
-    branchId: branchId || "Main Store",
-    shelfLocation,
+    branchId: bId,
+    shelfLocation: targetShelf,
     updatedBy: "Manager",
     lastUpdated: new Date().toISOString().split("T")[0],
     status: numQty < 50 ? "Low Stock" : "In Stock",
@@ -387,6 +490,7 @@ const recordStockMovement = async (
     quantity,
     reference = "ADJ-1001",
     status = "Completed",
+    notes = null,
   },
 ) => {
   try {
@@ -403,6 +507,23 @@ const recordStockMovement = async (
         status,
       ],
     );
+
+    // Also persist in audit_logs so the audit trail displays the action
+    await auditService.log({
+      organisationId,
+      action: "STOCK_ADJUSTMENT",
+      entityType: "STOCK_ADJUSTMENT",
+      entityId: reference,
+      metadata: {
+        item,
+        branchName,
+        type,
+        quantity,
+        reference,
+        status,
+        reason: notes || "Stock movement adjustment",
+      },
+    }).catch(() => {});
   } catch (err) {
     console.warn("Failed to record stock movement:", err.message);
   }
@@ -682,7 +803,7 @@ function generateCode128Svg(text, barHeight = 44, moduleWidth = 2) {
   const textX = svgWidth / 2;
   const textY = barHeight + 14;
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${svgWidth} ${svgHeight}" width="${svgWidth}" height="${svgHeight}" style="background-color: #FFFFFF; shape-rendering: crispEdges;">
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${svgWidth} ${svgHeight}" width="100%" height="${svgHeight}" style="max-width: 100%; height: auto; background-color: #FFFFFF; shape-rendering: crispEdges; display: block; margin: 0 auto;">
   <rect width="100%" height="100%" fill="#ffffff" />
   ${rects}
   <text x="${textX}" y="${textY}" text-anchor="middle" font-family="'Courier New', monospace, sans-serif" font-size="11" font-weight="700" fill="#111827" letter-spacing="1.5">${clean}</text>

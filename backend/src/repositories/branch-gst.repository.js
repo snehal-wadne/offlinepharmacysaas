@@ -90,7 +90,7 @@ const createBranchGstSettings = async (
     branchId,
     gstin,
     legalName = null,
-    tradeName = null,
+    tradeName = null,    
     state = null,
     stateCode = null,
     gstScheme = "REGULAR",

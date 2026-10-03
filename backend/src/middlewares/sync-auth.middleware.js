@@ -94,23 +94,14 @@ const authenticateUser = async (req) => {
         })();
 
     const res = await pool.query(
-      `SELECT id, name, email, status, is_platform_superadmin, supabase_auth_id
+      `SELECT id, name, email, status, is_platform_superadmin
        FROM users
-       WHERE (supabase_auth_id = $1 OR (supabase_auth_id IS NULL AND LOWER(email) = LOWER($2)))
+       WHERE LOWER(email) = LOWER($1)
          AND status = 'ACTIVE'`,
-      [subUuid, supabaseDecoded.email || ""],
+      [supabaseDecoded.email || ""],
     );
     if (res.rows.length > 0) {
       const u = res.rows[0];
-      if (!u.supabase_auth_id && subUuid) {
-        await pool
-          .query("UPDATE users SET supabase_auth_id = $1 WHERE id = $2", [
-            subUuid,
-            u.id,
-          ])
-          .catch(() => {});
-        u.supabase_auth_id = subUuid;
-      }
       return { user: u };
     }
   }
@@ -264,6 +255,14 @@ const requireSyncAuth = async (req, res, next) => {
       );
       if (userOrgRes.rows.length > 0) {
         rawOrgId = userOrgRes.rows[0].organisation_id;
+      } else {
+        const ownerOrgRes = await pool.query(
+          "SELECT id FROM organisations WHERE owner_id = $1 AND status = 'ACTIVE' LIMIT 1;",
+          [req.user.id]
+        );
+        if (ownerOrgRes.rows.length > 0) {
+          rawOrgId = ownerOrgRes.rows[0].id;
+        }
       }
     }
 

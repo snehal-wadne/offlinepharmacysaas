@@ -23,14 +23,21 @@ export default function AuditLogScreen({
   onShowToast,
   onNavigate,
   selectedBranch = "All Branches",
+  initialSearchQuery = "",
 }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
   const isMobile = width < 768;
 
   // Search & KPI Filter State
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(initialSearchQuery || "");
   const [activeKpiFilter, setActiveKpiFilter] = useState("ALL"); // 'ALL' | 'CRITICAL' | 'STOCK' | 'RX' | 'SECURITY'
+
+  useEffect(() => {
+    if (initialSearchQuery) {
+      setSearchQuery(initialSearchQuery);
+    }
+  }, [initialSearchQuery]);
 
   // Audit Logs State
   const [logs, setLogs] = useState([]);
@@ -55,10 +62,16 @@ export default function AuditLogScreen({
             ? rawBranch
             : undefined;
         const res = await fetchAuditLogs({ branchId: branchParam, limit: 100 });
-        if (isMounted && res && res.data && Array.isArray(res.data)) {
-          const mapped = res.data.map((l) => ({
+        const rawLogs = Array.isArray(res?.data?.data)
+          ? res.data.data
+          : Array.isArray(res?.data)
+            ? res.data
+            : [];
+
+        if (isMounted) {
+          const mapped = rawLogs.map((l) => ({
             id: l.id || `LOG-${Math.random().toString(36).substr(2, 6)}`,
-            action: l.action || "SYSTEM_EVENT",
+            action: l.action || l.actionType || "SYSTEM_EVENT",
             actionLabel:
               l.actionLabel || l.action?.replace(/_/g, " ") || "System Event",
             actionType: l.actionType || l.entityType || "SYSTEM",
@@ -69,22 +82,36 @@ export default function AuditLogScreen({
                 : "Info"),
             entityRef:
               l.entityRef ||
-              (l.entityType ? `${l.entityType}: ${l.entityId || ""}` : ""),
-            timestamp: l.createdAt
+              l.metadata?.receiptNumber ||
+              l.metadata?.transferNumber ||
+              l.metadata?.invoiceNumber ||
+              (l.entityType ? `${l.entityType}: ${l.entityId || ""}` : "System Record"),
+            timestamp: l.timestamp || (l.createdAt
               ? new Date(l.createdAt).toLocaleString("en-IN")
-              : l.timestamp || "Recent",
+              : "Recent"),
             branch: l.branch || l.branchName || "Main Branch",
             ipAddress: l.ipAddress || "127.0.0.1",
+            device: l.device || "Web Browser",
             actor: {
-              name: l.userName || l.actor?.name || "Staff User",
-              role: l.userRole || l.actor?.role || "Staff",
+              name: l.actor?.name || l.userName || "Staff User",
+              role: l.actor?.role || l.userRole || "Staff",
+              email: l.actor?.email || l.userEmail || "",
+              avatarInitials:
+                l.actor?.avatarInitials ||
+                (l.userName
+                  ? l.userName
+                      .split(" ")
+                      .map((n) => n[0])
+                      .slice(0, 2)
+                      .join("")
+                      .toUpperCase()
+                  : "SU"),
             },
-            reason: l.metadata?.reason || l.reason || "",
+            reason: l.reason || l.metadata?.reason || "",
+            beforeAfterDiff: l.beforeAfterDiff || l.metadata?.diff || [],
             metadata: l.metadata || {},
           }));
           setLogs(mapped);
-        } else if (isMounted) {
-          setLogs([]);
         }
       } catch (err) {
         console.warn("[AuditLogScreen] Audit API error:", err.message);

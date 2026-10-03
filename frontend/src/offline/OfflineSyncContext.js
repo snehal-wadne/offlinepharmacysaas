@@ -78,6 +78,30 @@ export function OfflineSyncProvider({ children }) {
 
         const invRecords = await localPersistenceService.getRecentInvoices();
         setInvoices(invRecords);
+
+        // Seed inventory into IndexedDB from backend when online
+        if (typeof navigator === "undefined" || navigator.onLine) {
+          try {
+            const { fetchInventory } = await import("../api/inventoryApi");
+            const invRes = await fetchInventory({});
+            const items = Array.isArray(invRes?.data?.data)
+              ? invRes.data.data
+              : Array.isArray(invRes?.data)
+              ? invRes.data
+              : [];
+
+            if (items.length > 0 && !invRes.isOffline) {
+              const { seedInventoryFromServer } = await import("../offline/offlineInventoryService");
+              const orgId = typeof window !== "undefined"
+                ? window.localStorage?.getItem("organisationId")
+                : null;
+              await seedInventoryFromServer(items, orgId, null);
+              console.log("[OfflineSyncContext] Inventory cached to IndexedDB:", items.length, "items");
+            }
+          } catch (err) {
+            console.warn("[OfflineSyncContext] Inventory seeding skipped:", err.message);
+          }
+        }
       } catch (err) {
         console.warn(
           "[OfflineSyncContext] Local data load warning:",

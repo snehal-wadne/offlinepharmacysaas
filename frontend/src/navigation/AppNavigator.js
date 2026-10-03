@@ -344,12 +344,20 @@ export default function AppNavigator() {
           (user?.role || "").toLowerCase().includes("owner")
         );
 
-        if (user && user.hasBranch === false) {
+        const isSingleShopMode =
+          typeof window !== "undefined" &&
+          window.localStorage?.getItem("pharmacyMode") === "single";
+
+        if (user && user.hasBranch === false && !isSingleShopMode) {
           setCurrentRoute("branches");
           updateBrowserRoute("branches", true);
           setSelectedBranch(null);
         } else if (user) {
-          if (isAdmin) {
+          if (isSingleShopMode) {
+            setSelectedBranch(
+              user.branch || { id: user.branchId || "main", name: "Main Store" },
+            );
+          } else if (isAdmin) {
             // Admin can see all branches and defaults to "All Branches"
             setSelectedBranch(null);
           } else {
@@ -537,7 +545,14 @@ export default function AppNavigator() {
   }, []);
 
   // Pharmacy Architecture Mode: Multi-Branch (true) vs Single-Shop (false)
-  const [isMultiBranch, setIsMultiBranch] = useState(true);
+  const [isMultiBranch, setIsMultiBranch] = useState(() => {
+    if (typeof window !== "undefined") {
+      const mode = window.localStorage?.getItem("pharmacyMode");
+      if (mode === "single") return false;
+      if (mode === "multi") return true;
+    }
+    return true;
+  });
 
   const showToast = (msg) => {
     setToastMessage(msg);
@@ -580,7 +595,13 @@ export default function AppNavigator() {
       "expiry-reports",
     ];
 
+    const isSingleShopMode =
+      !isMultiBranch ||
+      (typeof window !== "undefined" &&
+        window.localStorage?.getItem("pharmacyMode") === "single");
+
     if (
+      !isSingleShopMode &&
       currentUser?.hasBranch === false &&
       (branchRequiredRoutes.includes(routeKey) || routeKey !== "branches")
     ) {
@@ -605,6 +626,9 @@ export default function AppNavigator() {
   const handleSetPharmacyMode = (multi) => {
     if (multi === isMultiBranch) return;
     setIsMultiBranch(multi);
+    if (typeof window !== "undefined") {
+      window.localStorage?.setItem("pharmacyMode", multi ? "multi" : "single");
+    }
     if (!multi && currentRoute === "stock-transfer") {
       setCurrentRoute("stock-adjustments");
       updateBrowserRoute("stock-adjustments", true);
@@ -866,6 +890,7 @@ export default function AppNavigator() {
       case "audit-log":
         return (
           <AuditLogScreen
+            initialSearchQuery={selectedCustomerId}
             onNavigate={handleNavigate}
             onShowToast={showToast}
             isMultiBranch={isMultiBranch}
@@ -1042,13 +1067,24 @@ export default function AppNavigator() {
             (user?.role || "").toLowerCase().includes("owner")
           );
 
+          const isSingleShopMode =
+            !isMultiBranch ||
+            (typeof window !== "undefined" &&
+              window.localStorage?.getItem("pharmacyMode") === "single");
+
           if (user?.role === "SUPPLIER") {
             setCurrentRoute("supplier-portal");
             setSelectedBranch(null);
-          } else if (user && user.hasBranch === false) {
+          } else if (user && user.hasBranch === false && !isSingleShopMode) {
             setCurrentRoute("branches");
             updateBrowserRoute("branches", true);
             setSelectedBranch(null);
+          } else if (isSingleShopMode) {
+            setSelectedBranch(
+              user?.branch || { id: user?.branchId || "main", name: "Main Store" },
+            );
+            setCurrentRoute("dashboard");
+            updateBrowserRoute("dashboard", true);
           } else if (isUserAdmin) {
             // Admin defaults to All Branches
             setSelectedBranch(null);
@@ -1087,8 +1123,13 @@ export default function AppNavigator() {
 
   // Auth Guard: ZERO-BRANCH ONBOARDING GUARD (Part 2 & Part 3)
   // When currentUser.hasBranch === false, DO NOT MOUNT PosProvider, OfflineSyncProvider, Sidebar, Header, or workspace!
-  // Render Branch Management ONLY.
-  if (currentUser && currentUser.hasBranch === false) {
+  // Render Branch Management ONLY for multi-branch mode. Single-shop users go straight to workspace.
+  const isSingleShopUser =
+    !isMultiBranch ||
+    (typeof window !== "undefined" &&
+      window.localStorage?.getItem("pharmacyMode") === "single");
+
+  if (currentUser && currentUser.hasBranch === false && !isSingleShopUser) {
     return (
       <View style={styles.appContainer}>
         <View style={styles.mainWrapper}>

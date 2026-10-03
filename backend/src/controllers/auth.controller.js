@@ -8,6 +8,8 @@
  */
 
 const authService = require("../services/auth.service");
+const auditService = require("../services/audit.service");
+
 
 const login = async (req, res) => {
   try {
@@ -166,6 +168,24 @@ const createStaffUser = async (req, res) => {
       organisationId,
       ...req.body,
     });
+
+    // Record audit event
+    auditService.log({
+      organisationId,
+      userId: req.user?.id || null,
+      action: "USER_INVITE",
+      entityType: "USER",
+      entityId: result?.data?.id || req.body?.email,
+      metadata: {
+        userName: result?.data?.name || req.body?.name,
+        userEmail: req.body?.email,
+        role: req.body?.roleName || req.body?.role,
+        reason: `Staff member ${req.body?.name || req.body?.email} invited/created.`,
+      },
+      ipAddress: req.ip,
+      userAgent: req.headers["user-agent"],
+    }).catch(() => {});
+
     res.status(201).json(result);
   } catch (error) {
     res.status(error.statusCode || 400).json({ success: false, error: error.message });
@@ -183,6 +203,23 @@ const updateStaffUser = async (req, res) => {
       req.params.id,
       req.body,
     );
+
+    // Record audit event
+    auditService.log({
+      organisationId,
+      userId: req.user?.id || null,
+      action: "USER_UPDATE",
+      entityType: "USER",
+      entityId: req.params.id,
+      metadata: {
+        userName: req.body?.name || req.params.id,
+        updatedFields: Object.keys(req.body),
+        reason: `Staff profile updated for ${req.body?.name || req.params.id}.`,
+      },
+      ipAddress: req.ip,
+      userAgent: req.headers["user-agent"],
+    }).catch(() => {});
+
     res.status(200).json(result);
   } catch (error) {
     res.status(error.statusCode || 400).json({ success: false, error: error.message });
@@ -200,11 +237,29 @@ const updateStaffStatus = async (req, res) => {
       req.params.id,
       req.body?.status,
     );
+
+    // Record audit event
+    const newStatus = req.body?.status;
+    auditService.log({
+      organisationId,
+      userId: req.user?.id || null,
+      action: newStatus === "ACTIVE" ? "USER_ACTIVATE" : "USER_DEACTIVATE",
+      entityType: "USER",
+      entityId: req.params.id,
+      metadata: {
+        status: newStatus,
+        reason: `Staff user ID ${req.params.id} marked as ${newStatus}.`,
+      },
+      ipAddress: req.ip,
+      userAgent: req.headers["user-agent"],
+    }).catch(() => {});
+
     res.status(200).json(result);
   } catch (error) {
     res.status(error.statusCode || 400).json({ success: false, error: error.message });
   }
 };
+
 
 module.exports = {
   getMe,

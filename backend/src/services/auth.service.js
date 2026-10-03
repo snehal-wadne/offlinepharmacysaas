@@ -46,9 +46,6 @@ class AuthService {
         u.staff_id AS "staffId",
         u.status, 
         u.password_hash,
-        u.supabase_auth_id,
-        u.role AS user_role,
-        u.supplier_id,
         om.organisation_id,
         ba.branch_id,
         r.name AS role_name,
@@ -59,15 +56,11 @@ class AuthService {
       LEFT JOIN organisations o ON o.id = om.organisation_id AND o.status = 'ACTIVE'
       LEFT JOIN branch_assignments ba ON ba.membership_id = om.id
       LEFT JOIN roles r ON r.id = ba.role_id
-      LEFT JOIN suppliers s ON s.id = u.supplier_id
       WHERE (
         LOWER(u.email) = $1 
         OR u.phone = $1 
         OR LOWER(u.staff_id) = $1
         OR LOWER(u.name) = $1
-        OR LOWER(COALESCE(s.name, '')) = $1
-        OR LOWER(COALESCE(s.name, '')) LIKE '%' || $1 || '%'
-        OR (s.phone IS NOT NULL AND (s.phone = $1 OR REPLACE(REPLACE(s.phone, ' ', ''), '-', '') = REPLACE(REPLACE($1, ' ', ''), '-', '')))
         OR (u.phone IS NOT NULL AND REPLACE(REPLACE(u.phone, ' ', ''), '-', '') = REPLACE(REPLACE($1, ' ', ''), '-', ''))
       )
         AND u.status = 'ACTIVE'
@@ -75,8 +68,7 @@ class AuthService {
         CASE 
           WHEN LOWER(u.email) = $1 THEN 0
           WHEN u.phone = $1 THEN 1
-          WHEN LOWER(COALESCE(s.name, '')) = $1 THEN 2
-          ELSE 3
+          ELSE 2
         END
       LIMIT 1;
     `;
@@ -85,7 +77,9 @@ class AuthService {
     const user = res.rows[0];
 
     if (!user) {
-      throw new Error("Invalid email, phone number, or password.");
+      throw new Error(
+        "Invalid email or password. Please check your credentials.",
+      );
     }
 
     // 2. Validate password
@@ -120,7 +114,9 @@ class AuthService {
     }
 
     if (!authenticated) {
-      throw new Error("Invalid credentials.");
+      throw new Error(
+        "Invalid email or password. Please check your credentials.",
+      );
     }
 
     // Ensure user has supabase_auth_id linked
@@ -136,13 +132,13 @@ class AuthService {
     }
 
     // 3. Check for Supplier identity
-    const isSupplier = user.user_role === "SUPPLIER" || Boolean(user.supplier_id);
+    const isSupplier = (user.role_identifier || user.role_name || "").toUpperCase() === "SUPPLIER";
     let supplierDetails = null;
 
     if (isSupplier) {
       const sRes = await pool.query(
-        "SELECT id, name, contact_person, phone, email, city, gstin, category, organisation_id FROM suppliers WHERE id = $1 OR LOWER(email) = $2 LIMIT 1;",
-        [user.supplier_id || "00000000-0000-0000-0000-000000000000", user.email],
+        "SELECT id, name, contact_person, phone, email, city, gstin, category, organisation_id FROM suppliers WHERE LOWER(email) = $1 LIMIT 1;",
+        [user.email],
       );
       if (sRes.rows.length > 0) {
         supplierDetails = sRes.rows[0];
