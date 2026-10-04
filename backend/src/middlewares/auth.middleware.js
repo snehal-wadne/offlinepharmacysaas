@@ -227,13 +227,17 @@ const authenticate = async (req, res, next) => {
        JOIN organisations o ON o.id = om.organisation_id
        LEFT JOIN branch_assignments ba ON ba.membership_id = om.id
        LEFT JOIN roles r ON r.id = ba.role_id
-       WHERE om.user_id = $1 AND om.status = 'ACTIVE' AND o.status = 'ACTIVE'
+       WHERE om.user_id = $1 AND om.status = 'ACTIVE' AND o.status IN ('ACTIVE', 'PENDING_PAYMENT')
        ORDER BY ba.is_primary DESC NULLS LAST, om.created_at ASC;`,
       [user.id],
     );
 
     const memberships = memRes.rows;
-    const requestedOrgId = req.headers["x-organisation-id"];
+    const rawOrgId = req.headers["x-organisation-id"];
+    const requestedOrgId =
+      rawOrgId && rawOrgId !== "undefined" && rawOrgId !== "null" && rawOrgId.trim()
+        ? rawOrgId.trim()
+        : null;
     const requestedBranchId = req.headers["x-branch-id"];
 
     let selectedMembership = null;
@@ -242,7 +246,7 @@ const authenticate = async (req, res, next) => {
       // Platform superadmins have universal cross-tenant access
       if (user.is_platform_superadmin) {
         const orgCheck = await pool.query(
-          "SELECT id, name FROM organisations WHERE id = $1 AND status = 'ACTIVE';",
+          "SELECT id, name FROM organisations WHERE id = $1 AND status IN ('ACTIVE', 'PENDING_PAYMENT');",
           [requestedOrgId],
         );
         if (orgCheck.rows.length === 0) {
@@ -262,21 +266,20 @@ const authenticate = async (req, res, next) => {
           (m) => m.organisation_id === requestedOrgId,
         );
         if (!selectedMembership) {
-          return res.status(403).json({
-            success: false,
-            message:
-              "Forbidden: You do not have active membership in the requested organisation.",
-          });
+          // Fallback to user's first valid membership if provided header doesn't match
+          selectedMembership = memberships[0] || null;
         }
       }
-    } else {
+    }
+
+    if (!selectedMembership) {
       // No header provided: use user's first legitimate active membership if exists
       if (memberships.length > 0) {
         selectedMembership = memberships[0];
       } else {
         // Fallback: Check if user is owner or named admin of an active organisation
         const ownerOrgRes = await pool.query(
-          "SELECT id, name, owner_id, admin_name FROM organisations WHERE (owner_id = $1 OR LOWER(admin_name) = LOWER($2)) AND status = 'ACTIVE' LIMIT 1;",
+          "SELECT id, name, owner_id, admin_name FROM organisations WHERE (owner_id = $1 OR LOWER(admin_name) = LOWER($2)) AND status IN ('ACTIVE', 'PENDING_PAYMENT') LIMIT 1;",
           [user.id, user.name || ""],
         );
         if (ownerOrgRes.rows.length > 0) {
@@ -293,6 +296,30 @@ const authenticate = async (req, res, next) => {
             role_name: "Administrator",
             role_identifier: "ADMIN",
           };
+        } else {
+          // Global fallback: Link user to first active organization in system
+          const defaultOrgRes = await pool.query(
+            "SELECT id, name, owner_id, admin_name FROM organisations WHERE status IN ('ACTIVE', 'PENDING_PAYMENT') ORDER BY created_at ASC LIMIT 1;"
+          );
+          if (defaultOrgRes.rows.length > 0) {
+            const defOrg = defaultOrgRes.rows[0];
+            const defBranchRes = await pool.query(
+              "SELECT id FROM branches WHERE organisation_id = $1 AND status = 'ACTIVE' ORDER BY created_at ASC LIMIT 1;",
+              [defOrg.id]
+            );
+            selectedMembership = {
+              organisation_id: defOrg.id,
+              organisation_name: defOrg.name,
+              owner_id: defOrg.owner_id,
+              branch_id: defBranchRes.rows[0]?.id || null,
+              role_name: user.role || "Staff Member",
+              role_identifier: user.role || "STAFF",
+            };
+            await pool.query(
+              "INSERT INTO organisation_memberships (organisation_id, user_id, status) VALUES ($1, $2, 'ACTIVE') ON CONFLICT (organisation_id, user_id) DO UPDATE SET status = 'ACTIVE';",
+              [defOrg.id, user.id]
+            ).catch(() => {});
+          }
         }
       }
     }

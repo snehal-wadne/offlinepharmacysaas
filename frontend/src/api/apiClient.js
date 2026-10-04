@@ -43,15 +43,19 @@ const DEFAULT_TIMEOUT = 15000; // 15 seconds
 
 export async function getAuthHeaders() {
   try {
-    const token =
-      (await getAccessToken()) ||
-      getStorageItem("authToken") ||
-      getStorageItem("superadminToken");
+    const localToken = getStorageItem("authToken");
+    const superToken = getStorageItem("superadminToken");
+    const supaToken = await getAccessToken().catch(() => null);
+    const token = localToken || supaToken || superToken;
     const orgId = getStorageItem("organisationId");
+    const validOrgId =
+      orgId && orgId !== "undefined" && orgId !== "null" && orgId.trim()
+        ? orgId.trim()
+        : null;
     return {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(orgId ? { "x-organisation-id": orgId } : {}),
+      ...(validOrgId ? { "x-organisation-id": validOrgId } : {}),
     };
   } catch {
     return { "Content-Type": "application/json" };
@@ -76,11 +80,9 @@ export async function apiRequest(endpoint, options = {}, isRetry = false) {
     clearTimeout(timeoutId);
 
     if (response.status === 401 && !isRetry) {
-      const refreshedToken = await refreshSession();
+      const refreshedToken = await refreshSession().catch(() => null);
       if (refreshedToken) {
         return apiRequest(endpoint, options, true);
-      } else {
-        await clearAuthSession();
       }
     }
 

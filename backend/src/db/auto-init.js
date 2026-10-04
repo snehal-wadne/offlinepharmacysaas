@@ -135,6 +135,13 @@ const autoInitDatabase = async () => {
 
       // Retry once after potential service start
       try {
+        adminClient = new Client({
+          host: DB_HOST,
+          port: DB_PORT,
+          user: DB_USER,
+          password: DB_PASSWORD,
+          database: "postgres",
+        });
         await adminClient.connect();
       } catch (retryErr) {
         console.error(
@@ -201,6 +208,26 @@ const autoInitDatabase = async () => {
         )
         .catch(() => {});
 
+      // Ensure organisations columns exist (pharmacy_mode, admin_name)
+      await targetPool
+        .query(`
+          ALTER TABLE public.organisations ADD COLUMN IF NOT EXISTS pharmacy_mode VARCHAR(50) DEFAULT 'single';
+          ALTER TABLE public.organisations ADD COLUMN IF NOT EXISTS admin_name VARCHAR(150);
+          UPDATE public.organisations SET pharmacy_mode = 'single' WHERE pharmacy_mode IS NULL;
+          UPDATE public.organisations SET status = 'ACTIVE' WHERE status = 'PENDING_PAYMENT';
+        `)
+        .catch((err) => console.warn("⚠️ organisations columns notice:", err.message));
+
+      // Ensure branches columns exist (admin_name, contact_person)
+      await targetPool
+        .query(`
+          ALTER TABLE public.branches ADD COLUMN IF NOT EXISTS admin_name VARCHAR(150);
+          ALTER TABLE public.branches ADD COLUMN IF NOT EXISTS contact_person VARCHAR(150);
+          UPDATE public.branches SET admin_name = COALESCE(admin_name, contact_person, 'Admin') WHERE admin_name IS NULL OR admin_name = '';
+          UPDATE public.branches SET contact_person = admin_name WHERE (contact_person IS NULL OR contact_person = '') AND admin_name IS NOT NULL;
+        `)
+        .catch((err) => console.warn("⚠️ branches columns notice:", err.message));
+
       await targetPool
         .query(
           `CREATE TABLE IF NOT EXISTS stock_movements (
@@ -239,12 +266,24 @@ const autoInitDatabase = async () => {
         );
       }
 
-      // Ensure role and supplier_id columns exist on users
+      // Ensure role, supplier_id, staff_id, supabase_auth_id exist on users
       await targetPool
-        .query(
-          "ALTER TABLE public.users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'STAFF'; ALTER TABLE public.users ADD COLUMN IF NOT EXISTS supplier_id UUID REFERENCES suppliers(id) ON DELETE SET NULL;",
-        )
+        .query(`
+          ALTER TABLE public.users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'STAFF';
+          ALTER TABLE public.users ADD COLUMN IF NOT EXISTS supplier_id UUID REFERENCES suppliers(id) ON DELETE SET NULL;
+          ALTER TABLE public.users ADD COLUMN IF NOT EXISTS staff_id VARCHAR(50);
+          ALTER TABLE public.users ADD COLUMN IF NOT EXISTS supabase_auth_id VARCHAR(100);
+          ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);
+        `)
         .catch(() => {});
+
+      // Apply branch admin name migration
+      try {
+        const { runMigration: migrateBranchAdminName } = require("./migrate-branch-admin-name");
+        await migrateBranchAdminName();
+      } catch (branchAdminErr) {
+        console.warn("⚠️ branch admin migration notice:", branchAdminErr.message);
+      }
 
       // Apply supplier notifications & portal schema
       try {

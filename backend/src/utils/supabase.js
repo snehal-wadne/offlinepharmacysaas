@@ -193,7 +193,7 @@ function createSupabaseTestToken({
   userId,
   email,
   role = "authenticated",
-  expiresIn = "1h",
+  expiresIn = "30d",
 }) {
   const resolvedSub = sub || userId;
   const payload = {

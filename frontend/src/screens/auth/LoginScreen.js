@@ -291,6 +291,9 @@ export default function LoginScreen({
       if (authUser) {
         if (typeof window !== "undefined") {
           window.localStorage?.setItem("authToken", token);
+          if (authUser.organisationId) {
+            window.localStorage?.setItem("organisationId", authUser.organisationId);
+          }
           if (rememberMe) {
             window.localStorage?.setItem("lastLoginEmail", email);
           }
@@ -638,6 +641,9 @@ export default function LoginScreen({
         if (data.token) {
           window.localStorage?.setItem("authToken", data.token);
         }
+        if (data.user?.organisationId) {
+          window.localStorage?.setItem("organisationId", data.user.organisationId);
+        }
         window.localStorage?.setItem("lastLoginEmail", email);
       }
 
@@ -722,6 +728,9 @@ export default function LoginScreen({
       if (typeof window !== "undefined") {
         if (data.token) {
           window.localStorage?.setItem("authToken", data.token);
+        }
+        if (data.user?.organisationId) {
+          window.localStorage?.setItem("organisationId", data.user.organisationId);
         }
         window.localStorage?.setItem("lastLoginEmail", email);
       }

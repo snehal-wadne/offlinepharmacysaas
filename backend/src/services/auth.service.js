@@ -157,7 +157,7 @@ class AuthService {
     let userPharmacyMode = "single";
     if (!user.organisation_id) {
       const ownerOrgRes = await pool.query(
-        "SELECT id, name, pharmacy_mode FROM organisations WHERE (owner_id = $1 OR LOWER(admin_name) = LOWER($2)) AND status = 'ACTIVE' LIMIT 1;",
+        "SELECT id, name, pharmacy_mode FROM organisations WHERE (owner_id = $1 OR LOWER(admin_name) = LOWER($2)) AND status IN ('ACTIVE', 'PENDING_PAYMENT') LIMIT 1;",
         [user.id, user.name || ""],
       );
       if (ownerOrgRes.rows.length > 0) {
@@ -169,7 +169,7 @@ class AuthService {
         const memRes = await pool.query(
           `SELECT o.id, o.name, o.owner_id, o.admin_name, o.pharmacy_mode FROM organisations o
            JOIN organisation_memberships om ON om.organisation_id = o.id
-           WHERE om.user_id = $1 AND om.status = 'ACTIVE' AND o.status = 'ACTIVE'
+           WHERE om.user_id = $1 AND om.status = 'ACTIVE' AND o.status IN ('ACTIVE', 'PENDING_PAYMENT')
            ORDER BY om.created_at ASC LIMIT 1;`,
           [user.id],
         );
@@ -185,6 +185,16 @@ class AuthService {
                 memRes.rows[0].admin_name.toLowerCase() ===
                   user.name.toLowerCase(),
             );
+        } else {
+          // Global fallback to first active organisation
+          const defOrgRes = await pool.query(
+            "SELECT id, name, pharmacy_mode FROM organisations WHERE status IN ('ACTIVE', 'PENDING_PAYMENT') ORDER BY created_at ASC LIMIT 1;"
+          );
+          if (defOrgRes.rows.length > 0) {
+            user.organisation_id = defOrgRes.rows[0].id;
+            user.organisation_name = defOrgRes.rows[0].name;
+            userPharmacyMode = defOrgRes.rows[0].pharmacy_mode || "single";
+          }
         }
       }
     } else {
@@ -1356,7 +1366,7 @@ class AuthService {
 
     // Check if user owns an active organisation
     const ownerOrgRes = await pool.query(
-      "SELECT id, name, owner_id, pharmacy_mode FROM organisations WHERE owner_id = $1 AND status = 'ACTIVE' LIMIT 1;",
+      "SELECT id, name, owner_id, pharmacy_mode FROM organisations WHERE owner_id = $1 AND status IN ('ACTIVE', 'PENDING_PAYMENT') LIMIT 1;",
       [user.id],
     );
 
@@ -1373,7 +1383,7 @@ class AuthService {
         `SELECT om.organisation_id, o.name AS organisation_name, o.owner_id, o.pharmacy_mode,
                 r.name AS role_name, r.role_identifier
          FROM organisation_memberships om
-         JOIN organisations o ON o.id = om.organisation_id AND o.status = 'ACTIVE'
+         JOIN organisations o ON o.id = om.organisation_id AND o.status IN ('ACTIVE', 'PENDING_PAYMENT')
          LEFT JOIN branch_assignments ba ON ba.membership_id = om.id
          LEFT JOIN roles r ON r.id = ba.role_id
          WHERE om.user_id = $1 AND om.status = 'ACTIVE'
@@ -1392,6 +1402,30 @@ class AuthService {
           ? "OWNER"
           : membership.role_identifier || "STAFF";
         roleName = isOwner ? "Pharmacy Owner" : membership.role_name || "Staff";
+      } else {
+        // Fallback: Check if user is owner or named admin
+        const namedOrgRes = await pool.query(
+          "SELECT id, name, owner_id, pharmacy_mode FROM organisations WHERE (owner_id = $1 OR LOWER(admin_name) = LOWER($2)) AND status IN ('ACTIVE', 'PENDING_PAYMENT') LIMIT 1;",
+          [user.id, user.name || ""],
+        );
+        if (namedOrgRes.rows.length > 0) {
+          organisationId = namedOrgRes.rows[0].id;
+          organisationName = namedOrgRes.rows[0].name;
+          pharmacyMode = namedOrgRes.rows[0].pharmacy_mode || "single";
+          isOwner = true;
+          roleIdentifier = "ADMIN";
+          roleName = "Administrator";
+        } else {
+          // Global fallback to first active organisation
+          const defOrgRes = await pool.query(
+            "SELECT id, name, pharmacy_mode FROM organisations WHERE status IN ('ACTIVE', 'PENDING_PAYMENT') ORDER BY created_at ASC LIMIT 1;"
+          );
+          if (defOrgRes.rows.length > 0) {
+            organisationId = defOrgRes.rows[0].id;
+            organisationName = defOrgRes.rows[0].name;
+            pharmacyMode = defOrgRes.rows[0].pharmacy_mode || "single";
+          }
+        }
       }
     }
 

@@ -68,10 +68,17 @@ async function runMigration() {
     throw err;
   } finally {
     client.release();
-    await pool.end();
   }
 }
 
-runMigration()
-  .then(() => process.exit(0))
-  .catch(() => process.exit(1));
+if (require.main === module) {
+  runMigration()
+    .then(() => pool.end())
+    .then(() => process.exit(0))
+    .catch((err) => {
+      console.error(err);
+      process.exit(1);
+    });
+}
+
+module.exports = { runMigration };

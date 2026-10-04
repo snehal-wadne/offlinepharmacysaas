@@ -78,7 +78,8 @@ CREATE TABLE IF NOT EXISTS organisations (
     pincode VARCHAR(20),
     gst_number VARCHAR(50),
     business_type VARCHAR(100) DEFAULT 'Private Limited',
-    status VARCHAR(30) NOT NULL DEFAULT 'PENDING_PAYMENT',
+    pharmacy_mode VARCHAR(50) DEFAULT 'single',
+    status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT organisations_status_check CHECK (
@@ -269,6 +270,7 @@ CREATE TABLE IF NOT EXISTS branches (
     branch_code VARCHAR(50),
     name VARCHAR(150) NOT NULL,
     facility_type VARCHAR(50) NOT NULL DEFAULT 'RETAIL_DISPENSARY',
+    admin_name VARCHAR(150),
     contact_person VARCHAR(150),
     contact_phone VARCHAR(50),
     contact_email VARCHAR(255),

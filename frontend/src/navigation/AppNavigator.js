@@ -1141,12 +1141,18 @@ export default function AppNavigator() {
             }
             return;
           }
-          setAuthSession({ organisationId: user?.organisationId });
+          const activeToken = token || user?.token;
+          setAuthSession({ organisationId: user?.organisationId, token: activeToken });
+          if (typeof window !== "undefined") {
+            if (activeToken) window.localStorage?.setItem("authToken", activeToken);
+            if (user?.organisationId) window.localStorage?.setItem("organisationId", user.organisationId);
+          }
           setCurrentUser(
-            user ? { ...user, token: token || user?.token } : null,
+            user ? { ...user, token: activeToken } : null,
           );
           setGoogleOnboardingData(null);
           setAuthError("");
+          setAuthStatus("AUTHENTICATED");
           const userMode =
             user?.pharmacyMode ||
             (typeof window !== "undefined"
@@ -1188,6 +1194,8 @@ export default function AppNavigator() {
           } else if (isUserAdmin) {
             // Admin defaults to All Branches
             setSelectedBranch(null);
+            setCurrentRoute("dashboard");
+            updateBrowserRoute("dashboard", true);
           } else {
             // Non-admin branch staff member: Pin strictly to assigned branch!
             const assignedBranch =
@@ -1202,6 +1210,8 @@ export default function AppNavigator() {
             if (assignedBranch && typeof syncEngine?.setActiveBranch === "function") {
               syncEngine.setActiveBranch(assignedBranch.id || assignedBranch.name);
             }
+            setCurrentRoute("dashboard");
+            updateBrowserRoute("dashboard", true);
           }
           showToast(`Welcome back, ${user.display_name || user.name}!`);
         }}
