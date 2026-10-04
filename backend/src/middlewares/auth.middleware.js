@@ -41,7 +41,7 @@ const authenticate = async (req, res, next) => {
 
         const userRes = await pool.query(
           `SELECT id, name, email, phone, staff_id AS "staffId", status, 
-                  is_platform_superadmin
+                  is_platform_superadmin, role, supplier_id
            FROM users
            WHERE LOWER(email) = LOWER($1)
              AND status = 'ACTIVE'
@@ -130,7 +130,7 @@ const authenticate = async (req, res, next) => {
         if (legacyDecoded && legacyDecoded.userId) {
           const userRes = await pool.query(
             `SELECT id, name, email, phone, staff_id AS "staffId", status, 
-                    is_platform_superadmin
+                    is_platform_superadmin, role, supplier_id
              FROM users
              WHERE id = $1 AND status = 'ACTIVE'
              LIMIT 1;`,
@@ -274,24 +274,24 @@ const authenticate = async (req, res, next) => {
       if (memberships.length > 0) {
         selectedMembership = memberships[0];
       } else {
-        // Fallback: Check if user is owner of an active organisation
+        // Fallback: Check if user is owner or named admin of an active organisation
         const ownerOrgRes = await pool.query(
-          "SELECT id, name, owner_id FROM organisations WHERE owner_id = $1 AND status = 'ACTIVE' LIMIT 1;",
-          [user.id]
+          "SELECT id, name, owner_id, admin_name FROM organisations WHERE (owner_id = $1 OR LOWER(admin_name) = LOWER($2)) AND status = 'ACTIVE' LIMIT 1;",
+          [user.id, user.name || ""],
         );
         if (ownerOrgRes.rows.length > 0) {
           const ownerOrg = ownerOrgRes.rows[0];
           const defaultBranchRes = await pool.query(
             "SELECT id FROM branches WHERE organisation_id = $1 AND status = 'ACTIVE' ORDER BY created_at ASC LIMIT 1;",
-            [ownerOrg.id]
+            [ownerOrg.id],
           );
           selectedMembership = {
             organisation_id: ownerOrg.id,
             organisation_name: ownerOrg.name,
             owner_id: ownerOrg.owner_id,
             branch_id: defaultBranchRes.rows[0]?.id || null,
-            role_name: "Owner",
-            role_identifier: "OWNER",
+            role_name: "Administrator",
+            role_identifier: "ADMIN",
           };
         }
       }
@@ -346,21 +346,50 @@ const authenticate = async (req, res, next) => {
       }
     }
 
-    const isOwner = selectedMembership?.owner_id === user.id;
+    let orgAdminMatches = false;
+    if (selectedMembership?.organisation_id && user.name) {
+      const orgCheck = await pool.query(
+        "SELECT 1 FROM organisations WHERE id = $1 AND (owner_id = $2 OR LOWER(admin_name) = LOWER($3)) LIMIT 1;",
+        [selectedMembership.organisation_id, user.id, user.name],
+      );
+      if (orgCheck.rows.length > 0) {
+        orgAdminMatches = true;
+      }
+    }
+
+    const isOwner = Boolean(
+      selectedMembership?.owner_id === user.id ||
+        orgAdminMatches ||
+        (user.role && user.role.toUpperCase() === "OWNER"),
+    );
+    const isAdmin = Boolean(
+      isOwner ||
+        user.is_platform_superadmin ||
+        (user.role && user.role.toUpperCase() === "ADMIN") ||
+        (selectedMembership?.role_identifier &&
+          selectedMembership.role_identifier.toUpperCase() === "ADMIN"),
+    );
 
     req.user = {
       id: user.id,
       supabaseAuthId: user.supabase_auth_id || null,
       name: user.name,
+      adminName: user.name,
       email: user.email,
       phone: user.phone,
       staffId: user.staffId,
       isPlatformSuperadmin: Boolean(user.is_platform_superadmin),
+      isOwner: isOwner,
       role: isOwner
         ? "OWNER"
-        : selectedMembership?.role_identifier ||
-          selectedMembership?.role_name ||
-          "STAFF",
+        : isAdmin
+        ? "ADMIN"
+        : selectedMembership?.role_identifier || user.role || "STAFF",
+      roleName: isOwner
+        ? "Pharmacy Owner"
+        : isAdmin
+        ? "Administrator"
+        : selectedMembership?.role_name || "Staff Member",
       roleId: selectedMembership?.role_id || null,
       organisationId: selectedMembership?.organisation_id || null,
       branchId: resolvedBranchId,

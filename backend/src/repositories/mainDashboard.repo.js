@@ -52,6 +52,8 @@ const PENDING_PO_LIMIT = 5;
 // GET MAIN DASHBOARD
 // ============================================================
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const getMainDashboard = async ({
   organisationId,
   branchId = null,
@@ -59,6 +61,9 @@ const getMainDashboard = async ({
   if (!organisationId) {
     throw new Error("organisationId is required");
   }
+
+  const safeBranchId =
+    branchId && UUID_REGEX.test(branchId) ? branchId : null;
 
   const query = `
     WITH
@@ -74,7 +79,6 @@ const getMainDashboard = async ({
         b.branch_code
       FROM branches b
       WHERE b.organisation_id = $1
-        AND b.status = 'ACTIVE'
         AND (
           $2::uuid IS NULL
           OR b.id = $2::uuid
@@ -85,20 +89,14 @@ const getMainDashboard = async ({
     /* ========================================================
        INVENTORY AGGREGATION
        
-       inventory_batches contains:
-       - product
-       - branch
-       - batch
-       - expiry
-       - quantity
-       
-       We first aggregate stock per product.
+       We aggregate stock per product using LEFT JOIN so all
+       organisation products are counted.
        ======================================================== */
 
     product_inventory AS (
       SELECT
         p.id AS product_id,
-        p.category,
+        COALESCE(NULLIF(TRIM(p.category), ''), 'General') AS category,
         p.medicine_name,
         p.brand_name,
 
@@ -110,14 +108,14 @@ const getMainDashboard = async ({
 
       FROM products p
 
-      INNER JOIN inventory_batches ib
-        ON ib.product_id = p.id
-
-      INNER JOIN selected_branches sb
-        ON sb.id = ib.branch_id
+      LEFT JOIN (
+        inventory_batches ib
+        INNER JOIN selected_branches sb
+          ON sb.id = ib.branch_id
+      ) ON ib.product_id = p.id
 
       WHERE p.organisation_id = $1
-        AND p.is_active = TRUE
+        AND (p.is_active IS NULL OR p.is_active = TRUE)
 
       GROUP BY
         p.id,
@@ -221,10 +219,10 @@ const getMainDashboard = async ({
 
       FROM purchases p
 
-      INNER JOIN branches b
+      LEFT JOIN branches b
         ON b.id = p.branch_id
 
-      INNER JOIN suppliers s
+      LEFT JOIN suppliers s
         ON s.id = p.supplier_id
 
       LEFT JOIN purchase_items pi
@@ -307,7 +305,7 @@ const getMainDashboard = async ({
       INNER JOIN invoices i
         ON i.id = ii.invoice_id
 
-      INNER JOIN branches b
+      LEFT JOIN branches b
         ON b.id = i.branch_id
 
       WHERE i.organisation_id = $1
@@ -371,7 +369,7 @@ const getMainDashboard = async ({
       INNER JOIN products p
         ON p.id = ib.product_id
 
-      INNER JOIN branches from_branch
+      LEFT JOIN branches from_branch
         ON from_branch.id = st.from_branch_id
 
       WHERE st.organisation_id = $1
@@ -486,7 +484,7 @@ const getMainDashboard = async ({
 
   const result = await pool.query(query, [
     organisationId,
-    branchId || null,
+    safeBranchId,
   ]);
 
   if (!result.rows.length) {

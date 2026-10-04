@@ -40,15 +40,18 @@ const getMainDashboard = async (req, res, next) => {
     // Branch filter
     // ----------------------------------------------------------
 
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     let branchId = req.query?.branchId || null;
 
     // Frontend may send:
     // ?branchId=all
     // ?branchId=ALL
+    // ?branchId=main
     // ?branchId=
     if (
       !branchId ||
-      branchId.toLowerCase?.() === "all"
+      branchId.toLowerCase?.() === "all" ||
+      !UUID_REGEX.test(branchId)
     ) {
       branchId = null;
     }

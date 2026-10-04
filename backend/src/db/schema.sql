@@ -38,6 +38,8 @@ last_login_at TIMESTAMPTZ,
 supabase_auth_id UUID UNIQUE,
 -- Platform Superadmin flag. Only platform Superadmins have TRUE.
 is_platform_superadmin BOOLEAN NOT NULL DEFAULT FALSE,
+role VARCHAR(50) DEFAULT 'STAFF',
+supplier_id UUID,
 created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 

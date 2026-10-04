@@ -279,12 +279,16 @@ export default function AppNavigator() {
     }
 
     let authIntent = null;
+    let urlPharmacyMode = null;
     if (typeof window !== "undefined") {
       try {
         const urlParams = new URLSearchParams(window.location.search);
         authIntent =
           urlParams.get("auth_intent") ||
           window.sessionStorage?.getItem("pharmaflow_auth_intent");
+        urlPharmacyMode =
+          urlParams.get("pharmacy_mode") ||
+          window.sessionStorage?.getItem("pharmaflow_pharmacy_mode");
       } catch (e) {}
     }
 
@@ -326,6 +330,19 @@ export default function AppNavigator() {
         setAuthError("");
         setAuthSession({ organisationId: user?.organisationId });
 
+        // Synchronize pharmacyMode authoritatively from user/org record
+        const userMode =
+          user?.pharmacyMode ||
+          (typeof window !== "undefined"
+            ? window.localStorage?.getItem("pharmacyMode")
+            : null) ||
+          "single";
+        const isMulti = userMode === "multi";
+        setIsMultiBranch(isMulti);
+        if (typeof window !== "undefined") {
+          window.localStorage?.setItem("pharmacyMode", isMulti ? "multi" : "single");
+        }
+
         if (user?.role === "SUPPLIER") {
           setCurrentRoute("supplier-portal");
           setSelectedBranch(null);
@@ -344,18 +361,15 @@ export default function AppNavigator() {
           (user?.role || "").toLowerCase().includes("owner")
         );
 
-        const isSingleShopMode =
-          typeof window !== "undefined" &&
-          window.localStorage?.getItem("pharmacyMode") === "single";
-
-        if (user && user.hasBranch === false && !isSingleShopMode) {
+        if (user && user.hasBranch === false && isMulti) {
           setCurrentRoute("branches");
           updateBrowserRoute("branches", true);
           setSelectedBranch(null);
         } else if (user) {
-          if (isSingleShopMode) {
+          if (!isMulti) {
+            // Single store: pin directly to their store
             setSelectedBranch(
-              user.branch || { id: user.branchId || "main", name: "Main Store" },
+              user.branch || (user.branchId ? { id: user.branchId, name: user.branchName || "Main Store" } : { id: "main", name: user.organisationName || "Main Store" }),
             );
           } else if (isAdmin) {
             // Admin can see all branches and defaults to "All Branches"
@@ -395,22 +409,95 @@ export default function AppNavigator() {
         return;
       }
 
-      // If user not found in PostgreSQL (401 / 404)
+      // If user not found in PostgreSQL (401 / 404):
+      // Automatically onboard them immediately using Google OAuth profile and redirect straight to dashboard!
+      const gName =
+        session.user?.user_metadata?.full_name ||
+        session.user?.user_metadata?.name ||
+        "Pharmacy Owner";
+      const gEmail = session.user?.email || "";
+      let chosenMode = "single";
+      let chosenPharmacyName = "";
+      if (typeof window !== "undefined") {
+        chosenMode =
+          urlPharmacyMode ||
+          window.sessionStorage?.getItem("pharmaflow_pharmacy_mode") ||
+          window.localStorage?.getItem("pharmacyMode") ||
+          "single";
+        chosenPharmacyName =
+          window.sessionStorage?.getItem("pharmaflow_pharmacy_name") || "";
+      }
+
+      try {
+        const onboardRes = await fetch(`${API_URL}/api/auth/google-onboard`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            token: session.access_token,
+            adminName: gName,
+            name: gName,
+            email: gEmail,
+            pharmacyName: chosenPharmacyName || `${gName}'s Pharmacy`,
+            pharmacyMode: chosenMode,
+            branchName: chosenMode === "multi" ? "Main Branch" : "Main Store",
+            createInitialBranch: true,
+          }),
+        });
+
+        const obData = await onboardRes.json().catch(() => ({}));
+        if (onboardRes.ok && obData.success && obData.user) {
+          const newUser = obData.user;
+          const userWithToken = { ...newUser, token: session.access_token };
+          setCurrentUser(userWithToken);
+          setGoogleOnboardingData(null);
+          setAuthError("");
+          setAuthSession({ organisationId: newUser.organisationId });
+
+          const isNewMulti = newUser.pharmacyMode === "multi" || chosenMode === "multi";
+          setIsMultiBranch(isNewMulti);
+          if (typeof window !== "undefined") {
+            window.localStorage?.setItem("pharmacyMode", isNewMulti ? "multi" : "single");
+          }
+
+          if (isNewMulti) {
+            setSelectedBranch(null); // All Branches for multi-branch admin
+          } else {
+            setSelectedBranch(
+              newUser.branch || { id: newUser.branchId || "main", name: newUser.branchName || "Main Store" }
+            );
+          }
+
+          setCurrentRoute("dashboard");
+          updateBrowserRoute("dashboard", true);
+          setAuthStatus("AUTHENTICATED");
+          showToast(`Welcome, ${newUser.name}! Your pharmacy workspace is ready.`);
+
+          if (typeof window !== "undefined") {
+            try {
+              window.sessionStorage?.removeItem("pharmaflow_auth_intent");
+              window.sessionStorage?.removeItem("pharmaflow_pharmacy_name");
+              if (window.history && window.location.search) {
+                window.history.replaceState({}, document.title, window.location.pathname);
+              }
+            } catch (e) {}
+          }
+          return;
+        }
+      } catch (onboardErr) {
+        console.warn("Auto Google onboard error:", onboardErr.message);
+      }
+
+      // Fallback only if auto-onboarding network request failed
       if (authIntent === "signup") {
-        // User authenticated via Supabase Google OAuth, but needs to complete pharmacy onboarding form
         setGoogleOnboardingData({
           token: session.access_token,
           email: session.user?.email || "",
-          name:
-            session.user?.user_metadata?.full_name ||
-            session.user?.user_metadata?.name ||
-            "",
+          name: gName,
         });
         setAuthStatus("AUTHENTICATED_INCOMPLETE_ONBOARDING");
         return;
       }
 
-      // User attempted Google login, but no PostgreSQL account exists
       await supabase.auth.signOut();
       await clearAuthSession();
       setCurrentUser(null);
@@ -419,7 +506,7 @@ export default function AppNavigator() {
 
       if (authIntent === "login") {
         setAuthError(
-          "No PharmaFlow account found for this Google ID. Please register your pharmacy using Sign Up.",
+          "Could not initialize pharmacy account for this Google ID. Please try again.",
         );
       }
 
@@ -595,10 +682,16 @@ export default function AppNavigator() {
       "expiry-reports",
     ];
 
-    const isSingleShopMode =
-      !isMultiBranch ||
-      (typeof window !== "undefined" &&
-        window.localStorage?.getItem("pharmacyMode") === "single");
+    // Single-store isolation: branches and stock-transfer cannot be accessed in Single Shop mode
+    if (!isMultiBranch && (routeKey === "branches" || routeKey === "stock-transfer")) {
+      showToast("Branch management and stock transfers are only available in Multi-Branch mode.");
+      setCurrentRoute("dashboard");
+      updateBrowserRoute("dashboard", true);
+      setMobileMenuOpen(false);
+      return;
+    }
+
+    const isSingleShopMode = !isMultiBranch;
 
     if (
       !isSingleShopMode &&
@@ -1054,7 +1147,17 @@ export default function AppNavigator() {
           );
           setGoogleOnboardingData(null);
           setAuthError("");
-          setAuthStatus("AUTHENTICATED");
+          const userMode =
+            user?.pharmacyMode ||
+            (typeof window !== "undefined"
+              ? window.localStorage?.getItem("pharmacyMode")
+              : null) ||
+            "single";
+          const isUserMulti = userMode === "multi";
+          setIsMultiBranch(isUserMulti);
+          if (typeof window !== "undefined") {
+            window.localStorage?.setItem("pharmacyMode", isUserMulti ? "multi" : "single");
+          }
 
           const isUserAdmin = Boolean(
             user?.isOwner ||
@@ -1067,10 +1170,7 @@ export default function AppNavigator() {
             (user?.role || "").toLowerCase().includes("owner")
           );
 
-          const isSingleShopMode =
-            !isMultiBranch ||
-            (typeof window !== "undefined" &&
-              window.localStorage?.getItem("pharmacyMode") === "single");
+          const isSingleShopMode = !isUserMulti;
 
           if (user?.role === "SUPPLIER") {
             setCurrentRoute("supplier-portal");
@@ -1264,8 +1364,6 @@ export default function AppNavigator() {
                 showToast(`Switched active branch to ${branchObj?.name || b}`);
               }}
               isMultiBranch={isMultiBranch}
-              onTogglePharmacyMode={handleTogglePharmacyMode}
-              onSetPharmacyMode={handleSetPharmacyMode}
               currentUser={currentUser}
               onSignOut={handleSignOut}
               syncStatus="online"

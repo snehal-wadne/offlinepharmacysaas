@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -107,8 +109,9 @@ export default function BranchesScreen({
 
         code: dbB.branch_code || `BR-0${idx + 1}`,
 
-        // Contact
-        contactPerson: dbB.contact_person || "",
+        // Contact & Admin
+        adminName: dbB.admin_name || dbB.contact_person || "",
+        contactPerson: dbB.contact_person || dbB.admin_name || "",
         phone: dbB.phone || dbB.contact_phone || "",
         email: dbB.contact_email || "",
 
@@ -183,7 +186,8 @@ export default function BranchesScreen({
     name: "",
     code: "",
     type: "Hospital Pharmacy",
-    contactPerson: "",
+    adminName: currentUser?.name || currentUser?.adminName || "",
+    contactPerson: currentUser?.name || currentUser?.adminName || "",
     phone: "",
     email: "",
     address: "",
@@ -210,6 +214,7 @@ export default function BranchesScreen({
       branch.name.toLowerCase().includes(q) ||
       branch.code.toLowerCase().includes(q) ||
       branch.city.toLowerCase().includes(q) ||
+      (branch.adminName && branch.adminName.toLowerCase().includes(q)) ||
       branch.contactPerson.toLowerCase().includes(q) ||
       branch.phone.includes(q) ||
       branch.drugLicenseNo.toLowerCase().includes(q);
@@ -232,11 +237,13 @@ export default function BranchesScreen({
   const handleOpenAddModal = () => {
     setIsEditing(false);
     setActiveBranchId(null);
+    const defaultAdmin = currentUser?.name || currentUser?.adminName || "";
     setFormData({
       name: "",
       code: `FIT-BR-0${branches.length + 1}`,
       type: "Retail Dispensary",
-      contactPerson: "",
+      adminName: defaultAdmin,
+      contactPerson: defaultAdmin,
       phone: "",
       email: "",
       address: "",
@@ -261,7 +268,8 @@ export default function BranchesScreen({
       name: branch.name,
       code: branch.code,
       type: branch.type,
-      contactPerson: branch.contactPerson,
+      adminName: branch.adminName || branch.contactPerson || "",
+      contactPerson: branch.contactPerson || branch.adminName || "",
       phone: branch.phone,
       email: branch.email,
       address: branch.address,
@@ -290,6 +298,10 @@ export default function BranchesScreen({
     errors.code = "Branch Code is required";
   }
 
+  if (!formData.adminName.trim()) {
+    errors.adminName = "Admin name is required";
+  }
+
   if (!formData.phone.trim()) {
     errors.phone = "Contact phone is required";
   }
@@ -309,7 +321,8 @@ export default function BranchesScreen({
       branchCode: formData.code.trim(),
       facilityType: formData.type,
 
-      contactPerson: formData.contactPerson?.trim() || "",
+      adminName: formData.adminName.trim(),
+      contactPerson: formData.adminName.trim() || formData.contactPerson?.trim() || "",
       phone: formData.phone.trim(),
       email: formData.email?.trim() || "",
 
@@ -355,6 +368,8 @@ export default function BranchesScreen({
             ? {
                 ...branch,
                 ...formData,
+                adminName: formData.adminName,
+                contactPerson: formData.adminName,
                 ...(updatedBranch?.id
                   ? { id: updatedBranch.id }
                   : {}),
@@ -362,6 +377,10 @@ export default function BranchesScreen({
             : branch
         )
       );
+
+      if (onBranchesUpdated) {
+        onBranchesUpdated();
+      }
 
       if (onShowToast) {
         onShowToast(
@@ -398,10 +417,15 @@ export default function BranchesScreen({
           created?.facilityType ||
           formData.type,
 
+        adminName:
+          created?.admin_name ||
+          created?.adminName ||
+          formData.adminName,
+
         contactPerson:
           created?.contact_person ||
           created?.contactPerson ||
-          formData.contactPerson,
+          formData.adminName,
 
         phone: created?.phone || formData.phone,
         email: created?.email || formData.email,
@@ -734,6 +758,38 @@ export default function BranchesScreen({
             Physical retail dispensaries, clinical hospital stores, and
             centralized distribution hubs.
           </Text>
+
+          {/* Admin Identity & Branch Visibility Notice */}
+          <View
+            style={{
+              backgroundColor: "#FAF5F7",
+              borderWidth: 1,
+              borderColor: "#E8D5DD",
+              borderRadius: 8,
+              paddingHorizontal: 14,
+              paddingVertical: 10,
+              marginTop: 12,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 10,
+            }}
+          >
+            <Text style={{ fontSize: 18 }}>👤</Text>
+            <View style={{ flex: 1 }}>
+              <Text
+                style={{
+                  fontSize: 12.5,
+                  fontWeight: "700",
+                  color: "#65364A",
+                }}
+              >
+                Store Admin Identity: {currentUser?.name || currentUser?.adminName || "Store Admin"}
+              </Text>
+              <Text style={{ fontSize: 11, color: "#77717A", marginTop: 2 }}>
+                All {branches.length} branches and store inventories registered under this Admin Name are active and accessible.
+              </Text>
+            </View>
+          </View>
         </View>
 
         {loading ? (
@@ -865,10 +921,10 @@ export default function BranchesScreen({
                   <View style={styles.mobileBranchDetailsGrid}>
                     <View style={styles.mobileBranchDetailItem}>
                       <Text style={styles.mobileBranchDetailLabel}>
-                        CONTACT PERSON
+                        ADMIN IN-CHARGE
                       </Text>
-                      <Text style={styles.mobileBranchDetailVal}>
-                        {branch.contactPerson}
+                      <Text style={[styles.mobileBranchDetailVal, { fontWeight: "700", color: "#65364A" }]}>
+                        👤 {branch.adminName || branch.contactPerson || "Store Admin"}
                       </Text>
                       <Text style={styles.mobileBranchDetailSub}>
                         {branch.phone}
@@ -932,7 +988,7 @@ export default function BranchesScreen({
                   Branch Name & Type
                 </Text>
                 <Text style={[styles.thText, styles.colContact]}>
-                  Contact Details
+                  Admin & Contact
                 </Text>
                 <Text style={[styles.thText, styles.colAddress]}>
                   Location / City
@@ -980,11 +1036,14 @@ export default function BranchesScreen({
                       </View>
                     </View>
 
-                    {/* Contact Details */}
+                    {/* Admin & Contact Details */}
                     <View style={styles.colContact}>
-                      <Text style={styles.contactPersonText} numberOfLines={1}>
-                        {branch.contactPerson}
-                      </Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 2 }}>
+                        <Text style={{ fontSize: 12 }}>👤</Text>
+                        <Text style={[styles.contactPersonText, { fontWeight: "700", color: "#65364A" }]} numberOfLines={1}>
+                          {branch.adminName || branch.contactPerson || "Store Admin"}
+                        </Text>
+                      </View>
                       <Text style={styles.contactPhoneText}>
                         {branch.phone}
                       </Text>
@@ -1235,19 +1294,31 @@ export default function BranchesScreen({
                   </View>
                 </View>
 
-                {/* Contact Person & Phone */}
+                {/* Admin Name & Phone */}
                 <View style={styles.formColHalf}>
                   <Text style={styles.fieldLabel}>
-                    Contact Person / Pharmacist in Charge
+                    Admin Name / Pharmacist in Charge <Text style={styles.reqStar}>*</Text>
                   </Text>
                   <TextInput
-                    style={styles.formInput}
-                    placeholder="e.g. Dr. Suresh Patil"
-                    value={formData.contactPerson}
-                    onChangeText={(text) =>
-                      setFormData({ ...formData, contactPerson: text })
-                    }
+                    style={[
+                      styles.formInput,
+                      formErrors.adminName && styles.formInputError,
+                    ]}
+                    placeholder="e.g. Dr. Snehal Wadne"
+                    value={formData.adminName}
+                    onChangeText={(text) => {
+                      setFormData({
+                        ...formData,
+                        adminName: text,
+                        contactPerson: text,
+                      });
+                      if (formErrors.adminName)
+                        setFormErrors({ ...formErrors, adminName: null });
+                    }}
                   />
+                  {formErrors.adminName ? (
+                    <Text style={styles.errorMsg}>{formErrors.adminName}</Text>
+                  ) : null}
                 </View>
 
                 <View style={styles.formColHalf}>
@@ -1525,9 +1596,9 @@ export default function BranchesScreen({
                       Operations & Contacts
                     </Text>
                     <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>In-Charge:</Text>
-                      <Text style={styles.detailValue}>
-                        {selectedBranch.contactPerson}
+                      <Text style={styles.detailLabel}>Admin in Charge:</Text>
+                      <Text style={[styles.detailValue, { fontWeight: "700", color: "#65364A" }]}>
+                        👤 {selectedBranch.adminName || selectedBranch.contactPerson || "Store Admin"}
                       </Text>
                     </View>
                     <View style={styles.detailRow}>

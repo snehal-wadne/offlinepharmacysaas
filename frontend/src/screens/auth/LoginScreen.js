@@ -79,6 +79,13 @@ export default function LoginScreen({
 
   // Pharmacy Owner Onboarding (Sign Up) States
   const [signUpPharmacyName, setSignUpPharmacyName] = useState("");
+  const [signUpBranchName, setSignUpBranchName] = useState(() => {
+    if (typeof window !== "undefined") {
+      const mode = window.localStorage?.getItem("pharmacyMode") || "single";
+      return mode === "single" ? "Single Store" : "Main Branch";
+    }
+    return "Main Branch";
+  });
   const [signUpAdminName, setSignUpAdminName] = useState(
     googleOnboardingData?.name || "",
   );
@@ -154,6 +161,12 @@ export default function LoginScreen({
     setIsLoading(true);
     try {
       const mode = overrideMode || (authMode === "signin" ? "login" : "signup");
+      if (typeof window !== "undefined") {
+        window.sessionStorage?.setItem("pharmaflow_pharmacy_mode", pharmacyMode || "single");
+        if (ownerPharmacyName) {
+          window.sessionStorage?.setItem("pharmaflow_pharmacy_name", ownerPharmacyName.trim());
+        }
+      }
       const { error } = await signInWithGoogle({ mode });
       if (error) {
         setErrorMessage(error.message || "Failed to initiate Google sign-in.");
@@ -344,7 +357,7 @@ export default function LoginScreen({
     }
 
     if (!adminName || adminName.length < 2) {
-      setErrorMessage("Please enter owner / contact person.");
+      setErrorMessage("Please enter Admin Name / Pharmacist in-charge.");
       return;
     }
 
@@ -378,6 +391,11 @@ export default function LoginScreen({
       return;
     }
 
+    const initialBranchName = (
+      signUpBranchName.trim() ||
+      (pharmacyMode === "single" ? "Single Store" : "Main Branch")
+    ).trim();
+
     // Google OAuth Onboarding Branch
     if (googleOnboardingData) {
       setIsLoading(true);
@@ -403,7 +421,7 @@ export default function LoginScreen({
             gstNumber,
             businessType,
             createInitialBranch: true,
-            branchName: pharmacyMode === "single" ? "Single Store" : "Main Branch",
+            branchName: initialBranchName,
           }),
         });
 
@@ -467,7 +485,7 @@ export default function LoginScreen({
           gstNumber,
           businessType,
           createInitialBranch: true,
-          branchName: pharmacyMode === "single" ? "Single Store" : "Main Branch",
+          branchName: initialBranchName,
           password: signUpPassword,
         }),
       });
@@ -477,64 +495,78 @@ export default function LoginScreen({
       if (!response.ok || !data.success) {
         setIsLoading(false);
         setErrorMessage(
-          data.error || "Invalid email or password. Please check your credentials.",
+          data.error || "Failed to register pharmacy store. Please check your credentials.",
         );
         return;
       }
 
       if (typeof window !== "undefined") {
         window.localStorage?.setItem("pharmacyMode", pharmacyMode);
+        window.localStorage?.setItem("lastLoginEmail", email);
       }
 
-      setSuccessMessage("Pharmacy registered successfully! Signing in...");
+      setSuccessMessage(
+        pharmacyMode === "single"
+          ? "Single shop direct inventory registered successfully! Signing in..."
+          : "Pharmacy registered successfully! Signing in...",
+      );
 
-      // 2. Authenticate directly via Supabase Auth
-      const { data: authData, error: authError } =
-        await supabase.auth.signInWithPassword({
-          email,
-          password: signUpPassword,
-        });
+      let token = data.token;
+      let loggedInUser = data.user;
 
-      if (authError || !authData.session) {
+      if (!token) {
+        // Fallback to client-side Supabase Auth
+        try {
+          const { data: authData, error: authError } =
+            await supabase.auth.signInWithPassword({
+              email,
+              password: signUpPassword,
+            });
+          if (!authError && authData?.session?.access_token) {
+            token = authData.session.access_token;
+          }
+        } catch (supaErr) {}
+      }
+
+      if (token) {
+        if (typeof window !== "undefined") {
+          window.localStorage?.setItem("authToken", token);
+        }
+
+        try {
+          const meRes = await fetch(`${API_URL}/api/auth/me`, {
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+          });
+          if (meRes.ok) {
+            const meData = await meRes.json();
+            loggedInUser = meData.data?.user || meData.user || loggedInUser;
+          }
+        } catch (meErr) {}
+
         setIsLoading(false);
-        setAuthMode("signin");
-        setSignInEmail(email);
-        setSignInPassword(signUpPassword);
-        setSuccessMessage(
-          "Pharmacy registered! Please sign in with your credentials.",
-        );
-        return;
+        if (onLoginSuccess && loggedInUser) {
+          onLoginSuccess(loggedInUser, token);
+          return;
+        }
       }
-
-      const token = authData.session.access_token;
-
-      // 3. Fetch authoritative profile
-      const meRes = await fetch(`${API_URL}/api/auth/me`, {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
 
       setIsLoading(false);
-
-      if (meRes.ok) {
-        const meData = await meRes.json();
-        const user = meData.data?.user || meData.user;
-        if (onLoginSuccess) {
-          onLoginSuccess(user, token);
-        }
-        return;
-      }
-
       setAuthMode("signin");
       setSignInEmail(email);
       setSignInPassword(signUpPassword);
+      setSuccessMessage(
+        "Pharmacy registered successfully! Please sign in with your credentials.",
+      );
     } catch (err) {
       setIsLoading(false);
       setErrorMessage("Registration error: " + err.message);
     }
   };
+
+  const handleOwnerSignUp = handleSignUp;
 
   // Supplier / Distributor Registration Handler
   const handleSupplierSignUp = async () => {
@@ -1262,9 +1294,13 @@ export default function LoginScreen({
                     accessibilityRole="button"
                   >
                     <Text style={styles.switchModeText}>
-                      New Pharmacy Owner?{" "}
+                      {pharmacyMode === "single"
+                        ? "New Single Shop Owner? "
+                        : "New Pharmacy Owner? "}
                       <Text style={styles.switchModeHighlight}>
-                        Register Your Pharmacy Here
+                        {pharmacyMode === "single"
+                          ? "Register Single Shop Direct Inventory Here"
+                          : "Register Your Pharmacy Here"}
                       </Text>
                     </Text>
                   </Pressable>
@@ -1289,7 +1325,9 @@ export default function LoginScreen({
                           setErrorMessage("");
                         }}
                       >
-                        <Text style={styles.signUpTypeIcon}>🏥</Text>
+                        <Text style={styles.signUpTypeIcon}>
+                          {pharmacyMode === "single" ? "🏬" : "🏥"}
+                        </Text>
                         <View style={{ flex: 1 }}>
                           <Text
                             style={[
@@ -1298,10 +1336,14 @@ export default function LoginScreen({
                                 styles.signUpTypeTitleActive,
                             ]}
                           >
-                            Pharmacy Admin
+                            {pharmacyMode === "single"
+                              ? "Single Shop Owner"
+                              : "Pharmacy Admin"}
                           </Text>
                           <Text style={styles.signUpTypeSub}>
-                            Store owner setup
+                            {pharmacyMode === "single"
+                              ? "Direct inventory & billing"
+                              : "Store owner setup"}
                           </Text>
                         </View>
                       </Pressable>
@@ -1651,14 +1693,21 @@ export default function LoginScreen({
                           {[
                             "Pharmacist",
                             "Cashier",
-                            "Inventory Specialist",
+                            "Manager",
+                            "Specialist",
                             "Sales Associate",
                           ].map((role) => {
-                            const isSelected = staffRoleTitle === role;
+                            const isSelected =
+                              staffRoleTitle === role ||
+                              (role === "Specialist" &&
+                                staffRoleTitle === "Inventory Specialist");
                             return (
                               <Pressable
                                 key={role}
-                                onPress={() => setStaffRoleTitle(role)}
+                                onPress={() => {
+                                  setStaffRoleTitle(role);
+                                  if (errorMessage) setErrorMessage("");
+                                }}
                                 style={{
                                   paddingVertical: 8,
                                   paddingHorizontal: 12,
@@ -1765,71 +1814,330 @@ export default function LoginScreen({
                       </Pressable>
                     </View>
                   ) : (
-                    <View
-                      style={{
-                        backgroundColor: "#FFFFFF",
-                        borderRadius: 14,
-                        borderWidth: 1.5,
-                        borderColor: "#E8D5DD",
-                        padding: 24,
-                        alignItems: "center",
-                        marginTop: 4,
-                        marginBottom: 16,
-                      }}
-                    >
-                      <View
-                        style={{
-                          width: 56,
-                          height: 56,
-                          borderRadius: 28,
-                          backgroundColor: "#E8D5DD",
-                          borderWidth: 2,
-                          borderColor: "#E8D5DD",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          marginBottom: 14,
-                        }}
-                      >
-                        <Text style={{ fontSize: 26 }}>🏥</Text>
+                    <View>
+                      {/* Section Header */}
+                      <View style={styles.sectionHeaderRow}>
+                        <Text style={styles.sectionHeaderTitle}>
+                          {pharmacyMode === "single"
+                            ? "🏬 Single Shop Direct Inventory Registration"
+                            : "🏥 Pharmacy Admin & Chain Registration"}
+                        </Text>
                       </View>
 
-                      <Text
+                      {/* Architecture Mode Notification Banner */}
+                      <View
                         style={{
-                          fontSize: 17,
-                          fontWeight: "800",
-                          color: "#B9829A",
-                          textAlign: "center",
-                          marginBottom: 6,
+                          backgroundColor: "#FBF7F9",
+                          borderWidth: 1.5,
+                          borderColor: "#E8D5DD",
+                          borderRadius: 10,
+                          padding: 12,
+                          marginBottom: 16,
+                          flexDirection: "row",
+                          gap: 10,
+                          alignItems: "center",
                         }}
                       >
-                        Pharmacy Admin Instant Access
-                      </Text>
+                        <Text style={{ fontSize: 20 }}>
+                          {pharmacyMode === "single" ? "🏬" : "🏢"}
+                        </Text>
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={{
+                              fontSize: 12.5,
+                              fontWeight: "700",
+                              color: "#744458",
+                            }}
+                          >
+                            {pharmacyMode === "single"
+                              ? "Single Store Direct Inventory Mode Enabled"
+                              : "Multi-Branch Distribution Architecture"}
+                          </Text>
+                          <Text
+                            style={{
+                              fontSize: 11,
+                              color: "#77717A",
+                              marginTop: 2,
+                              lineHeight: 16,
+                            }}
+                          >
+                            {pharmacyMode === "single"
+                              ? "Your standalone store will have direct inventory management, automated FEFO batches, customer billing, and local reports with zero branch transfer complexity."
+                              : "Multi-branch store architecture allows inter-branch stock transfers, central warehouse receiving, and aggregated sales analytics."}
+                          </Text>
+                        </View>
+                      </View>
 
-                      <Text
-                        style={{
-                          fontSize: 13,
-                          color: "#77717A",
-                          textAlign: "center",
-                          lineHeight: 19,
-                          marginBottom: 20,
-                          maxWidth: 380,
-                        }}
+                      {/* Pharmacy / Shop Name */}
+                      <View style={styles.fieldContainer}>
+                        <Text style={styles.label}>
+                          {pharmacyMode === "single"
+                            ? "Single Shop / Pharmacy Name *"
+                            : "Pharmacy Chain / Brand Name *"}
+                        </Text>
+                        <View style={styles.inputWrapper}>
+                          <Text style={styles.inputPrefixIcon}>🏬</Text>
+                          <TextInput
+                            style={styles.input}
+                            placeholder={
+                              pharmacyMode === "single"
+                                ? "e.g. Apex Chemist & Druggist"
+                                : "e.g. Metro Care Pharmacy Network"
+                            }
+                            placeholderTextColor="#77717A"
+                            value={signUpPharmacyName}
+                            onChangeText={setSignUpPharmacyName}
+                            autoCapitalize="words"
+                            editable={!isLoading}
+                          />
+                        </View>
+                      </View>
+
+                      {/* Admin Name */}
+                      <View style={styles.fieldContainer}>
+                        <Text style={styles.label}>
+                          Admin Name (Store Admin / Owner) *
+                        </Text>
+                        <View style={styles.inputWrapper}>
+                          <Text style={styles.inputPrefixIcon}>👤</Text>
+                          <TextInput
+                            style={styles.input}
+                            placeholder="e.g. Dr. Snehal Wadne"
+                            placeholderTextColor="#77717A"
+                            value={signUpAdminName}
+                            onChangeText={setSignUpAdminName}
+                            autoCapitalize="words"
+                            editable={!isLoading}
+                          />
+                        </View>
+                      </View>
+
+                      {/* Store / Branch Name */}
+                      <View style={styles.fieldContainer}>
+                        <Text style={styles.label}>
+                          {pharmacyMode === "single"
+                            ? "Store / Branch Name *"
+                            : "New Branch Name (Primary Store) *"}
+                        </Text>
+                        <View style={styles.inputWrapper}>
+                          <Text style={styles.inputPrefixIcon}>🏢</Text>
+                          <TextInput
+                            style={styles.input}
+                            placeholder={
+                              pharmacyMode === "single"
+                                ? "e.g. Single Store Direct"
+                                : "e.g. Main Branch"
+                            }
+                            placeholderTextColor="#77717A"
+                            value={signUpBranchName}
+                            onChangeText={setSignUpBranchName}
+                            autoCapitalize="words"
+                            editable={!isLoading}
+                          />
+                        </View>
+                      </View>
+
+                      {/* Email Address */}
+                      <View style={styles.fieldContainer}>
+                        <Text style={styles.label}>
+                          Official Email (Store Login ID) *
+                        </Text>
+                        <View style={styles.inputWrapper}>
+                          <Text style={styles.inputPrefixIcon}>📧</Text>
+                          <TextInput
+                            style={styles.input}
+                            placeholder="e.g. owner@singleshop.com"
+                            placeholderTextColor="#77717A"
+                            value={signUpEmail}
+                            onChangeText={setSignUpEmail}
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                            editable={!isLoading}
+                          />
+                        </View>
+                      </View>
+
+                      {/* Phone Number */}
+                      <View style={styles.fieldContainer}>
+                        <Text style={styles.label}>
+                          Mobile / Phone Number *
+                        </Text>
+                        <View style={styles.inputWrapper}>
+                          <Text style={styles.inputPrefixIcon}>📱</Text>
+                          <TextInput
+                            style={styles.input}
+                            placeholder="+91 98765 43210"
+                            placeholderTextColor="#77717A"
+                            value={signUpPhone}
+                            onChangeText={setSignUpPhone}
+                            keyboardType="phone-pad"
+                            editable={!isLoading}
+                          />
+                        </View>
+                      </View>
+
+                      {/* Shop Address */}
+                      <View style={styles.fieldContainer}>
+                        <Text style={styles.label}>
+                          Store / Shop Address *
+                        </Text>
+                        <View style={styles.inputWrapper}>
+                          <Text style={styles.inputPrefixIcon}>📍</Text>
+                          <TextInput
+                            style={styles.input}
+                            placeholder="Shop No. 4, Station Road, Opp. Hospital"
+                            placeholderTextColor="#77717A"
+                            value={signUpAddress}
+                            onChangeText={setSignUpAddress}
+                            editable={!isLoading}
+                          />
+                        </View>
+                      </View>
+
+                      {/* City & State (Two Columns) */}
+                      <View style={{ flexDirection: "row", gap: 10 }}>
+                        <View style={[styles.fieldContainer, { flex: 1 }]}>
+                          <Text style={styles.label}>City *</Text>
+                          <View style={styles.inputWrapper}>
+                            <TextInput
+                              style={styles.input}
+                              placeholder="e.g. Mumbai"
+                              placeholderTextColor="#77717A"
+                              value={signUpCity}
+                              onChangeText={setSignUpCity}
+                              editable={!isLoading}
+                            />
+                          </View>
+                        </View>
+                        <View style={[styles.fieldContainer, { flex: 1 }]}>
+                          <Text style={styles.label}>State *</Text>
+                          <View style={styles.inputWrapper}>
+                            <TextInput
+                              style={styles.input}
+                              placeholder="e.g. Maharashtra"
+                              placeholderTextColor="#77717A"
+                              value={signUpState}
+                              onChangeText={setSignUpState}
+                              editable={!isLoading}
+                            />
+                          </View>
+                        </View>
+                      </View>
+
+                      {/* Pincode & GSTIN (Two Columns) */}
+                      <View style={{ flexDirection: "row", gap: 10 }}>
+                        <View style={[styles.fieldContainer, { flex: 1 }]}>
+                          <Text style={styles.label}>Pincode *</Text>
+                          <View style={styles.inputWrapper}>
+                            <TextInput
+                              style={styles.input}
+                              placeholder="400001"
+                              placeholderTextColor="#77717A"
+                              value={signUpPincode}
+                              onChangeText={setSignUpPincode}
+                              keyboardType="numeric"
+                              editable={!isLoading}
+                            />
+                          </View>
+                        </View>
+                        <View style={[styles.fieldContainer, { flex: 1 }]}>
+                          <Text style={styles.label}>GSTIN / Drug Lic. (Opt)</Text>
+                          <View style={styles.inputWrapper}>
+                            <TextInput
+                              style={styles.input}
+                              placeholder="27AAAAA0000A1Z5"
+                              placeholderTextColor="#77717A"
+                              value={signUpGstNumber}
+                              onChangeText={setSignUpGstNumber}
+                              autoCapitalize="characters"
+                              editable={!isLoading}
+                            />
+                          </View>
+                        </View>
+                      </View>
+
+                      {/* Password */}
+                      <View style={styles.fieldContainer}>
+                        <Text style={styles.label}>Create Password *</Text>
+                        <View style={styles.inputWrapper}>
+                          <Text style={styles.inputPrefixIcon}>🔒</Text>
+                          <TextInput
+                            style={styles.input}
+                            placeholder="Minimum 6 characters"
+                            placeholderTextColor="#77717A"
+                            secureTextEntry={!showSignUpPassword}
+                            value={signUpPassword}
+                            onChangeText={setSignUpPassword}
+                            editable={!isLoading}
+                          />
+                          <Pressable
+                            style={styles.eyeButton}
+                            onPress={() =>
+                              setShowSignUpPassword(!showSignUpPassword)
+                            }
+                          >
+                            <Text style={styles.eyeIcon}>
+                              {showSignUpPassword ? "🙈" : "👁️"}
+                            </Text>
+                          </Pressable>
+                        </View>
+                      </View>
+
+                      {/* Confirm Password */}
+                      <View style={styles.fieldContainer}>
+                        <Text style={styles.label}>Confirm Password *</Text>
+                        <View style={styles.inputWrapper}>
+                          <Text style={styles.inputPrefixIcon}>🔒</Text>
+                          <TextInput
+                            style={styles.input}
+                            placeholder="Confirm your password"
+                            placeholderTextColor="#77717A"
+                            secureTextEntry={!showSignUpPassword}
+                            value={signUpConfirmPassword}
+                            onChangeText={setSignUpConfirmPassword}
+                            editable={!isLoading}
+                          />
+                        </View>
+                      </View>
+
+                      {/* Submit Single Shop / Owner Registration */}
+                      <Pressable
+                        style={[
+                          styles.signInButton,
+                          { backgroundColor: "#B9829A", marginTop: 8 },
+                          isLoading && styles.disabledButton,
+                        ]}
+                        onPress={handleSignUp}
+                        disabled={isLoading}
                       >
-                        Admins and store owners sign up and log in directly with your Gmail / Google account. No manual forms needed — your pharmacy inventory workspace will be created and opened automatically.
-                      </Text>
+                        {isLoading ? (
+                          <ActivityIndicator size="small" color="#ffffff" />
+                        ) : (
+                          <Text style={styles.signInText}>
+                            {pharmacyMode === "single"
+                              ? "Register Single Shop Direct Inventory →"
+                              : "Register Pharmacy Network →"}
+                          </Text>
+                        )}
+                      </Pressable>
 
-                      {/* Google Sign-In Button */}
+                      {/* Google Sign-In Alternative */}
+                      <View style={[styles.dividerRow, { marginVertical: 14 }]}>
+                        <View style={styles.dividerLine} />
+                        <Text style={styles.dividerText}>or register with Google</Text>
+                        <View style={styles.dividerLine} />
+                      </View>
+
                       <Pressable
                         style={[
                           styles.googleButton,
                           {
                             width: "100%",
-                            paddingVertical: 14,
+                            paddingVertical: 12,
                             borderRadius: 10,
                             borderWidth: 1.5,
                             borderColor: "#E5DFE4",
                             backgroundColor: "#FFFFFF",
-                            marginBottom: 16,
                           },
                           isLoading && styles.disabledButton,
                         ]}
@@ -1839,44 +2147,10 @@ export default function LoginScreen({
                         <View style={styles.googleIconCircle}>
                           <Text style={styles.googleGText}>G</Text>
                         </View>
-                        <Text style={[styles.googleButtonText, { fontSize: 14 }]}>
-                          Sign Up / Log In with Google (Gmail)
+                        <Text style={[styles.googleButtonText, { fontSize: 13 }]}>
+                          1-Click Sign Up with Google ID
                         </Text>
                       </Pressable>
-
-                      {/* Direct Admin Credentials Helper note */}
-                      <View
-                        style={{
-                          backgroundColor: "#F8F5F7",
-                          borderRadius: 8,
-                          borderWidth: 1,
-                          borderColor: "#E5DFE4",
-                          padding: 12,
-                          width: "100%",
-                          marginBottom: 14,
-                        }}
-                      >
-                        <Text
-                          style={{
-                            fontSize: 11,
-                            fontWeight: "700",
-                            color: "#B9829A",
-                            marginBottom: 3,
-                          }}
-                        >
-                          🔑 Existing Default Store Admin Credentials:
-                        </Text>
-                        <Text style={{ fontSize: 11.5, color: "#28242B" }}>
-                          Email:{" "}
-                          <Text style={{ fontWeight: "700" }}>
-                            admin@falahpharmacy.com
-                          </Text>
-                        </Text>
-                        <Text style={{ fontSize: 11.5, color: "#28242B" }}>
-                          Password:{" "}
-                          <Text style={{ fontWeight: "700" }}>password123</Text>
-                        </Text>
-                      </View>
 
                       {/* Switch to Sign In link */}
                       <Pressable
@@ -1885,12 +2159,12 @@ export default function LoginScreen({
                           setErrorMessage("");
                           setSuccessMessage("");
                         }}
-                        style={{ marginTop: 4 }}
+                        style={[styles.switchModeRow, { marginTop: 14 }]}
                       >
                         <Text style={styles.switchModeText}>
-                          Already have standard credentials?{" "}
+                          Already have a store account?{" "}
                           <Text style={styles.switchModeHighlight}>
-                            Sign In directly here
+                            Sign In to Pharmacy Workspace
                           </Text>
                         </Text>
                       </Pressable>

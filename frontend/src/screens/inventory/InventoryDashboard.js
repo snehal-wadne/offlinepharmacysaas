@@ -34,10 +34,12 @@ export default function InventoryDashboard({
       setLoading(true);
 
       try {
-        const branchId =
+        const rawBranchId =
           typeof selectedBranch === "object" &&
           selectedBranch !== null
             ? selectedBranch.id
+            : typeof selectedBranch === "string" && selectedBranch !== "All Branches"
+            ? selectedBranch
             : null;
 
         const isAllBranches =
@@ -45,10 +47,14 @@ export default function InventoryDashboard({
           selectedBranch === "All Branches" ||
           selectedBranch === "all" ||
           selectedBranch === "ALL" ||
-          selectedBranch === "No Active Branch";
+          selectedBranch === "No Active Branch" ||
+          !rawBranchId ||
+          rawBranchId === "main" ||
+          rawBranchId === "null" ||
+          rawBranchId === "undefined";
 
         const response = await fetchMainDashboard(
-          isAllBranches ? null : branchId
+          isAllBranches ? null : rawBranchId
         );
 
         console.log(
@@ -69,7 +75,7 @@ export default function InventoryDashboard({
           return;
         }
 
-        const data = response?.data.data;
+        const data = response?.data?.data || response?.data;
 
         console.log(
           "📊 INVENTORY DASHBOARD DATA:",

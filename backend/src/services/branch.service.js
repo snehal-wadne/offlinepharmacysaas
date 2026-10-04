@@ -44,16 +44,9 @@ const createBranch = async (branchData) => {
   }
 
   const normalizedFacilityType =
-    FACILITY_TYPE_MAP[branchData.facilityType];
-
-  if (!normalizedFacilityType) {
-    const error = new Error(
-      `Invalid facilityType. Allowed values: HOSPITAL_PHARMACY, RETAIL_DISPENSARY, CENTRAL_WAREHOUSE`
-    );
-
-    error.statusCode = 400;
-    throw error;
-  }
+    FACILITY_TYPE_MAP[branchData.facilityType] ||
+    FACILITY_TYPE_MAP[branchData.type] ||
+    "RETAIL_DISPENSARY";
 
   const normalizedBranchData = {
     ...branchData,

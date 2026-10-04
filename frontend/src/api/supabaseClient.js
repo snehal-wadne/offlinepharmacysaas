@@ -72,13 +72,18 @@ export async function signInWithGoogle({ mode = "login" } = {}) {
       ? window.location.origin
       : "http://localhost:8081");
 
+  let pMode = "single";
   if (typeof window !== "undefined" && window.sessionStorage) {
     try {
       window.sessionStorage.setItem("pharmaflow_auth_intent", mode);
+      pMode =
+        window.sessionStorage.getItem("pharmaflow_pharmacy_mode") ||
+        window.localStorage?.getItem("pharmacyMode") ||
+        "single";
     } catch (e) {}
   }
 
-  const redirectTo = `${frontendUrl}/?auth_intent=${encodeURIComponent(mode)}`;
+  const redirectTo = `${frontendUrl}/?auth_intent=${encodeURIComponent(mode)}&pharmacy_mode=${encodeURIComponent(pMode)}`;
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",

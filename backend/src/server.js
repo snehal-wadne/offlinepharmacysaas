@@ -292,6 +292,9 @@ const startServer = () => {
         console.log(
           `✅ PostgreSQL connected: ${process.env.DB_DATABASE || "falah_pharmacy"}`,
         );
+        autoInitDatabase().catch((initErr) => {
+          console.warn("⚠️  Database auto-init notice:", initErr.message);
+        });
       } else {
         console.log(
           "ℹ️  PostgreSQL offline: Running seamlessly in offline mode.",

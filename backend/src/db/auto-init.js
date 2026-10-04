@@ -92,9 +92,12 @@ const connectionString =
   process.env.SUPABASE_DB_URL;
 
 const isRemoteOrSsl = Boolean(
-  connectionString ||
+  (connectionString &&
+    !connectionString.includes("localhost") &&
+    !connectionString.includes("127.0.0.1")) ||
   process.env.DB_SSL === "true" ||
-  (process.env.DB_HOST && !["localhost", "127.0.0.1"].includes(process.env.DB_HOST))
+  (process.env.DB_HOST &&
+    !["localhost", "127.0.0.1"].includes(process.env.DB_HOST)),
 );
 
 /**
@@ -224,6 +227,24 @@ const autoInitDatabase = async () => {
           syncMigrateErr.message,
         );
       }
+
+      // Apply sync_changes table migration
+      try {
+        const { migrateSyncChanges } = require("./migrate-sync-changes");
+        await migrateSyncChanges();
+      } catch (syncChangesErr) {
+        console.warn(
+          "⚠️ sync_changes migration notice:",
+          syncChangesErr.message,
+        );
+      }
+
+      // Ensure role and supplier_id columns exist on users
+      await targetPool
+        .query(
+          "ALTER TABLE public.users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'STAFF'; ALTER TABLE public.users ADD COLUMN IF NOT EXISTS supplier_id UUID REFERENCES suppliers(id) ON DELETE SET NULL;",
+        )
+        .catch(() => {});
 
       // Apply supplier notifications & portal schema
       try {

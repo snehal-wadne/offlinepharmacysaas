@@ -33,6 +33,7 @@ const BRANCH_COLUMNS = `
   branch_code,
   name,
   facility_type,
+  admin_name,
   contact_person,
   contact_phone,
   contact_email,
@@ -241,6 +242,7 @@ const createBranch = async (
     branchCode = null,
     name,
     facilityType = "RETAIL_DISPENSARY",
+    adminName = null,
     contactPerson = null,
     contactPhone = null,
     contactEmail = null,
@@ -256,12 +258,16 @@ const createBranch = async (
   },
   client = pool,
 ) => {
+  const resolvedAdminName = (adminName || contactPerson || "").trim() || null;
+  const resolvedContactPerson = (contactPerson || adminName || "").trim() || null;
+
   const query = `
     INSERT INTO branches (
       organisation_id,
       branch_code,
       name,
       facility_type,
+      admin_name,
       contact_person,
       contact_phone,
       contact_email,
@@ -277,10 +283,10 @@ const createBranch = async (
     )
     VALUES (
       $1, $2, $3, $4,
-      $5, $6, $7,
-      $8, $9, $10, $11,
-      $12, $13, $14,
-      $15, $16
+      $5, $6, $7, $8,
+      $9, $10, $11, $12,
+      $13, $14, $15,
+      $16, $17
     )
     RETURNING
       ${BRANCH_COLUMNS};
@@ -291,7 +297,8 @@ const createBranch = async (
     branchCode,
     name,
     facilityType,
-    contactPerson,
+    resolvedAdminName,
+    resolvedContactPerson,
     contactPhone,
     contactEmail,
     address,
@@ -348,7 +355,7 @@ const listBranches = async (
 
   if (search) {
     conditions.push(
-      `(name ILIKE $${paramIndex} OR branch_code ILIKE $${paramIndex} OR city ILIKE $${paramIndex} OR contact_person ILIKE $${paramIndex})`,
+      `(name ILIKE $${paramIndex} OR branch_code ILIKE $${paramIndex} OR city ILIKE $${paramIndex} OR contact_person ILIKE $${paramIndex} OR admin_name ILIKE $${paramIndex})`,
     );
     values.push(`%${search}%`);
     paramIndex++;
@@ -389,6 +396,7 @@ const updateBranch = async (
     branchCode,
     name,
     facilityType,
+    adminName,
     contactPerson,
     contactPhone,
     contactEmail,
@@ -403,24 +411,38 @@ const updateBranch = async (
     status,
   } = updates;
 
+  const resolvedAdminName =
+    adminName !== undefined
+      ? adminName
+      : contactPerson !== undefined
+      ? contactPerson
+      : null;
+  const resolvedContactPerson =
+    contactPerson !== undefined
+      ? contactPerson
+      : adminName !== undefined
+      ? adminName
+      : null;
+
   const query = `
     UPDATE branches
     SET
       branch_code = COALESCE($3, branch_code),
       name = COALESCE($4, name),
       facility_type = COALESCE($5, facility_type),
-      contact_person = COALESCE($6, contact_person),
-      contact_phone = COALESCE($7, contact_phone),
-      contact_email = COALESCE($8, contact_email),
-      address = COALESCE($9, address),
-      city = COALESCE($10, city),
-      state = COALESCE($11, state),
-      postal_code = COALESCE($12, postal_code),
-      phone = COALESCE($13, phone),
-      operating_hours = COALESCE($14, operating_hours),
-      drug_license_number = COALESCE($15, drug_license_number),
-      invoice_prefix = COALESCE($16, invoice_prefix),
-      status = COALESCE($17, status),
+      admin_name = COALESCE($6, admin_name),
+      contact_person = COALESCE($7, contact_person),
+      contact_phone = COALESCE($8, contact_phone),
+      contact_email = COALESCE($9, contact_email),
+      address = COALESCE($10, address),
+      city = COALESCE($11, city),
+      state = COALESCE($12, state),
+      postal_code = COALESCE($13, postal_code),
+      phone = COALESCE($14, phone),
+      operating_hours = COALESCE($15, operating_hours),
+      drug_license_number = COALESCE($16, drug_license_number),
+      invoice_prefix = COALESCE($17, invoice_prefix),
+      status = COALESCE($18, status),
       updated_at = CURRENT_TIMESTAMP
     WHERE id = $1
       AND organisation_id = $2
@@ -434,7 +456,8 @@ const updateBranch = async (
     branchCode !== undefined ? branchCode : null,
     name !== undefined ? name : null,
     facilityType !== undefined ? facilityType : null,
-    contactPerson !== undefined ? contactPerson : null,
+    resolvedAdminName,
+    resolvedContactPerson,
     contactPhone !== undefined ? contactPhone : null,
     contactEmail !== undefined ? contactEmail : null,
     address !== undefined ? address : null,

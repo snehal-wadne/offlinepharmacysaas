@@ -1008,6 +1008,20 @@ const SYSTEM_ROLES = [
     description:
       "Financial auditor and accountant with extensive reporting, audit log, refund approval, and ledger visibility.",
   },
+  {
+    name: "Inventory Specialist",
+    identifier: "SPECIALIST",
+    clearance: "MANAGEMENT",
+    description:
+      "Specialist in inventory management, batch tracking, stock replenishment, and goods receiving.",
+  },
+  {
+    name: "Sales Associate",
+    identifier: "SALES_ASSOCIATE",
+    clearance: "STANDARD_POS",
+    description:
+      "Point-of-sale and OTC sales associate focused on customer assistance, billing, and order handling.",
+  },
 ];
 
 /**
@@ -1187,6 +1201,34 @@ const ACCOUNTANT_PERMISSIONS = [
   "VIEW_APPROVAL_SETTINGS",
 ];
 
+// 7. Inventory Specialist: Inventory, Batches, Purchases, Goods Receiving
+const SPECIALIST_PERMISSIONS = [
+  ...PERMISSION_DOMAINS.Dashboard,
+  ...PERMISSION_DOMAINS.Inventory,
+  ...PERMISSION_DOMAINS.Purchases,
+  ...PERMISSION_DOMAINS["Goods Receiving"],
+  ...PERMISSION_DOMAINS["Stock Transfer"],
+  "VIEW_PRODUCTS",
+  "VIEW_SUPPLIERS",
+];
+
+// 8. Sales Associate: Sales, Customers, POS billing
+const SALES_ASSOCIATE_PERMISSIONS = [
+  ...PERMISSION_DOMAINS.Dashboard,
+  "VIEW_SALES",
+  "CREATE_SALE",
+  "UPDATE_DRAFT_SALE",
+  "HOLD_SALE",
+  "RESUME_HELD_SALE",
+  "CREATE_PAYMENT",
+  "APPLY_DISCOUNT",
+  "PRINT_SALE",
+  ...PERMISSION_DOMAINS.Customers,
+  "VIEW_PRODUCTS",
+  "VIEW_BATCHES",
+  "VIEW_STOCK",
+];
+
 const ROLE_DEFAULT_PERMISSIONS = {
   ADMIN: ADMIN_PERMISSIONS,
   MANAGER: MANAGER_PERMISSIONS,
@@ -1194,6 +1236,8 @@ const ROLE_DEFAULT_PERMISSIONS = {
   PHARMACIST: PHARMACIST_PERMISSIONS,
   CASHIER: CASHIER_PERMISSIONS,
   ACCOUNTANT: ACCOUNTANT_PERMISSIONS,
+  SPECIALIST: SPECIALIST_PERMISSIONS,
+  SALES_ASSOCIATE: SALES_ASSOCIATE_PERMISSIONS,
 };
 
 module.exports = {

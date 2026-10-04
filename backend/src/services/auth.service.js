@@ -23,6 +23,9 @@ const {
 const {
   seedOrganisationSystemRoles,
 } = require("../repositories/role.repository");
+const {
+  seedInitialPharmacyData,
+} = require("./pharmacySeeder.service");
 
 class AuthService {
   /**
@@ -46,6 +49,7 @@ class AuthService {
         u.staff_id AS "staffId",
         u.status, 
         u.password_hash,
+        u.role AS user_role,
         om.organisation_id,
         ba.branch_id,
         r.name AS role_name,
@@ -150,18 +154,20 @@ class AuthService {
 
     // Resolve organisation context legitimately from PostgreSQL
     let isOwner = false;
+    let userPharmacyMode = "single";
     if (!user.organisation_id) {
       const ownerOrgRes = await pool.query(
-        "SELECT id, name FROM organisations WHERE owner_id = $1 AND status = 'ACTIVE' LIMIT 1;",
-        [user.id],
+        "SELECT id, name, pharmacy_mode FROM organisations WHERE (owner_id = $1 OR LOWER(admin_name) = LOWER($2)) AND status = 'ACTIVE' LIMIT 1;",
+        [user.id, user.name || ""],
       );
       if (ownerOrgRes.rows.length > 0) {
         user.organisation_id = ownerOrgRes.rows[0].id;
         user.organisation_name = ownerOrgRes.rows[0].name;
+        userPharmacyMode = ownerOrgRes.rows[0].pharmacy_mode || "single";
         isOwner = true;
       } else {
         const memRes = await pool.query(
-          `SELECT o.id, o.name, o.owner_id FROM organisations o
+          `SELECT o.id, o.name, o.owner_id, o.admin_name, o.pharmacy_mode FROM organisations o
            JOIN organisation_memberships om ON om.organisation_id = o.id
            WHERE om.user_id = $1 AND om.status = 'ACTIVE' AND o.status = 'ACTIVE'
            ORDER BY om.created_at ASC LIMIT 1;`,
@@ -170,16 +176,35 @@ class AuthService {
         if (memRes.rows.length > 0) {
           user.organisation_id = memRes.rows[0].id;
           user.organisation_name = memRes.rows[0].name;
-          isOwner = memRes.rows[0].owner_id === user.id;
+          userPharmacyMode = memRes.rows[0].pharmacy_mode || "single";
+          isOwner =
+            memRes.rows[0].owner_id === user.id ||
+            Boolean(
+              memRes.rows[0].admin_name &&
+                user.name &&
+                memRes.rows[0].admin_name.toLowerCase() ===
+                  user.name.toLowerCase(),
+            );
         }
       }
     } else {
       const orgCheck = await pool.query(
-        "SELECT owner_id FROM organisations WHERE id = $1 LIMIT 1;",
+        "SELECT owner_id, admin_name, pharmacy_mode FROM organisations WHERE id = $1 LIMIT 1;",
         [user.organisation_id],
       );
-      if (orgCheck.rows[0]?.owner_id === user.id) {
-        isOwner = true;
+      if (orgCheck.rows[0]) {
+        userPharmacyMode = orgCheck.rows[0].pharmacy_mode || "single";
+        if (
+          orgCheck.rows[0].owner_id === user.id ||
+          Boolean(
+            orgCheck.rows[0].admin_name &&
+              user.name &&
+              orgCheck.rows[0].admin_name.toLowerCase() ===
+                user.name.toLowerCase(),
+          )
+        ) {
+          isOwner = true;
+        }
       }
     }
 
@@ -238,6 +263,7 @@ class AuthService {
         id: user.id,
         supabaseAuthId,
         name: user.name,
+        adminName: user.name,
         email: user.email,
         phone: user.phone,
         staffId: user.staffId,
@@ -245,13 +271,14 @@ class AuthService {
         roleName: isSupplier
           ? "Medicine Supplier"
           : user.role_name || (isOwner ? "Pharmacy Owner" : "Staff Member"),
-        isOwner: Boolean(isOwner),
+        isOwner: Boolean(isOwner || isExplicitAdmin),
         supplierId: supplierDetails?.id || user.supplier_id || null,
         supplierName: supplierDetails?.name || null,
         companyName: supplierDetails?.name || null,
         supplierDetails: supplierDetails || null,
         organisationId: user.organisation_id,
         organisationName: user.organisation_name || "Falah Pharmacy",
+        pharmacyMode: userPharmacyMode || "single",
         branchId: branch?.id || null,
         branchName: branch?.name || null,
         branch: branch
@@ -481,7 +508,7 @@ class AuthService {
       let orgName = "Pharmacy";
       if (userData.pharmacyCode) {
         const orgByCode = await pool.query(
-          "SELECT id, name FROM organisations WHERE LOWER(name) LIKE '%' || LOWER($1) || '%' OR id::text = $1 LIMIT 1;",
+          "SELECT id, name FROM organisations WHERE LOWER(pharmacy_code) = LOWER($1) OR LOWER(name) LIKE '%' || LOWER($1) || '%' OR id::text = $1 LIMIT 1;",
           [userData.pharmacyCode.trim()],
         );
         if (orgByCode.rows.length > 0) {
@@ -497,23 +524,93 @@ class AuthService {
         orgName = defaultOrg.rows[0]?.name || "Pharmacy";
       }
 
-      // Pick first active branch of the organisation
-      const branchRes = await pool.query(
-        "SELECT id, name, branch_code AS \"branchCode\" FROM branches WHERE organisation_id = $1 AND status = 'ACTIVE' ORDER BY created_at ASC LIMIT 1;",
-        [orgId],
-      );
-      const branch = branchRes.rows[0] || null;
+      // Pick or create first active branch of the organisation
+      let branch = null;
+      if (orgId) {
+        const branchRes = await pool.query(
+          "SELECT id, name, branch_code AS \"branchCode\" FROM branches WHERE organisation_id = $1 AND status = 'ACTIVE' ORDER BY created_at ASC LIMIT 1;",
+          [orgId],
+        );
+        branch = branchRes.rows[0] || null;
 
-      // Generate staff ID
-      const staffSeqRes = await pool.query("SELECT COUNT(*) + 1 AS num FROM users WHERE role = 'STAFF';");
+        if (!branch) {
+          const newBranch = await pool.query(
+            `INSERT INTO branches (organisation_id, name, branch_code, status)
+             VALUES ($1, 'Main Branch', 'BR-01', 'ACTIVE')
+             RETURNING id, name, branch_code AS "branchCode";`,
+            [orgId],
+          ).catch(() => null);
+          branch = newBranch?.rows?.[0] || null;
+        }
+      }
+
+      // Seed / ensure system roles exist for this organisation
+      if (orgId) {
+        await seedOrganisationSystemRoles(orgId).catch((err) =>
+          console.warn("Seeding roles notice:", err.message),
+        );
+      }
+
+      // Resolve designation / role in organisation
+      let roleRecord = null;
+      if (orgId) {
+        const roleRes = await pool.query(
+          `SELECT id, name, role_identifier, clearance_level FROM roles 
+           WHERE organisation_id = $1 AND (
+             LOWER(name) = LOWER($2)
+             OR LOWER(role_identifier) = LOWER($2)
+             OR ($2 ILIKE '%specialist%' AND role_identifier = 'SPECIALIST')
+             OR ($2 ILIKE '%sales%' AND role_identifier = 'SALES_ASSOCIATE')
+             OR ($2 ILIKE '%pharm%' AND role_identifier = 'PHARMACIST')
+             OR ($2 ILIKE '%cash%' AND role_identifier = 'CASHIER')
+             OR ($2 ILIKE '%manag%' AND role_identifier = 'MANAGER')
+             OR LOWER(name) LIKE '%' || LOWER($2) || '%'
+             OR LOWER(role_identifier) LIKE '%' || LOWER($2) || '%'
+           )
+           ORDER BY 
+             (LOWER(name) = LOWER($2)) DESC,
+             (LOWER(role_identifier) = LOWER($2)) DESC
+           LIMIT 1;`,
+          [orgId, staffRole],
+        );
+        roleRecord = roleRes.rows[0] || null;
+
+        if (!roleRecord) {
+          // Fallback to Pharmacist or first role
+          const fallbackRole = await pool.query(
+            "SELECT id, name, role_identifier, clearance_level FROM roles WHERE organisation_id = $1 AND (role_identifier = 'PHARMACIST' OR name = 'Pharmacist') LIMIT 1;",
+            [orgId],
+          );
+          roleRecord = fallbackRole.rows[0] || null;
+        }
+      }
+
+      const assignedRoleIdentifier =
+        roleRecord?.role_identifier ||
+        staffRole.toUpperCase().replace(/[^A-Z0-9]/g, "_") ||
+        "PHARMACIST";
+      const assignedRoleName = roleRecord?.name || staffRole || "Pharmacist";
+
+      // Generate staff ID safely
+      const staffSeqRes = await pool.query(
+        "SELECT COUNT(*) + 1 AS num FROM users WHERE role IS NOT NULL OR staff_id IS NOT NULL;",
+      );
       const staffSeq = staffSeqRes.rows[0]?.num || 1;
       const staffId = `STF-${String(staffSeq).padStart(3, "0")}`;
 
       const userRes = await pool.query(
         `INSERT INTO users (name, email, password_hash, phone, supabase_auth_id, role, staff_id, status)
-         VALUES ($1, $2, $3, $4, $5, 'STAFF', $6, 'ACTIVE')
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'ACTIVE')
          RETURNING id, name, email, phone, supabase_auth_id, role, staff_id, status;`,
-        [staffName, cleanEmail, passwordHash, cleanPhone || null, supabaseAuthId, staffId],
+        [
+          staffName,
+          cleanEmail,
+          passwordHash,
+          cleanPhone || null,
+          supabaseAuthId,
+          assignedRoleIdentifier,
+          staffId,
+        ],
       );
       const user = userRes.rows[0];
 
@@ -522,7 +619,8 @@ class AuthService {
         const memRes = await pool.query(
           `INSERT INTO organisation_memberships (organisation_id, user_id, status)
            VALUES ($1, $2, 'ACTIVE')
-           ON CONFLICT DO NOTHING RETURNING id;`,
+           ON CONFLICT (organisation_id, user_id) DO UPDATE SET status = 'ACTIVE'
+           RETURNING id;`,
           [orgId, user.id],
         ).catch((err) => console.warn("Staff membership error:", err.message));
         membershipId = memRes?.rows?.[0]?.id;
@@ -535,12 +633,13 @@ class AuthService {
         }
       }
 
-      if (branch?.id && membershipId) {
+      if (branch?.id && membershipId && roleRecord?.id) {
         await pool.query(
-          `INSERT INTO branch_assignments (membership_id, branch_id, is_primary)
-           VALUES ($1, $2, TRUE)
-           ON CONFLICT DO NOTHING;`,
-          [membershipId, branch.id],
+          `INSERT INTO branch_assignments (membership_id, branch_id, role_id, is_primary)
+           VALUES ($1, $2, $3, TRUE)
+           ON CONFLICT (membership_id, branch_id) 
+           DO UPDATE SET role_id = EXCLUDED.role_id, is_primary = TRUE;`,
+          [membershipId, branch.id, roleRecord.id],
         ).catch((err) => console.warn("Staff branch assignment error:", err.message));
       }
 
@@ -560,8 +659,9 @@ class AuthService {
           email: user.email,
           phone: user.phone,
           staffId: user.staff_id,
-          role: "STAFF",
-          roleName: staffRole || "Pharmacy Staff",
+          role: assignedRoleIdentifier,
+          roleName: assignedRoleName,
+          accessLevel: roleRecord?.clearance_level || "Clinical Dispensing",
           organisationId: orgId,
           organisationName: orgName,
           branchId: branch?.id || null,
@@ -589,11 +689,16 @@ class AuthService {
       gstNumber,
       gstin,
       businessType,
+      pharmacyMode,
     } = userData || {};
 
     const cleanName = (adminName || ownerName || name || "").trim();
     const cleanEmail = (email || "").trim().toLowerCase();
     const cleanPharmacyName = (pharmacyName || organisationName || "").trim();
+    const cleanPharmacyMode =
+      (pharmacyMode || "single").trim().toLowerCase() === "multi"
+        ? "multi"
+        : "single";
     const cleanBranchName = (
       branchName ||
       (isNaN(branches) ? branches : null) ||
@@ -663,9 +768,9 @@ class AuthService {
 
       // B. Insert Owner User
       const insertUserRes = await client.query(
-        `INSERT INTO users (name, email, password_hash, phone, supabase_auth_id, status)
-         VALUES ($1, $2, $3, $4, $5, 'ACTIVE')
-         RETURNING id, name, email, phone, supabase_auth_id, status, created_at;`,
+        `INSERT INTO users (name, email, password_hash, phone, supabase_auth_id, role, status)
+         VALUES ($1, $2, $3, $4, $5, 'ADMIN', 'ACTIVE')
+         RETURNING id, name, email, phone, supabase_auth_id, role, status, created_at;`,
         [cleanName, cleanEmail, passwordHash, phone || null, supabaseAuthId],
       );
       const user = insertUserRes.rows[0];
@@ -680,9 +785,9 @@ class AuthService {
       const insertOrgRes = await client.query(
         `INSERT INTO organisations (
            owner_id, name, pharmacy_code, admin_name, email, phone,
-           address, city, state, pincode, gst_number, business_type, status
+           address, city, state, pincode, gst_number, business_type, pharmacy_mode, status
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'ACTIVE')
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'ACTIVE')
          RETURNING *;`,
         [
           user.id,
@@ -697,6 +802,7 @@ class AuthService {
           pincode || "400001",
           cleanGstNumber,
           cleanBusinessType,
+          cleanPharmacyMode,
         ],
       );
       const organisation = insertOrgRes.rows[0];
@@ -743,14 +849,16 @@ class AuthService {
         const insertBranchRes = await client.query(
           `INSERT INTO branches (
              organisation_id, branch_code, name, facility_type,
+             admin_name, contact_person,
              address, city, state, postal_code, phone, status
            )
-           VALUES ($1, $2, $3, 'RETAIL_DISPENSARY', $4, $5, $6, $7, $8, 'ACTIVE')
-           RETURNING id, name, branch_code;`,
+           VALUES ($1, $2, $3, 'RETAIL_DISPENSARY', $4, $4, $5, $6, $7, $8, $9, 'ACTIVE')
+           RETURNING id, name, branch_code, admin_name, contact_person;`,
           [
             organisation.id,
             branchCode,
             cleanBranchName,
+            cleanName,
             address || "Registered Address",
             city || "City",
             state || "Maharashtra",
@@ -793,21 +901,35 @@ class AuthService {
            VALUES ($1, $2, $3, TRUE);`,
           [membershipId, branch.id, adminRoleId],
         );
+
+        // I. Seed Initial Pharmacy Inventory, Catalog & Purchase Orders
+        await seedInitialPharmacyData(organisation.id, branch.id, client).catch(
+          (seedErr) => console.warn("[Auth] Initial pharmacy seed error:", seedErr.message)
+        );
       }
 
       await client.query("COMMIT");
+
+      const token = createSupabaseTestToken({
+        sub: user.supabase_auth_id || supabaseAuthId,
+        email: cleanEmail,
+      });
 
       return {
         success: true,
         message:
           "Pharmacy organisation and owner account created successfully.",
+        token,
         user: {
           id: user.id,
           supabaseAuthId: user.supabase_auth_id,
           name: user.name,
+          adminName: user.name,
           email: user.email,
           role: "OWNER",
           roleName: "Pharmacy Owner",
+          isOwner: true,
+          pharmacyMode: cleanPharmacyMode,
           organisationId: organisation.id,
           organisationName: organisation.name,
           pharmacyCode: organisation.pharmacy_code,
@@ -884,6 +1006,7 @@ class AuthService {
       gstNumber,
       gstin,
       businessType,
+      pharmacyMode,
       createInitialBranch,
     } = onboardData || {};
 
@@ -932,18 +1055,22 @@ class AuthService {
       decoded.user_metadata?.name ||
       "Pharmacy Owner"
     ).trim();
-    const cleanPharmacyName = (pharmacyName || organisationName || "").trim();
+    const cleanPharmacyMode =
+      (pharmacyMode || "single").trim().toLowerCase() === "multi"
+        ? "multi"
+        : "single";
+    const cleanPharmacyName = (
+      pharmacyName ||
+      organisationName ||
+      (cleanName ? `${cleanName}'s Pharmacy` : "My Pharmacy")
+    ).trim();
     const cleanBranchName = (
       branchName ||
       (isNaN(branches) ? branches : null) ||
-      "Main Branch"
+      (cleanPharmacyMode === "multi" ? "Main Branch" : "Main Store")
     ).trim();
     const cleanGstNumber = (gstNumber || gstin || "").trim() || null;
     const cleanBusinessType = (businessType || "Private Limited").trim();
-
-    if (!cleanPharmacyName) {
-      throw new Error("Pharmacy name is required for pharmacy onboarding.");
-    }
 
     // Check if user already exists in PostgreSQL
     const existingUser = await pool.query(
@@ -951,9 +1078,7 @@ class AuthService {
       [uuidSub, verifiedEmail],
     );
     if (existingUser.rows.length > 0) {
-      throw new Error(
-        "An account with this email address already exists. Please sign in instead.",
-      );
+      return await this.googleLogin({ token });
     }
 
     // Execute transactional onboarding in PostgreSQL
@@ -963,9 +1088,9 @@ class AuthService {
 
       // A. Insert Owner User
       const insertUserRes = await client.query(
-        `INSERT INTO users (name, email, phone, supabase_auth_id, status)
-         VALUES ($1, $2, $3, $4, 'ACTIVE')
-         RETURNING id, name, email, phone, supabase_auth_id, status, created_at;`,
+        `INSERT INTO users (name, email, phone, supabase_auth_id, role, status)
+         VALUES ($1, $2, $3, $4, 'ADMIN', 'ACTIVE')
+         RETURNING id, name, email, phone, supabase_auth_id, role, status, created_at;`,
         [cleanName, verifiedEmail, phone || null, uuidSub],
       );
       const user = insertUserRes.rows[0];
@@ -980,9 +1105,9 @@ class AuthService {
       const insertOrgRes = await client.query(
         `INSERT INTO organisations (
            owner_id, name, pharmacy_code, admin_name, email, phone,
-           address, city, state, pincode, gst_number, business_type, status
+           address, city, state, pincode, gst_number, business_type, pharmacy_mode, status
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'ACTIVE')
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'ACTIVE')
          RETURNING *;`,
         [
           user.id,
@@ -997,6 +1122,7 @@ class AuthService {
           pincode || "400001",
           cleanGstNumber,
           cleanBusinessType,
+          cleanPharmacyMode,
         ],
       );
       const organisation = insertOrgRes.rows[0];
@@ -1031,7 +1157,7 @@ class AuthService {
       // E. Generate sequential Branch Code & Insert Initial Branch (if requested)
       let branch = null;
       const shouldCreateBranch =
-        createInitialBranch === true && Boolean(cleanBranchName);
+        createInitialBranch !== false && Boolean(cleanBranchName);
 
       if (shouldCreateBranch) {
         const branchCode = await getNextBusinessNumber({
@@ -1043,14 +1169,16 @@ class AuthService {
         const insertBranchRes = await client.query(
           `INSERT INTO branches (
              organisation_id, branch_code, name, facility_type,
+             admin_name, contact_person,
              address, city, state, postal_code, phone, status
            )
-           VALUES ($1, $2, $3, 'RETAIL_DISPENSARY', $4, $5, $6, $7, $8, 'ACTIVE')
-           RETURNING id, name, branch_code;`,
+           VALUES ($1, $2, $3, 'RETAIL_DISPENSARY', $4, $4, $5, $6, $7, $8, $9, 'ACTIVE')
+           RETURNING id, name, branch_code, admin_name, contact_person;`,
           [
             organisation.id,
             branchCode,
             cleanBranchName,
+            cleanName,
             address || "Registered Address",
             city || "City",
             state || "Maharashtra",
@@ -1093,6 +1221,11 @@ class AuthService {
            VALUES ($1, $2, $3, TRUE);`,
           [membershipId, branch.id, adminRoleId],
         );
+
+        // I. Seed Initial Pharmacy Inventory, Catalog & Purchase Orders
+        await seedInitialPharmacyData(organisation.id, branch.id, client).catch(
+          (seedErr) => console.warn("[Auth] Google initial pharmacy seed error:", seedErr.message)
+        );
       }
 
       await client.query("COMMIT");
@@ -1106,9 +1239,12 @@ class AuthService {
           id: user.id,
           supabaseAuthId: user.supabase_auth_id,
           name: user.name,
+          adminName: user.name,
           email: user.email,
           role: "OWNER",
           roleName: "Pharmacy Owner",
+          isOwner: true,
+          pharmacyMode: organisation.pharmacy_mode || cleanPharmacyMode,
           organisationId: organisation.id,
           organisationName: organisation.name,
           pharmacyCode: organisation.pharmacy_code,
@@ -1213,26 +1349,28 @@ class AuthService {
     // Resolve organisation context legitimately from PostgreSQL
     let organisationId = null;
     let organisationName = null;
+    let pharmacyMode = "single";
     let isOwner = false;
     let roleIdentifier = "STAFF";
     let roleName = "Staff";
 
     // Check if user owns an active organisation
     const ownerOrgRes = await pool.query(
-      "SELECT id, name, owner_id FROM organisations WHERE owner_id = $1 AND status = 'ACTIVE' LIMIT 1;",
+      "SELECT id, name, owner_id, pharmacy_mode FROM organisations WHERE owner_id = $1 AND status = 'ACTIVE' LIMIT 1;",
       [user.id],
     );
 
     if (ownerOrgRes.rows.length > 0) {
       organisationId = ownerOrgRes.rows[0].id;
       organisationName = ownerOrgRes.rows[0].name;
+      pharmacyMode = ownerOrgRes.rows[0].pharmacy_mode || "single";
       isOwner = true;
       roleIdentifier = "OWNER";
       roleName = "Pharmacy Owner";
     } else {
       // Check active membership in organisation_memberships
       const memRes = await pool.query(
-        `SELECT om.organisation_id, o.name AS organisation_name, o.owner_id,
+        `SELECT om.organisation_id, o.name AS organisation_name, o.owner_id, o.pharmacy_mode,
                 r.name AS role_name, r.role_identifier
          FROM organisation_memberships om
          JOIN organisations o ON o.id = om.organisation_id AND o.status = 'ACTIVE'
@@ -1248,6 +1386,7 @@ class AuthService {
         const membership = memRes.rows[0];
         organisationId = membership.organisation_id;
         organisationName = membership.organisation_name;
+        pharmacyMode = membership.pharmacy_mode || "single";
         isOwner = membership.owner_id === user.id;
         roleIdentifier = isOwner
           ? "OWNER"
@@ -1295,6 +1434,7 @@ class AuthService {
         isOwner: Boolean(isOwner),
         organisationId: organisationId || null,
         organisationName: organisationName || null,
+        pharmacyMode: pharmacyMode || "single",
         branchId: branch?.id || null,
         branchName: branch?.name || null,
         hasBranch: Boolean(branch),
@@ -1350,7 +1490,7 @@ class AuthService {
     // Query fresh user & organisation details
     const orgRes = user.organisationId
       ? await pool.query(
-          "SELECT id, name, pharmacy_code FROM organisations WHERE id = $1 LIMIT 1;",
+          "SELECT id, name, pharmacy_code, pharmacy_mode FROM organisations WHERE id = $1 LIMIT 1;",
           [user.organisationId],
         )
       : { rows: [] };
@@ -1405,15 +1545,24 @@ class AuthService {
         id: user.id,
         supabaseAuthId: user.supabaseAuthId || null,
         name: user.name,
+        adminName: user.name,
         email: user.email,
         phone: user.phone,
         staffId: user.staffId,
         role: user.role,
         roleId: user.roleId,
         isPlatformSuperadmin: Boolean(user.isPlatformSuperadmin),
+        isOwner: Boolean(
+          user.isOwner ||
+            (user.role || "").toUpperCase() === "OWNER" ||
+            (user.role || "").toUpperCase() === "ADMIN" ||
+            (user.role || "").toLowerCase().includes("admin") ||
+            (user.role || "").toLowerCase().includes("owner"),
+        ),
         organisationId: user.organisationId,
         organisationName: orgRes.rows[0]?.name || null,
         pharmacyCode: orgRes.rows[0]?.pharmacy_code || null,
+        pharmacyMode: orgRes.rows[0]?.pharmacy_mode || user.pharmacyMode || "single",
         branchId: branchRecord?.id || user.branchId || null,
         branchName: branchRecord?.name || null,
         hasBranch,

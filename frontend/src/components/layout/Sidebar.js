@@ -96,8 +96,15 @@ export default function Sidebar({
     console.error('Context extraction error:', e);
   }
 
-  // Inventory subitems (Stock Adjustments, Stock Transfer, Stock Status)
-  const inventorySubItems = ALL_INVENTORY_SUBITEMS;
+  // Inventory subitems: Stock Transfer is strictly for Multi-Branch architecture
+  const inventorySubItems = ALL_INVENTORY_SUBITEMS.filter(
+    (item) => item.key !== 'stock-transfer' || isMultiBranch
+  );
+
+  // Management subitems: Branches is strictly for Multi-Branch architecture
+  const managementSubItems = MANAGEMENT_SUBITEMS.filter(
+    (item) => item.key !== 'branches' || isMultiBranch
+  );
 
   const settingsSubItems = SETTINGS_SUBITEMS.filter(
     (item) => !item.adminOnly || isAdmin
@@ -583,10 +590,10 @@ export default function Sidebar({
             </Text>
           </Pressable>
 
-          {/* Submenu: Branches, Users, Roles & Permissions, Audit Log */}
+          {/* Submenu: Branches (if multi-branch), Users, Roles & Permissions, Audit Log */}
           {managementExpanded && (
             <View style={styles.submenuContainer}>
-              {MANAGEMENT_SUBITEMS.map((subItem) => {
+              {managementSubItems.map((subItem) => {
                 const isActive = activeItem === subItem.key;
                 return (
                   <Pressable

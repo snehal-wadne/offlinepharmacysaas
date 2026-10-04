@@ -51,8 +51,8 @@ export default function Header({
 
   const displayBranch =
     typeof currentBranch === "object" && currentBranch !== null
-      ? currentBranch.name || currentBranch.branchCode || (isAdminOrOwner ? "All Branches" : "My Branch")
-      : String(currentBranch || (isAdminOrOwner ? "All Branches" : "My Branch"));
+      ? currentBranch.name || currentBranch.branchCode || (isAdminOrOwner ? "All Branches & Stores" : "My Branch")
+      : String(currentBranch || (isAdminOrOwner ? "All Branches & Stores" : "My Branch"));
 
   const fetchBranchesFromDb = async () => {
     try {
@@ -71,11 +71,12 @@ export default function Header({
           id: b.id,
           name: b.name,
           branchCode: b.branch_code || b.branchCode,
+          adminName: b.admin_name || b.contact_person || "",
         }));
 
         let combined;
         if (isAdminOrOwner) {
-          combined = [{ id: null, name: "All Branches" }, ...branchObjs];
+          combined = [{ id: null, name: "All Branches & Stores" }, ...branchObjs];
         } else {
           // Non-admin branch staff MUST ONLY see their assigned branch!
           // NEVER show "All Branches" and never show other branches!
@@ -89,7 +90,8 @@ export default function Header({
           const isInvalid =
             !currentBranch ||
             currentBranch === "All Branches" ||
-            (typeof currentBranch === "object" && (!currentBranch.id || currentBranch.name === "All Branches"));
+            currentBranch === "All Branches & Stores" ||
+            (typeof currentBranch === "object" && (!currentBranch.id || currentBranch.name === "All Branches" || currentBranch.name === "All Branches & Stores"));
           if (isInvalid && onBranchChange) {
             onBranchChange(combined[0]);
           }
@@ -223,175 +225,146 @@ export default function Header({
             isMobile && styles.branchSelectorRowMobile,
           ]}
         >
-          {!isMobile && <Text style={styles.branchLabel}>Store / Branch</Text>}
+          {!isMobile && (
+            <Text style={styles.branchLabel}>
+              {isMultiBranch ? "Store / Branch" : "Single Store"}
+            </Text>
+          )}
           <View style={styles.branchAnchorContainer}>
-            <Pressable
-              onPress={() => {
-                if (!dropdownOpen) fetchBranchesFromDb();
-                setDropdownOpen(!dropdownOpen);
-              }}
-              style={[
-                styles.branchButton,
-                isMobile && styles.branchButtonMobile,
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Select Branch"
-            >
-              <Text style={styles.branchStoreIcon}>📍</Text>
-              <Text
+            {!isMultiBranch ? (
+              /* Single Store: Solid Non-Clickable Badge (No branch switcher dropdown) */
+              <View
                 style={[
-                  styles.branchButtonText,
-                  isMobile && styles.branchButtonTextMobile,
+                  styles.branchButton,
+                  {
+                    backgroundColor: "#FFFFFF",
+                    borderColor: "#E5DFE4",
+                    borderWidth: 1,
+                    cursor: "default",
+                    paddingHorizontal: 12,
+                  },
+                  isMobile && styles.branchButtonMobile,
                 ]}
-                numberOfLines={1}
               >
-                {displayBranch}
-              </Text>
-              <Text style={styles.chevron}>▾</Text>
-            </Pressable>
-
-            {/* Anchored Dropdown Menu */}
-            {dropdownOpen && (
-              <>
-                <Pressable
-                  style={styles.floatingBackdrop}
-                  onPress={() => setDropdownOpen(false)}
-                />
-                <View style={styles.dropdownCardAnchored}>
-                  <Text style={styles.dropdownTitle}>
-                    {isAdminOrOwner
-                      ? "Select Active Store Branch"
-                      : "Your Assigned Store Branch"}
-                  </Text>
-                  {branchOptions.length === 0 ? (
-                    <Text
-                      style={{
-                        padding: 12,
-                        color: "#64748B",
-                        fontSize: 13,
-                        textAlign: "center",
-                      }}
-                    >
-                      No active branch assigned. Please contact your store administrator.
-                    </Text>
-                  ) : (
-                    branchOptions.map((branch) => {
-                      const branchName =
-                        typeof branch === "object" && branch !== null
-                          ? branch.name || branch.branchCode || "Branch"
-                          : String(branch);
-                      const isSelected = branchName === displayBranch;
-                      return (
-                        <Pressable
-                          key={branch.id || branchName}
-                          onPress={() => handleSelectBranch(branch)}
-                          style={[
-                            styles.dropdownItem,
-                            isSelected && styles.dropdownItemSelected,
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.dropdownItemText,
-                              isSelected && styles.dropdownItemTextSelected,
-                            ]}
-                          >
-                            📍 {branchName}
-                          </Text>
-                          {isSelected && <Text style={styles.checkmark}>✓</Text>}
-                        </Pressable>
-                      );
-                    })
-                  )}
-
-                  {/* Single vs Multi Pharmacy Mode Switcher - Admin Only */}
-                  {isAdminOrOwner && (
-                    <>
-                      <View style={styles.dropdownDivider} />
-                      <View style={styles.dropdownModeSection}>
-                        <Text style={styles.dropdownModeSectionTitle}>
-                          PHARMACY OPERATION MODE
-                        </Text>
-                    <Pressable
-                      onPress={() => {
-                        if (onSetPharmacyMode) onSetPharmacyMode(false);
-                        setDropdownOpen(false);
-                      }}
-                      style={[
-                        styles.dropdownModeBtn,
-                        !isMultiBranch && styles.dropdownModeBtnActive,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.dropdownModeBtnText,
-                          !isMultiBranch && styles.dropdownModeBtnTextActive,
-                        ]}
-                      >
-                        🏪 Single Store Mode
-                      </Text>
-                      {!isMultiBranch && (
-                        <Text style={styles.checkmark}>✓</Text>
-                      )}
-                    </Pressable>
-                    <Pressable
-                      onPress={() => {
-                        if (onSetPharmacyMode) onSetPharmacyMode(true);
-                        setDropdownOpen(false);
-                      }}
-                      style={[
-                        styles.dropdownModeBtn,
-                        isMultiBranch && styles.dropdownModeBtnActive,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.dropdownModeBtnText,
-                          isMultiBranch && styles.dropdownModeBtnTextActive,
-                        ]}
-                      >
-                        🏢 Multi-Branch Network
-                      </Text>
-                      {isMultiBranch && <Text style={styles.checkmark}>✓</Text>}
-                    </Pressable>
-                  </View>
-                </>
-              )}
-            </View>
-          </>
-        )}
-          </View>
-
-          {/* Quick Mode Toggle Pill in Header Bar */}
-          {onTogglePharmacyMode && (
-            <Pressable
-              onPress={onTogglePharmacyMode}
-              style={[
-                styles.modeTogglePill,
-                isMultiBranch
-                  ? styles.modeTogglePillMulti
-                  : styles.modeTogglePillSingle,
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Toggle Pharmacy Mode"
-            >
-              <Text style={styles.modeToggleIcon}>
-                {isMultiBranch ? "🏢" : "🏪"}
-              </Text>
-              {!isMobile && (
+                <Text style={styles.branchStoreIcon}>🏪</Text>
                 <Text
                   style={[
-                    styles.modeToggleText,
-                    isMultiBranch
-                      ? styles.modeToggleTextMulti
-                      : styles.modeToggleTextSingle,
+                    styles.branchButtonText,
+                    { color: "#28242B", fontWeight: "700" },
+                    isMobile && styles.branchButtonTextMobile,
                   ]}
+                  numberOfLines={1}
                 >
-                  {isMultiBranch ? "Multi-Branch" : "Single Shop"}
+                  {currentUser?.organisationName || displayBranch || "Main Store"}
                 </Text>
-              )}
-            </Pressable>
-          )}
+                <View
+                  style={{
+                    marginLeft: 6,
+                    paddingHorizontal: 6,
+                    paddingVertical: 2,
+                    borderRadius: 4,
+                    backgroundColor: "#F2ECF0",
+                  }}
+                >
+                  <Text style={{ fontSize: 10, fontWeight: "800", color: "#744458" }}>
+                    DIRECT
+                  </Text>
+                </View>
+              </View>
+            ) : (
+              /* Multi-Branch Chain: Branch Switcher Dropdown */
+              <>
+                <Pressable
+                  onPress={() => {
+                    if (!dropdownOpen) fetchBranchesFromDb();
+                    setDropdownOpen(!dropdownOpen);
+                  }}
+                  style={[
+                    styles.branchButton,
+                    isMobile && styles.branchButtonMobile,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Select Branch"
+                >
+                  <Text style={styles.branchStoreIcon}>📍</Text>
+                  <Text
+                    style={[
+                      styles.branchButtonText,
+                      isMobile && styles.branchButtonTextMobile,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {displayBranch}
+                  </Text>
+                  <Text style={styles.chevron}>▾</Text>
+                </Pressable>
+
+                {/* Anchored Dropdown Menu */}
+                {dropdownOpen && (
+                  <>
+                    <Pressable
+                      style={styles.floatingBackdrop}
+                      onPress={() => setDropdownOpen(false)}
+                    />
+                    <View style={styles.dropdownCardAnchored}>
+                      <Text style={styles.dropdownTitle}>
+                        {isAdminOrOwner
+                          ? "Select Active Store Branch"
+                          : "Your Assigned Store Branch"}
+                      </Text>
+                      {branchOptions.length === 0 ? (
+                        <Text
+                          style={{
+                            padding: 12,
+                            color: "#64748B",
+                            fontSize: 13,
+                            textAlign: "center",
+                          }}
+                        >
+                          No active branch assigned. Please contact your store administrator.
+                        </Text>
+                      ) : (
+                        branchOptions.map((branch) => {
+                          const branchName =
+                            typeof branch === "object" && branch !== null
+                              ? branch.name || branch.branchCode || "Branch"
+                              : String(branch);
+                          const isSelected = branchName === displayBranch;
+                          return (
+                            <Pressable
+                              key={branch.id || branchName}
+                              onPress={() => handleSelectBranch(branch)}
+                              style={[
+                                styles.dropdownItem,
+                                isSelected && styles.dropdownItemSelected,
+                              ]}
+                            >
+                              <View style={{ flex: 1 }}>
+                                <Text
+                                  style={[
+                                    styles.dropdownItemText,
+                                    isSelected && styles.dropdownItemTextSelected,
+                                  ]}
+                                >
+                                  📍 {branchName}
+                                </Text>
+                                {branch.adminName ? (
+                                  <Text style={{ fontSize: 11, color: "#77717A", marginTop: 1, paddingLeft: 18 }}>
+                                    Admin: {branch.adminName}
+                                  </Text>
+                                ) : null}
+                              </View>
+                              {isSelected && <Text style={styles.checkmark}>✓</Text>}
+                            </Pressable>
+                          );
+                        })
+                      )}
+                    </View>
+                  </>
+                )}
+              </>
+            )}
+          </View>
         </View>
       </View>
 
