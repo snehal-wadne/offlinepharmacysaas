@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   SafeAreaView,
+  useWindowDimensions,
 } from "react-native";
 import {
   SkeletonTableRow,
@@ -78,6 +79,8 @@ const REPORT_TYPES = [
 const MOCK_PO_DATA = [];
 
 export default function PurchaseReportsScreen({ navigation, route }) {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
   const [selectedReport, setSelectedReport] = useState("purchase_summary");
   const [quickRange, setQuickRange] = useState("this_month");
   const [filters, setFilters] = useState({
@@ -196,8 +199,8 @@ export default function PurchaseReportsScreen({ navigation, route }) {
   return (
     <SafeAreaView style={styles.safeArea}>
       {/* HEADER */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
+      <View style={[styles.header, isMobile && styles.headerMobile]}>
+        <View style={[styles.headerLeft, isMobile && styles.headerLeftMobile]}>
           <TouchableOpacity
             onPress={() => navigation?.goBack()}
             style={styles.backButton}
@@ -211,14 +214,22 @@ export default function PurchaseReportsScreen({ navigation, route }) {
             </Text>
           </View>
         </View>
-        <TouchableOpacity style={styles.headerExportButton}>
+        <TouchableOpacity
+          style={[
+            styles.headerExportButton,
+            isMobile && styles.headerExportButtonMobile,
+          ]}
+        >
           <Text style={styles.headerExportText}>⬇ Export</Text>
         </TouchableOpacity>
       </View>
 
       <ScrollView
         style={styles.container}
-        contentContainerStyle={styles.contentContainer}
+        contentContainerStyle={[
+          styles.contentContainer,
+          isMobile && styles.contentContainerMobile,
+        ]}
         keyboardShouldPersistTaps="handled"
       >
         {/* REPORT TYPE SELECTOR */}
@@ -286,7 +297,12 @@ export default function PurchaseReportsScreen({ navigation, route }) {
           </View>
 
           {quickRange === "custom" && (
-            <View style={styles.customDateContainer}>
+            <View
+              style={[
+                styles.customDateContainer,
+                isMobile && styles.customDateContainerMobile,
+              ]}
+            >
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>From Date</Text>
                 <TextInput
@@ -308,7 +324,12 @@ export default function PurchaseReportsScreen({ navigation, route }) {
             </View>
           )}
 
-          <View style={styles.dropdownsRow}>
+          <View
+            style={[
+              styles.dropdownsRow,
+              isMobile && styles.dropdownsRowMobile,
+            ]}
+          >
             {/* Branch Dropdown */}
             <View style={styles.dropdownWrapper}>
               <Text style={styles.inputLabel}>Branch</Text>
@@ -590,9 +611,20 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     zIndex: 10,
   },
+  headerMobile: {
+    flexDirection: "column",
+    alignItems: "stretch",
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
   headerLeft: {
     flexDirection: "row",
     alignItems: "center",
+    minWidth: 0,
+  },
+  headerLeftMobile: {
+    width: "100%",
   },
   backButton: {
     marginRight: 12,
@@ -618,6 +650,9 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 6,
   },
+  headerExportButtonMobile: {
+    alignSelf: "flex-start",
+  },
   headerExportText: {
     color: COLORS.secondary,
     fontWeight: "600",
@@ -628,6 +663,9 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: 16,
+  },
+  contentContainerMobile: {
+    padding: 12,
   },
   sectionContainer: {
     marginBottom: 16,
@@ -719,6 +757,10 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 16,
   },
+  customDateContainerMobile: {
+    flexDirection: "column",
+    gap: 10,
+  },
   inputGroup: {
     flex: 1,
   },
@@ -742,6 +784,10 @@ const styles = StyleSheet.create({
     gap: 12,
     flexWrap: "wrap",
     zIndex: 2000, // higher z-index for the row
+  },
+  dropdownsRowMobile: {
+    flexDirection: "column",
+    alignItems: "stretch",
   },
   dropdownWrapper: {
     flex: 1,

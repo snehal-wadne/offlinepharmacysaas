@@ -132,6 +132,7 @@ export default function PharmaciesTenantsPage() {
         </View>
 
         <FilterSelect
+          isMobile={isMobile}
           value={statusFilter}
           options={[
             'All Status',
@@ -146,6 +147,7 @@ export default function PharmaciesTenantsPage() {
         />
 
         <FilterSelect
+          isMobile={isMobile}
           value={planFilter}
           options={[
             'All Plans',
@@ -300,17 +302,29 @@ function FilterSelect({
   value,
   options,
   onChange,
+  isMobile,
 }: {
   value: string;
   options: string[];
   onChange: (value: string) => void;
+  isMobile: boolean;
 }) {
   const [open, setOpen] = useState(false);
 
   return (
-    <View style={[styles.filterWrapper, open && { zIndex: 10002 }]}>
+    <View
+      style={[
+        styles.filterWrapper,
+        isMobile && styles.filterWrapperMobile,
+        open && { zIndex: 10002 },
+      ]}
+    >
       <Pressable
-        style={[styles.filterButton, open && styles.activeFilterButton]}
+        style={[
+          styles.filterButton,
+          isMobile && styles.filterButtonMobile,
+          open && styles.activeFilterButton,
+        ]}
         onPress={() => setOpen((current) => !current)}
       >
         <Text style={[styles.filterText, open && styles.activeFilterText]}>{value}</Text>
@@ -318,7 +332,7 @@ function FilterSelect({
       </Pressable>
 
       {open && (
-        <View style={styles.dropdown}>
+        <View style={[styles.dropdown, isMobile && styles.dropdownMobile]}>
           {options.map((option) => (
             <Pressable
               key={option}
@@ -606,6 +620,10 @@ const styles = StyleSheet.create({
     zIndex: 10000,
     elevation: 10000,
   },
+  filterWrapperMobile: {
+    width: '100%',
+    flexBasis: '100%',
+  },
   filterButton: {
     minWidth: 125,
     height: 42,
@@ -617,6 +635,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  filterButtonMobile: {
+    width: '100%',
   },
   activeFilterButton: {
     borderColor: C.sageGreen,
@@ -649,6 +670,10 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.18,
     shadowRadius: 10,
+  },
+  dropdownMobile: {
+    width: '100%',
+    minWidth: 0,
   },
   dropdownItem: {
     padding: 11,

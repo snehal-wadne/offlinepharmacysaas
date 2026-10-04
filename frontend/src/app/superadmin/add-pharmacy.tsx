@@ -154,7 +154,7 @@ export default function AddPharmacyPage() {
       contentContainerStyle={[styles.content, isMobile && styles.contentMobile]}
       showsVerticalScrollIndicator={false}
     >
-      <View style={styles.breadcrumb}>
+      <View style={[styles.breadcrumb, isMobile && styles.breadcrumbMobile]}>
         <Pressable
           onPress={() => router.replace('/superadmin/pharmacies')}
         >
@@ -265,7 +265,7 @@ export default function AddPharmacyPage() {
         </View>
 
         <View style={[styles.rightColumn, isMobile && styles.fullWidthCard]}>
-          <View style={styles.formCard}>
+          <View style={[styles.formCard, isMobile && styles.formCardMobile]}>
             <Text style={styles.cardTitle}>Additional Information</Text>
 
             <FormField
@@ -310,7 +310,7 @@ export default function AddPharmacyPage() {
         </View>
       </View>
 
-      <View style={styles.bottomActions}>
+      <View style={[styles.bottomActions, isMobile && styles.bottomActionsMobile]}>
         <Pressable
           style={styles.cancelButton}
           onPress={() => {
@@ -439,6 +439,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 22,
   },
+  breadcrumbMobile: {
+    flexWrap: 'wrap',
+  },
   stepsMobile: {
     minHeight: 0,
     padding: 12,
@@ -508,6 +511,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.softGray,
     backgroundColor: C.white,
+  },
+  formCardMobile: {
+    width: '100%',
+    minWidth: 0,
+    maxWidth: '100%',
+    flexBasis: '100%',
+    padding: 16,
   },
   rightColumn: {
     flex: 0.7,
@@ -600,7 +610,11 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 18,
   },
+  bottomActionsMobile: {
+    flexDirection: 'column-reverse',
+  },
   cancelButton: {
+    alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 8,

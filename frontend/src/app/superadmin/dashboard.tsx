@@ -120,9 +120,9 @@ export default function SuperAdminDashboard() {
         />
       </View>
 
-      <View style={styles.threeColumn}>
-        <Panel title="Subscription Status Overview">
-          <View style={styles.statusChart}>
+      <View style={[styles.threeColumn, isMobile && styles.mobileColumn]}>
+        <Panel title="Subscription Status Overview" mobile={isMobile}>
+          <View style={[styles.statusChart, isMobile && styles.statusChartMobile]}>
             <View style={styles.chartRing}>
               <Text style={styles.chartNumber}>
                 {activeCount}
@@ -150,7 +150,7 @@ export default function SuperAdminDashboard() {
           </View>
         </Panel>
 
-        <Panel title="Pharmacies Trend">
+        <Panel title="Pharmacies Trend" mobile={isMobile}>
           <View style={styles.trendHeader}>
             <Text style={styles.trendText}>This Month</Text>
             <Text style={styles.trendArrow}>⌄</Text>
@@ -195,7 +195,7 @@ export default function SuperAdminDashboard() {
           </View>
         </Panel>
 
-        <Panel title="Top Plans by Revenue">
+        <Panel title="Top Plans by Revenue" mobile={isMobile}>
           {charts?.topPlans && charts.topPlans.length > 0 ? (
             charts.topPlans.slice(0, 5).map((plan: any, idx: number) => (
               <RevenueRow
@@ -217,12 +217,12 @@ export default function SuperAdminDashboard() {
         </Panel>
       </View>
 
-      <View style={styles.bottomRow}>
-        <Panel title="Recently Onboarded Pharmacies" large>
+      <View style={[styles.bottomRow, isMobile && styles.mobileColumn]}>
+        <Panel title="Recently Onboarded Pharmacies" large mobile={isMobile}>
           {pharmacies.slice(0, 4).map((pharmacy) => (
             <Pressable
               key={pharmacy.id}
-              style={styles.pharmacyRow}
+              style={[styles.pharmacyRow, isMobile && styles.pharmacyRowMobile]}
               onPress={() =>
                 router.push({
                   pathname: '/superadmin/pharmacy-details',
@@ -230,19 +230,19 @@ export default function SuperAdminDashboard() {
                 })
               }
             >
-              <Text style={styles.pharmacyName}>{pharmacy.name}</Text>
-              <Text style={styles.rowText}>{pharmacy.adminName}</Text>
-              <Text style={styles.rowText}>{pharmacy.plan}</Text>
-              <Text style={styles.rowText}>{pharmacy.usersUsed}</Text>
+              <Text style={[styles.pharmacyName, isMobile && styles.pharmacyNameMobile]}>{pharmacy.name}</Text>
+              <Text style={[styles.rowText, isMobile && styles.pharmacyMetaMobile]}>{pharmacy.adminName}</Text>
+              <Text style={[styles.rowText, isMobile && styles.pharmacyMetaMobile]}>{pharmacy.plan}</Text>
+              <Text style={[styles.rowText, isMobile && styles.pharmacyMetaMobile]}>{pharmacy.usersUsed}</Text>
               <Text
                 style={
                   pharmacy.status === 'Active'
-                    ? styles.activeText
+                    ? [styles.activeText, isMobile && styles.pharmacyMetaMobile]
                     : pharmacy.status === 'Expiring Soon'
-                    ? styles.expiringLegend
+                    ? [styles.expiringLegend, isMobile && styles.pharmacyMetaMobile]
                     : pharmacy.status === 'Deactivated'
-                    ? styles.expiredLegend
-                    : styles.activeText
+                    ? [styles.expiredLegend, isMobile && styles.pharmacyMetaMobile]
+                    : [styles.activeText, isMobile && styles.pharmacyMetaMobile]
                 }
               >
                 {pharmacy.status}
@@ -258,7 +258,7 @@ export default function SuperAdminDashboard() {
           </Pressable>
         </Panel>
 
-        <Panel title="Upcoming Expiry (Next 30 Days)">
+        <Panel title="Upcoming Expiry (Next 30 Days)" mobile={isMobile}>
           {expiringPharmacies.map((pharmacy) => (
             <View key={pharmacy.id} style={styles.expiryRow}>
               <View>
@@ -355,13 +355,15 @@ function Panel({
   title,
   children,
   large = false,
+  mobile = false,
 }: {
   title: string;
   children: React.ReactNode;
   large?: boolean;
+  mobile?: boolean;
 }) {
   return (
-    <View style={[styles.panel, large && styles.largePanel]}>
+    <View style={[styles.panel, large && styles.largePanel, mobile && styles.panelMobile]}>
       <Text style={styles.panelTitle}>{title}</Text>
       {children}
     </View>
@@ -532,6 +534,9 @@ const styles = StyleSheet.create({
     gap: 14,
     marginTop: 18,
   },
+  mobileColumn: {
+    flexDirection: 'column',
+  },
   panel: {
     flex: 1,
     minWidth: 290,
@@ -540,6 +545,12 @@ const styles = StyleSheet.create({
     backgroundColor: C.white,
     borderWidth: 1,
     borderColor: C.softGray,
+  },
+  panelMobile: {
+    width: '100%',
+    minWidth: 0,
+    flexBasis: '100%',
+    padding: 16,
   },
   largePanel: {
     flex: 2,
@@ -554,6 +565,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 18,
+  },
+  statusChartMobile: {
+    flexDirection: 'column',
+    alignItems: 'center',
   },
   chartRing: {
     width: 112,
@@ -698,11 +713,21 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: C.tableRose,
   },
+  pharmacyRowMobile: {
+    flexWrap: 'wrap',
+    gap: 8,
+  },
   pharmacyName: {
     flex: 1.5,
     color: C.mutedGray,
     fontSize: 11,
     fontWeight: '800',
+  },
+  pharmacyNameMobile: {
+    flexBasis: '100%',
+  },
+  pharmacyMetaMobile: {
+    flexBasis: '30%',
   },
   rowText: {
     flex: 1,

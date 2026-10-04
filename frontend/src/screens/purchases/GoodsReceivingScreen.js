@@ -496,12 +496,15 @@ export default function GoodsReceivingScreen({
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.contentContainer}
+      contentContainerStyle={[
+        styles.contentContainer,
+        isMobile && styles.contentContainerMobile,
+      ]}
       showsVerticalScrollIndicator={true}
     >
       {/* Header Row */}
-      <View style={styles.headerRow}>
-        <View>
+      <View style={[styles.headerRow, isMobile && styles.headerRowMobile]}>
+        <View style={isMobile && styles.headerTitleMobile}>
           <Text style={styles.pageTitle}>Goods Receiving</Text>
           <Text style={styles.pageSubtitle}>
             Verify incoming medicine shipments against POs and log Goods
@@ -510,7 +513,10 @@ export default function GoodsReceivingScreen({
         </View>
         <Pressable
           onPress={handleOpenModal}
-          style={styles.receiveButton}
+          style={[
+            styles.receiveButton,
+            isMobile && styles.receiveButtonMobile,
+          ]}
           accessibilityRole="button"
           accessibilityLabel="Receive Shipment"
         >
@@ -536,7 +542,11 @@ export default function GoodsReceivingScreen({
       <View style={styles.cardContainer}>
         {/* Filters Bar */}
         <View
-          style={[styles.filtersBar, isCompact && styles.filtersBarCompact]}
+          style={[
+            styles.filtersBar,
+            isCompact && styles.filtersBarCompact,
+            isMobile && styles.filtersBarMobile,
+          ]}
         >
           <View style={styles.searchBox}>
             <TextInput
@@ -557,7 +567,12 @@ export default function GoodsReceivingScreen({
           </View>
 
           {/* Status Filter Chips */}
-          <View style={styles.filterChipRow}>
+          <View
+            style={[
+              styles.filterChipRow,
+              isMobile && styles.filterChipRowMobile,
+            ]}
+          >
             {GRN_STATUS_FILTER.map((st) => (
               <Pressable
                 key={st}
@@ -1424,12 +1439,26 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     gap: 24,
   },
+  contentContainerMobile: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 28,
+    gap: 16,
+  },
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     flexWrap: "wrap",
     gap: 16,
+  },
+  headerRowMobile: {
+    flexDirection: "column",
+    alignItems: "stretch",
+    gap: 12,
+  },
+  headerTitleMobile: {
+    minWidth: 0,
   },
   pageTitle: {
     fontSize: 24,
@@ -1449,6 +1478,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     borderRadius: 8,
     cursor: "pointer",
+  },
+  receiveButtonMobile: {
+    width: "100%",
+    alignItems: "center",
   },
   receiveText: {
     color: "#FFFFFF",
@@ -1494,6 +1527,10 @@ const styles = StyleSheet.create({
     flexDirection: "column",
     alignItems: "stretch",
   },
+  filtersBarMobile: {
+    paddingHorizontal: 12,
+    gap: 10,
+  },
   searchBox: {
     flex: 1,
     flexDirection: "row",
@@ -1521,6 +1558,9 @@ const styles = StyleSheet.create({
   filterChipRow: {
     flexDirection: "row",
     gap: 8,
+  },
+  filterChipRowMobile: {
+    flexWrap: "wrap",
   },
   filterChip: {
     paddingHorizontal: 12,

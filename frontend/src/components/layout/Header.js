@@ -1,16 +1,17 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+
 import {
-  View,
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  StyleSheet,
   Text,
   TextInput,
-  Pressable,
-  Modal,
-  StyleSheet,
-  Platform,
-  ActivityIndicator,
+  View
 } from "react-native";
-import { useOfflineSync } from "../../offline/OfflineSyncContext";
+
 import { apiGet } from "../../api/apiClient";
+import { useOfflineSync } from "../../offline/OfflineSyncContext";
 
 const DEFAULT_BRANCH_OPTIONS = [{ id: null, name: "All Branches" }];
 
@@ -35,38 +36,52 @@ export default function Header({
   const syncNow = offlineSync?.syncNow;
 
   const [dropdownOpen, setDropdownOpen] = useState(false);
+
   const isAdminOrOwner = Boolean(
     currentUser?.isOwner ||
-    currentUser?.isPlatformSuperadmin ||
-    currentUser?.is_platform_superadmin ||
-    (currentUser?.role || "").toUpperCase() === "OWNER" ||
-    (currentUser?.role || "").toUpperCase() === "ADMIN" ||
-    (currentUser?.role || "").toUpperCase() === "SUPERADMIN" ||
-    (currentUser?.role || "").toLowerCase().includes("admin") ||
-    (currentUser?.role || "").toLowerCase().includes("owner")
+      currentUser?.isPlatformSuperadmin ||
+      currentUser?.is_platform_superadmin ||
+      (currentUser?.role || "").toUpperCase() === "OWNER" ||
+      (currentUser?.role || "").toUpperCase() === "ADMIN" ||
+      (currentUser?.role || "").toUpperCase() === "SUPERADMIN" ||
+      (currentUser?.role || "").toLowerCase().includes("admin") ||
+      (currentUser?.role || "").toLowerCase().includes("owner")
   );
+
   const [branchOptions, setBranchOptions] = useState(
     isAdminOrOwner ? DEFAULT_BRANCH_OPTIONS : []
   );
 
   const displayBranch =
     typeof currentBranch === "object" && currentBranch !== null
-      ? currentBranch.name || currentBranch.branchCode || (isAdminOrOwner ? "All Branches & Stores" : "My Branch")
-      : String(currentBranch || (isAdminOrOwner ? "All Branches & Stores" : "My Branch"));
+      ? currentBranch.name ||
+        currentBranch.branchCode ||
+        (isAdminOrOwner ? "All Branches & Stores" : "My Branch")
+      : String(
+          currentBranch ||
+            (isAdminOrOwner ? "All Branches & Stores" : "My Branch")
+        );
 
   const fetchBranchesFromDb = async () => {
     try {
       const result = await apiGet("/api/branches");
+
       if (result.success) {
         const json = result.data;
+
         const branchList = Array.isArray(json)
           ? json
           : json?.data && Array.isArray(json.data)
             ? json.data
             : [];
+
         const activeBranches = branchList.filter(
-          (b) => b.status === "ACTIVE" || b.status === "Active" || !b.status,
+          (b) =>
+            b.status === "ACTIVE" ||
+            b.status === "Active" ||
+            !b.status
         );
+
         const branchObjs = activeBranches.map((b) => ({
           id: b.id,
           name: b.name,
@@ -75,8 +90,12 @@ export default function Header({
         }));
 
         let combined;
+
         if (isAdminOrOwner) {
-          combined = [{ id: null, name: "All Branches & Stores" }, ...branchObjs];
+          combined = [
+            { id: null, name: "All Branches & Stores" },
+            ...branchObjs,
+          ];
         } else {
           // Non-admin branch staff MUST ONLY see their assigned branch!
           // NEVER show "All Branches" and never show other branches!
@@ -91,18 +110,28 @@ export default function Header({
             !currentBranch ||
             currentBranch === "All Branches" ||
             currentBranch === "All Branches & Stores" ||
-            (typeof currentBranch === "object" && (!currentBranch.id || currentBranch.name === "All Branches" || currentBranch.name === "All Branches & Stores"));
+            (typeof currentBranch === "object" &&
+              (!currentBranch.id ||
+                currentBranch.name === "All Branches" ||
+                currentBranch.name === "All Branches & Stores"));
+
           if (isInvalid && onBranchChange) {
             onBranchChange(combined[0]);
           }
         }
+
         return;
       }
     } catch (err) {
-      console.warn("Could not fetch database branches in Header:", err.message);
+      console.warn(
+        "Could not fetch database branches in Header:",
+        err.message
+      );
     }
 
-    setBranchOptions(isAdminOrOwner ? DEFAULT_BRANCH_OPTIONS : []);
+    setBranchOptions(
+      isAdminOrOwner ? DEFAULT_BRANCH_OPTIONS : []
+    );
   };
 
   // --- Global Search (products & customers) ---
@@ -117,25 +146,36 @@ export default function Header({
 
   const runSearch = async (query) => {
     setIsSearching(true);
+
     try {
       const [productsRes, customersRes] = await Promise.all([
-        apiGet(`/api/cashier/products?search=${encodeURIComponent(query)}`),
-        apiGet(`/api/customers?search=${encodeURIComponent(query)}`),
+        apiGet(
+          `/api/cashier/products?search=${encodeURIComponent(query)}`
+        ),
+        apiGet(
+          `/api/customers?search=${encodeURIComponent(query)}`
+        ),
       ]);
 
       const products =
-        productsRes.success && Array.isArray(productsRes.data?.data)
+        productsRes.success &&
+        Array.isArray(productsRes.data?.data)
           ? productsRes.data.data.slice(0, 5)
           : [];
+
       const customers =
-        customersRes.success && Array.isArray(customersRes.data?.data)
+        customersRes.success &&
+        Array.isArray(customersRes.data?.data)
           ? customersRes.data.data.slice(0, 5)
           : [];
 
       setSearchResults({ products, customers });
     } catch (err) {
       console.warn("Global search failed:", err.message);
-      setSearchResults({ products: [], customers: [] });
+      setSearchResults({
+        products: [],
+        customers: [],
+      });
     } finally {
       setIsSearching(false);
     }
@@ -150,13 +190,20 @@ export default function Header({
     }
 
     const trimmed = text.trim();
+
     if (trimmed.length < 2) {
-      setSearchResults({ products: [], customers: [] });
+      setSearchResults({
+        products: [],
+        customers: [],
+      });
       setIsSearching(false);
       return;
     }
 
-    searchDebounceRef.current = setTimeout(() => runSearch(trimmed), 350);
+    searchDebounceRef.current = setTimeout(
+      () => runSearch(trimmed),
+      350
+    );
   };
 
   const closeSearch = () => {
@@ -166,21 +213,34 @@ export default function Header({
   const handleSelectProduct = (product) => {
     closeSearch();
     setSearchQuery("");
-    setSearchResults({ products: [], customers: [] });
-    if (onNavigate) onNavigate("stock-status", product.name);
+    setSearchResults({
+      products: [],
+      customers: [],
+    });
+
+    if (onNavigate) {
+      onNavigate("stock-status", product.name);
+    }
   };
 
   const handleSelectCustomer = (customer) => {
     closeSearch();
     setSearchQuery("");
-    setSearchResults({ products: [], customers: [] });
-    if (onNavigate) onNavigate("customer-details", customer.id);
+    setSearchResults({
+      products: [],
+      customers: [],
+    });
+
+    if (onNavigate) {
+      onNavigate("customer-details", customer.id);
+    }
   };
 
   const hasSearchResults =
-    searchResults.products.length > 0 || searchResults.customers.length > 0;
+    searchResults.products.length > 0 ||
+    searchResults.customers.length > 0;
 
-  // Branch fetching from backend (online status is tracked by OfflineSyncContext)
+  // Branch fetching from backend
   useEffect(() => {
     fetchBranchesFromDb();
   }, [branchRefreshKey]);
@@ -198,19 +258,29 @@ export default function Header({
     if (onBranchChange) {
       onBranchChange(branch);
     }
+
     setDropdownOpen(false);
   };
 
   return (
     <View
-      style={[styles.headerContainer, isMobile && styles.headerContainerMobile]}
+      style={[
+        styles.headerContainer,
+        isMobile && styles.headerContainerMobile,
+      ]}
     >
       {/* Left: Mobile Hamburger Button & Branch Info */}
-      <View style={[styles.leftSection, isMobile && styles.leftSectionMobile]}>
+      <View
+        style={[
+          styles.leftSection,
+          isMobile && styles.leftSectionMobile,
+        ]}
+      >
         {isMobile && (
           <Pressable
             onPress={onToggleMobileMenu}
             style={styles.hamburgerButton}
+            hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel="Open Navigation Menu"
           >
@@ -230,9 +300,10 @@ export default function Header({
               {isMultiBranch ? "Store / Branch" : "Single Store"}
             </Text>
           )}
+
           <View style={styles.branchAnchorContainer}>
             {!isMultiBranch ? (
-              /* Single Store: Solid Non-Clickable Badge (No branch switcher dropdown) */
+              /* Single Store: Solid Non-Clickable Badge */
               <View
                 style={[
                   styles.branchButton,
@@ -247,16 +318,23 @@ export default function Header({
                 ]}
               >
                 <Text style={styles.branchStoreIcon}>🏪</Text>
+
                 <Text
                   style={[
                     styles.branchButtonText,
-                    { color: "#28242B", fontWeight: "700" },
+                    {
+                      color: "#28242B",
+                      fontWeight: "700",
+                    },
                     isMobile && styles.branchButtonTextMobile,
                   ]}
                   numberOfLines={1}
                 >
-                  {currentUser?.organisationName || displayBranch || "Main Store"}
+                  {currentUser?.organisationName ||
+                    displayBranch ||
+                    "Main Store"}
                 </Text>
+
                 <View
                   style={{
                     marginLeft: 6,
@@ -266,7 +344,13 @@ export default function Header({
                     backgroundColor: "#F2ECF0",
                   }}
                 >
-                  <Text style={{ fontSize: 10, fontWeight: "800", color: "#744458" }}>
+                  <Text
+                    style={{
+                      fontSize: 10,
+                      fontWeight: "800",
+                      color: "#744458",
+                    }}
+                  >
                     DIRECT
                   </Text>
                 </View>
@@ -276,7 +360,10 @@ export default function Header({
               <>
                 <Pressable
                   onPress={() => {
-                    if (!dropdownOpen) fetchBranchesFromDb();
+                    if (!dropdownOpen) {
+                      fetchBranchesFromDb();
+                    }
+
                     setDropdownOpen(!dropdownOpen);
                   }}
                   style={[
@@ -287,15 +374,18 @@ export default function Header({
                   accessibilityLabel="Select Branch"
                 >
                   <Text style={styles.branchStoreIcon}>📍</Text>
+
                   <Text
                     style={[
                       styles.branchButtonText,
-                      isMobile && styles.branchButtonTextMobile,
+                      isMobile &&
+                        styles.branchButtonTextMobile,
                     ]}
                     numberOfLines={1}
                   >
                     {displayBranch}
                   </Text>
+
                   <Text style={styles.chevron}>▾</Text>
                 </Pressable>
 
@@ -306,12 +396,14 @@ export default function Header({
                       style={styles.floatingBackdrop}
                       onPress={() => setDropdownOpen(false)}
                     />
+
                     <View style={styles.dropdownCardAnchored}>
                       <Text style={styles.dropdownTitle}>
                         {isAdminOrOwner
                           ? "Select Active Store Branch"
                           : "Your Assigned Store Branch"}
                       </Text>
+
                       {branchOptions.length === 0 ? (
                         <Text
                           style={{
@@ -321,40 +413,64 @@ export default function Header({
                             textAlign: "center",
                           }}
                         >
-                          No active branch assigned. Please contact your store administrator.
+                          No active branch assigned. Please contact
+                          your store administrator.
                         </Text>
                       ) : (
                         branchOptions.map((branch) => {
                           const branchName =
-                            typeof branch === "object" && branch !== null
-                              ? branch.name || branch.branchCode || "Branch"
+                            typeof branch === "object" &&
+                            branch !== null
+                              ? branch.name ||
+                                branch.branchCode ||
+                                "Branch"
                               : String(branch);
-                          const isSelected = branchName === displayBranch;
+
+                          const isSelected =
+                            branchName === displayBranch;
+
                           return (
                             <Pressable
                               key={branch.id || branchName}
-                              onPress={() => handleSelectBranch(branch)}
+                              onPress={() =>
+                                handleSelectBranch(branch)
+                              }
                               style={[
                                 styles.dropdownItem,
-                                isSelected && styles.dropdownItemSelected,
+                                isSelected &&
+                                  styles.dropdownItemSelected,
                               ]}
                             >
                               <View style={{ flex: 1 }}>
                                 <Text
                                   style={[
                                     styles.dropdownItemText,
-                                    isSelected && styles.dropdownItemTextSelected,
+                                    isSelected &&
+                                      styles.dropdownItemTextSelected,
                                   ]}
                                 >
                                   📍 {branchName}
                                 </Text>
+
                                 {branch.adminName ? (
-                                  <Text style={{ fontSize: 11, color: "#77717A", marginTop: 1, paddingLeft: 18 }}>
+                                  <Text
+                                    style={{
+                                      fontSize: 11,
+                                      color: "#77717A",
+                                      marginTop: 1,
+                                      paddingLeft: 18,
+                                    }}
+                                  >
                                     Admin: {branch.adminName}
                                   </Text>
                                 ) : null}
                               </View>
-                              {isSelected && <Text style={styles.checkmark}>✓</Text>}
+
+                              {isSelected && (
+                                <Text style={styles.checkmark}>
+                                  ✓
+                                </Text>
+                              )}
                             </Pressable>
                           );
                         })
@@ -373,6 +489,7 @@ export default function Header({
         <View style={styles.headerSearchAnchor}>
           <View style={styles.headerSearchWrapper}>
             <Text style={styles.headerSearchIcon}>🔍</Text>
+
             <TextInput
               style={styles.headerSearchInput}
               placeholder="Search products, customers..."
@@ -382,7 +499,13 @@ export default function Header({
               onFocus={() => setSearchOpen(true)}
               accessibilityLabel="Global search"
             />
-            {isSearching && <ActivityIndicator size="small" color="#B9829A" />}
+
+            {isSearching && (
+              <ActivityIndicator
+                size="small"
+                color="#B9829A"
+              />
+            )}
           </View>
 
           {searchOpen && searchQuery.trim().length >= 2 && (
@@ -391,6 +514,7 @@ export default function Header({
                 style={styles.floatingBackdrop}
                 onPress={closeSearch}
               />
+
               <View style={styles.searchResultsDropdown}>
                 {!isSearching && !hasSearchResults && (
                   <Text style={styles.searchNoResults}>
@@ -400,14 +524,22 @@ export default function Header({
 
                 {searchResults.customers.length > 0 && (
                   <>
-                    <Text style={styles.searchSectionTitle}>Customers</Text>
+                    <Text style={styles.searchSectionTitle}>
+                      Customers
+                    </Text>
+
                     {searchResults.customers.map((customer) => (
                       <Pressable
                         key={`customer-${customer.id}`}
                         style={styles.searchResultItem}
-                        onPress={() => handleSelectCustomer(customer)}
+                        onPress={() =>
+                          handleSelectCustomer(customer)
+                        }
                       >
-                        <Text style={styles.searchResultIcon}>🧑</Text>
+                        <Text style={styles.searchResultIcon}>
+                          🧑
+                        </Text>
+
                         <View style={{ flex: 1 }}>
                           <Text
                             style={styles.searchResultTitle}
@@ -417,11 +549,14 @@ export default function Header({
                               customer.full_name ||
                               customer.name}
                           </Text>
+
                           <Text
                             style={styles.searchResultSubtitle}
                             numberOfLines={1}
                           >
-                            {customer.phone || customer.email || ""}
+                            {customer.phone ||
+                              customer.email ||
+                              ""}
                           </Text>
                         </View>
                       </Pressable>
@@ -431,14 +566,22 @@ export default function Header({
 
                 {searchResults.products.length > 0 && (
                   <>
-                    <Text style={styles.searchSectionTitle}>Products</Text>
+                    <Text style={styles.searchSectionTitle}>
+                      Products
+                    </Text>
+
                     {searchResults.products.map((product) => (
                       <Pressable
                         key={`product-${product.id}`}
                         style={styles.searchResultItem}
-                        onPress={() => handleSelectProduct(product)}
+                        onPress={() =>
+                          handleSelectProduct(product)
+                        }
                       >
-                        <Text style={styles.searchResultIcon}>💊</Text>
+                        <Text style={styles.searchResultIcon}>
+                          💊
+                        </Text>
+
                         <View style={{ flex: 1 }}>
                           <Text
                             style={styles.searchResultTitle}
@@ -446,11 +589,13 @@ export default function Header({
                           >
                             {product.name}
                           </Text>
+
                           <Text
                             style={styles.searchResultSubtitle}
                             numberOfLines={1}
                           >
-                            Stock: {product.stock} • MRP ₹{product.mrp}
+                            Stock: {product.stock} • MRP ₹
+                            {product.mrp}
                           </Text>
                         </View>
                       </Pressable>
@@ -465,20 +610,32 @@ export default function Header({
 
       {/* Right: Sync Status & User Profile */}
       <View
-        style={[styles.rightSection, isMobile && styles.rightSectionMobile]}
+        style={[
+          styles.rightSection,
+          isMobile && styles.rightSectionMobile,
+        ]}
       >
         {/* Subscription Plan Quick Badge */}
         {!isMobile && (
           <Pressable
-            onPress={() => onNavigate && onNavigate("subscription-plans")}
+            onPress={() =>
+              onNavigate &&
+              onNavigate("subscription-plans")
+            }
             style={styles.headerPlanBadge}
             accessibilityRole="button"
             accessibilityLabel="View SaaS Subscription"
           >
             <Text style={styles.headerPlanIcon}>💳</Text>
+
             <View>
-              <Text style={styles.headerPlanTitle}>Growth ERP (18% GST)</Text>
-              <Text style={styles.headerPlanSubtitle}>Active License</Text>
+              <Text style={styles.headerPlanTitle}>
+                Growth ERP (18% GST)
+              </Text>
+
+              <Text style={styles.headerPlanSubtitle}>
+                Active License
+              </Text>
             </View>
           </Pressable>
         )}
@@ -512,6 +669,7 @@ export default function Header({
                   : styles.syncDot,
             ]}
           />
+
           <Text
             style={[
               styles.syncText,
@@ -544,7 +702,10 @@ export default function Header({
         <Pressable
           onPress={() => {
             console.log("SETTINGS BUTTON CLICKED");
-            if (onNavigate) onNavigate("tax-settings");
+
+            if (onNavigate) {
+              onNavigate("tax-settings");
+            }
           }}
           style={[
             styles.quickSettingsButton,
@@ -554,7 +715,10 @@ export default function Header({
           accessibilityLabel="Settings"
         >
           <Text
-            style={[styles.quickSettingsIcon, isMobile && { fontSize: 13 }]}
+            style={[
+              styles.quickSettingsIcon,
+              isMobile && { fontSize: 13 },
+            ]}
           >
             ⚙️
           </Text>
@@ -572,39 +736,50 @@ export default function Header({
               styles.avatar,
               isMobile && styles.avatarMobile,
               (currentUser?.isOwner ||
-                (currentUser?.role || "").toUpperCase() === "OWNER") && {
+                (currentUser?.role || "").toUpperCase() ===
+                  "OWNER") && {
                 backgroundColor: "#A66D86",
               },
             ]}
           >
             <Text
-              style={[styles.avatarText, isMobile && styles.avatarTextMobile]}
+              style={[
+                styles.avatarText,
+                isMobile && styles.avatarTextMobile,
+              ]}
             >
               {currentUser?.isOwner ||
-              (currentUser?.role || "").toUpperCase() === "OWNER"
+              (currentUser?.role || "").toUpperCase() ===
+                "OWNER"
                 ? "👑"
                 : initials || "C"}
             </Text>
           </View>
+
           {!isMobile && (
             <View style={styles.userInfoColumn}>
               <Text style={styles.userNameText}>
                 {displayName || "Admin Owner"}
               </Text>
+
               <Text
                 style={[
                   styles.userRoleText,
                   (currentUser?.isOwner ||
-                    (currentUser?.role || "").toUpperCase() === "OWNER") && {
+                    (currentUser?.role || "").toUpperCase() ===
+                      "OWNER") && {
                     color: "#B9829A",
                     fontWeight: "800",
                   },
                 ]}
               >
                 {currentUser?.isOwner ||
-                (currentUser?.role || "").toUpperCase() === "OWNER"
+                (currentUser?.role || "").toUpperCase() ===
+                  "OWNER"
                   ? "👑 Pharmacy Owner"
-                  : currentUser?.roleName || currentUser?.role || "Admin"}
+                  : currentUser?.roleName ||
+                    currentUser?.role ||
+                    "Admin"}
               </Text>
             </View>
           )}
@@ -647,37 +822,49 @@ const styles = StyleSheet.create({
     paddingHorizontal: 28,
     zIndex: 10,
   },
+
   headerContainerMobile: {
     paddingHorizontal: 8,
     height: 56,
+    minWidth: 0,
   },
+
   hamburgerButton: {
     padding: 6,
     marginRight: 2,
     borderRadius: 6,
     backgroundColor: "#F8F5F7",
   },
+
   hamburgerIcon: {
     fontSize: 16,
     fontWeight: "bold",
     color: "#B9829A",
   },
+
   leftSection: {
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
   },
+
   leftSectionMobile: {
     gap: 6,
+    minWidth: 0,
+    flexShrink: 1,
   },
+
   branchSelectorRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
   },
+
   branchSelectorRowMobile: {
     gap: 6,
+    minWidth: 0,
   },
+
   branchLabel: {
     fontSize: 12,
     fontWeight: "600",
@@ -685,6 +872,7 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
+
   branchButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -702,33 +890,41 @@ const styles = StyleSheet.create({
       },
     }),
   },
+
   branchButtonMobile: {
     paddingVertical: 4,
     paddingHorizontal: 7,
     maxWidth: 110,
     gap: 4,
   },
+
   branchButtonText: {
     fontSize: 13.5,
     fontWeight: "600",
     color: "#28242B",
   },
+
   branchButtonTextMobile: {
     fontSize: 11.5,
     maxWidth: 62,
   },
+
   chevron: {
     fontSize: 12,
     color: "#77717A",
   },
+
   rightSection: {
     flexDirection: "row",
     alignItems: "center",
     gap: 20,
   },
+
   rightSectionMobile: {
     gap: 6,
+    flexShrink: 0,
   },
+
   syncBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -740,22 +936,26 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     gap: 7,
   },
+
   syncDot: {
     width: 7,
     height: 7,
     borderRadius: 4,
     backgroundColor: "#4F8A72",
   },
+
   syncText: {
     fontSize: 12.5,
     fontWeight: "600",
     color: "#4F8A72",
   },
+
   profileContainer: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
   },
+
   avatar: {
     width: 34,
     height: 34,
@@ -766,20 +966,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+
   avatarText: {
     fontSize: 12,
     fontWeight: "700",
     color: "#28242B",
   },
+
   userRole: {
     fontSize: 13,
     fontWeight: "600",
     color: "#28242B",
   },
+
   headerSearchAnchor: {
     position: "relative",
     zIndex: 9999,
   },
+
   headerSearchWrapper: {
     flexDirection: "row",
     alignItems: "center",
@@ -792,19 +996,24 @@ const styles = StyleSheet.create({
     width: 280,
     gap: 8,
   },
+
   headerSearchIcon: {
     fontSize: 12,
     color: "#77717A",
   },
+
   headerSearchInput: {
     flex: 1,
     fontSize: 12.5,
     color: "#28242B",
     padding: 0,
     ...Platform.select({
-      web: { outlineStyle: "none" },
+      web: {
+        outlineStyle: "none",
+      },
     }),
   },
+
   searchResultsDropdown: {
     position: "absolute",
     top: 40,
@@ -825,6 +1034,7 @@ const styles = StyleSheet.create({
       },
     }),
   },
+
   searchSectionTitle: {
     fontSize: 10.5,
     fontWeight: "700",
@@ -835,6 +1045,7 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 4,
   },
+
   searchResultItem: {
     flexDirection: "row",
     alignItems: "center",
@@ -843,19 +1054,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     cursor: "pointer",
   },
+
   searchResultIcon: {
     fontSize: 15,
   },
+
   searchResultTitle: {
     fontSize: 12.5,
     fontWeight: "600",
     color: "#28242B",
   },
+
   searchResultSubtitle: {
     fontSize: 11,
     color: "#77717A",
     marginTop: 1,
   },
+
   searchNoResults: {
     fontSize: 12,
     color: "#77717A",
@@ -863,24 +1078,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     textAlign: "center",
   },
+
   userInfoColumn: {
     flexDirection: "column",
   },
+
   userNameText: {
     fontSize: 13,
     fontWeight: "700",
     color: "#28242B",
     lineHeight: 16,
   },
+
   userRoleText: {
     fontSize: 11,
     color: "#77717A",
     fontWeight: "500",
   },
+
   branchAnchorContainer: {
     position: "relative",
     zIndex: 9999,
   },
+
   floatingBackdrop: {
     position: "fixed",
     top: 0,
@@ -889,6 +1109,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 9998,
   },
+
   dropdownCardAnchored: {
     position: "absolute",
     top: 38,
@@ -907,6 +1128,7 @@ const styles = StyleSheet.create({
       },
     }),
   },
+
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(15, 23, 42, 0.3)",
@@ -915,6 +1137,7 @@ const styles = StyleSheet.create({
     paddingTop: 68,
     paddingLeft: 28,
   },
+
   dropdownCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 10,
@@ -928,6 +1151,7 @@ const styles = StyleSheet.create({
       },
     }),
   },
+
   dropdownTitle: {
     fontSize: 11,
     fontWeight: "700",
@@ -937,6 +1161,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 6,
   },
+
   dropdownItem: {
     flexDirection: "row",
     alignItems: "center",
@@ -945,78 +1170,98 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     cursor: "pointer",
   },
+
   dropdownItemSelected: {
     backgroundColor: "#E8D5DD",
   },
+
   dropdownItemText: {
     fontSize: 13,
     color: "#28242B",
     fontWeight: "500",
   },
+
   dropdownItemTextSelected: {
     color: "#B9829A",
     fontWeight: "700",
   },
+
   checkmark: {
     fontSize: 12,
     color: "#B9829A",
     fontWeight: "700",
   },
+
   syncBadgeOffline: {
     backgroundColor: "#F7EDEE",
     borderColor: "#F7EDEE",
   },
+
   syncDotOffline: {
     backgroundColor: "#B85C64",
   },
+
   syncTextOffline: {
     color: "#B85C64",
   },
+
   syncBadgePending: {
     backgroundColor: "#F7F0E5",
     borderColor: "#F7F0E5",
   },
+
   syncDotPending: {
     backgroundColor: "#C49752",
   },
+
   syncTextPending: {
     color: "#C49752",
   },
+
   syncBadgeSyncing: {
     backgroundColor: "#E8D5DD",
     borderColor: "#E8D5DD",
   },
+
   syncDotSyncing: {
     backgroundColor: "#B9829A",
   },
+
   syncTextSyncing: {
     color: "#A66D86",
   },
+
   syncBadgeMobile: {
     paddingVertical: 3,
     paddingHorizontal: 6,
     gap: 4,
     borderRadius: 12,
   },
+
   syncTextMobile: {
     fontSize: 10.5,
     fontWeight: "700",
   },
+
   profileContainerMobile: {
     gap: 4,
   },
+
   avatarMobile: {
     width: 28,
     height: 28,
     borderRadius: 14,
   },
+
   avatarTextMobile: {
     fontSize: 10,
   },
+
   quickSettingsButtonMobile: {
     padding: 5,
     borderRadius: 6,
   },
+
   signOutButton: {
     marginLeft: 8,
     paddingVertical: 5,
@@ -1027,20 +1272,24 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFF",
     cursor: "pointer",
   },
+
   signOutButtonMobile: {
     marginLeft: 2,
     paddingVertical: 4,
     paddingHorizontal: 6,
     borderRadius: 6,
   },
+
   signOutText: {
     fontSize: 11.5,
     fontWeight: "600",
     color: "#77717A",
   },
+
   signOutTextMobile: {
     fontSize: 12,
   },
+
   headerPlanBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -1053,23 +1302,28 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     cursor: "pointer",
   },
+
   headerPlanIcon: {
     fontSize: 14,
   },
+
   headerPlanTitle: {
     fontSize: 11.5,
     fontWeight: "700",
     color: "#A66D86",
     lineHeight: 14,
   },
+
   headerPlanSubtitle: {
     fontSize: 9.5,
     color: "#B9829A",
     fontWeight: "600",
   },
+
   branchStoreIcon: {
     fontSize: 13,
   },
+
   modeTogglePill: {
     flexDirection: "row",
     alignItems: "center",
@@ -1080,36 +1334,45 @@ const styles = StyleSheet.create({
     cursor: "pointer",
     borderWidth: 1,
   },
+
   modeTogglePillMulti: {
     backgroundColor: "#E8D5DD",
     borderColor: "#E8D5DD",
   },
+
   modeTogglePillSingle: {
     backgroundColor: "#E8D5DD",
     borderColor: "#E8D5DD",
   },
+
   modeToggleIcon: {
     fontSize: 12,
   },
+
   modeToggleText: {
     fontSize: 12,
     fontWeight: "700",
   },
+
   modeToggleTextMulti: {
     color: "#B9829A",
   },
+
   modeToggleTextSingle: {
     color: "#A66D86",
   },
+
   dropdownDivider: {
     height: 1,
     backgroundColor: "#F8F5F7",
     marginVertical: 6,
   },
+
   dropdownModeSection: {
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
+
   dropdownModeSectionTitle: {
     fontSize: 10,
     fontWeight: "800",
@@ -1118,6 +1381,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     paddingHorizontal: 6,
   },
+
   dropdownModeBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -1127,18 +1391,22 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     cursor: "pointer",
   },
+
   dropdownModeBtnActive: {
     backgroundColor: "#E8D5DD",
   },
+
   dropdownModeBtnText: {
     fontSize: 12,
     fontWeight: "600",
     color: "#28242B",
   },
+
   dropdownModeBtnTextActive: {
     color: "#B9829A",
     fontWeight: "750",
   },
+
   quickSettingsButton: {
     padding: 7,
     borderRadius: 8,
@@ -1149,6 +1417,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+
   quickSettingsIcon: {
     fontSize: 15,
   },

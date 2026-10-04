@@ -140,13 +140,18 @@ export default function PharmacyDetailsPage() {
       contentContainerStyle={[styles.content, isMobile && styles.contentMobile]}
       showsVerticalScrollIndicator={false}
     >
-      <View style={styles.breadcrumb}>
+      <View style={[styles.breadcrumb, isMobile && styles.breadcrumbMobile]}>
         <Pressable onPress={() => router.push('/superadmin/pharmacies')}>
           <Text style={styles.breadcrumbLink}>Pharmacies</Text>
         </Pressable>
 
         <Text style={styles.breadcrumbSeparator}>/</Text>
-        <Text style={styles.breadcrumbCurrent}>{pharmacy.name} - View</Text>
+        <Text
+          style={[styles.breadcrumbCurrent, isMobile && styles.breadcrumbCurrentMobile]}
+          numberOfLines={1}
+        >
+          {pharmacy.name} - View
+        </Text>
       </View>
 
       <View style={[styles.topSection, isMobile && styles.topSectionMobile]}>
@@ -155,7 +160,7 @@ export default function PharmacyDetailsPage() {
             <Text style={styles.largeAvatarText}>{pharmacy.initials}</Text>
           </View>
 
-          <View>
+          <View style={[styles.pharmacyInfo, isMobile && styles.pharmacyInfoMobile]}>
             <Text style={[styles.title, isMobile && styles.titleMobile]}>{pharmacy.name}</Text>
             <Text style={styles.subtitle}>
               Pharmacy subscription and business details
@@ -333,9 +338,9 @@ export default function PharmacyDetailsPage() {
         </View>
       </View>
 
-      <View style={styles.invoicePanel}>
-        <View style={styles.panelHeader}>
-          <View>
+      <View style={[styles.invoicePanel, isMobile && styles.invoicePanelMobile]}>
+        <View style={[styles.panelHeader, isMobile && styles.panelHeaderMobile]}>
+          <View style={isMobile && styles.invoiceHeaderInfoMobile}>
             <Text style={styles.panelTitle}>Invoice & Billing KPI Cards</Text>
             <Text style={styles.invoiceSubtext}>
               Financial transaction summary and invoice records for {pharmacy.name}
@@ -408,7 +413,10 @@ export default function PharmacyDetailsPage() {
           )}
 
           {invoices.map((invoice) => (
-            <View key={invoice.id} style={styles.invoiceDocCard}>
+            <View
+              key={invoice.id}
+              style={[styles.invoiceDocCard, isMobile && styles.invoiceDocCardMobile]}
+            >
               <View style={styles.invoiceDocTop}>
                 <View style={styles.invoiceDocTag}>
                   <Text style={styles.invoiceDocTagText}>SUBSCRIPTION</Text>
@@ -528,10 +536,18 @@ const styles = StyleSheet.create({
   breadcrumbSeparator: {
     color: C.mutedGray,
   },
+  breadcrumbMobile: {
+    width: '100%',
+    minWidth: 0,
+    flexWrap: 'wrap',
+  },
   breadcrumbCurrent: {
     color: C.charcoal,
     fontSize: 13,
     fontWeight: '700',
+  },
+  breadcrumbCurrentMobile: {
+    flexShrink: 1,
   },
   topSection: {
     flexDirection: 'row',
@@ -563,6 +579,13 @@ const styles = StyleSheet.create({
     minWidth: 0,
     alignItems: 'flex-start',
     gap: 10,
+  },
+  pharmacyInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  pharmacyInfoMobile: {
+    flexShrink: 1,
   },
   largeAvatar: {
     width: 58,
@@ -717,6 +740,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 10,
   },
+  panelHeaderMobile: {
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  invoiceHeaderInfoMobile: {
+    width: '100%',
+    minWidth: 0,
+  },
   panelTitle: {
     color: C.charcoal,
     fontSize: 16,
@@ -772,6 +803,9 @@ const styles = StyleSheet.create({
     borderColor: C.softGray,
     backgroundColor: C.white,
     marginTop: 18,
+  },
+  invoicePanelMobile: {
+    padding: 16,
   },
   invoiceSubtext: {
     marginTop: 3,
@@ -855,6 +889,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.softGray,
     backgroundColor: C.white,
+  },
+  invoiceDocCardMobile: {
+    width: '100%',
+    minWidth: 0,
+    maxWidth: '100%',
+    flexBasis: '100%',
   },
   invoiceDocTop: {
     flexDirection: 'row',

@@ -10,6 +10,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 
@@ -197,6 +198,8 @@ const PurchasesScreen = ({
   selectedBranch,
   onNavigate,
 }) => {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -1717,10 +1720,8 @@ const PurchasesScreen = ({
           HEADER
       ====================================================== */}
 
-      <View
-        style={styles.header}
-      >
-        <View>
+      <View style={[styles.header, isMobile && styles.headerMobile]}>
+        <View style={isMobile && styles.headerTitleMobile}>
           <Text
             style={
               styles.pageTitle
@@ -1740,9 +1741,7 @@ const PurchasesScreen = ({
         </View>
 
         <TouchableOpacity
-          style={
-            styles.createButton
-          }
+          style={[styles.createButton, isMobile && styles.createButtonMobile]}
           onPress={() =>
             setShowCreateModal(true)
           }
@@ -1763,12 +1762,13 @@ const PurchasesScreen = ({
       ====================================================== */}
 
       <View
-        style={
-          styles.summaryContainer
-        }
+        style={[
+          styles.summaryContainer,
+          isMobile && styles.summaryContainerMobile,
+        ]}
       >
         <View
-          style={styles.summaryCard}
+          style={[styles.summaryCard, isMobile && styles.summaryCardMobile]}
         >
           <Text
             style={
@@ -1780,7 +1780,7 @@ const PurchasesScreen = ({
 
           <Text
             style={
-              styles.summaryValue
+              [styles.summaryValue, isMobile && styles.summaryValueMobile]
             }
           >
             {formatCurrency(
@@ -1790,7 +1790,7 @@ const PurchasesScreen = ({
         </View>
 
         <View
-          style={styles.summaryCard}
+          style={[styles.summaryCard, isMobile && styles.summaryCardMobile]}
         >
           <Text
             style={
@@ -1802,7 +1802,7 @@ const PurchasesScreen = ({
 
           <Text
             style={
-              styles.summaryValue
+              [styles.summaryValue, isMobile && styles.summaryValueMobile]
             }
           >
             {statusCounts.all}
@@ -1810,7 +1810,7 @@ const PurchasesScreen = ({
         </View>
 
         <View
-          style={styles.summaryCard}
+          style={[styles.summaryCard, isMobile && styles.summaryCardMobile]}
         >
           <Text
             style={
@@ -1822,7 +1822,7 @@ const PurchasesScreen = ({
 
           <Text
             style={
-              styles.summaryValue
+              [styles.summaryValue, isMobile && styles.summaryValueMobile]
             }
           >
             {statusCounts.draft}
@@ -1830,7 +1830,7 @@ const PurchasesScreen = ({
         </View>
 
         <View
-          style={styles.summaryCard}
+          style={[styles.summaryCard, isMobile && styles.summaryCardMobile]}
         >
           <Text
             style={
@@ -1842,7 +1842,7 @@ const PurchasesScreen = ({
 
           <Text
             style={
-              styles.summaryValue
+              [styles.summaryValue, isMobile && styles.summaryValueMobile]
             }
           >
             {statusCounts.pending}
@@ -1855,11 +1855,7 @@ const PurchasesScreen = ({
           FILTERS
       ====================================================== */}
 
-      <View
-        style={
-          styles.filterContainer
-        }
-      >
+      <View style={[styles.filterContainer, isMobile && styles.filterContainerMobile]}>
         <TextInput
           value={searchQuery}
           onChangeText={
@@ -1867,9 +1863,7 @@ const PurchasesScreen = ({
           }
           placeholder="Search PO, supplier, medicine..."
           placeholderTextColor="#77717A"
-          style={
-            styles.searchInput
-          }
+          style={[styles.searchInput, isMobile && styles.searchInputMobile]}
         />
 
         <View
@@ -1939,7 +1933,7 @@ const PurchasesScreen = ({
       ) : (
         <View
           style={
-            styles.listContainer
+            [styles.listContainer, isMobile && styles.listContainerMobile]
           }
         >
           {Platform.OS === "web"
@@ -2481,6 +2475,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 20,
   },
+  headerMobile: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    flexDirection: "column",
+    alignItems: "stretch",
+    gap: 12,
+  },
+  headerTitleMobile: {
+    minWidth: 0,
+  },
 
   pageTitle: {
     fontSize: 26,
@@ -2500,6 +2504,10 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 8,
   },
+  createButtonMobile: {
+    width: "100%",
+    alignItems: "center",
+  },
 
   createButtonText: {
     color: "#FFFFFF",
@@ -2514,6 +2522,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingBottom: 18,
   },
+  summaryContainerMobile: {
+    paddingHorizontal: 16,
+    gap: 10,
+  },
 
   summaryCard: {
     backgroundColor: "#FFFFFF",
@@ -2523,6 +2535,11 @@ const styles = StyleSheet.create({
     padding: 16,
     minWidth: 180,
     flex: 1,
+  },
+  summaryCardMobile: {
+    minWidth: "47%",
+    maxWidth: "48.5%",
+    padding: 12,
   },
 
   summaryLabel: {
@@ -2538,11 +2555,19 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#28242B",
   },
+  summaryValueMobile: {
+    fontSize: 18,
+  },
 
   filterContainer: {
     paddingHorizontal: 24,
     paddingBottom: 18,
     gap: 12,
+  },
+  filterContainerMobile: {
+    paddingHorizontal: 16,
+    paddingBottom: 14,
+    gap: 10,
   },
 
   searchInput: {
@@ -2554,6 +2579,9 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     fontSize: 13,
     color: "#28242B",
+  },
+  searchInputMobile: {
+    width: "100%",
   },
 
   statusFilters: {
@@ -2590,6 +2618,11 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 24,
     paddingBottom: 30,
+  },
+  listContainerMobile: {
+    paddingHorizontal: 12,
+    paddingBottom: 20,
+    minWidth: 0,
   },
 
   table: {

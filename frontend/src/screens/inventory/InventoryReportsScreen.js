@@ -8,6 +8,7 @@ import {
   StyleSheet,
   SafeAreaView,
   ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
 
 import {
@@ -207,6 +208,8 @@ export default function InventoryReportsScreen({
   navigation,
   route,
 }) {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
   const [selectedReport, setSelectedReport] = useState(
     'stock_valuation',
   );
@@ -1499,13 +1502,9 @@ export default function InventoryReportsScreen({
     >
       {/* HEADER */}
 
-      <View
-        style={styles.header}
-      >
+      <View style={[styles.header, isMobile && styles.headerMobile]}>
         <View
-          style={
-            styles.headerLeft
-          }
+          style={[styles.headerLeft, isMobile && styles.headerLeftMobile]}
         >
           <TouchableOpacity
             onPress={() =>
@@ -1545,9 +1544,10 @@ export default function InventoryReportsScreen({
         </View>
 
         <TouchableOpacity
-          style={
-            styles.exportButtonHeader
-          }
+          style={[
+            styles.exportButtonHeader,
+            isMobile && styles.exportButtonHeaderMobile,
+          ]}
           onPress={() => {
             console.log(
               '[InventoryReports] Export requested:',
@@ -1569,9 +1569,10 @@ export default function InventoryReportsScreen({
 
       <ScrollView
         style={styles.container}
-        contentContainerStyle={
-          styles.contentContainer
-        }
+        contentContainerStyle={[
+          styles.contentContainer,
+          isMobile && styles.contentContainerMobile,
+        ]}
       >
         {/* REPORT TYPE SELECTOR */}
 
@@ -1735,9 +1736,10 @@ export default function InventoryReportsScreen({
           {quickRange ===
             'custom' && (
               <View
-                style={
-                  styles.customDateRow
-                }
+                style={[
+                  styles.customDateRow,
+                  isMobile && styles.customDateRowMobile,
+                ]}
               >
                 <View
                   style={
@@ -1804,9 +1806,10 @@ export default function InventoryReportsScreen({
           {/* DROPDOWNS */}
 
           <View
-            style={
-              styles.dropdownRow
-            }
+            style={[
+              styles.dropdownRow,
+              isMobile && styles.dropdownRowMobile,
+            ]}
           >
             {/* BRANCH */}
 
@@ -2200,6 +2203,9 @@ const styles = StyleSheet.create({
   contentContainer: {
     padding: 16,
   },
+  contentContainerMobile: {
+    padding: 12,
+  },
 
   // ==========================================================
   // HEADER
@@ -2227,11 +2233,22 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     zIndex: 10,
   },
+  headerMobile: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
 
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    minWidth: 0,
+  },
+  headerLeftMobile: {
+    width: '100%',
   },
 
   backButton: {
@@ -2261,6 +2278,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 6,
+  },
+  exportButtonHeaderMobile: {
+    alignSelf: 'flex-start',
   },
 
   exportButtonHeaderText: {
@@ -2415,6 +2435,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginBottom: 16,
   },
+  customDateRowMobile: {
+    flexDirection: 'column',
+    gap: 10,
+  },
 
   customDateInputContainer: {
     flex: 1,
@@ -2449,10 +2473,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginBottom: 16,
   },
+  dropdownRowMobile: {
+    flexDirection: 'column',
+    gap: 10,
+  },
 
   dropdownContainer: {
     flex: 1,
     marginRight: 8,
+    minWidth: 0,
   },
 
   dropdownTrigger: {

@@ -1212,7 +1212,12 @@ export default function AppNavigator() {
   // Auth Guard: SUPPLIER PORTAL (Dedicated isolated portal for medicine suppliers)
   if (currentUser?.role === "SUPPLIER") {
     return (
-      <View style={styles.appContainer}>
+      <View
+        style={[
+          styles.appContainer,
+          isMobile && styles.appContainerMobile,
+        ]}
+      >
         <SupplierPortalScreen
           currentUser={currentUser}
           onSignOut={handleSignOut}
@@ -1231,15 +1236,30 @@ export default function AppNavigator() {
 
   if (currentUser && currentUser.hasBranch === false && !isSingleShopUser) {
     return (
-      <View style={styles.appContainer}>
+      <View
+        style={[
+          styles.appContainer,
+          isMobile && styles.appContainerMobile,
+        ]}
+      >
         <View style={styles.mainWrapper}>
           {/* Dedicated Onboarding Header */}
-          <View style={styles.onboardingHeader}>
-            <View style={styles.onboardingBrandRow}>
+          <View
+            style={[
+              styles.onboardingHeader,
+              isMobile && styles.onboardingHeaderMobile,
+            ]}
+          >
+            <View
+              style={[
+                styles.onboardingBrandRow,
+                isMobile && styles.onboardingBrandRowMobile,
+              ]}
+            >
               <View style={styles.onboardingIconCircle}>
                 <Text style={styles.onboardingIconText}>Rx</Text>
               </View>
-              <View>
+              <View style={isMobile && styles.onboardingBrandTextMobile}>
                 <Text style={styles.onboardingTitle}>
                   {currentUser.organisationName ||
                     currentUser.name ||
@@ -1293,7 +1313,12 @@ export default function AppNavigator() {
   return (
     <OfflineSyncProvider>
       <PosProvider currentUser={currentUser} selectedBranch={selectedBranch}>
-        <View style={styles.appContainer}>
+        <View
+          style={[
+            styles.appContainer,
+            isMobile && styles.appContainerMobile,
+          ]}
+        >
           {/* 1. Fixed Left Sidebar for Desktop */}
           {!isMobile && (
             <Sidebar
@@ -1403,11 +1428,17 @@ const styles = StyleSheet.create({
       },
     }),
   },
+  appContainerMobile: {
+    width: "100%",
+    minWidth: 0,
+    flexDirection: "column",
+  },
   mainWrapper: {
     flex: 1,
     flexDirection: "column",
     backgroundColor: "#F8F5F7",
     height: "100%",
+    minWidth: 0,
   },
   toastBanner: {
     backgroundColor: "#E8D5DD",
@@ -1438,6 +1469,7 @@ const styles = StyleSheet.create({
   screenContainer: {
     flex: 1,
     backgroundColor: "#F8F5F7",
+    minWidth: 0,
   },
   mobileDrawerOverlay: {
     flex: 1,
@@ -1512,10 +1544,25 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#A66D86",
   },
+  onboardingHeaderMobile: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 10,
+    flexWrap: "wrap",
+  },
   onboardingBrandRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
+  },
+  onboardingBrandRowMobile: {
+    minWidth: 0,
+    gap: 8,
+    flex: 1,
+  },
+  onboardingBrandTextMobile: {
+    minWidth: 0,
+    flexShrink: 1,
   },
   onboardingIconCircle: {
     width: 36,

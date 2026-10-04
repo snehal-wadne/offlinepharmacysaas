@@ -568,14 +568,27 @@ export default function StockTransferScreen({ onShowToast }) {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.contentContainer}
+      contentContainerStyle={[
+        styles.contentContainer,
+        isMobile && styles.contentContainerMobile,
+      ]}
       showsVerticalScrollIndicator={true}
     >
       {/* Page Header (Screenshot 3 style) */}
-      <View style={styles.headerRow}>
+      <View
+        style={[
+          styles.headerRow,
+          isMobile && styles.headerRowMobile,
+        ]}
+      >
         <View>
           <Text style={styles.pageTitle}>Stock Transfer</Text>
-          <Text style={styles.pageSubtitle}>
+          <Text
+            style={[
+              styles.pageSubtitle,
+              isMobile && styles.pageSubtitleMobile,
+            ]}
+          >
             Transfer stock between pharmacy branches and distribution nodes.
           </Text>
         </View>
@@ -1637,6 +1650,10 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     color: "#77717A",
     marginTop: 4,
+  },
+  pageSubtitleMobile: {
+    flexShrink: 1,
+    maxWidth: "100%",
   },
   newTransferButton: {
     flexDirection: "row",
