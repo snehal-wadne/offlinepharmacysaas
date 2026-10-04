@@ -117,17 +117,22 @@ export default function StockMovementHistoryScreen({ navigation, route }) {
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, isMobile && styles.headerMobile]}>
         <View>
           <Text style={styles.headerTitle}>Stock Movement History</Text>
           <Text style={styles.headerSubtitle}>Complete audit trail of all inventory movements</Text>
         </View>
-        <TouchableOpacity style={styles.exportBtn}>
+        <TouchableOpacity
+          style={[styles.exportBtn, isMobile && styles.exportBtnMobile]}
+        >
           <Text style={styles.exportBtnText}>⬇ Export</Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        style={[styles.content, isMobile && styles.contentMobile]}
+        keyboardShouldPersistTaps="handled"
+      >
         {/* Filters */}
         <View style={styles.filterCard}>
           <View style={[styles.filterRow, isMobile && styles.filterRowMobile]}>
@@ -387,6 +392,9 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 6,
   },
+  exportBtnMobile: {
+    alignSelf: "flex-start",
+  },
   exportBtnText: {
     color: COLORS.secondary,
     fontWeight: '600',
@@ -395,6 +403,9 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 20,
+  },
+  contentMobile: {
+    padding: 12,
   },
   filterCard: {
     backgroundColor: COLORS.surface,
@@ -529,6 +540,12 @@ const styles = StyleSheet.create({
     padding: 10,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
+  },
+  headerMobile: {
+    flexDirection: "column",
+    alignItems: "stretch",
+    gap: 10,
+    paddingHorizontal: 14,
   },
   dropdownItemText: {
     fontSize: 14,

@@ -376,7 +376,9 @@ export default function PosBillingScreen({
     <View style={styles.container}>
       {/* Top Banner / Breadcrumb */}
       <View style={[styles.topBar, isMobile && styles.topBarMobile]}>
-        <View style={styles.posTitleBox}>
+        <View
+          style={[styles.posTitleBox, isMobile && styles.posTitleBoxMobile]}
+        >
           <Text style={styles.posTitle}>POS Billing & Checkout</Text>
           <Text style={styles.posSubtitle}>
             Counter 01 • Fast Prescription & OTC Sales (BIL-01)
@@ -386,7 +388,10 @@ export default function PosBillingScreen({
         {/* Customer Badge Selector */}
         <Pressable
           onPress={() => setCustomerModalVisible(true)}
-          style={styles.customerSelectorBtn}
+          style={[
+            styles.customerSelectorBtn,
+            isMobile && styles.customerSelectorBtnMobile,
+          ]}
         >
           <Text style={styles.customerBtnIcon}>👤</Text>
           <View>
@@ -416,6 +421,7 @@ export default function PosBillingScreen({
                 styles.mobileTabItemText,
                 mobileTab === "catalog" && styles.mobileTabItemTextActive,
               ]}
+              numberOfLines={1}
             >
               💊 Medicines ({filteredProducts.length})
             </Text>
@@ -432,6 +438,7 @@ export default function PosBillingScreen({
                 styles.mobileTabItemText,
                 mobileTab === "cart" && styles.mobileTabItemTextActive,
               ]}
+              numberOfLines={1}
             >
               🛒 Current Bill ({cart.length}) • ₹{totals.grandTotal.toFixed(2)}
             </Text>
@@ -577,7 +584,12 @@ export default function PosBillingScreen({
 
         {/* RIGHT PANE: Cart & Checkout Summary */}
         {(!isMobile || mobileTab === "cart") && (
-          <View style={[styles.rightPane, isMobile && { flex: 1 }]}>
+          <View
+            style={[
+              styles.rightPane,
+              isMobile && styles.rightPaneMobile,
+            ]}
+          >
             {isMobile && (
               <Pressable
                 onPress={() => setMobileTab("catalog")}
@@ -602,7 +614,12 @@ export default function PosBillingScreen({
             </View>
 
             {/* Cart Items List */}
-            <ScrollView style={styles.cartItemsScroll}>
+            <ScrollView
+              style={[
+                styles.cartItemsScroll,
+                isMobile && styles.cartItemsScrollMobile,
+              ]}
+            >
               {cart.length === 0 ? (
                 <View style={styles.emptyCartBox}>
                   <Text style={styles.emptyCartEmoji}>🛒</Text>
@@ -613,9 +630,22 @@ export default function PosBillingScreen({
                 </View>
               ) : (
                 cart.map((item, idx) => (
-                  <View key={item.id + idx} style={styles.cartItemRow}>
-                    <View style={styles.cartItemDetails}>
-                      <Text style={styles.cartItemName}>{item.name}</Text>
+                  <View
+                    key={item.id + idx}
+                    style={[
+                      styles.cartItemRow,
+                      isMobile && styles.cartItemRowMobile,
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.cartItemDetails,
+                        isMobile && styles.cartItemDetailsMobile,
+                      ]}
+                    >
+                      <Text style={styles.cartItemName} numberOfLines={1}>
+                        {item.name}
+                      </Text>
                       <Text style={styles.cartItemMeta}>
                         Batch: {item.batch} • Exp: {item.expiry}
                       </Text>
@@ -625,7 +655,12 @@ export default function PosBillingScreen({
                     </View>
 
                     {/* Quantity Controls */}
-                    <View style={styles.qtyControlsRow}>
+                    <View
+                      style={[
+                        styles.qtyControlsRow,
+                        isMobile && styles.qtyControlsRowMobile,
+                      ]}
+                    >
                       <Pressable
                         onPress={() => handleUpdateQty(idx, -1)}
                         style={styles.qtyBtn}
@@ -642,7 +677,12 @@ export default function PosBillingScreen({
                     </View>
 
                     {/* Line Total */}
-                    <View style={styles.cartItemTotalBox}>
+                    <View
+                      style={[
+                        styles.cartItemTotalBox,
+                        isMobile && styles.cartItemTotalBoxMobile,
+                      ]}
+                    >
                       <Text style={styles.cartItemTotal}>
                         ₹
                         {(
@@ -657,7 +697,12 @@ export default function PosBillingScreen({
             </ScrollView>
 
             {/* Bill Summary Calculations */}
-            <View style={styles.billSummaryBox}>
+            <View
+              style={[
+                styles.billSummaryBox,
+                isMobile && styles.billSummaryBoxMobile,
+              ]}
+            >
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Subtotal</Text>
                 <Text style={styles.summaryVal}>
@@ -681,7 +726,12 @@ export default function PosBillingScreen({
 
               <View style={styles.summaryDivider} />
 
-              <View style={styles.grandTotalRow}>
+              <View
+                style={[
+                  styles.grandTotalRow,
+                  isMobile && styles.grandTotalRowMobile,
+                ]}
+              >
                 <Text style={styles.grandTotalLabel}>Grand Total</Text>
                 <Text style={styles.grandTotalVal}>
                   ₹{totals.grandTotal.toFixed(2)}
@@ -689,7 +739,12 @@ export default function PosBillingScreen({
               </View>
 
               {/* Cart Footer Actions */}
-              <View style={styles.cartActionButtonsRow}>
+              <View
+                style={[
+                  styles.cartActionButtonsRow,
+                  isMobile && styles.cartActionButtonsRowMobile,
+                ]}
+              >
                 <Pressable
                   onPress={handleHoldBill}
                   style={styles.holdBtn}
@@ -754,6 +809,12 @@ export default function PosBillingScreen({
               isMobile && styles.checkoutModalCardMobile,
             ]}
           >
+            <ScrollView
+              style={styles.checkoutModalScroll}
+              contentContainerStyle={styles.checkoutModalScrollContent}
+              showsVerticalScrollIndicator
+              keyboardShouldPersistTaps="handled"
+            >
             <View style={styles.modalHeader}>
               <View>
                 <Text style={styles.modalTitle}>Settle Payment</Text>
@@ -843,7 +904,7 @@ export default function PosBillingScreen({
                 </View>
 
                 {/* VPA and supported apps */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFFFFF', padding: 6, borderRadius: 6, marginBottom: 8, borderWidth: 1, borderColor: '#E5DFE4' }}>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 6, backgroundColor: '#FFFFFF', padding: 6, borderRadius: 6, marginBottom: 8, borderWidth: 1, borderColor: '#E5DFE4' }}>
                   <Text style={{ fontSize: 11, color: '#77717A' }}>UPI VPA: <Text style={{ fontWeight: '700', color: '#28242B' }}>{storeUpiId}</Text></Text>
                   <Pressable onPress={() => setIsEditingUpiId(!isEditingUpiId)}>
                     <Text style={{ fontSize: 11, fontWeight: '700', color: '#A66D86' }}>{isEditingUpiId ? 'Done' : 'Edit'}</Text>
@@ -860,7 +921,7 @@ export default function PosBillingScreen({
                   />
                 )}
 
-                <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6, marginBottom: 8 }}>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 6, marginBottom: 8 }}>
                   {['GPay', 'PhonePe', 'Paytm', 'BHIM', 'Any App'].map((app) => (
                     <Text key={app} style={{ fontSize: 10, fontWeight: '700', color: '#77717A', backgroundColor: '#F8F5F7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>{app}</Text>
                   ))}
@@ -912,22 +973,34 @@ export default function PosBillingScreen({
               </View>
             )}
 
-            <View style={styles.modalFooterRow}>
+            <View
+              style={[
+                styles.modalFooterRow,
+                isMobile && styles.modalFooterRowMobile,
+              ]}
+            >
               <Pressable
                 onPress={() => setCheckoutModalVisible(false)}
-                style={styles.cancelBtn}
+                style={[
+                  styles.cancelBtn,
+                  isMobile && styles.modalActionButtonMobile,
+                ]}
               >
                 <Text style={styles.cancelBtnText}>Cancel</Text>
               </Pressable>
               <Pressable
                 onPress={handleFinalizeSale}
-                style={styles.confirmPayBtn}
+                style={[
+                  styles.confirmPayBtn,
+                  isMobile && styles.modalActionButtonMobile,
+                ]}
               >
                 <Text style={styles.confirmPayBtnText}>
                   Complete Sale & Print
                 </Text>
               </Pressable>
             </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -942,8 +1015,13 @@ export default function PosBillingScreen({
           animationType="fade"
           onRequestClose={() => setReceiptModalVisible(false)}
         >
-          <View style={styles.modalOverlay}>
-            <View style={styles.receiptCard}>
+          <View style={[styles.modalOverlay, isMobile && styles.modalOverlayMobile]}>
+            <ScrollView
+              style={styles.receiptScroll}
+              contentContainerStyle={styles.receiptScrollContent}
+              showsVerticalScrollIndicator
+            >
+            <View style={[styles.receiptCard, isMobile && styles.receiptCardMobile]}>
               <View style={styles.receiptHeader}>
                 <Text style={styles.pharmacyName}>PHARMAFLOW PHARMACY</Text>
                 <Text style={styles.pharmacyDetails}>
@@ -1012,25 +1090,37 @@ export default function PosBillingScreen({
                 Thank you! Get well soon.
               </Text>
 
-              <View style={styles.receiptActionsRow}>
+              <View
+                style={[
+                  styles.receiptActionsRow,
+                  isMobile && styles.receiptActionsRowMobile,
+                ]}
+              >
                 <Pressable
                   onPress={() => {
                     setReceiptModalVisible(false);
                     if (onShowToast)
                       onShowToast("🖨️ Sent receipt to thermal printer.");
                   }}
-                  style={styles.printThermalBtn}
+                  style={[
+                    styles.printThermalBtn,
+                    isMobile && styles.receiptActionButtonMobile,
+                  ]}
                 >
                   <Text style={styles.printThermalText}>🖨️ Print Receipt</Text>
                 </Pressable>
                 <Pressable
                   onPress={() => setReceiptModalVisible(false)}
-                  style={styles.doneBtn}
+                  style={[
+                    styles.doneBtn,
+                    isMobile && styles.receiptActionButtonMobile,
+                  ]}
                 >
                   <Text style={styles.doneBtnText}>Done</Text>
                 </Pressable>
               </View>
             </View>
+            </ScrollView>
           </View>
         </Modal>
       )}
@@ -1153,6 +1243,16 @@ const styles = StyleSheet.create({
     flexDirection: "column",
     alignItems: "flex-start",
     gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  customerSelectorBtnMobile: {
+    width: "100%",
+    minWidth: 0,
+  },
+  posTitleBoxMobile: {
+    minWidth: 0,
+    width: "100%",
   },
   mobileTabRow: {
     flexDirection: "row",
@@ -1181,6 +1281,8 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     fontWeight: "700",
     color: "#77717A",
+    textAlign: "center",
+    flexShrink: 1,
   },
   mobileTabItemTextActive: {
     color: "#FFFFFF",
@@ -1211,7 +1313,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingVertical: 14,
-    paddingHorizontal: 18,
+    paddingHorizontal: 12,
+    gap: 8,
     shadowColor: "#28242B",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
@@ -1223,6 +1326,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
+    minWidth: 0,
+    flexShrink: 1,
   },
   floatingCartBadge: {
     backgroundColor: "#FFFFFF",
@@ -1241,11 +1346,13 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 14,
     fontWeight: "700",
+    flexShrink: 1,
   },
   floatingCartRight: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 4,
+    flexShrink: 0,
   },
   floatingCartTotal: {
     color: "#FFFFFF",
@@ -1319,6 +1426,10 @@ const styles = StyleSheet.create({
     flexDirection: "column",
     backgroundColor: "#F8F5F7",
     padding: 16,
+  },
+  rightPaneMobile: {
+    minHeight: 0,
+    padding: 12,
   },
 
   // Search Bar
@@ -1499,6 +1610,9 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 180,
   },
+  cartItemsScrollMobile: {
+    minHeight: 0,
+  },
   emptyCartBox: {
     alignItems: "center",
     justifyContent: "center",
@@ -1527,8 +1641,16 @@ const styles = StyleSheet.create({
     borderColor: "#E5DFE4",
     marginBottom: 8,
   },
+  cartItemRowMobile: {
+    flexWrap: "wrap",
+    gap: 8,
+  },
   cartItemDetails: {
     flex: 1.2,
+  },
+  cartItemDetailsMobile: {
+    flexBasis: "100%",
+    minWidth: 0,
   },
   cartItemName: {
     fontSize: 12,
@@ -1549,6 +1671,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
     marginHorizontal: 8,
+  },
+  qtyControlsRowMobile: {
+    marginHorizontal: 0,
   },
   qtyBtn: {
     width: 24,
@@ -1575,6 +1700,9 @@ const styles = StyleSheet.create({
     minWidth: 60,
     alignItems: "flex-end",
   },
+  cartItemTotalBoxMobile: {
+    marginLeft: "auto",
+  },
   cartItemTotal: {
     fontSize: 13,
     fontWeight: "800",
@@ -1589,6 +1717,10 @@ const styles = StyleSheet.create({
     borderColor: "#E5DFE4",
     padding: 14,
     marginTop: 10,
+  },
+  billSummaryBoxMobile: {
+    padding: 10,
+    marginTop: 8,
   },
   summaryRow: {
     flexDirection: "row",
@@ -1618,6 +1750,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 12,
   },
+  grandTotalRowMobile: {
+    marginBottom: 8,
+  },
   grandTotalLabel: {
     fontSize: 14,
     fontWeight: "800",
@@ -1631,6 +1766,10 @@ const styles = StyleSheet.create({
   cartActionButtonsRow: {
     flexDirection: "row",
     gap: 10,
+  },
+  cartActionButtonsRowMobile: {
+    flexDirection: "column",
+    gap: 8,
   },
   holdBtn: {
     flex: 1,
@@ -1659,6 +1798,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "800",
     color: "#FFFFFF",
+    flexShrink: 1,
+    textAlign: "center",
   },
 
   // Modals
@@ -1669,6 +1810,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 16,
   },
+  modalOverlayMobile: {
+    padding: 8,
+    justifyContent: "center",
+  },
   checkoutModalCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 16,
@@ -1677,7 +1822,17 @@ const styles = StyleSheet.create({
     maxWidth: 500,
   },
   checkoutModalCardMobile: {
-    padding: 16,
+    padding: 12,
+    height: "94%",
+    maxHeight: "94%",
+    overflow: "hidden",
+  },
+  checkoutModalScroll: {
+    flex: 1,
+    maxHeight: "100%",
+  },
+  checkoutModalScrollContent: {
+    paddingBottom: 4,
   },
   modalHeader: {
     flexDirection: "row",
@@ -1804,6 +1959,14 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
     gap: 10,
   },
+  modalFooterRowMobile: {
+    flexDirection: "column-reverse",
+    alignItems: "stretch",
+  },
+  modalActionButtonMobile: {
+    width: "100%",
+    alignItems: "center",
+  },
   cancelBtn: {
     paddingHorizontal: 16,
     paddingVertical: 8,
@@ -1825,6 +1988,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     color: "#FFFFFF",
+    textAlign: "center",
   },
 
   // Receipt Card
@@ -1835,6 +1999,17 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 380,
     fontFamily: Platform.select({ web: "monospace", default: "System" }),
+  },
+  receiptScroll: {
+    width: "100%",
+    maxHeight: "94%",
+  },
+  receiptScrollContent: {
+    alignItems: "center",
+    paddingVertical: 4,
+  },
+  receiptCardMobile: {
+    padding: 14,
   },
   receiptHeader: {
     alignItems: "center",
@@ -1870,6 +2045,8 @@ const styles = StyleSheet.create({
   receiptItemName: {
     fontSize: 11,
     color: "#28242B",
+    flex: 1,
+    minWidth: 0,
   },
   receiptItemAmount: {
     fontSize: 11,
@@ -1901,6 +2078,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
     marginTop: 16,
+  },
+  receiptActionsRowMobile: {
+    flexDirection: "column",
+  },
+  receiptActionButtonMobile: {
+    width: "100%",
   },
   printThermalBtn: {
     flex: 1,

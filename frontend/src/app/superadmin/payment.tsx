@@ -375,7 +375,7 @@ export default function PharmacyPaymentPage() {
       contentContainerStyle={[styles.content, isMobile && styles.contentMobile]}
       showsVerticalScrollIndicator={false}
     >
-      <View style={styles.breadcrumb}>
+      <View style={[styles.breadcrumb, isMobile && styles.breadcrumbMobile]}>
         <Text style={styles.breadcrumbText}>Pharmacies</Text>
         <Text style={styles.separator}>/</Text>
         <Text style={styles.breadcrumbText}>Add New Pharmacy</Text>
@@ -461,7 +461,7 @@ export default function PharmacyPaymentPage() {
         </View>
       </View>
 
-      <View style={styles.bottomActions}>
+      <View style={[styles.bottomActions, isMobile && styles.bottomActionsMobile]}>
         <Pressable
           style={styles.cancelButton}
           disabled={isProcessing}
@@ -575,6 +575,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     marginBottom: 18,
+  },
+  breadcrumbMobile: {
+    flexWrap: 'wrap',
   },
   breadcrumbText: {
     color: C.mutedGray,
@@ -775,6 +778,10 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     gap: 10,
   },
+  bottomActionsMobile: {
+    flexDirection: 'column-reverse',
+    alignItems: 'stretch',
+  },
   cancelButton: {
     paddingHorizontal: 20,
     paddingVertical: 12,
@@ -782,6 +789,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.secondaryBorder,
     backgroundColor: C.white,
+    alignItems: 'center',
   },
   cancelText: {
     color: C.midnightViolet,
@@ -793,6 +801,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 8,
     backgroundColor: C.dustyRose,
+    alignItems: 'center',
   },
   paidText: {
     color: C.white,

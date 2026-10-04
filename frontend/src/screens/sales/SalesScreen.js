@@ -82,6 +82,22 @@ function clearSalesDraft() {
   }
 }
 
+function ResponsiveBillPane({ isMobile, children }) {
+  if (isMobile) {
+    return (
+      <ScrollView
+        style={styles.rightBillPaneMobile}
+        contentContainerStyle={styles.rightBillPaneMobileContent}
+        keyboardShouldPersistTaps="handled"
+      >
+        {children}
+      </ScrollView>
+    );
+  }
+
+  return <View style={styles.rightBillPane}>{children}</View>;
+}
+
 export default function SalesScreen({
   onNavigate,
   onShowToast,
@@ -870,8 +886,18 @@ const handleHoldBillAction = async () => {
 
       {/* DRAFT RESUMED Alert Bar (Matches Image 4 yellow/amber alert bar) */}
       {activeResumedDraft ? (
-        <View style={styles.draftResumedAlertBar}>
-          <View style={styles.draftResumedLeftGroup}>
+        <View
+          style={[
+            styles.draftResumedAlertBar,
+            isMobile && styles.draftResumedAlertBarMobile,
+          ]}
+        >
+          <View
+            style={[
+              styles.draftResumedLeftGroup,
+              isMobile && styles.draftResumedLeftGroupMobile,
+            ]}
+          >
             <View style={styles.draftResumedBadge}>
               <Text style={styles.draftResumedBadgeText}>DRAFT RESUMED</Text>
             </View>
@@ -1039,7 +1065,12 @@ const handleHoldBillAction = async () => {
               </ScrollView>
 
               {/* 2. Search Results Section */}
-              <View style={styles.searchResultsHeaderRow}>
+              <View
+                style={[
+                  styles.searchResultsHeaderRow,
+                  isMobile && styles.searchResultsHeaderRowMobile,
+                ]}
+              >
                 <Text style={styles.sectionHeading}>Search Results</Text>
                 <Text style={styles.resultsCountText}>
                   {filteredProducts.length} items found
@@ -1060,7 +1091,12 @@ const handleHoldBillAction = async () => {
                           styles.searchResultRowContainerActive,
                       ]}
                     >
-                      <View style={styles.searchResultRow}>
+                      <View
+                        style={[
+                          styles.searchResultRow,
+                          isMobile && styles.searchResultRowMobile,
+                        ]}
+                      >
                         {/* Left info */}
                         <View style={styles.resultLeftInfo}>
                           <View style={styles.resultTitleRow}>
@@ -1084,7 +1120,12 @@ const handleHoldBillAction = async () => {
                         </View>
 
                         {/* Right Price & Actions */}
-                        <View style={styles.resultRightActions}>
+                        <View
+                          style={[
+                            styles.resultRightActions,
+                            isMobile && styles.resultRightActionsMobile,
+                          ]}
+                        >
                           <Text style={styles.resultPriceText}>
                             ₹{prod.sellingPrice}
                           </Text>
@@ -1243,12 +1284,7 @@ const handleHoldBillAction = async () => {
         {/* RIGHT PANE: Current Bill / Draft Invoice (Cart & Checkout)               */}
         {/* ========================================================================= */}
         {(!isMobile || mobileTab === "bill") && (
-          <View
-            style={[
-              styles.rightBillPane,
-              isMobile && styles.rightBillPaneMobile,
-            ]}
-          >
+          <ResponsiveBillPane isMobile={isMobile}>
             {isMobile && (
               <Pressable
                 onPress={() => setMobileTab("catalog")}
@@ -1344,13 +1380,23 @@ const handleHoldBillAction = async () => {
             </View>
 
             {/* Items Section */}
-            <View style={styles.itemsSectionBox}>
+            <View
+              style={[
+                styles.itemsSectionBox,
+                isMobile && styles.itemsSectionBoxMobile,
+              ]}
+            >
               <Text style={styles.itemsCountHeading}>
                 ITEMS ({cart.length})
               </Text>
 
               {cart.length === 0 ? (
-                <View style={styles.emptyItemsBox}>
+                <View
+                  style={[
+                    styles.emptyItemsBox,
+                    isMobile && styles.emptyItemsBoxMobile,
+                  ]}
+                >
                   <Text style={styles.emptyCartIcon}>🛒</Text>
                   <Text style={styles.emptyCartHeading}>
                     No medicines added yet
@@ -1361,7 +1407,10 @@ const handleHoldBillAction = async () => {
                 </View>
               ) : (
                 <ScrollView
-                  style={styles.cartItemsScrollView}
+                  style={[
+                    styles.cartItemsScrollView,
+                    isMobile && styles.cartItemsScrollViewMobile,
+                  ]}
                   showsVerticalScrollIndicator={true}
                 >
                   {cart.map((item, idx) => (
@@ -1506,7 +1555,7 @@ const handleHoldBillAction = async () => {
                 <Text style={styles.payNowBtnText}>Pay Now</Text>
               </Pressable>
             </View>
-          </View>
+          </ResponsiveBillPane>
         )}
       </View>
 
@@ -1543,7 +1592,12 @@ const handleHoldBillAction = async () => {
         onRequestClose={() => setCheckoutModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.checkoutModalCard}>
+          <ScrollView
+            style={styles.checkoutModalScroll}
+            contentContainerStyle={styles.checkoutModalCard}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator
+          >
             <View style={styles.modalHeader}>
               <View>
                 <Text style={styles.modalTitle}>Complete POS Sale</Text>
@@ -1728,7 +1782,12 @@ const handleHoldBillAction = async () => {
               </View>
             )}
 
-            <View style={styles.modalFooterRow}>
+            <View
+              style={[
+                styles.modalFooterRow,
+                isMobile && styles.modalFooterRowMobile,
+              ]}
+            >
               <Pressable
                 onPress={() => setCheckoutModalVisible(false)}
                 style={styles.cancelModalBtn}
@@ -1744,7 +1803,7 @@ const handleHoldBillAction = async () => {
                 </Text>
               </Pressable>
             </View>
-          </View>
+          </ScrollView>
         </View>
       </Modal>
 
@@ -1759,7 +1818,11 @@ const handleHoldBillAction = async () => {
           onRequestClose={() => setReceiptModalVisible(false)}
         >
           <View style={styles.modalOverlay}>
-            <View style={styles.receiptCard}>
+            <ScrollView
+              style={styles.receiptModalScroll}
+              contentContainerStyle={styles.receiptCard}
+              showsVerticalScrollIndicator
+            >
               <View style={styles.receiptHeader}>
                 <Text style={styles.receiptStoreName}>FALAH PHARMACY POS</Text>
                 <Text style={styles.receiptStoreSub}>
@@ -1892,7 +1955,7 @@ const handleHoldBillAction = async () => {
                   <Text style={styles.doneReceiptBtnText}>Done</Text>
                 </Pressable>
               </View>
-            </View>
+            </ScrollView>
           </View>
         </Modal>
       )}
@@ -2267,11 +2330,21 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
+  draftResumedAlertBarMobile: {
+    paddingHorizontal: 12,
+    flexDirection: "column",
+    alignItems: "stretch",
+    gap: 8,
+  },
   draftResumedLeftGroup: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
     flex: 1,
+  },
+  draftResumedLeftGroupMobile: {
+    flexDirection: "column",
+    alignItems: "flex-start",
   },
   draftResumedBadge: {
     backgroundColor: "#C49752",
@@ -2341,6 +2414,13 @@ const styles = StyleSheet.create({
   rightBillPaneMobile: {
     width: "100%",
     flex: 1,
+    minHeight: 0,
+    backgroundColor: "#FFFFFF",
+  },
+  rightBillPaneMobileContent: {
+    padding: 16,
+    backgroundColor: "#FFFFFF",
+    justifyContent: "flex-start",
   },
   mobileBackToMedsBtn: {
     paddingVertical: 10,
@@ -2585,6 +2665,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 12,
   },
+  searchResultsHeaderRowMobile: {
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 4,
+  },
   resultsCountText: {
     fontSize: 12,
     color: "#77717A",
@@ -2606,6 +2691,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.02,
     shadowRadius: 3,
     elevation: 1,
+  },
+  searchResultRowMobile: {
+    flexDirection: "column",
+    alignItems: "stretch",
+    gap: 8,
+    paddingHorizontal: 12,
+    minWidth: 0,
+    flexWrap: "wrap",
   },
   resultLeftInfo: {
     flex: 1,
@@ -2644,6 +2737,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
+  },
+  resultRightActionsMobile: {
+    flexWrap: "wrap",
+    justifyContent: "flex-start",
+    gap: 8,
   },
   resultPriceText: {
     fontSize: 15,
@@ -2956,6 +3054,9 @@ const styles = StyleSheet.create({
     minHeight: 0,
     marginBottom: 14,
   },
+  itemsSectionBoxMobile: {
+    flex: 0,
+  },
   itemsCountHeading: {
     fontSize: 11,
     fontWeight: "800",
@@ -2988,9 +3089,18 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 4,
   },
+  emptyItemsBoxMobile: {
+    flex: 0,
+    minHeight: 112,
+  },
   cartItemsScrollView: {
     flex: 1,
     minHeight: 0,
+  },
+  cartItemsScrollViewMobile: {
+    flex: 0,
+    minHeight: 48,
+    maxHeight: 240,
   },
   cartItemRow: {
     flexDirection: "row",
@@ -3202,11 +3312,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 16,
   },
-  checkoutModalCard: {
+  checkoutModalScroll: {
     width: "100%",
     maxWidth: 480,
+    maxHeight: "90%",
     backgroundColor: "#FFFFFF",
     borderRadius: 14,
+  },
+  checkoutModalCard: {
+    width: "100%",
     padding: 20,
   },
   modalHeader: {
@@ -3529,6 +3643,9 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
     gap: 10,
   },
+  modalFooterRowMobile: {
+    flexDirection: "column",
+  },
   cancelModalBtn: {
     paddingHorizontal: 16,
     paddingVertical: 10,
@@ -3553,9 +3670,15 @@ const styles = StyleSheet.create({
   },
 
   // Thermal Receipt
-  receiptCard: {
+  receiptModalScroll: {
     width: "100%",
     maxWidth: 380,
+    maxHeight: "90%",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+  },
+  receiptCard: {
+    width: "100%",
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
     padding: 20,

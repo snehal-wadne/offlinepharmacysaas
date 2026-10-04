@@ -103,7 +103,7 @@ export default function ConfirmationPage() {
       style={styles.container}
       contentContainerStyle={[styles.content, isMobile && styles.contentMobile]}
     >
-      <View style={styles.breadcrumb}>
+      <View style={[styles.breadcrumb, isMobile && styles.breadcrumbMobile]}>
         <Text style={styles.breadcrumbText}>Pharmacies</Text>
         <Text style={styles.separator}>/</Text>
         <Text style={styles.breadcrumbText}>Add New Pharmacy</Text>
@@ -311,6 +311,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     marginBottom: 18,
+  },
+  breadcrumbMobile: {
+    flexWrap: 'wrap',
   },
   breadcrumbText: {
     color: C.mutedGray,

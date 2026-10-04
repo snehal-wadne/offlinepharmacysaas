@@ -846,6 +846,7 @@ const styles = StyleSheet.create({
   mainNavItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    minHeight: 44,
     paddingVertical: 10,
     paddingHorizontal: 14,
     borderRadius: 8,
@@ -885,6 +886,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    minHeight: 44,
     paddingVertical: 10,
     paddingHorizontal: 14,
     borderRadius: 8,
@@ -917,6 +919,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    minHeight: 44,
     paddingVertical: 8.5,
     paddingHorizontal: 12,
     borderRadius: 6,

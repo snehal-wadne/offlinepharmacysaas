@@ -27,6 +27,7 @@ const EXPIRY_BADGES = {
 
 export default function LowStockExpiryScreen({ onShowToast }) {
   const { width } = useWindowDimensions();
+  const isMobile = width < 768;
   const isCompact = width < 1100;
 
   // Active Tab: 'low-stock' or 'expiry'
@@ -175,7 +176,10 @@ export default function LowStockExpiryScreen({ onShowToast }) {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.contentContainer}
+      contentContainerStyle={[
+        styles.contentContainer,
+        isMobile && styles.contentContainerMobile,
+      ]}
       showsVerticalScrollIndicator={true}
     >
       {/* Header */}
@@ -561,6 +565,12 @@ const styles = StyleSheet.create({
     paddingTop: 24,
     paddingBottom: 40,
     gap: 24,
+  },
+  contentContainerMobile: {
+    paddingHorizontal: 12,
+    paddingTop: 16,
+    paddingBottom: 28,
+    gap: 16,
   },
   headerSection: {
     marginBottom: 4,

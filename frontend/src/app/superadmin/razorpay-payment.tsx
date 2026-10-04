@@ -7,6 +7,7 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import {
@@ -336,6 +337,7 @@ export default function RazorPayPaymentsPage() {
   }>();
 
   const isMobile = useIsMobile();
+  const { width: viewportWidth } = useWindowDimensions();
   const [payments, setPayments] = useState<Payment[]>(PAYMENTS);
   const [isProcessingAction, setIsProcessingAction] = useState(false);
   const [search, setSearch] = useState('');
@@ -786,7 +788,16 @@ export default function RazorPayPaymentsPage() {
           </Pressable>
 
           {calendarOpen && (
-            <View style={styles.calendarPopover}>
+            <View
+              style={[
+                styles.calendarPopover,
+                isMobile && {
+                  width: Math.min(320, viewportWidth - 32),
+                  left: 0,
+                  right: undefined,
+                },
+              ]}
+            >
               {/* Popover Header */}
               <View style={styles.calHeader}>
                 <Pressable

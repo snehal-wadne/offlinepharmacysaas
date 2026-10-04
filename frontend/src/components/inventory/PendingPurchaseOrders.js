@@ -48,14 +48,22 @@ export default function PendingPurchaseOrders({
               >
                 {/* Left Info: PO Number & Supplier */}
                 <View style={styles.orderLeft}>
-                  <Text style={styles.poNumber}>{order.id || '-'}</Text>
-                  <Text style={styles.supplierName}>{order.supplierName || 'Unknown Supplier'}</Text>
+                  <Text style={styles.poNumber} numberOfLines={1}>
+                    {order.id || "-"}
+                  </Text>
+                  <Text style={styles.supplierName} numberOfLines={1}>
+                    {order.supplierName || "Unknown Supplier"}
+                  </Text>
                 </View>
 
                 {/* Right Info: Amount & Time */}
                 <View style={styles.orderRight}>
-                  <Text style={styles.amount}>₹{order.totalAmount || order.formattedAmount || '₹0.00'}</Text>
-                  <Text style={styles.timeAgo}>{order.timeAgo || ''}</Text>
+                  <Text style={styles.amount} numberOfLines={1}>
+                    ₹{order.totalAmount || order.formattedAmount || "₹0.00"}
+                  </Text>
+                  <Text style={styles.timeAgo} numberOfLines={1}>
+                    {order.timeAgo || ""}
+                  </Text>
                 </View>
               </Pressable>
             );
@@ -124,6 +132,9 @@ const styles = StyleSheet.create({
   },
   orderLeft: {
     flexDirection: 'column',
+    flex: 1,
+    minWidth: 0,
+    marginRight: 10,
   },
   poNumber: {
     fontSize: 14,
@@ -139,6 +150,7 @@ const styles = StyleSheet.create({
   orderRight: {
     flexDirection: 'column',
     alignItems: 'flex-end',
+    flexShrink: 0,
   },
   amount: {
     fontSize: 14,

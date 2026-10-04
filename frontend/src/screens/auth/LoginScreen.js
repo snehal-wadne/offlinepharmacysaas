@@ -766,8 +766,8 @@ export default function LoginScreen({
         {isDesktop && (
           <View style={[styles.leftSection, styles.desktopLeft]}>
             <Image
-              source={require("../../../assets/pharmacy.png")}
-              resizeMode="contain"
+              source={require("../../../assets/login-hero.jpg")}
+              resizeMode="cover"
               style={styles.pharmacyImage}
             />
             <View style={styles.imageBlend} />
@@ -2192,7 +2192,7 @@ export default function LoginScreen({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#EAF2EE",
+    backgroundColor: "#F8F5F7",
   },
   container: {
     flex: 1,
@@ -2202,7 +2202,7 @@ const styles = StyleSheet.create({
   },
   leftSection: {
     flex: 1,
-    backgroundColor: "#EAF2EE",
+    backgroundColor: "#30243D",
     minHeight: 650,
     overflow: "hidden",
     position: "relative",
@@ -2212,21 +2212,23 @@ const styles = StyleSheet.create({
   },
   pharmacyImage: {
     position: "absolute",
-    width: 540,
-    height: 480,
-    right: -40,
-    bottom: 20,
-    opacity: 0.28,
+    width: 300,
+    height: 533,
+    right: -20,
+    bottom: 24,
+    opacity: 0.82,
     zIndex: 0,
+    borderRadius: 20,
   },
   imageBlend: {
     position: "absolute",
-    right: -40,
-    bottom: 20,
-    width: 540,
-    height: 480,
-    backgroundColor: "rgba(234, 247, 243, 0.2)",
+    right: -20,
+    bottom: 24,
+    width: 300,
+    height: 533,
+    backgroundColor: "rgba(48, 36, 61, 0.3)",
     zIndex: 1,
+    borderRadius: 20,
   },
   leftContent: {
     flex: 1,
@@ -2243,7 +2245,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: "#EAF2EE",
+    backgroundColor: "#3D2E4D",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2254,14 +2256,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "800",
     letterSpacing: 1.2,
-    color: "#B9829A",
+    color: "#FFFFFF",
   },
   logoSubtitle: {
     marginTop: 2,
     fontSize: 10.5,
     fontWeight: "700",
     letterSpacing: 1.5,
-    color: "#77717A",
+    color: "#D9D2DE",
   },
   mainContent: {
     flex: 1,
@@ -2272,7 +2274,7 @@ const styles = StyleSheet.create({
     fontSize: 36,
     lineHeight: 42,
     fontWeight: "800",
-    color: "#28242B",
+    color: "#FFFFFF",
     letterSpacing: -0.5,
   },
   greenHeading: {
@@ -2286,14 +2288,14 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 15,
     fontWeight: "600",
-    color: "#77717A",
+    color: "#D9D2DE",
   },
   description: {
     marginTop: 12,
     maxWidth: 480,
     fontSize: 13,
     lineHeight: 20,
-    color: "#77717A",
+    color: "#D9D2DE",
   },
   featuresContainer: {
     marginTop: 24,
@@ -2308,11 +2310,11 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 10,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#3D2E4D",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#E5DFE4",
+    borderColor: "rgba(229, 223, 228, 0.2)",
   },
   featureEmoji: {
     fontSize: 18,
@@ -2323,11 +2325,11 @@ const styles = StyleSheet.create({
   featureTitle: {
     fontSize: 13.5,
     fontWeight: "700",
-    color: "#28242B",
+    color: "#FFFFFF",
   },
   featureDescription: {
     fontSize: 12,
-    color: "#77717A",
+    color: "#D9D2DE",
     marginTop: 1,
   },
   footer: {
@@ -2335,7 +2337,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingTop: 20,
     borderTopWidth: 1,
-    borderTopColor: "rgba(15, 118, 110, 0.12)",
+    borderTopColor: "rgba(229, 223, 228, 0.24)",
   },
   footerItem: {
     flex: 1,
@@ -2359,7 +2361,7 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: 11,
-    color: "#77717A",
+    color: "#D9D2DE",
     marginTop: 2,
   },
 
@@ -3039,4 +3041,3 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
 });
-

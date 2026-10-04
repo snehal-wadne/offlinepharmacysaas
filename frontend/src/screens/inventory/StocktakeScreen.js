@@ -206,7 +206,7 @@ export default function StocktakeScreen({ navigation, route }) {
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, isMobile && styles.headerMobile]}>
         <View>
           <Text style={styles.headerTitle}>Physical Stocktake</Text>
           <Text style={styles.headerSubtitle}>
@@ -214,14 +214,17 @@ export default function StocktakeScreen({ navigation, route }) {
           </Text>
         </View>
         <TouchableOpacity
-          style={styles.primaryButton}
+          style={[styles.primaryButton, isMobile && styles.primaryButtonMobile]}
           onPress={() => setShowNewModal(true)}
         >
           <Text style={styles.primaryButtonText}>+ New Stocktake</Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content}>
+      <ScrollView
+        style={[styles.content, isMobile && styles.contentMobile]}
+        contentContainerStyle={isMobile && styles.contentContainerMobile}
+      >
         {/* KPI Cards */}
         <View style={[styles.kpiRow, isMobile && styles.kpiRowMobile]}>
           <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile]}>
@@ -251,7 +254,7 @@ export default function StocktakeScreen({ navigation, route }) {
         </View>
 
         {/* Tab Navigation */}
-        <View style={styles.tabContainer}>
+        <View style={[styles.tabContainer, isMobile && styles.tabContainerMobile]}>
           <TouchableOpacity
             style={[styles.tab, activeTab === "active" && styles.tabActive]}
             onPress={() => setActiveTab("active")}
@@ -711,6 +714,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
+  headerMobile: {
+    flexDirection: "column",
+    alignItems: "stretch",
+    gap: 10,
+    padding: 14,
+    minWidth: 0,
+  },
   title: {
     fontSize: 24,
     fontWeight: "bold",
@@ -775,6 +785,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
     marginBottom: 16,
+  },
+  tabContainerMobile: {
+    flexWrap: "wrap",
   },
   /* Mobile Card Styles */
   mobileCardList: {
@@ -861,6 +874,12 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 16,
+  },
+  contentMobile: {
+    padding: 12,
+  },
+  contentContainerMobile: {
+    paddingBottom: 24,
   },
   activeBanner: {
     backgroundColor: COLORS.secondaryLight,
@@ -1011,6 +1030,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 6,
+  },
+  primaryButtonMobile: {
+    alignItems: "center",
   },
   primaryButtonText: {
     color: COLORS.surface,
