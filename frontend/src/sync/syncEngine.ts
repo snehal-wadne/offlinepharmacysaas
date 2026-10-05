@@ -262,7 +262,16 @@ export class SyncEngine {
       try {
         let token = this.authToken;
         if (!token) {
-          token = await getAccessToken().catch(() => null);
+          token =
+            (typeof window !== 'undefined'
+              ? window.localStorage?.getItem('authToken') ||
+                window.localStorage?.getItem('superadminToken')
+              : null) || (await getAccessToken().catch(() => null));
+        }
+
+        let orgId = this.activeOrganisationId;
+        if (!orgId && typeof window !== 'undefined') {
+          orgId = window.localStorage?.getItem('organisationId') || null;
         }
 
         const headers: Record<string, string> = {
@@ -272,8 +281,8 @@ export class SyncEngine {
           headers['Authorization'] = `Bearer ${token}`;
           headers['x-sync-auth'] = token;
         }
-        if (this.activeOrganisationId) {
-          headers['x-organisation-id'] = this.activeOrganisationId;
+        if (orgId) {
+          headers['x-organisation-id'] = orgId;
         }
         if (this.activeBranchId) {
           headers['x-branch-id'] = this.activeBranchId;

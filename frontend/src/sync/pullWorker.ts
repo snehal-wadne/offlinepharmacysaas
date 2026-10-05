@@ -66,17 +66,33 @@ export class PullWorker {
 
       let token = this.authToken;
       if (!token) {
-        token = await getAccessToken().catch(() => null);
+        token =
+          (typeof window !== 'undefined'
+            ? window.localStorage?.getItem('authToken') ||
+              window.localStorage?.getItem('superadminToken')
+            : null) || (await getAccessToken().catch(() => null));
+      }
+
+      // If still no token available, skip remote pull cleanly instead of throwing 401
+      if (!token) {
+        logSyncEvent('pull_skipped', { stream, reason: 'unauthenticated' });
+        return { changesApplied: 0, cursor: currentCursor };
+      }
+
+      let effOrgId = organisationId;
+      if ((!effOrgId || effOrgId === 'ORG-DEFAULT') && typeof window !== 'undefined') {
+        const localOrg = window.localStorage?.getItem('organisationId');
+        if (localOrg && localOrg.trim()) {
+          effOrgId = localOrg.trim();
+        }
       }
 
       const headers: Record<string, string> = {
-        'x-organisation-id': organisationId,
+        'x-organisation-id': effOrgId,
         'x-branch-id': branchId,
+        'Authorization': `Bearer ${token}`,
+        'x-sync-auth': token,
       };
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-        headers['x-sync-auth'] = token;
-      }
 
       const response = await fetch(url, { method: 'GET', headers });
       if (!response.ok) {

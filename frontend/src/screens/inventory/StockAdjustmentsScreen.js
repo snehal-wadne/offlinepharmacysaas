@@ -1286,7 +1286,10 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
   const [activeKpiFilter, setActiveKpiFilter] = useState("ALL");
 
   // Dynamic 4 KPI Cards calculated from stockItems
-  const totalProductsCount = stockItems.length;
+  const uniqueProductIds = new Set(
+    stockItems.map((i) => i.productId || i.medicineName),
+  );
+  const totalProductsCount = uniqueProductIds.size || stockItems.length;
   const lowStockCount = stockItems.filter(
     (i) => Number(i.quantity) < 50,
   ).length;

@@ -328,7 +328,7 @@ export default function AppNavigator() {
         setCurrentUser(userWithToken);
         setGoogleOnboardingData(null);
         setAuthError("");
-        setAuthSession({ organisationId: user?.organisationId });
+        setAuthSession({ organisationId: user?.organisationId, token: session.access_token });
 
         // Synchronize pharmacyMode authoritatively from user/org record
         const userMode =
@@ -451,7 +451,7 @@ export default function AppNavigator() {
           setCurrentUser(userWithToken);
           setGoogleOnboardingData(null);
           setAuthError("");
-          setAuthSession({ organisationId: newUser.organisationId });
+          setAuthSession({ organisationId: newUser.organisationId, token: session.access_token });
 
           const isNewMulti = newUser.pharmacyMode === "multi" || chosenMode === "multi";
           setIsMultiBranch(isNewMulti);

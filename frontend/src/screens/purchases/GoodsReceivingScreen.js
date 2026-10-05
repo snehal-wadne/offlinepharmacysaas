@@ -927,7 +927,13 @@ export default function GoodsReceivingScreen({
                                   onPress={() => setActiveMenuId(null)}
                                 />
                               )}
-                              <View style={styles.menuPopover}>
+                              <View
+                                style={[
+                                  styles.menuPopover,
+                                  index >= Math.max(1, filteredGRNs.length - 2) &&
+                                    styles.menuPopoverUp,
+                                ]}
+                              >
                                 <Text style={styles.menuHeaderTitle}>
                                   Update Status
                                 </Text>
@@ -1587,6 +1593,8 @@ const styles = StyleSheet.create({
   tableWrapper: {
     minWidth: 1100,
     paddingHorizontal: 8,
+    minHeight: 320,
+    paddingBottom: 120,
   },
   tableHeader: {
     flexDirection: "row",
@@ -1684,6 +1692,10 @@ const styles = StyleSheet.create({
           "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
       },
     }),
+  },
+  menuPopoverUp: {
+    top: "auto",
+    bottom: 36,
   },
   menuHeaderTitle: {
     fontSize: 11,

@@ -38,14 +38,14 @@ const getInventory = async ({
 
     const query = `
       SELECT
-        ib.id,
-        ib.batch_number AS "batchNo",
+        COALESCE(ib.id, p.id) AS id,
+        COALESCE(ib.batch_number, 'No Batch') AS "batchNo",
         ib.expiry_date AS "expiryDate",
-        ib.quantity,
-        ib.mrp,
-        ib.shelf_location AS "shelfLocation",
-        ib.created_at,
-        ib.updated_at,
+        COALESCE(ib.quantity, 0) AS quantity,
+        COALESCE(ib.mrp, 0) AS mrp,
+        COALESCE(ib.shelf_location, '') AS "shelfLocation",
+        COALESCE(ib.created_at, p.created_at) AS created_at,
+        COALESCE(ib.updated_at, p.updated_at) AS updated_at,
         p.id AS "productId",
         p.medicine_name AS "medicineName",
         p.brand_name AS "brandName",
@@ -55,19 +55,20 @@ const getInventory = async ({
         p.sku,
         p.is_active AS "isActive",
         p.is_rx_required AS "isRxRequired",
-        s.name AS "supplierName",
+        COALESCE(s.name, '') AS "supplierName",
         ib.branch_id AS "branchId",
-        b.name AS "branchName",
+        COALESCE(b.name, 'Main Store') AS "branchName",
         u.name AS "updatedBy"
-      FROM inventory_batches ib
-      INNER JOIN products p ON p.id = ib.product_id
-      INNER JOIN branches b ON b.id = ib.branch_id AND b.organisation_id = $1
-      INNER JOIN suppliers s ON s.id = ib.supplier_id AND s.organisation_id = $1
+      FROM products p
+      LEFT JOIN inventory_batches ib ON ib.product_id = p.id
+      LEFT JOIN branches b ON b.id = ib.branch_id AND b.organisation_id = $1
+      LEFT JOIN suppliers s ON s.id = ib.supplier_id AND s.organisation_id = $1
       LEFT JOIN users u ON u.id = ib.updated_by
       WHERE p.organisation_id = $1
+        AND (p.is_active IS NULL OR p.is_active = TRUE)
         ${branchClause}
         ${searchClause}
-      ORDER BY ib.updated_at DESC, ib.created_at DESC
+      ORDER BY COALESCE(ib.updated_at, p.updated_at) DESC, COALESCE(ib.created_at, p.created_at) DESC
       LIMIT $${limitIdx} OFFSET $${offsetIdx};
     `;
 

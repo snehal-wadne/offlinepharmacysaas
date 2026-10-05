@@ -13,6 +13,7 @@ import {
 import {
   fetchCustomers,
   fetchCustomerLedger,
+  settleCustomerDue,
 } from "../../api/customerApi";
 import { SkeletonTableRow, SkeletonItemCard } from '../../components/common/SkeletonLoader';
 
@@ -32,7 +33,16 @@ export default function CustomerDetailsScreen({
   );
   const [customer, setCustomer] = useState(null);
   const [ledgerRecords, setLedgerRecords] = useState([]);
+  const [ledgerEntries, setLedgerEntries] = useState([]);
+  const [isLedgerLoading, setIsLedgerLoading] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  // Record Payment Modal state
+  const [paymentModalVisible, setPaymentModalVisible] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("CASH");
+  const [paymentNotes, setPaymentNotes] = useState("");
+  const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
 
   // Active Tab: 'purchases' | 'returns' | 'ledger' | 'info'
   const [activeTab, setActiveTab] = useState("purchases");
@@ -143,20 +153,16 @@ export default function CustomerDetailsScreen({
       isMounted = false;
     };
   }, [selectedCustomerId]);
-  useEffect(() => {
-  if (!customer?.id) return;
-
-  let cancelled = false;
-
-  const loadPurchaseHistory = async () => {
+  const loadCustomerLedger = async (customerIdToFetch) => {
+    const targetId = customerIdToFetch || customer?.id;
+    if (!targetId) return;
     try {
-      const response = await fetchCustomerLedger(customer.id);
+      setIsLedgerLoading(true);
+      const response = await fetchCustomerLedger(targetId);
       const data = response?.data?.data ?? response?.data ?? response;
 
       console.log("[CustomerDetails] LEDGER:", data);
       console.log("FIRST ENTRY:", JSON.stringify(data?.entries?.[0], null, 2));
-
-      if (cancelled) return;
 
       const invoices = Array.isArray(data?.invoices)
         ? data.invoices
@@ -165,17 +171,50 @@ export default function CustomerDetailsScreen({
           : [];
 
       setLedgerRecords(invoices);
+
+      const rawEntries = Array.isArray(data?.entries)
+        ? data.entries
+        : Array.isArray(data?.ledger)
+          ? data.ledger
+          : [];
+
+      const formatted = rawEntries.map((entry) => ({
+        id: entry.id || String(Math.random()),
+        dateTime: entry.entry_date || entry.created_at
+          ? new Date(entry.entry_date || entry.created_at).toLocaleString("en-IN", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          : "-",
+        type: entry.entry_type || entry.type || "PAYMENT",
+        refNo: entry.reference_id || entry.refNo || entry.receipt_number || "-",
+        description: entry.description || "-",
+        debit: entry.debit_amount !== undefined && entry.debit_amount !== null
+          ? `₹${Number(entry.debit_amount).toFixed(2)}`
+          : entry.debit || "₹0.00",
+        credit: entry.credit_amount !== undefined && entry.credit_amount !== null
+          ? `₹${Number(entry.credit_amount).toFixed(2)}`
+          : entry.credit || "₹0.00",
+        balance: entry.balance_after !== undefined && entry.balance_after !== null
+          ? `₹${Number(entry.balance_after).toFixed(2)}`
+          : entry.balance || "₹0.00",
+      }));
+
+      setLedgerEntries(formatted);
     } catch (err) {
       console.error("[CustomerDetails] Ledger error:", err);
+    } finally {
+      setIsLedgerLoading(false);
     }
   };
 
-  loadPurchaseHistory();
-
-  return () => {
-    cancelled = true;
-  };
-}, [customer?.id]);
+  useEffect(() => {
+    if (!customer?.id) return;
+    loadCustomerLedger(customer.id);
+  }, [customer?.id]);
 
   const profile = useMemo(() => {
     if (!customer) return {};
@@ -332,7 +371,67 @@ export default function CustomerDetailsScreen({
 
   const invoices = customer?.invoices || [];
   const returns = customer?.returns || [];
-  const ledger = customer?.ledger || [];
+  const ledger = ledgerEntries.length > 0 ? ledgerEntries : (customer?.ledger || []);
+
+  const handleOpenPaymentModal = () => {
+    const outstanding = Number(
+      customer?.outstandingBalance ??
+      customer?.outstanding_balance ??
+      0
+    );
+    setPaymentAmount(outstanding > 0 ? String(outstanding) : "");
+    setPaymentMethod("CASH");
+    setPaymentNotes("");
+    setPaymentModalVisible(true);
+  };
+
+  const handleRecordPaymentSubmit = async () => {
+    const amt = parseFloat(paymentAmount);
+    if (!amt || isNaN(amt) || amt <= 0) {
+      if (onShowToast) onShowToast("Please enter a valid payment amount greater than 0");
+      return;
+    }
+
+    try {
+      setIsSubmittingPayment(true);
+      const res = await settleCustomerDue(customer.id, {
+        amount: amt,
+        paymentMethod,
+        notes: paymentNotes || undefined,
+      });
+
+      const resData = res?.data?.data || res?.data || res;
+      const newOutstanding = resData?.outstandingBalance;
+
+      setCustomer((prev) => {
+        if (!prev) return prev;
+        const currentBal = Number(prev.outstandingBalance ?? prev.outstanding_balance ?? 0);
+        const resolvedBal =
+          newOutstanding !== undefined
+            ? Number(newOutstanding)
+            : Math.max(0, currentBal - amt);
+        return {
+          ...prev,
+          outstandingBalance: resolvedBal,
+          outstanding_balance: resolvedBal,
+        };
+      });
+
+      if (onShowToast) {
+        onShowToast(`₹${amt.toFixed(2)} payment recorded successfully!`);
+      }
+
+      setPaymentModalVisible(false);
+      await loadCustomerLedger(customer.id);
+    } catch (err) {
+      console.error("Error recording payment:", err);
+      const errMsg =
+        err?.response?.data?.error || err?.message || "Failed to record payment";
+      if (onShowToast) onShowToast(`Error: ${errMsg}`);
+    } finally {
+      setIsSubmittingPayment(false);
+    }
+  };
 
   // Filtered invoices by search
   const filteredInvoices = invoices.filter((inv) =>
@@ -1119,10 +1218,7 @@ export default function CustomerDetailsScreen({
             </View>
 
             <Pressable
-              onPress={() =>
-                onShowToast &&
-                onShowToast(`Recording payment for ${profile.name}`)
-              }
+              onPress={handleOpenPaymentModal}
               style={styles.recordPaymentBtn}
             >
               <Text style={styles.recordPaymentBtnText}>+ Record Payment</Text>
@@ -1131,80 +1227,90 @@ export default function CustomerDetailsScreen({
 
           {isMobile ? (
             <View style={styles.mobileCardsContainer}>
-              {ledger.map((entry) => (
-                <View key={entry.id} style={styles.mobileCustomerCard}>
-                  <View style={styles.mobileCardHeader}>
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 6,
-                      }}
-                    >
-                      <Text style={styles.invNoText}>{entry.refNo}</Text>
-                      <View style={styles.statusCompletedPill}>
-                        <Text style={styles.statusCompletedText}>
-                          {entry.type}
+              {isLedgerLoading ? (
+                <View style={{ paddingVertical: 28, alignItems: "center" }}>
+                  <Text style={{ color: "#77717A", fontSize: 14 }}>Loading financial ledger records...</Text>
+                </View>
+              ) : ledger.length === 0 ? (
+                <View style={{ paddingVertical: 28, alignItems: "center" }}>
+                  <Text style={{ color: "#77717A", fontSize: 14 }}>No ledger transactions recorded for this customer.</Text>
+                </View>
+              ) : (
+                ledger.map((entry) => (
+                  <View key={entry.id} style={styles.mobileCustomerCard}>
+                    <View style={styles.mobileCardHeader}>
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 6,
+                        }}
+                      >
+                        <Text style={styles.invNoText}>{entry.refNo}</Text>
+                        <View style={styles.statusCompletedPill}>
+                          <Text style={styles.statusCompletedText}>
+                            {entry.type}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text
+                        style={[styles.mobileCardAmount, { color: "#28242B" }]}
+                      >
+                        Bal: {entry.balance}
+                      </Text>
+                    </View>
+
+                    <Text style={styles.mobileCardDate}>{entry.dateTime}</Text>
+                    <Text style={styles.mobileCardReasonText}>
+                      {entry.description}
+                    </Text>
+
+                    <View style={styles.mobileLedgerValuesRow}>
+                      <View style={styles.mobileLedgerValBlock}>
+                        <Text style={styles.mobileLedgerValLabel}>DEBIT (+)</Text>
+                        <Text
+                          style={[
+                            styles.mobileLedgerValText,
+                            {
+                              color:
+                                entry.debit !== "₹0.00" ? "#B85C64" : "#77717A",
+                            },
+                          ]}
+                        >
+                          {entry.debit}
+                        </Text>
+                      </View>
+                      <View style={styles.mobileLedgerValBlock}>
+                        <Text style={styles.mobileLedgerValLabel}>
+                          CREDIT (-)
+                        </Text>
+                        <Text
+                          style={[
+                            styles.mobileLedgerValText,
+                            {
+                              color:
+                                entry.credit !== "₹0.00" ? "#4F8A72" : "#77717A",
+                            },
+                          ]}
+                        >
+                          {entry.credit}
+                        </Text>
+                      </View>
+                      <View style={styles.mobileLedgerValBlock}>
+                        <Text style={styles.mobileLedgerValLabel}>BALANCE</Text>
+                        <Text
+                          style={[
+                            styles.mobileLedgerValText,
+                            { fontWeight: "800", color: "#28242B" },
+                          ]}
+                        >
+                          {entry.balance}
                         </Text>
                       </View>
                     </View>
-                    <Text
-                      style={[styles.mobileCardAmount, { color: "#28242B" }]}
-                    >
-                      Bal: {entry.balance}
-                    </Text>
                   </View>
-
-                  <Text style={styles.mobileCardDate}>{entry.dateTime}</Text>
-                  <Text style={styles.mobileCardReasonText}>
-                    {entry.description}
-                  </Text>
-
-                  <View style={styles.mobileLedgerValuesRow}>
-                    <View style={styles.mobileLedgerValBlock}>
-                      <Text style={styles.mobileLedgerValLabel}>DEBIT (+)</Text>
-                      <Text
-                        style={[
-                          styles.mobileLedgerValText,
-                          {
-                            color:
-                              entry.debit !== "₹0.00" ? "#B85C64" : "#77717A",
-                          },
-                        ]}
-                      >
-                        {entry.debit}
-                      </Text>
-                    </View>
-                    <View style={styles.mobileLedgerValBlock}>
-                      <Text style={styles.mobileLedgerValLabel}>
-                        CREDIT (-)
-                      </Text>
-                      <Text
-                        style={[
-                          styles.mobileLedgerValText,
-                          {
-                            color:
-                              entry.credit !== "₹0.00" ? "#4F8A72" : "#77717A",
-                          },
-                        ]}
-                      >
-                        {entry.credit}
-                      </Text>
-                    </View>
-                    <View style={styles.mobileLedgerValBlock}>
-                      <Text style={styles.mobileLedgerValLabel}>BALANCE</Text>
-                      <Text
-                        style={[
-                          styles.mobileLedgerValText,
-                          { fontWeight: "800", color: "#28242B" },
-                        ]}
-                      >
-                        {entry.balance}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              ))}
+                ))
+              )}
             </View>
           ) : (
             <ScrollView horizontal showsHorizontalScrollIndicator={true}>
@@ -1235,78 +1341,88 @@ export default function CustomerDetailsScreen({
                   </Text>
                 </View>
 
-                {ledger.map((entry, idx) => (
-                  <View
-                    key={entry.id}
-                    style={[
-                      styles.tableRow,
-                      idx % 2 === 1 && styles.tableRowAlt,
-                    ]}
-                  >
-                    <Text
-                      style={[styles.tdCell, styles.dateText, { width: 160 }]}
-                    >
-                      {entry.dateTime}
-                    </Text>
-                    <Text
-                      style={[styles.tdCell, { width: 140, fontWeight: "600" }]}
-                    >
-                      {entry.type}
-                    </Text>
-                    <Text
-                      style={[styles.tdCell, styles.invNoText, { width: 120 }]}
-                    >
-                      {entry.refNo}
-                    </Text>
-                    <Text
-                      style={[styles.tdCell, { width: 280 }]}
-                      numberOfLines={1}
-                    >
-                      {entry.description}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.tdCell,
-                        {
-                          width: 110,
-                          textAlign: "right",
-                          color:
-                            entry.debit !== "₹0.00" ? "#B85C64" : "#77717A",
-                          fontWeight: "600",
-                        },
-                      ]}
-                    >
-                      {entry.debit}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.tdCell,
-                        {
-                          width: 110,
-                          textAlign: "right",
-                          color:
-                            entry.credit !== "₹0.00" ? "#4F8A72" : "#77717A",
-                          fontWeight: "600",
-                        },
-                      ]}
-                    >
-                      {entry.credit}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.tdCell,
-                        {
-                          width: 120,
-                          textAlign: "right",
-                          fontWeight: "700",
-                          color: "#28242B",
-                        },
-                      ]}
-                    >
-                      {entry.balance}
-                    </Text>
+                {isLedgerLoading ? (
+                  <View style={{ paddingVertical: 32, alignItems: "center", width: "100%" }}>
+                    <Text style={{ color: "#77717A", fontSize: 14 }}>Loading financial ledger records...</Text>
                   </View>
-                ))}
+                ) : ledger.length === 0 ? (
+                  <View style={{ paddingVertical: 32, alignItems: "center", width: "100%" }}>
+                    <Text style={{ color: "#77717A", fontSize: 14 }}>No ledger transactions recorded for this customer.</Text>
+                  </View>
+                ) : (
+                  ledger.map((entry, idx) => (
+                    <View
+                      key={entry.id}
+                      style={[
+                        styles.tableRow,
+                        idx % 2 === 1 && styles.tableRowAlt,
+                      ]}
+                    >
+                      <Text
+                        style={[styles.tdCell, styles.dateText, { width: 160 }]}
+                      >
+                        {entry.dateTime}
+                      </Text>
+                      <Text
+                        style={[styles.tdCell, { width: 140, fontWeight: "600" }]}
+                      >
+                        {entry.type}
+                      </Text>
+                      <Text
+                        style={[styles.tdCell, styles.invNoText, { width: 120 }]}
+                      >
+                        {entry.refNo}
+                      </Text>
+                      <Text
+                        style={[styles.tdCell, { width: 280 }]}
+                        numberOfLines={1}
+                      >
+                        {entry.description}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.tdCell,
+                          {
+                            width: 110,
+                            textAlign: "right",
+                            color:
+                              entry.debit !== "₹0.00" ? "#B85C64" : "#77717A",
+                            fontWeight: "600",
+                          },
+                        ]}
+                      >
+                        {entry.debit}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.tdCell,
+                          {
+                            width: 110,
+                            textAlign: "right",
+                            color:
+                              entry.credit !== "₹0.00" ? "#4F8A72" : "#77717A",
+                            fontWeight: "600",
+                          },
+                        ]}
+                      >
+                        {entry.credit}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.tdCell,
+                          {
+                            width: 120,
+                            textAlign: "right",
+                            fontWeight: "700",
+                            color: "#28242B",
+                          },
+                        ]}
+                      >
+                        {entry.balance}
+                      </Text>
+                    </View>
+                  ))
+                )}
               </View>
             </ScrollView>
           )}
@@ -1546,6 +1662,163 @@ export default function CustomerDetailsScreen({
           </Pressable>
         </Modal>
       )}
+
+      {/* Record Payment Modal */}
+      <Modal
+        visible={paymentModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPaymentModalVisible(false)}
+      >
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => setPaymentModalVisible(false)}
+        >
+          <Pressable
+            style={[styles.modalCard, isMobile && styles.modalCardMobile, { maxWidth: 500 }]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Record Customer Payment</Text>
+                <Text style={styles.modalSubtitle}>
+                  {profile.name} • Current Outstanding: {profile.outstandingBalance}
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => setPaymentModalVisible(false)}
+                style={styles.closeModalBtn}
+              >
+                <Text style={styles.closeModalBtnText}>✕</Text>
+              </Pressable>
+            </View>
+
+            <View style={[styles.modalBody, { paddingVertical: 16 }]}>
+              {/* Amount input */}
+              <View style={{ marginBottom: 16 }}>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: "#28242B", marginBottom: 6 }}>
+                  Payment Amount (₹) *
+                </Text>
+                <TextInput
+                  style={{
+                    backgroundColor: "#FFFFFF",
+                    borderWidth: 1,
+                    borderColor: "#E1DEE3",
+                    borderRadius: 8,
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    fontSize: 15,
+                    color: "#28242B",
+                    fontWeight: "600",
+                  }}
+                  placeholder="Enter amount (e.g. 250)"
+                  placeholderTextColor="#9CA3AF"
+                  keyboardType="numeric"
+                  value={paymentAmount}
+                  onChangeText={setPaymentAmount}
+                />
+                {profile.outstandingBalanceValue > 0 && (
+                  <Pressable
+                    onPress={() => setPaymentAmount(String(profile.outstandingBalanceValue))}
+                    style={{ marginTop: 6, alignSelf: "flex-start" }}
+                  >
+                    <Text style={{ fontSize: 12, color: "#7F56D9", fontWeight: "600" }}>
+                      Fill Full Outstanding ({profile.outstandingBalance})
+                    </Text>
+                  </Pressable>
+                )}
+              </View>
+
+              {/* Payment Method */}
+              <View style={{ marginBottom: 16 }}>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: "#28242B", marginBottom: 6 }}>
+                  Payment Method *
+                </Text>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                  {["CASH", "UPI", "CARD", "BANK_TRANSFER"].map((method) => {
+                    const isSelected = paymentMethod === method;
+                    const labels = {
+                      CASH: "Cash",
+                      UPI: "UPI",
+                      CARD: "Card",
+                      BANK_TRANSFER: "Bank Transfer",
+                    };
+                    return (
+                      <Pressable
+                        key={method}
+                        onPress={() => setPaymentMethod(method)}
+                        style={{
+                          paddingHorizontal: 14,
+                          paddingVertical: 8,
+                          borderRadius: 8,
+                          borderWidth: 1,
+                          borderColor: isSelected ? "#7F56D9" : "#E1DEE3",
+                          backgroundColor: isSelected ? "#F4EBFF" : "#FFFFFF",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 13,
+                            fontWeight: isSelected ? "700" : "500",
+                            color: isSelected ? "#7F56D9" : "#555",
+                          }}
+                        >
+                          {labels[method]}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Notes / Reference */}
+              <View style={{ marginBottom: 16 }}>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: "#28242B", marginBottom: 6 }}>
+                  Reference / Notes (Optional)
+                </Text>
+                <TextInput
+                  style={{
+                    backgroundColor: "#FFFFFF",
+                    borderWidth: 1,
+                    borderColor: "#E1DEE3",
+                    borderRadius: 8,
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    fontSize: 13,
+                    color: "#28242B",
+                  }}
+                  placeholder="e.g. UPI Ref #, Cheque No, Counter receipt"
+                  placeholderTextColor="#9CA3AF"
+                  value={paymentNotes}
+                  onChangeText={setPaymentNotes}
+                />
+              </View>
+            </View>
+
+            <View style={styles.modalFooter}>
+              <Pressable
+                onPress={() => setPaymentModalVisible(false)}
+                disabled={isSubmittingPayment}
+                style={[styles.closeBtnPrimary, { backgroundColor: "#F4EBFF", borderColor: "#E1DEE3" }]}
+              >
+                <Text style={[styles.closeBtnPrimaryText, { color: "#555" }]}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleRecordPaymentSubmit}
+                disabled={isSubmittingPayment}
+                style={[
+                  styles.recordPaymentBtn,
+                  { minWidth: 140, justifyContent: "center", alignItems: "center", opacity: isSubmittingPayment ? 0.7 : 1 },
+                ]}
+              >
+                <Text style={styles.recordPaymentBtnText}>
+                  {isSubmittingPayment ? "Recording..." : "Save Payment"}
+                </Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </ScrollView>
   );
 }

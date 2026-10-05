@@ -41,10 +41,27 @@ export function OfflineSyncProvider({ children }) {
   // Initialize and load local storage data
   useEffect(() => {
     let isMounted = true;
+    const localToken =
+      typeof window !== "undefined"
+        ? window.localStorage?.getItem("authToken") ||
+          window.localStorage?.getItem("superadminToken")
+        : null;
+    if (localToken && typeof syncEngine?.setAuthToken === "function") {
+      syncEngine.setAuthToken(localToken);
+    }
+    const localOrgId =
+      typeof window !== "undefined"
+        ? window.localStorage?.getItem("organisationId")
+        : null;
+    if (localOrgId && typeof syncEngine?.setActiveOrganisation === "function") {
+      syncEngine.setActiveOrganisation(localOrgId);
+    }
+
     getAccessToken()
       .then((token) => {
-        if (token && typeof syncEngine?.setAuthToken === "function") {
-          syncEngine.setAuthToken(token);
+        const effectiveToken = token || localToken;
+        if (effectiveToken && typeof syncEngine?.setAuthToken === "function") {
+          syncEngine.setAuthToken(effectiveToken);
         }
       })
       .catch(() => {})
@@ -79,8 +96,14 @@ export function OfflineSyncProvider({ children }) {
         const invRecords = await localPersistenceService.getRecentInvoices();
         setInvoices(invRecords);
 
-        // Seed inventory into IndexedDB from backend when online
-        if (typeof navigator === "undefined" || navigator.onLine) {
+        // Seed inventory into IndexedDB from backend when online AND token is available
+        const currentToken =
+          localToken ||
+          (typeof window !== "undefined"
+            ? window.localStorage?.getItem("authToken") ||
+              window.localStorage?.getItem("superadminToken")
+            : null);
+        if ((typeof navigator === "undefined" || navigator.onLine) && currentToken) {
           try {
             const { fetchInventory } = await import("../api/inventoryApi");
             const invRes = await fetchInventory({});
