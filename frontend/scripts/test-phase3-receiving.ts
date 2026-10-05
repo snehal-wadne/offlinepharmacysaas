@@ -278,8 +278,8 @@ async function runPhase3ReceivingTests() {
   const emptyService = new LocalPersistenceService(emptyDb);
   const emptyReceipts = await emptyService.getLocalPurchaseReceipts('unseeded-org');
   assert(
-    emptyReceipts.length === 0 && MOCK_GRN_LIST.length > 0,
-    'T: Unseeded/demo fallback to MOCK_GRN_LIST preserved intact'
+    emptyReceipts.length === 0,
+    'T: Unseeded/demo fallback to empty list preserved intact'
   );
 
   // -------------------------------------------------------------------------

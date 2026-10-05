@@ -25,6 +25,16 @@ export const SUPABASE_ANON_KEY =
   process.env.SUPABASE_PUBLISHABLE_KEY ||
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhY3phb3pqYXhxeHpjdHBoZGZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk2MTMwNTgsImV4cCI6MjEwNTE4OTA1OH0.FuhicfVh2FcNSD_RCQOMkEaLDxu459pOfqrC-rrV328";
 
+if (typeof globalThis !== "undefined" && typeof globalThis.WebSocket === "undefined") {
+  globalThis.WebSocket = class MockWebSocket {
+    constructor() {}
+    addEventListener() {}
+    removeEventListener() {}
+    send() {}
+    close() {}
+  };
+}
+
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     persistSession: true,

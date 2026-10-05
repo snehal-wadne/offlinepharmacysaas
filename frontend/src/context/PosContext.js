@@ -97,7 +97,20 @@ export function PosProvider({
           fetchCustomers ? fetchCustomers() : Promise.resolve([]),
         ]);
         if (isMounted) {
-          setProducts(Array.isArray(liveProds) ? liveProds : []);
+          let prodsToSet = Array.isArray(liveProds) ? liveProds : [];
+          if (prodsToSet.length === 0) {
+            try {
+              const cachedProds = await localPersistenceService.getCatalogForPos(
+                effectiveOrgId,
+                branchParam || "BRANCH-MAIN",
+              );
+              if (cachedProds && cachedProds.length > 0) {
+                prodsToSet = cachedProds;
+              }
+            } catch (_) {}
+          }
+          setProducts(prodsToSet);
+
           const rawCusts = Array.isArray(liveCustomers?.data?.data)
             ? liveCustomers.data.data
             : Array.isArray(liveCustomers?.data)
@@ -151,18 +164,30 @@ export function PosProvider({
                 }))
               : [],
           );
+
+          let invsToSet = Array.isArray(liveInvs) ? liveInvs : [];
+          if (invsToSet.length === 0) {
+            try {
+              const cachedInvs = await localPersistenceService.getRecentInvoices(
+                branchParam || "BRANCH-MAIN",
+                20,
+                effectiveOrgId,
+              );
+              if (cachedInvs && cachedInvs.length > 0) {
+                invsToSet = cachedInvs;
+              }
+            } catch (_) {}
+          }
           setInvoices(
-            Array.isArray(liveInvs)
-              ? liveInvs.map((inv) => ({
-                  ...inv,
-                  total: parseFloat(inv.total) || Number(inv.total) || 0,
-                  subtotal:
-                    parseFloat(inv.subtotal) || Number(inv.subtotal) || 0,
-                  tax: parseFloat(inv.tax) || Number(inv.tax) || 0,
-                  discount:
-                    parseFloat(inv.discount) || Number(inv.discount) || 0,
-                }))
-              : [],
+            invsToSet.map((inv) => ({
+              ...inv,
+              total: parseFloat(inv.total) || Number(inv.total) || 0,
+              subtotal:
+                parseFloat(inv.subtotal) || Number(inv.subtotal) || 0,
+              tax: parseFloat(inv.tax) || Number(inv.tax) || 0,
+              discount:
+                parseFloat(inv.discount) || Number(inv.discount) || 0,
+            })),
           );
           setReturnHistory(Array.isArray(liveReturns) ? liveReturns : []);
         }
@@ -171,6 +196,25 @@ export function PosProvider({
           "POS live hydration fallback to offline cache:",
           err.message,
         );
+        if (isMounted) {
+          try {
+            const cachedProds = await localPersistenceService.getCatalogForPos(
+              effectiveOrgId,
+              branchParam || "BRANCH-MAIN",
+            );
+            if (cachedProds && cachedProds.length > 0) {
+              setProducts(cachedProds);
+            }
+            const cachedInvs = await localPersistenceService.getRecentInvoices(
+              branchParam || "BRANCH-MAIN",
+              20,
+              effectiveOrgId,
+            );
+            if (cachedInvs && cachedInvs.length > 0) {
+              setInvoices(cachedInvs);
+            }
+          } catch (_) {}
+        }
       }
     }
     hydratePosData();
@@ -549,7 +593,8 @@ export function PosProvider({
       attachedPrescription: saleData.attachedPrescription || null,
     };
 
-    // 2. Commit Sale Online Directly to Backend
+    // 2. Commit Sale Online Directly to Backend if available
+    let committedOnline = false;
     try {
       const onlineSaleRes = await createPosSale({
         items: (saleData.items || []).map((it) => ({
@@ -571,11 +616,12 @@ export function PosProvider({
         discount: saleData.discountAmount || 0,
         tax: saleData.tax,
         total: saleData.total,
-        branchId: activeBranch?.id || undefined,
+        branchId: activeBranch?.id || effectiveBranchId || undefined,
         notes: saleData.notes,
       });
 
       if (onlineSaleRes) {
+        committedOnline = true;
         newInvoice = {
           ...newInvoice,
           invoiceNo:
@@ -587,10 +633,40 @@ export function PosProvider({
           customerName: onlineSaleRes.customerName || custName,
           phone: onlineSaleRes.customerPhone || custPhone,
           customerPhone: onlineSaleRes.customerPhone || custPhone,
+          status: "Completed",
+          syncStatus: "SYNCED",
         };
       }
     } catch (onlineErr) {
-      console.warn("Online createPosSale failed, proceeding with local invoice:", onlineErr?.message);
+      console.warn("Online createPosSale failed, proceeding with local offline commit:", onlineErr?.message);
+    }
+
+    // 2b. Always commit atomically to local persistence (IndexedDB transactions & local inventory batches)
+    // When online: commits locally with alreadySynced: true (updates local ledger & stock without re-queueing)
+    // When offline: commits locally with alreadySynced: false (enqueues durable CREATE_SALE mutation in sync_outbox)
+    try {
+      await localPersistenceService.commitLocalSale(
+        {
+          ...saleData,
+          invoiceNo: newInvoice.invoiceNo,
+          total: newInvoice.total,
+          customer: custName,
+          phone: custPhone,
+        },
+        {
+          organisationId: effectiveOrgId,
+          branchId: activeBranch?.id || effectiveBranchId,
+          userId: effectiveUserId,
+          alreadySynced: committedOnline,
+        }
+      );
+      if (!committedOnline) {
+        newInvoice.status = "Local (Pending Sync)";
+        newInvoice.syncStatus = "PENDING";
+        newInvoice.isOffline = true;
+      }
+    } catch (localErr) {
+      console.warn("Local persistence commit notice:", localErr?.message);
     }
 
     // 3. Update React UI state (stock, drafts, invoices) ONLY after local DB succeeds

@@ -16,7 +16,9 @@ export type SyncLogEvent =
   | 'sync_completed'
   | 'sync_failed'
   | 'pull_started'
-  | 'pull_completed';
+  | 'pull_completed'
+  | 'pull_skipped'
+  | 'pull_failed';
 
 export interface SyncLogData {
   mutationId?: string;

@@ -229,18 +229,29 @@ export default function PosBillingScreen({
   };
 
   // Barcode & QR Code Scan Handler
-  const handleBarcodeScanned = (code) => {
+  const handleBarcodeScanned = async (code) => {
     setIsScannerOpen(false);
     if (!code) return;
     const cleanCode = code.trim().toLowerCase();
-    const match = productsList.find(
+    let match = productsList.find(
       (p) =>
         (p.barcode && String(p.barcode).toLowerCase() === cleanCode) ||
         (p.code && String(p.code).toLowerCase() === cleanCode) ||
         (p.id && String(p.id).toLowerCase() === cleanCode) ||
         (p.sku && String(p.sku).toLowerCase() === cleanCode) ||
-        p.name.toLowerCase().includes(cleanCode)
+        (p.name && p.name.toLowerCase().includes(cleanCode))
     );
+
+    // If not found in memory, query offline-first catalog (Dexie IndexedDB)
+    if (!match) {
+      try {
+        const found = await fetchCashierProducts("", code);
+        if (Array.isArray(found) && found.length > 0) {
+          match = found[0];
+        }
+      } catch (_) {}
+    }
+
     if (match) {
       handleAddToCart(match);
       if (onShowToast) onShowToast(`✓ Scanned & added ${match.name}`);

@@ -51,6 +51,8 @@ export type MutationType =
   | 'UPDATE_INVENTORY'
   | 'ADJUST_STOCK'
   | 'TRANSFER_STOCK'
+  | 'NOTIFY_SUPPLIER'
+  | 'SEND_NOTIFICATION'
   | 'REGISTER_OPEN'
   | 'REGISTER_CLOSE'
   | 'OPEN_REGISTER_SESSION'
@@ -123,6 +125,13 @@ export interface InventoryBatchRecord {
   mrp: number;
   sellingPrice: number;
   updatedAt: string;
+  medicineName?: string;
+  genericName?: string;
+  barcode?: string;
+  sku?: string;
+  packSize?: string;
+  isRxRequired?: boolean;
+  isActive?: boolean;
 }
 
 /**

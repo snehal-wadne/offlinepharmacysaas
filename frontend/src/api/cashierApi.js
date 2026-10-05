@@ -6,6 +6,7 @@
  */
 
 import { apiGet, apiPost, apiDelete } from "./apiClient";
+import { localPersistenceService } from "../db";
 
 // ==========================================
 // 1. REGISTER SESSIONS
@@ -123,13 +124,62 @@ export async function fetchCashierProducts(
   }
   const queryString = query.toString() ? `?${query.toString()}` : "";
 
-  const res = await apiGet(`/cashier/products${queryString}`);
-  if (!res.success) {
-    return [];
+  let orgId = "ORG-DEFAULT";
+  try {
+    if (typeof window !== "undefined" && window.localStorage) {
+      orgId = window.localStorage.getItem("organisationId") || "ORG-DEFAULT";
+    }
+  } catch (_) {}
+
+  try {
+    const res = await apiGet(`/cashier/products${queryString}`);
+    if (res && res.success) {
+      const list = res.data?.data || res.data?.products || res.data || [];
+      if (Array.isArray(list) && list.length > 0) {
+        // Cache products into IndexedDB for offline resilience asynchronously
+        localPersistenceService
+          .seedInitialCatalog(orgId, bid || "BRANCH-MAIN", list)
+          .catch((e) => console.warn("[CashierApi] Seed catalog notice:", e?.message));
+        return list;
+      }
+    }
+  } catch (err) {
+    console.warn("[CashierApi] Online fetch failed, loading offline catalog:", err?.message);
   }
-  const list = res.data?.data || res.data?.products || res.data || [];
-  console.log("Products List: ", list);
-  return Array.isArray(list) ? list : [];
+
+  // Fallback to IndexedDB local catalog
+  try {
+    const cached = await localPersistenceService.getCatalogForPos(
+      orgId,
+      bid || "BRANCH-MAIN",
+    );
+    if (Array.isArray(cached) && cached.length > 0) {
+      let filtered = cached;
+      if (search) {
+        const s = search.toLowerCase();
+        filtered = filtered.filter(
+          (p) =>
+            (p.name && p.name.toLowerCase().includes(s)) ||
+            (p.generic && p.generic.toLowerCase().includes(s)) ||
+            (p.barcode && String(p.barcode).toLowerCase().includes(s)) ||
+            (p.sku && String(p.sku).toLowerCase().includes(s)),
+        );
+      }
+      if (barcode) {
+        const b = barcode.toLowerCase();
+        filtered = filtered.filter(
+          (p) =>
+            (p.barcode && String(p.barcode).toLowerCase() === b) ||
+            (p.sku && String(p.sku).toLowerCase() === b),
+        );
+      }
+      return filtered;
+    }
+  } catch (offlineErr) {
+    console.warn("[CashierApi] Offline catalog lookup notice:", offlineErr?.message);
+  }
+
+  return [];
 }
 
 // ==========================================
@@ -145,12 +195,41 @@ export async function createPosSale(saleData) {
 }
 
 export async function fetchRecentInvoices(limit = 20) {
-  const res = await apiGet(`/cashier/sales/recent?limit=${limit}`);
-  if (!res.success) {
-    return [];
+  let orgId = "ORG-DEFAULT";
+  let branchId = "BRANCH-MAIN";
+  try {
+    if (typeof window !== "undefined" && window.localStorage) {
+      orgId = window.localStorage.getItem("organisationId") || "ORG-DEFAULT";
+      branchId = window.localStorage.getItem("activeBranchId") || "BRANCH-MAIN";
+    }
+  } catch (_) {}
+
+  try {
+    const res = await apiGet(`/cashier/sales/recent?limit=${limit}`);
+    if (res && res.success) {
+      const list = res.data?.data || res.data || [];
+      if (Array.isArray(list) && list.length > 0) {
+        return list;
+      }
+    }
+  } catch (err) {
+    console.warn("[CashierApi] Online invoices fetch failed, checking offline cache:", err?.message);
   }
-  const list = res.data?.data || res.data || [];
-  return Array.isArray(list) ? list : [];
+
+  try {
+    const localInvs = await localPersistenceService.getRecentInvoices(
+      branchId,
+      limit,
+      orgId,
+    );
+    if (Array.isArray(localInvs) && localInvs.length > 0) {
+      return localInvs;
+    }
+  } catch (offlineErr) {
+    console.warn("[CashierApi] Offline invoices lookup notice:", offlineErr?.message);
+  }
+
+  return [];
 }
 
 // ==========================================
@@ -158,37 +237,87 @@ export async function fetchRecentInvoices(limit = 20) {
 // ==========================================
 
 export async function fetchHeldBills() {
-  const res = await apiGet("/cashier/held-bills");
-  if (!res.success) {
-    return [];
+  try {
+    const res = await apiGet("/cashier/held-bills");
+    if (res && res.success) {
+      const list = res.data?.data || res.data || [];
+      if (Array.isArray(list)) {
+        if (typeof window !== "undefined" && window.localStorage) {
+          window.localStorage.setItem("pharma_held_bills", JSON.stringify(list));
+        }
+        return list;
+      }
+    }
+  } catch (err) {
+    console.warn("[CashierApi] Online held bills fetch failed, using local storage:", err?.message);
   }
-  const list = res.data?.data || res.data || [];
-  console.log("Held bills: ", list);
-  return Array.isArray(list) ? list : [];
+
+  try {
+    if (typeof window !== "undefined" && window.localStorage) {
+      const raw = window.localStorage.getItem("pharma_held_bills");
+      if (raw) return JSON.parse(raw);
+    }
+  } catch (_) {}
+
+  return [];
 }
 
 export async function holdCurrentBill(billData) {
-  const res = await apiPost("/cashier/held-bills", billData);
-  if (!res.success) {
-    throw new Error(res.error || "Failed to hold bill");
+  try {
+    const res = await apiPost("/cashier/held-bills", billData);
+    if (res && res.success) {
+      return res.data?.data || res.data;
+    }
+  } catch (err) {
+    console.warn("[CashierApi] Online hold bill failed, saving locally:", err?.message);
   }
-  return res.data?.data || res.data;
+
+  try {
+    if (typeof window !== "undefined" && window.localStorage) {
+      const raw = window.localStorage.getItem("pharma_held_bills");
+      const list = raw ? JSON.parse(raw) : [];
+      list.unshift(billData);
+      window.localStorage.setItem("pharma_held_bills", JSON.stringify(list));
+    }
+  } catch (_) {}
+  return billData;
 }
 
 export async function resumeHeldBill(holdId) {
-  const res = await apiDelete(`/cashier/held-bills/${holdId}`);
-  if (!res.success) {
-    return null;
+  try {
+    const res = await apiDelete(`/cashier/held-bills/${holdId}`);
+    if (res && res.success) {
+      return res.data?.data || res.data;
+    }
+  } catch (err) {
+    console.warn("[CashierApi] Online resume bill notice:", err?.message);
   }
-  return res.data?.data || res.data;
+
+  try {
+    if (typeof window !== "undefined" && window.localStorage) {
+      const raw = window.localStorage.getItem("pharma_held_bills");
+      if (raw) {
+        const list = JSON.parse(raw).filter(
+          (b) => b.holdId !== holdId && b.billNo !== holdId,
+        );
+        window.localStorage.setItem("pharma_held_bills", JSON.stringify(list));
+      }
+    }
+  } catch (_) {}
+  return { success: true };
 }
 
 export async function saveHeldBill(billData) {
-  const res = await apiPost('/cashier/held-bills', billData);
-  if (!res.success) {
-    throw new Error(res.error || 'Failed to save held bill');
+  try {
+    const res = await apiPost('/cashier/held-bills', billData);
+    if (res && res.success) {
+      return res.data;
+    }
+  } catch (err) {
+    console.warn("[CashierApi] Online save held bill failed, saving locally:", err?.message);
   }
-  return res.data;
+
+  return holdCurrentBill(billData);
 }
 
 // ==========================================

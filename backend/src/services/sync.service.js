@@ -14,6 +14,8 @@ const {
 } = require("../db/connection");
 const cashierService = require("./cashier.service");
 const customerService = require("./customer.service");
+const supplierService = require("./supplier.service");
+const inventoryService = require("./inventory.service");
 const {
   getNextBusinessNumber,
 } = require("../repositories/number-sequence.repository");
@@ -111,6 +113,7 @@ class SyncService {
         const payload = data || {};
 
         switch (opType) {
+          case "CREATE_SALE":
           case "CREATE_INVOICE":
           case "SALE": {
             const saleData = payload.invoice
@@ -146,6 +149,54 @@ class SyncService {
             await cashierService.createSale(saleData);
             syncedIds.push(id);
             console.log(`✓ Synced offline invoice: ${invNum || id}`);
+            break;
+          }
+
+          case "ADJUST_STOCK": {
+            const orgId = payload.organisationId || fallbackOrgId;
+            if (orgId) {
+              await inventoryService.saveInventoryEntry(orgId, payload.data || payload);
+              syncedIds.push(id);
+              console.log(`✓ Synced offline stock adjustment: ${payload.adjustmentNumber || id}`);
+            }
+            break;
+          }
+
+          case "UPDATE_INVENTORY": {
+            const orgId = payload.organisationId || fallbackOrgId;
+            if (orgId) {
+              const itemData = payload.data || payload;
+              if (payload.id) itemData.id = payload.id;
+              await inventoryService.saveInventoryEntry(orgId, itemData);
+              syncedIds.push(id);
+              console.log(`✓ Synced offline inventory update: ${itemData.medicineName || id}`);
+            }
+            break;
+          }
+
+          case "RECEIVE_PURCHASE": {
+            const orgId = payload.organisationId || fallbackOrgId;
+            if (orgId) {
+              await this.processReceivePurchase({
+                mutationId: id || `MUT-${Date.now()}`,
+                organisationId: orgId,
+                branchId: payload.branchId,
+                payload,
+              });
+              syncedIds.push(id);
+              console.log(`✓ Synced offline goods receipt: ${payload.receiptNumber || id}`);
+            }
+            break;
+          }
+
+          case "NOTIFY_SUPPLIER":
+          case "SEND_NOTIFICATION": {
+            const orgId = payload.organisationId || fallbackOrgId;
+            if (orgId) {
+              await supplierService.notifySupplier(orgId, payload);
+              syncedIds.push(id);
+              console.log(`✓ Synced offline supplier notification: ${payload.medicineName || id}`);
+            }
             break;
           }
 
@@ -291,9 +342,17 @@ class SyncService {
 
     // 3. Validate branch access
     if (!branchId || !isUuid(branchId)) {
-      throw new Error(
-        `Invalid or missing branchId: '${branchId}'. Explicit active branch UUID is required.`,
+      const fallbackBr = await pool.query(
+        "SELECT id FROM branches WHERE organisation_id = $1 AND status = 'ACTIVE' ORDER BY created_at ASC LIMIT 1",
+        [organisationId]
       );
+      if (fallbackBr.rows.length > 0) {
+        branchId = fallbackBr.rows[0].id;
+      } else {
+        throw new Error(
+          `Invalid or missing branchId: '${branchId}'. Explicit active branch UUID is required.`,
+        );
+      }
     }
 
     const brRes = await pool.query(
@@ -2818,6 +2877,97 @@ class SyncService {
   }
 
   /**
+   * Process NOTIFY_SUPPLIER & SEND_NOTIFICATION sync mutation
+   */
+  async processNotifySupplier({
+    mutationId,
+    organisationId,
+    branchId,
+    effectiveUserId,
+    payload = {},
+    occurredAt,
+    deviceId,
+  }) {
+    try {
+      const { resolvedOrgId, resolvedBranchId } = await this.resolveTenantContext(
+        organisationId,
+        branchId,
+      );
+      const res = await supplierService.notifySupplier(resolvedOrgId, {
+        ...payload,
+        branchId: resolvedBranchId,
+        userId: effectiveUserId,
+      });
+      return {
+        status: "SUCCESS",
+        result: {
+          mutationType: "NOTIFY_SUPPLIER",
+          dispatched: true,
+          referenceNumber: res?.referenceNumber || `NOTIF-${Date.now().toString().slice(-6)}`,
+          occurredAt: occurredAt || new Date().toISOString(),
+        },
+      };
+    } catch (err) {
+      console.error(
+        `[SyncService] Error processing NOTIFY_SUPPLIER ${mutationId}:`,
+        err,
+      );
+      return {
+        status: "RETRYABLE_ERROR",
+        errorCode: "NOTIFICATION_ERROR",
+        errorMessage: err.message,
+      };
+    }
+  }
+
+  /**
+   * Process UPDATE_INVENTORY sync mutation
+   */
+  async processUpdateInventory({
+    mutationId,
+    organisationId,
+    branchId,
+    effectiveUserId,
+    payload = {},
+    occurredAt,
+    deviceId,
+  }) {
+    try {
+      const { resolvedOrgId, resolvedBranchId } = await this.resolveTenantContext(
+        organisationId,
+        branchId,
+      );
+      const itemData = payload.data || payload;
+      if (payload.id) itemData.id = payload.id;
+      if (!itemData.branchId) itemData.branchId = resolvedBranchId;
+      const res = await inventoryService.saveInventoryEntry(
+        resolvedOrgId,
+        itemData,
+        effectiveUserId,
+      );
+      return {
+        status: "SUCCESS",
+        result: {
+          mutationType: "UPDATE_INVENTORY",
+          synced: true,
+          data: res,
+          occurredAt: occurredAt || new Date().toISOString(),
+        },
+      };
+    } catch (err) {
+      console.error(
+        `[SyncService] Error processing UPDATE_INVENTORY ${mutationId}:`,
+        err,
+      );
+      return {
+        status: "RETRYABLE_ERROR",
+        errorCode: "INVENTORY_ERROR",
+        errorMessage: err.message,
+      };
+    }
+  }
+
+  /**
    * Process OPEN_REGISTER_SESSION sync mutation
    */
   async processOpenRegisterSession({
@@ -3586,9 +3736,18 @@ class SyncService {
       }
 
       // 1. Resolve Target Organisation and Branch for this mutation
-      const targetOrgId =
-        mutation.organisationId || tenantContext?.organisationId;
-      const targetBranchId = mutation.branchId || tenantContext?.branchId;
+      let targetOrgId =
+        (mutation.organisationId && mutation.organisationId !== "ORG-DEFAULT"
+          ? mutation.organisationId
+          : tenantContext?.organisationId) ||
+        tenantContext?.organisationId ||
+        mutation.organisationId;
+      let targetBranchId =
+        (mutation.branchId && mutation.branchId !== "BRANCH-MAIN"
+          ? mutation.branchId
+          : tenantContext?.branchId) ||
+        tenantContext?.branchId ||
+        mutation.branchId;
 
       if (!targetOrgId) {
         results.push({
@@ -3826,6 +3985,29 @@ class SyncService {
           case "REGISTER_CLOSE":
           case "CLOSE_SESSION":
             outcome = await this.processCloseRegisterSession({
+              ...mutation,
+              organisationId: targetOrgId,
+              branchId: targetBranchId,
+              effectiveUserId,
+              userContext,
+              deviceId,
+            });
+            break;
+
+          case "NOTIFY_SUPPLIER":
+          case "SEND_NOTIFICATION":
+            outcome = await this.processNotifySupplier({
+              ...mutation,
+              organisationId: targetOrgId,
+              branchId: targetBranchId,
+              effectiveUserId,
+              userContext,
+              deviceId,
+            });
+            break;
+
+          case "UPDATE_INVENTORY":
+            outcome = await this.processUpdateInventory({
               ...mutation,
               organisationId: targetOrgId,
               branchId: targetBranchId,
