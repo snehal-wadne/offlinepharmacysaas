@@ -21,7 +21,8 @@ const login = async (req, res) => {
     });
     res.status(200).json(result);
   } catch (error) {
-    res.status(401).json({ success: false, error: error.message });
+    const statusCode = error.statusCode || (error.code === "ACCOUNT_DEACTIVATED" ? 403 : 401);
+    res.status(statusCode).json({ success: false, code: error.code, error: error.message });
   }
 };
 
@@ -236,6 +237,7 @@ const updateStaffStatus = async (req, res) => {
       organisationId,
       req.params.id,
       req.body?.status,
+      req.user,
     );
 
     // Record audit event

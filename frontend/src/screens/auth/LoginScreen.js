@@ -222,6 +222,13 @@ export default function LoginScreen({
         if (backendRes.ok && bData.success && bData.token) {
           token = bData.token;
           authUser = bData.user;
+        } else if (bData.code === "ACCOUNT_DEACTIVATED" || backendRes.status === 403) {
+          setIsLoading(false);
+          setErrorMessage(
+            bData.error ||
+              "Your account has been deactivated. Please contact your pharmacy administrator.",
+          );
+          return;
         } else if (backendRes.status === 400 || backendRes.status === 401) {
           setIsLoading(false);
           setErrorMessage("Invalid email or password. Please check your credentials.");

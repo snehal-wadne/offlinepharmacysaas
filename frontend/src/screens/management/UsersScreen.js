@@ -23,7 +23,22 @@ import { exportToCSV } from "../../utils/exportUtils";
 import { fetchRoles } from "../../api/RoleApi";
 import { createAuditLog } from "../../api/auditApi";
 
-export default function UsersScreen({ onShowToast, onNavigate }) {
+export default function UsersScreen({ onShowToast, onNavigate, currentUser }) {
+
+  const isTargetOwner = (u) => {
+    if (!u) return false;
+    const role = (u.role || "").toUpperCase();
+    return (
+      role === "OWNER" ||
+      role.includes("OWNER") ||
+      (currentUser && currentUser.isOwner && u.id === currentUser.id)
+    );
+  };
+
+  const isTargetSelf = (u) => {
+    if (!u || !currentUser) return false;
+    return u.id === currentUser.id;
+  };
 
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
@@ -416,7 +431,27 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
 
   // Toggle user Active / Inactive status
   const handleToggleStatus = async (user) => {
+    if (isTargetSelf(user)) {
+      if (onShowToast) onShowToast("⚠️ You cannot deactivate your own account.");
+      return;
+    }
+    if (isTargetOwner(user)) {
+      if (onShowToast) onShowToast("⚠️ The pharmacy owner account cannot be deactivated.");
+      return;
+    }
+
     const nextStatus = user.status === "Active" ? "Inactive" : "Active";
+
+    if (nextStatus === "Inactive") {
+      const confirmed =
+        typeof window !== "undefined" && typeof window.confirm === "function"
+          ? window.confirm(
+              `Are you sure you want to deactivate ${user.name}? They will no longer be able to log in.`,
+            )
+          : true;
+      if (!confirmed) return;
+    }
+
     try {
       const res = await updateUserStatus(
         user.id,
@@ -891,10 +926,19 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
 
                     <Pressable
                       onPress={() => handleToggleStatus(user)}
-                      style={styles.toggleSwitchRow}
+                      style={[
+                        styles.toggleSwitchRow,
+                        (isTargetSelf(user) || isTargetOwner(user)) && { opacity: 0.7 },
+                      ]}
                       accessibilityRole="switch"
                       accessibilityState={{ checked: isActive }}
-                      accessibilityLabel={`User status: ${user.status}`}
+                      accessibilityLabel={
+                        isTargetOwner(user)
+                          ? "Owner Account (Protected)"
+                          : isTargetSelf(user)
+                          ? "Current User (Protected)"
+                          : `User status: ${user.status}`
+                      }
                     >
                       <View
                         style={[
@@ -921,7 +965,11 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                             : styles.toggleLabelInactive,
                         ]}
                       >
-                        {user.status}
+                        {isTargetOwner(user)
+                          ? "Owner"
+                          : isTargetSelf(user)
+                          ? "You"
+                          : user.status}
                       </Text>
                     </Pressable>
                   </View>
@@ -1141,10 +1189,19 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                     <View style={styles.colStatus}>
                       <Pressable
                         onPress={() => handleToggleStatus(user)}
-                        style={styles.toggleSwitchRow}
+                        style={[
+                          styles.toggleSwitchRow,
+                          (isTargetSelf(user) || isTargetOwner(user)) && { opacity: 0.7 },
+                        ]}
                         accessibilityRole="switch"
                         accessibilityState={{ checked: isActive }}
-                        accessibilityLabel={`User status: ${user.status}. Tap to switch.`}
+                        accessibilityLabel={
+                          isTargetOwner(user)
+                            ? "Owner Account (Protected)"
+                            : isTargetSelf(user)
+                            ? "Current User (Protected)"
+                            : `User status: ${user.status}. Tap to switch.`
+                        }
                       >
                         <View
                           style={[
@@ -1171,7 +1228,11 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                               : styles.toggleLabelInactive,
                           ]}
                         >
-                          {user.status}
+                          {isTargetOwner(user)
+                            ? "Owner"
+                            : isTargetSelf(user)
+                            ? "You"
+                            : user.status}
                         </Text>
                       </Pressable>
                     </View>
@@ -1924,21 +1985,45 @@ export default function UsersScreen({ onShowToast, onNavigate }) {
                   </Text>
                 </Pressable>
 
-                <Pressable
-                  onPress={() => handleToggleStatus(selectedUser)}
-                  style={[
-                    styles.modalStatusToggleBtn,
-                    selectedUser.status === "Active"
-                      ? styles.modalStatusToggleBtnInactive
-                      : styles.modalStatusToggleBtnActive,
-                  ]}
-                >
-                  <Text style={styles.modalStatusToggleBtnText}>
-                    {selectedUser.status === "Active"
-                      ? "Deactivate User"
-                      : "Activate User"}
-                  </Text>
-                </Pressable>
+                {isTargetOwner(selectedUser) ? (
+                  <View
+                    style={[
+                      styles.modalStatusToggleBtn,
+                      { backgroundColor: "#F7F0E5", borderColor: "#E5D7B7" },
+                    ]}
+                  >
+                    <Text style={[styles.modalStatusToggleBtnText, { color: "#C49752" }]}>
+                      Owner (Protected)
+                    </Text>
+                  </View>
+                ) : isTargetSelf(selectedUser) ? (
+                  <View
+                    style={[
+                      styles.modalStatusToggleBtn,
+                      { backgroundColor: "#F7F0E5", borderColor: "#E5D7B7" },
+                    ]}
+                  >
+                    <Text style={[styles.modalStatusToggleBtnText, { color: "#C49752" }]}>
+                      You (Protected)
+                    </Text>
+                  </View>
+                ) : (
+                  <Pressable
+                    onPress={() => handleToggleStatus(selectedUser)}
+                    style={[
+                      styles.modalStatusToggleBtn,
+                      selectedUser.status === "Active"
+                        ? styles.modalStatusToggleBtnInactive
+                        : styles.modalStatusToggleBtnActive,
+                    ]}
+                  >
+                    <Text style={styles.modalStatusToggleBtnText}>
+                      {selectedUser.status === "Active"
+                        ? "Deactivate User"
+                        : "Activate User"}
+                    </Text>
+                  </Pressable>
+                )}
 
                 <Pressable
                   onPress={() => {

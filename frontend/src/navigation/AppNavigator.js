@@ -305,6 +305,19 @@ export default function AppNavigator() {
       });
       if (fetchTimeout) clearTimeout(fetchTimeout);
 
+      if (response.status === 403) {
+        const errJson = await response.json().catch(() => ({}));
+        if (errJson.code === "ACCOUNT_DEACTIVATED") {
+          await supabase.auth.signOut().catch(() => {});
+          await clearAuthSession();
+          setCurrentUser(null);
+          setGoogleOnboardingData(null);
+          setAuthStatus("UNAUTHENTICATED");
+          setAuthError(errJson.message || "Your account has been deactivated. Please contact your pharmacy administrator.");
+          return;
+        }
+      }
+
       if (response.ok) {
         const resData = await response.json();
         const user = resData.data?.user || resData.user;
@@ -961,6 +974,7 @@ export default function AppNavigator() {
             onShowToast={showToast}
             isMultiBranch={isMultiBranch}
             selectedBranch={selectedBranch}
+            currentUser={currentUser}
           />
         );
       case "roles":

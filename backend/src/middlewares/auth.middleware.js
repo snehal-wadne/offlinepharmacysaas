@@ -44,13 +44,20 @@ const authenticate = async (req, res, next) => {
                   is_platform_superadmin, role, supplier_id
            FROM users
            WHERE LOWER(email) = LOWER($1)
-             AND status = 'ACTIVE'
            LIMIT 1;`,
           [supabaseDecoded.email || ""],
         );
 
         if (userRes.rows.length > 0) {
-          user = userRes.rows[0];
+          const foundUser = userRes.rows[0];
+          if (foundUser.status === "INACTIVE") {
+            return res.status(403).json({
+              success: false,
+              code: "ACCOUNT_DEACTIVATED",
+              message: "Your account has been deactivated. Please contact your pharmacy administrator.",
+            });
+          }
+          user = foundUser;
         } else if (supabaseDecoded.email) {
           // Automatic JIT provisioning for Google Auth Admin (Zero-form onboarding)
           const googleEmail = supabaseDecoded.email.trim().toLowerCase();
@@ -132,12 +139,20 @@ const authenticate = async (req, res, next) => {
             `SELECT id, name, email, phone, staff_id AS "staffId", status, 
                     is_platform_superadmin, role, supplier_id
              FROM users
-             WHERE id = $1 AND status = 'ACTIVE'
+             WHERE id = $1
              LIMIT 1;`,
             [legacyDecoded.userId],
           );
           if (userRes.rows.length > 0) {
-            user = userRes.rows[0];
+            const foundUser = userRes.rows[0];
+            if (foundUser.status === "INACTIVE") {
+              return res.status(403).json({
+                success: false,
+                code: "ACCOUNT_DEACTIVATED",
+                message: "Your account has been deactivated. Please contact your pharmacy administrator.",
+              });
+            }
+            user = foundUser;
           }
         }
       }

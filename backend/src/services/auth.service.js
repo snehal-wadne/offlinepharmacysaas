@@ -67,7 +67,6 @@ class AuthService {
         OR LOWER(u.name) = $1
         OR (u.phone IS NOT NULL AND REPLACE(REPLACE(u.phone, ' ', ''), '-', '') = REPLACE(REPLACE($1, ' ', ''), '-', ''))
       )
-        AND u.status = 'ACTIVE'
       ORDER BY 
         CASE 
           WHEN LOWER(u.email) = $1 THEN 0
@@ -121,6 +120,15 @@ class AuthService {
       throw new Error(
         "Invalid email or password. Please check your credentials.",
       );
+    }
+
+    if (user.status === "INACTIVE") {
+      const deactErr = new Error(
+        "Your account has been deactivated. Please contact your pharmacy administrator.",
+      );
+      deactErr.code = "ACCOUNT_DEACTIVATED";
+      deactErr.statusCode = 403;
+      throw deactErr;
     }
 
     // Ensure user has supabase_auth_id linked
@@ -1951,12 +1959,46 @@ class AuthService {
    * historical records (invoices, sessions, audit logs) reference
    * users via RESTRICT foreign keys.
    */
-  async updateStaffStatus(organisationId, userId, status) {
+  async updateStaffStatus(organisationId, userId, status, requestingUser) {
     const normalizedStatus = String(status || "").toUpperCase();
     if (!["ACTIVE", "INACTIVE"].includes(normalizedStatus)) {
       const err = new Error("status must be ACTIVE or INACTIVE.");
       err.statusCode = 400;
       throw err;
+    }
+
+    // 1. Prevent self-deactivation
+    if (normalizedStatus === "INACTIVE" && requestingUser && requestingUser.id === userId) {
+      const err = new Error("You cannot deactivate your own account.");
+      err.statusCode = 400;
+      throw err;
+    }
+
+    // 2. Prevent deactivation of Organisation Owner
+    const orgCheck = await pool.query(
+      `SELECT owner_id, name FROM organisations WHERE id = $1;`,
+      [organisationId],
+    );
+    if (orgCheck.rows.length > 0 && orgCheck.rows[0].owner_id === userId) {
+      if (normalizedStatus === "INACTIVE") {
+        const err = new Error("The pharmacy owner account cannot be deactivated.");
+        err.statusCode = 400;
+        throw err;
+      }
+    }
+
+    // 3. Prevent deactivation of users with OWNER role
+    const userRoleCheck = await pool.query(
+      `SELECT id, name, email, role FROM users WHERE id = $1;`,
+      [userId],
+    );
+    if (userRoleCheck.rows.length > 0) {
+      const targetRole = (userRoleCheck.rows[0].role || "").toUpperCase();
+      if (targetRole === "OWNER" && normalizedStatus === "INACTIVE") {
+        const err = new Error("Pharmacy owner accounts cannot be deactivated.");
+        err.statusCode = 400;
+        throw err;
+      }
     }
 
     const membership = await pool.query(
