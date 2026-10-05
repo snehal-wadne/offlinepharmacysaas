@@ -342,6 +342,9 @@ export default function AppNavigator() {
         setGoogleOnboardingData(null);
         setAuthError("");
         setAuthSession({ organisationId: user?.organisationId, token: session.access_token });
+        if (typeof window !== "undefined" && userWithToken) {
+          window.localStorage?.setItem("cachedAuthUser", JSON.stringify(userWithToken));
+        }
 
         // Synchronize pharmacyMode authoritatively from user/org record
         const userMode =
@@ -511,6 +514,21 @@ export default function AppNavigator() {
         return;
       }
 
+      // Check if we have an offline cached session before signing out
+      if (typeof window !== "undefined") {
+        try {
+          const cachedStr = window.localStorage?.getItem("cachedAuthUser");
+          if (cachedStr) {
+            const cachedUser = JSON.parse(cachedStr);
+            if (cachedUser && cachedUser.id) {
+              setCurrentUser({ ...cachedUser, isOffline: true });
+              setAuthStatus("AUTHENTICATED");
+              return;
+            }
+          }
+        } catch (cacheErr) {}
+      }
+
       await supabase.auth.signOut();
       await clearAuthSession();
       setCurrentUser(null);
@@ -537,6 +555,19 @@ export default function AppNavigator() {
       }
     } catch (e) {
       console.warn("Session restore error:", e.message);
+      if (typeof window !== "undefined") {
+        try {
+          const cachedStr = window.localStorage?.getItem("cachedAuthUser");
+          if (cachedStr) {
+            const cachedUser = JSON.parse(cachedStr);
+            if (cachedUser && cachedUser.id) {
+              setCurrentUser({ ...cachedUser, isOffline: true });
+              setAuthStatus("AUTHENTICATED");
+              return;
+            }
+          }
+        } catch (cacheErr) {}
+      }
       setAuthStatus("UNAUTHENTICATED");
     }
   };

@@ -255,6 +255,17 @@ export default function LoginScreen({
         }
       }
 
+      // Check offline cached user if network failed to connect
+      if (!token && typeof window !== "undefined") {
+        try {
+          const cached = JSON.parse(window.localStorage?.getItem("cachedAuthUser") || "null");
+          if (cached && cached.email?.toLowerCase() === email.toLowerCase()) {
+            token = cached.token || window.localStorage?.getItem("authToken") || "offline_token";
+            authUser = { ...cached, isOffline: true };
+          }
+        } catch (e) {}
+      }
+
       if (!token) {
         setIsLoading(false);
         setErrorMessage("Invalid email or password. Please check your credentials.");
@@ -263,16 +274,28 @@ export default function LoginScreen({
 
       // 3. Fetch authoritative user context from backend if not already retrieved
       if (!authUser) {
-        const response = await fetch(`${API_URL}/api/auth/me`, {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        try {
+          const response = await fetch(`${API_URL}/api/auth/me`, {
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+          });
 
-        if (response.ok) {
-          const resData = await response.json();
-          authUser = resData.data?.user || resData.user;
+          if (response.ok) {
+            const resData = await response.json();
+            authUser = resData.data?.user || resData.user;
+          }
+        } catch (meErr) {
+          // If offline, use cached user
+          if (typeof window !== "undefined") {
+            try {
+              const cached = JSON.parse(window.localStorage?.getItem("cachedAuthUser") || "null");
+              if (cached && cached.email?.toLowerCase() === email.toLowerCase()) {
+                authUser = { ...cached, isOffline: true };
+              }
+            } catch (e) {}
+          }
         }
       }
 
@@ -298,6 +321,7 @@ export default function LoginScreen({
       if (authUser) {
         if (typeof window !== "undefined") {
           window.localStorage?.setItem("authToken", token);
+          window.localStorage?.setItem("cachedAuthUser", JSON.stringify({ ...authUser, token }));
           if (authUser.organisationId) {
             window.localStorage?.setItem("organisationId", authUser.organisationId);
           }

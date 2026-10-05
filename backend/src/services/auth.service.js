@@ -64,7 +64,6 @@ class AuthService {
         LOWER(u.email) = $1 
         OR u.phone = $1 
         OR LOWER(u.staff_id) = $1
-        OR LOWER(u.name) = $1
         OR (u.phone IS NOT NULL AND REPLACE(REPLACE(u.phone, ' ', ''), '-', '') = REPLACE(REPLACE($1, ' ', ''), '-', ''))
       )
       ORDER BY 
@@ -72,7 +71,10 @@ class AuthService {
           WHEN LOWER(u.email) = $1 THEN 0
           WHEN u.phone = $1 THEN 1
           ELSE 2
-        END
+        END,
+        CASE WHEN o.owner_id = u.id THEN 0 ELSE 1 END,
+        ba.is_primary DESC NULLS LAST,
+        om.created_at ASC
       LIMIT 1;
     `;
 
@@ -165,8 +167,8 @@ class AuthService {
     let userPharmacyMode = "single";
     if (!user.organisation_id) {
       const ownerOrgRes = await pool.query(
-        "SELECT id, name, pharmacy_mode FROM organisations WHERE (owner_id = $1 OR LOWER(admin_name) = LOWER($2)) AND status IN ('ACTIVE', 'PENDING_PAYMENT') LIMIT 1;",
-        [user.id, user.name || ""],
+        "SELECT id, name, pharmacy_mode FROM organisations WHERE owner_id = $1 AND status IN ('ACTIVE', 'PENDING_PAYMENT') LIMIT 1;",
+        [user.id],
       );
       if (ownerOrgRes.rows.length > 0) {
         user.organisation_id = ownerOrgRes.rows[0].id;
@@ -178,21 +180,14 @@ class AuthService {
           `SELECT o.id, o.name, o.owner_id, o.admin_name, o.pharmacy_mode FROM organisations o
            JOIN organisation_memberships om ON om.organisation_id = o.id
            WHERE om.user_id = $1 AND om.status = 'ACTIVE' AND o.status IN ('ACTIVE', 'PENDING_PAYMENT')
-           ORDER BY om.created_at ASC LIMIT 1;`,
+           ORDER BY CASE WHEN o.owner_id = $1 THEN 0 ELSE 1 END, om.created_at ASC LIMIT 1;`,
           [user.id],
         );
         if (memRes.rows.length > 0) {
           user.organisation_id = memRes.rows[0].id;
           user.organisation_name = memRes.rows[0].name;
           userPharmacyMode = memRes.rows[0].pharmacy_mode || "single";
-          isOwner =
-            memRes.rows[0].owner_id === user.id ||
-            Boolean(
-              memRes.rows[0].admin_name &&
-                user.name &&
-                memRes.rows[0].admin_name.toLowerCase() ===
-                  user.name.toLowerCase(),
-            );
+          isOwner = memRes.rows[0].owner_id === user.id;
         } else {
           // Global fallback to first active organisation
           const defOrgRes = await pool.query(
@@ -212,15 +207,7 @@ class AuthService {
       );
       if (orgCheck.rows[0]) {
         userPharmacyMode = orgCheck.rows[0].pharmacy_mode || "single";
-        if (
-          orgCheck.rows[0].owner_id === user.id ||
-          Boolean(
-            orgCheck.rows[0].admin_name &&
-              user.name &&
-              orgCheck.rows[0].admin_name.toLowerCase() ===
-                user.name.toLowerCase(),
-          )
-        ) {
+        if (orgCheck.rows[0].owner_id === user.id) {
           isOwner = true;
         }
       }

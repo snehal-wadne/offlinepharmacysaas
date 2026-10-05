@@ -42,8 +42,8 @@ const { pool } = require("../db/connection");
 //   AND expiry_date <= CURRENT_DATE + 60 days
 // ============================================================
 
-const LOW_STOCK_THRESHOLD = 5;
-const NEAR_EXPIRY_DAYS = 60;
+const LOW_STOCK_THRESHOLD = 50;
+const NEAR_EXPIRY_DAYS = 90;
 const RECENT_MOVEMENTS_LIMIT = 10;
 const PENDING_PO_LIMIT = 5;
 
@@ -102,9 +102,11 @@ const getMainDashboard = async ({
 
         COALESCE(SUM(ib.quantity), 0) AS total_quantity,
 
-        MIN(ib.expiry_date) FILTER (
-          WHERE ib.quantity > 0
-        ) AS nearest_expiry_date
+        MIN(ib.expiry_date) AS nearest_expiry_date,
+
+        BOOL_OR(ib.expiry_date < CURRENT_DATE AND ib.id IS NOT NULL) AS has_expired,
+
+        BOOL_OR(ib.quantity > 0 AND ib.quantity < ${LOW_STOCK_THRESHOLD}) AS has_low_stock
 
       FROM products p
 
@@ -135,23 +137,27 @@ const getMainDashboard = async ({
         /* Total active products */
         COUNT(*)::INTEGER AS total_products,
 
-        /* Products currently low in stock */
+        /* Products currently low in stock (< 50 units) */
         COUNT(*) FILTER (
-          WHERE total_quantity > 0
-            AND total_quantity <= ${LOW_STOCK_THRESHOLD}
+          WHERE has_low_stock = TRUE OR (total_quantity > 0 AND total_quantity < ${LOW_STOCK_THRESHOLD})
         )::INTEGER AS low_stock_alerts,
 
-        /* Products having stock expiring within 60 days */
+        /* Products having stock expiring within 90 days */
         COUNT(*) FILTER (
-          WHERE nearest_expiry_date > CURRENT_DATE
+          WHERE nearest_expiry_date >= CURRENT_DATE
             AND nearest_expiry_date <=
               CURRENT_DATE + INTERVAL '${NEAR_EXPIRY_DAYS} days'
         )::INTEGER AS near_expiry,
 
-        /* Products with no stock */
+        /* Products with expired stock */
+        COUNT(*) FILTER (
+          WHERE has_expired = TRUE OR (nearest_expiry_date IS NOT NULL AND nearest_expiry_date < CURRENT_DATE)
+        )::INTEGER AS expired_stock,
+
+        /* Products with zero stock */
         COUNT(*) FILTER (
           WHERE total_quantity = 0
-        )::INTEGER AS expired_stock
+        )::INTEGER AS out_of_stock
 
       FROM product_inventory
     ),
@@ -168,12 +174,12 @@ const getMainDashboard = async ({
         COUNT(*)::INTEGER AS total_items,
 
         COUNT(*) FILTER (
-          WHERE total_quantity > ${LOW_STOCK_THRESHOLD}
+          WHERE total_quantity >= ${LOW_STOCK_THRESHOLD}
         )::INTEGER AS in_stock,
 
         COUNT(*) FILTER (
           WHERE total_quantity > 0
-            AND total_quantity <= ${LOW_STOCK_THRESHOLD}
+            AND total_quantity < ${LOW_STOCK_THRESHOLD}
         )::INTEGER AS low_stock,
 
         COUNT(*) FILTER (

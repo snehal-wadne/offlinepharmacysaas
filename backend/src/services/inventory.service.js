@@ -22,7 +22,7 @@ const getInventory = async ({
 
     if (!isAllBranches) {
       values.push(branchId);
-      branchClause = `AND (ib.branch_id::text = $${values.length} OR b.name ILIKE $${values.length})`;
+      branchClause = `AND (ib.branch_id IS NULL OR ib.branch_id::text = $${values.length} OR b.name ILIKE $${values.length})`;
     }
 
     let searchClause = "";
@@ -450,22 +450,23 @@ const getInventorySummary = async (organisationId, branchId = null) => {
 
   if (!isAllBranches) {
     params.push(branchId);
-    branchJoin = "INNER JOIN branches b ON b.id = ib.branch_id";
-    branchClause = `AND (ib.branch_id::text = $2 OR b.name ILIKE $2)`;
+    branchJoin = "LEFT JOIN branches b ON b.id = ib.branch_id";
+    branchClause = `AND (ib.branch_id IS NULL OR ib.branch_id::text = $2 OR b.name ILIKE $2)`;
   }
 
   const kpiQuery = `
     SELECT
       COUNT(DISTINCT p.id) AS "totalProducts",
       COUNT(ib.id) AS "totalBatches",
-      COUNT(CASE WHEN ib.quantity < 50 AND ib.quantity > 0 THEN 1 END) AS "lowStockCount",
-      COUNT(CASE WHEN ib.quantity = 0 THEN 1 END) AS "outOfStockCount",
-      COUNT(CASE WHEN ib.expiry_date >= CURRENT_DATE AND ib.expiry_date <= CURRENT_DATE + INTERVAL '60 days' THEN 1 END) AS "nearExpiryCount",
-      COUNT(CASE WHEN ib.expiry_date < CURRENT_DATE THEN 1 END) AS "expiredCount"
-    FROM inventory_batches ib
-    INNER JOIN products p ON p.id = ib.product_id
+      COUNT(DISTINCT CASE WHEN ib.quantity < 50 AND ib.quantity > 0 THEN p.id END) AS "lowStockCount",
+      COUNT(DISTINCT CASE WHEN ib.quantity = 0 OR ib.id IS NULL THEN p.id END) AS "outOfStockCount",
+      COUNT(DISTINCT CASE WHEN ib.expiry_date >= CURRENT_DATE AND ib.expiry_date <= CURRENT_DATE + INTERVAL '90 days' THEN p.id END) AS "nearExpiryCount",
+      COUNT(DISTINCT CASE WHEN ib.expiry_date < CURRENT_DATE THEN p.id END) AS "expiredCount"
+    FROM products p
+    LEFT JOIN inventory_batches ib ON ib.product_id = p.id
     ${branchJoin}
     WHERE p.organisation_id = $1
+      AND (p.is_active IS NULL OR p.is_active = TRUE)
       ${branchClause};
   `;
 

@@ -1285,31 +1285,47 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
   // Active KPI Filter State
   const [activeKpiFilter, setActiveKpiFilter] = useState("ALL");
 
-  // Dynamic 4 KPI Cards calculated from stockItems
+  // Dynamic 4 KPI Cards calculated from stockItems (deduplicated by product to match Dashboard)
   const uniqueProductIds = new Set(
     stockItems.map((i) => i.productId || i.medicineName),
   );
   const totalProductsCount = uniqueProductIds.size || stockItems.length;
-  const lowStockCount = stockItems.filter(
-    (i) => Number(i.quantity) < 50,
-  ).length;
-  const nearExpiryCount = stockItems.filter((i) => {
-    if (i.status === "Near Expiry") return true;
-    if (i.expiryDate || i.expiry_date) {
-      const d = new Date(i.expiryDate || i.expiry_date);
-      const now = new Date();
-      const diffDays = (d - now) / (1000 * 60 * 60 * 24);
-      return diffDays > 0 && diffDays <= 90;
-    }
-    return false;
-  }).length;
-  const expiredCount = stockItems.filter((i) => {
-    if (i.status === "Expired") return true;
-    if (i.expiryDate || i.expiry_date) {
-      return new Date(i.expiryDate || i.expiry_date) < new Date();
-    }
-    return Number(i.quantity) === 0;
-  }).length;
+
+  const lowStockProductIds = new Set(
+    stockItems
+      .filter((i) => Number(i.quantity) > 0 && Number(i.quantity) < 50)
+      .map((i) => i.productId || i.medicineName),
+  );
+  const lowStockCount = lowStockProductIds.size;
+
+  const nearExpiryProductIds = new Set(
+    stockItems
+      .filter((i) => {
+        if (i.status === "Near Expiry") return true;
+        if (i.expiryDate || i.expiry_date) {
+          const d = new Date(i.expiryDate || i.expiry_date);
+          const now = new Date();
+          const diffDays = (d - now) / (1000 * 60 * 60 * 24);
+          return diffDays > 0 && diffDays <= 90;
+        }
+        return false;
+      })
+      .map((i) => i.productId || i.medicineName),
+  );
+  const nearExpiryCount = nearExpiryProductIds.size;
+
+  const expiredProductIds = new Set(
+    stockItems
+      .filter((i) => {
+        if (i.status === "Expired") return true;
+        if (i.expiryDate || i.expiry_date) {
+          return new Date(i.expiryDate || i.expiry_date) < new Date();
+        }
+        return false;
+      })
+      .map((i) => i.productId || i.medicineName),
+  );
+  const expiredCount = expiredProductIds.size;
 
   const dynamicKpis = [
     {
@@ -1351,8 +1367,8 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
       value: expiredCount.toLocaleString(),
       subtext:
         activeKpiFilter === "EXPIRED"
-          ? "Filtered: Out of stock / expired"
-          : "Expired / Out of stock",
+          ? "Filtered: Expired stock"
+          : "Expired stock",
       variant: "red",
       key: "EXPIRED",
     },
@@ -1386,7 +1402,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
       if (item.expiryDate || item.expiry_date) {
         return new Date(item.expiryDate || item.expiry_date) < new Date();
       }
-      return Number(item.quantity) === 0;
+      return false;
     }
     if (filterLowStockOnly && Number(item.quantity) >= 50) return false;
     if (filterActiveOnly && item.isActive === false) return false;

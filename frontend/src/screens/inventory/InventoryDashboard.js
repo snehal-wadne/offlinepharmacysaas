@@ -223,7 +223,7 @@ export default function InventoryDashboard({
     },
     {
       id: "kpi-3",
-      label: "NEAR EXPIRY (< 60D)",
+      label: "NEAR EXPIRY (< 90D)",
       value: Number(
         overview.nearExpiry || 0
       ).toLocaleString(),

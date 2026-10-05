@@ -292,10 +292,10 @@ const authenticate = async (req, res, next) => {
       if (memberships.length > 0) {
         selectedMembership = memberships[0];
       } else {
-        // Fallback: Check if user is owner or named admin of an active organisation
+        // Fallback: Check if user is owner of an active organisation
         const ownerOrgRes = await pool.query(
-          "SELECT id, name, owner_id, admin_name FROM organisations WHERE (owner_id = $1 OR LOWER(admin_name) = LOWER($2)) AND status IN ('ACTIVE', 'PENDING_PAYMENT') LIMIT 1;",
-          [user.id, user.name || ""],
+          "SELECT id, name, owner_id, admin_name FROM organisations WHERE owner_id = $1 AND status IN ('ACTIVE', 'PENDING_PAYMENT') LIMIT 1;",
+          [user.id],
         );
         if (ownerOrgRes.rows.length > 0) {
           const ownerOrg = ownerOrgRes.rows[0];
@@ -312,28 +312,21 @@ const authenticate = async (req, res, next) => {
             role_identifier: "ADMIN",
           };
         } else {
-          // Global fallback: Link user to first active organization in system
-          const defaultOrgRes = await pool.query(
-            "SELECT id, name, owner_id, admin_name FROM organisations WHERE status IN ('ACTIVE', 'PENDING_PAYMENT') ORDER BY created_at ASC LIMIT 1;"
+          // Check if any membership exists in any status
+          const anyMem = await pool.query(
+            "SELECT om.organisation_id, o.name AS organisation_name, o.owner_id FROM organisation_memberships om JOIN organisations o ON o.id = om.organisation_id WHERE om.user_id = $1 LIMIT 1;",
+            [user.id]
           );
-          if (defaultOrgRes.rows.length > 0) {
-            const defOrg = defaultOrgRes.rows[0];
-            const defBranchRes = await pool.query(
-              "SELECT id FROM branches WHERE organisation_id = $1 AND status = 'ACTIVE' ORDER BY created_at ASC LIMIT 1;",
-              [defOrg.id]
-            );
+          if (anyMem.rows.length > 0) {
+            const m = anyMem.rows[0];
             selectedMembership = {
-              organisation_id: defOrg.id,
-              organisation_name: defOrg.name,
-              owner_id: defOrg.owner_id,
-              branch_id: defBranchRes.rows[0]?.id || null,
+              organisation_id: m.organisation_id,
+              organisation_name: m.organisation_name,
+              owner_id: m.owner_id,
+              branch_id: null,
               role_name: user.role || "Staff Member",
               role_identifier: user.role || "STAFF",
             };
-            await pool.query(
-              "INSERT INTO organisation_memberships (organisation_id, user_id, status) VALUES ($1, $2, 'ACTIVE') ON CONFLICT (organisation_id, user_id) DO UPDATE SET status = 'ACTIVE';",
-              [defOrg.id, user.id]
-            ).catch(() => {});
           }
         }
       }

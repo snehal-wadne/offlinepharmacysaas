@@ -303,3 +303,82 @@ export async function seedInventoryFromServer(serverItems = [], organisationId, 
   await db.inventory.bulkPut(records);
   console.log(`[OfflineInventory] Seeded ${records.length} items into IndexedDB`);
 }
+
+/**
+ * Compute offline dashboard overview & KPIs from local IndexedDB data
+ */
+export async function getOfflineDashboard(branchId = null) {
+  try {
+    const invRes = await getOfflineInventory({ branchId });
+    const items = invRes?.data || [];
+    const products = await db.products.toArray().catch(() => []);
+
+    const uniqueProductIds = new Set(
+      items.length > 0
+        ? items.map((i) => i.productId || i.medicineName)
+        : products.map((p) => p.productId || p.name)
+    );
+    const totalProducts = Math.max(uniqueProductIds.size, products.length);
+
+    const now = new Date();
+    const lowStockProductIds = new Set(
+      items
+        .filter((i) => Number(i.quantity) > 0 && Number(i.quantity) < 50)
+        .map((i) => i.productId || i.medicineName)
+    );
+    const nearExpiryProductIds = new Set(
+      items
+        .filter((i) => {
+          if (!i.expiryDate) return false;
+          const d = new Date(i.expiryDate);
+          const diff = (d - now) / (1000 * 60 * 60 * 24);
+          return diff > 0 && diff <= 90;
+        })
+        .map((i) => i.productId || i.medicineName)
+    );
+    const expiredProductIds = new Set(
+      items
+        .filter((i) => i.expiryDate && new Date(i.expiryDate) < now)
+        .map((i) => i.productId || i.medicineName)
+    );
+
+    const catMap = {};
+    items.forEach((item) => {
+      const cat = item.category || "General";
+      if (!catMap[cat]) {
+        catMap[cat] = { category: cat, totalItems: 0, inStock: 0, lowStock: 0, outOfStock: 0 };
+      }
+      catMap[cat].totalItems += 1;
+      const q = Number(item.quantity) || 0;
+      if (q >= 50) catMap[cat].inStock += 1;
+      else if (q > 0) catMap[cat].lowStock += 1;
+      else catMap[cat].outOfStock += 1;
+    });
+
+    const stockSummary = Object.values(catMap);
+
+    return {
+      success: true,
+      isOffline: true,
+      data: {
+        overview: {
+          totalProducts,
+          lowStockAlerts: lowStockProductIds.size,
+          nearExpiry: nearExpiryProductIds.size,
+          expiredStock: expiredProductIds.size,
+        },
+        stockSummary,
+        pendingPurchaseOrders: [],
+        recentStockMovements: [],
+      },
+    };
+  } catch (err) {
+    console.warn("[OfflineInventory] Failed to compute offline dashboard:", err);
+    return {
+      success: false,
+      isOffline: true,
+      error: err.message,
+    };
+  }
+}
+

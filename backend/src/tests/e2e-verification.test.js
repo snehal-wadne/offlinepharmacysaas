@@ -1,8 +1,5 @@
-/**
- * Comprehensive System-Wide E2E Integration Test Suite
- * Tests all backend modules, databases, and frontend API contracts.
- */
-
+require("dotenv").config();
+const { createSupabaseTestToken } = require("../utils/supabase");
 const BASE_URL = "http://localhost:5000";
 
 async function testEndpoint(name, url, options = {}) {
@@ -52,6 +49,10 @@ async function runE2E() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        token: createSupabaseTestToken({
+          email: "surajmore303@gmail.com",
+          sub: "google_owner_test_123",
+        }),
         email: "surajmore303@gmail.com",
         name: "Suraj More",
         role: "OWNER",
@@ -163,15 +164,15 @@ async function runE2E() {
 
   count(
     await testEndpoint(
-      "GET /api/taxes/branch-gst/main",
-      `${BASE_URL}/api/taxes/branch-gst/main`,
+      `GET /api/taxes/branch-gst/${activeBranchId}`,
+      `${BASE_URL}/api/taxes/branch-gst/${activeBranchId}`,
       { headers: authHeaders },
     ),
   );
   count(
     await testEndpoint(
-      "PUT /api/taxes/branch-gst/main",
-      `${BASE_URL}/api/taxes/branch-gst/main`,
+      `PUT /api/taxes/branch-gst/${activeBranchId}`,
+      `${BASE_URL}/api/taxes/branch-gst/${activeBranchId}`,
       {
         method: "PUT",
         headers: { "Content-Type": "application/json", ...authHeaders },
@@ -384,6 +385,10 @@ async function runE2E() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        token: createSupabaseTestToken({
+          email: "staff.pharmacist@gmail.com",
+          sub: "google_staff_test_456",
+        }),
         email: "staff.pharmacist@gmail.com",
         name: "Staff Pharmacist",
         role: "PHARMACIST",

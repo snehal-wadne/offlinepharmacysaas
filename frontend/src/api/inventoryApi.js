@@ -70,16 +70,46 @@ export async function fetchInventorySummary(params = {}) {
   try {
     const offlineData = await getOfflineInventory(params);
     const items = offlineData?.data || [];
-    const totalItems = items.length;
-    const lowStock = items.filter((i) => (Number(i.quantity) || 0) < 50).length;
-    const outOfStock = items.filter((i) => (Number(i.quantity) || 0) <= 0).length;
+    const uniqueProducts = new Set(items.map((i) => i.productId || i.brandName || i.medicineName));
+    const totalProducts = uniqueProducts.size || items.length;
+    const now = new Date();
+    const lowStock = new Set(
+      items
+        .filter((i) => (Number(i.quantity) || 0) > 0 && (Number(i.quantity) || 0) < 50)
+        .map((i) => i.productId || i.medicineName)
+    ).size;
+    const outOfStock = new Set(
+      items
+        .filter((i) => (Number(i.quantity) || 0) <= 0)
+        .map((i) => i.productId || i.medicineName)
+    ).size;
+    const nearExpiry = new Set(
+      items
+        .filter((i) => {
+          if (!i.expiryDate) return false;
+          const d = new Date(i.expiryDate);
+          const diff = (d - now) / (1000 * 60 * 60 * 24);
+          return diff > 0 && diff <= 90;
+        })
+        .map((i) => i.productId || i.medicineName)
+    ).size;
+    const expired = new Set(
+      items
+        .filter((i) => i.expiryDate && new Date(i.expiryDate) < now)
+        .map((i) => i.productId || i.medicineName)
+    ).size;
+
     return {
       success: true,
       isOffline: true,
       data: {
-        totalItems,
+        totalProducts,
+        totalItems: items.length,
         lowStock,
+        lowStockCount: lowStock,
         outOfStock,
+        nearExpiryCount: nearExpiry,
+        expiredCount: expired,
         totalValuation: items.reduce(
           (sum, i) =>
             sum +
@@ -90,7 +120,11 @@ export async function fetchInventorySummary(params = {}) {
       },
     };
   } catch (_) {
-    return { success: true, isOffline: true, data: { totalItems: 0, lowStock: 0, outOfStock: 0 } };
+    return {
+      success: true,
+      isOffline: true,
+      data: { totalProducts: 0, totalItems: 0, lowStock: 0, lowStockCount: 0, outOfStock: 0, nearExpiryCount: 0, expiredCount: 0 },
+    };
   }
 }
 
