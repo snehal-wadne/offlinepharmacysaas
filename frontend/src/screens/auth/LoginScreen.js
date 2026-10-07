@@ -211,6 +211,8 @@ export default function LoginScreen({
         ? `${API_URL}/api/superadmin/auth/login`
         : `${API_URL}/api/auth/login`;
 
+      let backendNetworkFailed = false;
+
       try {
         const backendRes = await fetch(loginUrl, {
           method: "POST",
@@ -235,6 +237,7 @@ export default function LoginScreen({
           return;
         }
       } catch (netErr) {
+        backendNetworkFailed = true;
         console.warn("Backend login network error, trying Supabase fallback:", netErr?.message);
       }
 
@@ -268,7 +271,13 @@ export default function LoginScreen({
 
       if (!token) {
         setIsLoading(false);
-        setErrorMessage("Invalid email or password. Please check your credentials.");
+        if (backendNetworkFailed) {
+          setErrorMessage(
+            "Unable to connect to backend server. Please verify that the backend API is running on http://localhost:5000."
+          );
+        } else {
+          setErrorMessage("Invalid email or password. Please check your credentials.");
+        }
         return;
       }
 
@@ -596,7 +605,17 @@ export default function LoginScreen({
       );
     } catch (err) {
       setIsLoading(false);
-      setErrorMessage("Registration error: " + err.message);
+      const isNetworkError =
+        err?.message &&
+        (err.message.toLowerCase().includes("failed to fetch") ||
+          err.message.toLowerCase().includes("networkerror"));
+      if (isNetworkError) {
+        setErrorMessage(
+          "Unable to connect to backend server. Please verify that the backend API is running on http://localhost:5000."
+        );
+      } else {
+        setErrorMessage("Registration error: " + err.message);
+      }
     }
   };
 

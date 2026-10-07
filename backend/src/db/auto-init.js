@@ -377,21 +377,29 @@ const autoInitDatabase = async () => {
           }
 
           // Supplier Users: ensure all suppliers have login credentials in users table
+          const existingSupplierUsers = await targetPool.query(
+            "SELECT supplier_id, LOWER(email) AS email FROM users WHERE supplier_id IS NOT NULL OR role = 'SUPPLIER';"
+          );
+          const existingSupplierIds = new Set(
+            existingSupplierUsers.rows.map((r) => r.supplier_id).filter(Boolean)
+          );
+          const existingEmails = new Set(
+            existingSupplierUsers.rows.map((r) => r.email).filter(Boolean)
+          );
+
           const allSups = await targetPool.query("SELECT id, name, email, phone FROM suppliers;");
           for (const s of allSups.rows) {
             const cleanName = s.name.toLowerCase().replace(/[^a-z0-9]/g, '');
             const supEmail = s.email && !s.email.includes('example.com')
               ? s.email.toLowerCase()
               : (s.email || `supplier.${cleanName || 'vendor'}@pharmaflow.in`.toLowerCase());
-            const uCheck = await targetPool.query(
-              "SELECT id FROM users WHERE supplier_id = $1 OR LOWER(email) = LOWER($2);",
-              [s.id, supEmail]
-            );
-            if (uCheck.rows.length === 0) {
+            if (!existingSupplierIds.has(s.id) && !existingEmails.has(supEmail)) {
               await targetPool.query(
                 "INSERT INTO users (name, email, phone, password_hash, role, status, supplier_id) VALUES ($1, $2, $3, $4, 'SUPPLIER', 'ACTIVE', $5);",
                 [s.name, supEmail, s.phone || null, passHash, s.id]
               );
+              existingSupplierIds.add(s.id);
+              existingEmails.add(supEmail);
             }
           }
         }

@@ -47,57 +47,47 @@ async function runMigration() {
         AND (u.role IS NULL OR u.role = 'STAFF');
     `);
 
-    // 6. Ensure every admin user has organisation membership and branch assignments to all branches
+    // 6. Ensure every admin user has organisation membership and branch assignments across all organisation branches
     console.log("6. Ensuring admin users have branch assignments across all organisation branches...");
-    const adminUsers = await client.query(`
-      SELECT DISTINCT u.id AS user_id, o.id AS organisation_id
-      FROM users u
-      JOIN organisations o ON o.owner_id = u.id OR LOWER(o.admin_name) = LOWER(u.name)
-      WHERE o.status = 'ACTIVE';
+    
+    // Set-based membership insertion (instant batch execution)
+    await client.query(`
+      INSERT INTO public.organisation_memberships (organisation_id, user_id, status)
+      SELECT DISTINCT o.id, u.id, 'ACTIVE'
+      FROM public.users u
+      JOIN public.organisations o ON o.owner_id = u.id OR LOWER(o.admin_name) = LOWER(u.name)
+      WHERE o.status = 'ACTIVE'
+      ON CONFLICT (organisation_id, user_id) DO UPDATE SET status = 'ACTIVE';
     `);
 
-    for (const au of adminUsers.rows) {
-      // Ensure organisation membership
-      const memRes = await client.query(`
-        INSERT INTO organisation_memberships (organisation_id, user_id, status)
-        VALUES ($1, $2, 'ACTIVE')
-        ON CONFLICT (organisation_id, user_id) DO UPDATE SET status = 'ACTIVE'
-        RETURNING id;
-      `, [au.organisation_id, au.user_id]);
-
-      const memId = memRes.rows[0]?.id;
-      if (memId) {
-        // Find ADMIN role
-        const roleRes = await client.query(`
-          SELECT id FROM roles WHERE organisation_id = $1 AND (role_identifier = 'ADMIN' OR name = 'Administrator') LIMIT 1;
-        `, [au.organisation_id]);
-        const adminRoleId = roleRes.rows[0]?.id;
-
-        // Check if membership already has a primary branch assignment
-        const primCheck = await client.query(`
-          SELECT branch_id FROM branch_assignments WHERE membership_id = $1 AND is_primary = TRUE LIMIT 1;
-        `, [memId]);
-        const hasPrimary = primCheck.rows.length > 0;
-
-        // Assign to all branches of this organisation
-        const branches = await client.query(`
-          SELECT id FROM branches WHERE organisation_id = $1 AND status = 'ACTIVE';
-        `, [au.organisation_id]);
-
-        for (let i = 0; i < branches.rows.length; i++) {
-          const b = branches.rows[i];
-          const shouldBePrimary = !hasPrimary && i === 0;
-          if (adminRoleId) {
-            await client.query(`
-              INSERT INTO branch_assignments (membership_id, branch_id, role_id, is_primary)
-              VALUES ($1, $2, $3, $4)
-              ON CONFLICT (membership_id, branch_id) 
-              DO UPDATE SET role_id = EXCLUDED.role_id;
-            `, [memId, b.id, adminRoleId, shouldBePrimary]);
-          }
-        }
-      }
-    }
+    // Set-based branch assignment insertion (instant batch execution)
+    await client.query(`
+      WITH admin_roles AS (
+        SELECT organisation_id, id AS role_id,
+               ROW_NUMBER() OVER (PARTITION BY organisation_id ORDER BY CASE WHEN role_identifier = 'ADMIN' THEN 0 ELSE 1 END) AS rn
+        FROM public.roles
+        WHERE role_identifier = 'ADMIN' OR name = 'Administrator'
+      ),
+      active_branches AS (
+        SELECT id AS branch_id, organisation_id,
+               ROW_NUMBER() OVER (PARTITION BY organisation_id ORDER BY created_at ASC) AS b_rn
+        FROM public.branches
+        WHERE status = 'ACTIVE'
+      )
+      INSERT INTO public.branch_assignments (membership_id, branch_id, role_id, is_primary)
+      SELECT DISTINCT
+        om.id AS membership_id,
+        ab.branch_id,
+        ar.role_id,
+        (ab.b_rn = 1) AS is_primary
+      FROM public.organisation_memberships om
+      JOIN public.users u ON om.user_id = u.id
+      JOIN public.organisations o ON om.organisation_id = o.id AND (o.owner_id = u.id OR LOWER(o.admin_name) = LOWER(u.name))
+      JOIN active_branches ab ON ab.organisation_id = o.id
+      JOIN admin_roles ar ON ar.organisation_id = o.id AND ar.rn = 1
+      ON CONFLICT (membership_id, branch_id) 
+      DO UPDATE SET role_id = EXCLUDED.role_id;
+    `);
 
     await client.query("COMMIT");
     console.log("✓ Branch admin name migration completed successfully!");
