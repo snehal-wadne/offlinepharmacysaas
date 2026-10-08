@@ -261,6 +261,52 @@ export default function PosBillingScreen({
     }
   };
 
+  // Global Hardware USB / Bluetooth Barcode Scanner Gun Listener
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+
+    let scanBuffer = "";
+    let lastCharTime = 0;
+
+    const handleWindowKeyDown = (e) => {
+      if (isScannerOpen) return;
+
+      const activeEl = typeof document !== "undefined" ? document.activeElement : null;
+      const isInputFocused =
+        activeEl &&
+        (activeEl.tagName === "INPUT" ||
+          activeEl.tagName === "TEXTAREA" ||
+          activeEl.isContentEditable);
+
+      const now = Date.now();
+      const diff = now - lastCharTime;
+      lastCharTime = now;
+
+      if (e.key === "Enter") {
+        if (scanBuffer.length >= 2) {
+          e.preventDefault();
+          const scannedCode = scanBuffer.trim();
+          scanBuffer = "";
+          handleBarcodeScanned(scannedCode);
+        } else {
+          scanBuffer = "";
+        }
+      } else if (e.key && e.key.length === 1) {
+        // Barcode scanner guns type at rapid machine speed (< 60ms between chars)
+        if (diff > 200 && !isInputFocused) {
+          scanBuffer = e.key;
+        } else if (diff <= 100) {
+          scanBuffer += e.key;
+        } else if (!isInputFocused) {
+          scanBuffer += e.key;
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleWindowKeyDown);
+    return () => window.removeEventListener("keydown", handleWindowKeyDown);
+  }, [isScannerOpen, productsList]);
+
   // Update Item Qty
   const handleUpdateQty = (index, delta) => {
     const updated = [...cart];

@@ -132,6 +132,23 @@ export default function BarcodeScannerModal({
 
     const startScanner = async () => {
       try {
+        // 1. Wait for container DOM element to be mounted in DOM
+        let elem = document.getElementById('pharmacy-barcode-reader');
+        let attempts = 0;
+        while (!elem && attempts < 20) {
+          await new Promise((r) => setTimeout(r, 100));
+          if (cancelled) return;
+          elem = document.getElementById('pharmacy-barcode-reader');
+          attempts++;
+        }
+
+        if (!elem) {
+          throw new Error('Scanner viewfinder element not found. Please click retry.');
+        }
+
+        // Clean any leftover elements inside the container
+        elem.innerHTML = '';
+
         const formatsToSupport = [
           Html5QrcodeSupportedFormats.CODE_128,
           Html5QrcodeSupportedFormats.CODE_39,
@@ -157,38 +174,55 @@ export default function BarcodeScannerModal({
 
         html5ScannerRef.current = scanner;
 
-        startPromise = scanner.start(
-          {
-            facingMode: cameraFacing,
-            width: { min: 640, ideal: 1280, max: 1920 },
-            height: { min: 480, ideal: 720, max: 1080 },
-          },
-          {
-            fps: 20,
-            qrbox: (viewfinderWidth, viewfinderHeight) => {
-              const width = Math.min(
-                viewfinderWidth - 12,
-                Math.max(260, Math.floor(viewfinderWidth * 0.94))
-              );
-              const height = Math.min(
-                viewfinderHeight - 12,
-                Math.max(160, Math.floor(viewfinderHeight * 0.8))
-              );
-              return { width, height };
-            },
-            aspectRatio: 1.777778,
-          },
-          (decodedText) => {
-            if (cancelled || scanLockedRef.current) return;
+        // 2. Discover available camera devices
+        let cameraConfig = null;
+        try {
+          const cameras = await Html5Qrcode.getCameras();
+          if (cameras && cameras.length > 0) {
+            const targetRegex =
+              cameraFacing === 'environment'
+                ? /back|rear|environment/i
+                : /front|user|face/i;
+            const matchedCam = cameras.find((c) => targetRegex.test(c.label));
+            cameraConfig = matchedCam ? matchedCam.id : cameras[0].id;
+          }
+        } catch (_) {
+          // If enumerateDevices fails, fall back to facingMode constraint
+        }
 
-            console.log('CAMERA DETECTED:', decodedText);
-            scanLockedRef.current = true;
-            // Unlock scanner after 1.5 seconds so user can scan consecutive products
-            setTimeout(() => {
-              scanLockedRef.current = false;
-            }, 1500);
-            executeScan(decodedText);
+        if (!cameraConfig) {
+          cameraConfig = { facingMode: { ideal: cameraFacing } };
+        }
+
+        const scanSuccessCallback = (decodedText) => {
+          if (cancelled || scanLockedRef.current) return;
+
+          console.log('CAMERA DETECTED:', decodedText);
+          scanLockedRef.current = true;
+          // Unlock scanner after 1.5 seconds so user can scan consecutive products
+          setTimeout(() => {
+            scanLockedRef.current = false;
+          }, 1500);
+          executeScan(decodedText);
+        };
+
+        const scanConfig = {
+          fps: 20,
+          qrbox: (viewfinderWidth, viewfinderHeight) => {
+            const edgeMin = Math.min(viewfinderWidth, viewfinderHeight);
+            const w = Math.max(140, Math.floor(Math.min(viewfinderWidth * 0.9, 280)));
+            const h = Math.max(100, Math.floor(Math.min(viewfinderHeight * 0.85, 200)));
+            return {
+              width: Math.min(w, Math.max(120, viewfinderWidth - 10)),
+              height: Math.min(h, Math.max(100, viewfinderHeight - 10)),
+            };
           },
+        };
+
+        startPromise = scanner.start(
+          cameraConfig,
+          scanConfig,
+          scanSuccessCallback,
           () => {}
         );
 
@@ -197,19 +231,25 @@ export default function BarcodeScannerModal({
         if (cancelled) return;
 
         setCameraActive(true);
-        setCameraStatusMessage('Camera ready — hold barcode or image in front of camera');
+        setCameraStatusMessage('Camera ready — hold barcode or QR code in front of camera');
       } catch (error) {
         if (!cancelled) {
           console.error('[Scanner]', error);
           setCameraActive(false);
-          setCameraStatusMessage(
-            'Camera unavailable. Reason: ' + (error?.message || 'Check camera permission')
-          );
+          let reason = error?.message || 'Check camera permission';
+          if (error?.name === 'NotAllowedError' || reason.toLowerCase().includes('permission')) {
+            reason = 'Camera access blocked. Click "Allow Camera" or enable camera permission in your browser.';
+          } else if (error?.name === 'NotFoundError' || reason.toLowerCase().includes('device')) {
+            reason = 'No camera device detected on this system. You can type or upload barcode.';
+          } else if (error?.name === 'NotReadableError') {
+            reason = 'Camera is currently in use by another application.';
+          }
+          setCameraStatusMessage(reason);
         }
       }
     };
 
-    const timer = setTimeout(startScanner, 300);
+    const timer = setTimeout(startScanner, 150);
 
     return () => {
       cancelled = true;
@@ -292,6 +332,20 @@ export default function BarcodeScannerModal({
     setCameraFacing((prev) =>
       prev === 'user' ? 'environment' : 'user'
     );
+  };
+
+  // Explicit user-gesture camera permission requester
+  const handleRetryCamera = async () => {
+    setCameraStatusMessage('Requesting camera access...');
+    try {
+      if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        stream.getTracks().forEach((t) => t.stop());
+      }
+      setCameraFacing((prev) => (prev === 'user' ? 'environment' : 'user'));
+    } catch (err) {
+      setCameraStatusMessage('Camera access blocked: ' + (err.message || 'Check browser permissions'));
+    }
   };
 
   // Scan directly from an uploaded or dropped image file
@@ -445,8 +499,16 @@ export default function BarcodeScannerModal({
                 <Text style={styles.viewfinderText}>
                   {cameraStatusMessage}
                 </Text>
+                <Pressable
+                  onPress={handleRetryCamera}
+                  style={styles.retryCameraBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel="Allow camera access or retry"
+                >
+                  <Text style={styles.retryCameraBtnText}>📷 Allow Camera / Retry</Text>
+                </Pressable>
                 <Text style={styles.viewfinderSub}>
-                  Hold barcode or QR code in front of camera
+                  Hold barcode in front of camera or upload image below
                 </Text>
               </View>
             )}
@@ -947,6 +1009,22 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 4,
     textAlign: 'center',
+  },
+  retryCameraBtn: {
+    marginTop: 8,
+    marginBottom: 4,
+    backgroundColor: '#059669',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 6,
+    cursor: 'pointer',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  retryCameraBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 12,
   },
 
   // Reticle Viewfinder Overlay
