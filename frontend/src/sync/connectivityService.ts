@@ -17,11 +17,11 @@ import { API_URL } from '../config';
 
 export type ConnectivityListener = (isOnline: boolean) => void;
 
-const MIN_PROBE_INTERVAL_MS = 10_000;   // Never probe more than once per 10s
-const ONLINE_POLL_MS        = 30_000;   // Poll every 30s when online
-const OFFLINE_POLL_MIN_MS   = 30_000;   // Start backoff at 30s when offline
-const OFFLINE_POLL_MAX_MS   = 120_000;  // Cap backoff at 2 minutes
-const PROBE_TIMEOUT_MS      = 4_000;    // Abort health probe after 4s
+const MIN_PROBE_INTERVAL_MS = 2_000;    // Allow probes every 2s
+const ONLINE_POLL_MS        = 6_000;    // Poll every 6s when online for fast offline detection
+const OFFLINE_POLL_MIN_MS   = 4_000;    // Start check at 4s when offline
+const OFFLINE_POLL_MAX_MS   = 30_000;   // Cap backoff at 30 seconds
+const PROBE_TIMEOUT_MS      = 3_000;    // Abort health probe after 3s
 
 export class ConnectivityService {
   private isOnline = true;
@@ -103,7 +103,15 @@ export class ConnectivityService {
    * 4. Short timeout (4s) with abort controller
    * 5. Exponential backoff on consecutive offline results
    */
-  checkConnectivityNow(): Promise<boolean> {
+  /**
+   * Handle an immediate network failure detected elsewhere (e.g. apiClient fetch rejection)
+   */
+  handleNetworkFailure(): void {
+    if (this.mockMode) return;
+    this.updateStatus(false);
+  }
+
+  checkConnectivityNow(force = false): Promise<boolean> {
     if (this.mockMode) {
       return Promise.resolve(this.isOnline);
     }
@@ -114,9 +122,9 @@ export class ConnectivityService {
       return Promise.resolve(false);
     }
 
-    // Gate 2: minimum interval between probes
+    // Gate 2: minimum interval between probes (unless forced)
     const now = Date.now();
-    if (now - this.lastProbeAt < MIN_PROBE_INTERVAL_MS) {
+    if (!force && now - this.lastProbeAt < MIN_PROBE_INTERVAL_MS) {
       return Promise.resolve(this.isOnline);
     }
 

@@ -1193,16 +1193,18 @@ const styles = StyleSheet.create({
   },
 
   syncBadgeOffline: {
-    backgroundColor: "#F7EDEE",
-    borderColor: "#F7EDEE",
+    backgroundColor: "#FEE2E2",
+    borderColor: "#FCA5A5",
+    borderWidth: 1,
   },
 
   syncDotOffline: {
-    backgroundColor: "#B85C64",
+    backgroundColor: "#DC2626",
   },
 
   syncTextOffline: {
-    color: "#B85C64",
+    color: "#B91C1C",
+    fontWeight: "700",
   },
 
   syncBadgePending: {

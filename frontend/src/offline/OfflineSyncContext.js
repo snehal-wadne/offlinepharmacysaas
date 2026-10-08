@@ -15,6 +15,7 @@ import React, {
 import { db } from "../db/pharmaflowDb";
 import { LocalPersistenceService } from "../db/services/localPersistenceService";
 import { syncEngine } from "../sync/syncEngine";
+import { connectivityService } from "../sync/connectivityService";
 import { getAccessToken } from "../api/supabaseClient";
 
 const localPersistenceService = new LocalPersistenceService(db);
@@ -70,6 +71,18 @@ export function OfflineSyncProvider({ children }) {
           syncEngine.start();
         }
       });
+    const handleOnlineEvent = () => setIsOnline(true);
+    const handleOfflineEvent = () => setIsOnline(false);
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("online", handleOnlineEvent);
+      window.addEventListener("offline", handleOfflineEvent);
+    }
+
+    const unsubConn = connectivityService.onConnectivityChange((online) => {
+      setIsOnline(online);
+    });
+
     const unsub = syncEngine.subscribe((state) => {
       setIsOnline(state.isOnline);
       setPendingCount(state.pendingCount);
@@ -135,6 +148,11 @@ export function OfflineSyncProvider({ children }) {
     loadData();
 
     return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("online", handleOnlineEvent);
+        window.removeEventListener("offline", handleOfflineEvent);
+      }
+      unsubConn();
       unsub();
       syncEngine.stop();
     };

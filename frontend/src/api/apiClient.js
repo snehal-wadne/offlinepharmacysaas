@@ -111,6 +111,12 @@ export async function apiRequest(endpoint, options = {}, isRetry = false) {
       err.name === "AbortError" ||
       err.message?.includes("Network") ||
       err.message?.includes("fetch");
+    if (isOffline) {
+      try {
+        const { connectivityService } = require("../sync/connectivityService");
+        connectivityService.handleNetworkFailure?.();
+      } catch (_) {}
+    }
     return {
       success: false,
       error: isOffline ? "Network unavailable" : err.message,

@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import AppNavigator from "./src/navigation/AppNavigator";
 import SuperAdminLayout from "./src/app/superadmin/_layout";
+import GlobalNetworkBanner from "./src/components/common/GlobalNetworkBanner";
 
 function isSuperAdminUrl() {
   if (typeof window !== "undefined" && window.location) {
@@ -123,6 +124,7 @@ export default function App() {
     <ErrorBoundary>
       <View style={styles.container}>
         <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+        <GlobalNetworkBanner />
         {isSuperAdmin ? <SuperAdminLayout /> : <AppNavigator />}
       </View>
     </ErrorBoundary>
