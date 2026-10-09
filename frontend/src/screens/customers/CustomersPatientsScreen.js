@@ -19,6 +19,7 @@ import {
   createCustomer,
   updateCustomer,
   deleteCustomer,
+  fetchCustomerLedger,
 } from "../../api/customerApi";
 import { exportToCSV, exportToPDF } from "../../utils/exportUtils";
 
@@ -59,6 +60,7 @@ const [customerToDelete, setCustomerToDelete] = useState(null);
     outstandingBalance: "0",
   });
   const [formErrors, setFormErrors] = useState({});
+  const [editCustomerHistory, setEditCustomerHistory] = useState([]);
 
   // Category Dropdown Open inside Modal
   const [modalCategoryDropdownOpen, setModalCategoryDropdownOpen] =
@@ -270,7 +272,7 @@ const loadCustomersData = async () => {
   setAddModalVisible(true);
 };
 
-  const handleOpenEditModal = (cust) => {
+  const handleOpenEditModal = async (cust) => {
     setIsEditing(true);
     setEditingId(cust.id);
     setFormData({
@@ -294,7 +296,22 @@ const loadCustomersData = async () => {
     setFormErrors({});
     setModalCategoryDropdownOpen(false);
     setActionMenuOpen(false);
+    setEditCustomerHistory(Array.isArray(cust.invoices) ? cust.invoices : []);
     setAddModalVisible(true);
+
+    try {
+      const ledgerRes = await fetchCustomerLedger(cust.id);
+      const invoices =
+        ledgerRes?.data?.invoices ||
+        ledgerRes?.invoices ||
+        ledgerRes?.data?.purchaseHistory ||
+        [];
+      if (invoices.length > 0) {
+        setEditCustomerHistory(invoices);
+      }
+    } catch (e) {
+      console.warn("[CustomersScreen] Error loading history for edit modal:", e);
+    }
   };
 
   const handleSavePatient = async () => {
@@ -430,9 +447,23 @@ const confirmDeleteCustomer = async () => {
   }
 };
   
-  const handleViewPatientDetails = (cust) => {
+  const handleViewPatientDetails = async (cust) => {
     setSelectedPatient(cust);
     setHistoryModalVisible(true);
+
+    try {
+      const ledgerRes = await fetchCustomerLedger(cust.id);
+      const invoices =
+        ledgerRes?.data?.invoices ||
+        ledgerRes?.invoices ||
+        ledgerRes?.data?.purchaseHistory ||
+        [];
+      setSelectedPatient((prev) =>
+        prev && prev.id === cust.id ? { ...prev, invoices } : prev
+      );
+    } catch (e) {
+      console.warn("[CustomersScreen] Error loading history for details modal:", e);
+    }
   };
 
   const handleOpenCustomerDetailsPage = (cust) => {
@@ -1299,6 +1330,84 @@ const handleViewMoreDetails = () => {
 ) : null}
                 </View>
               </View>
+
+              {isEditing && (
+                <View style={{ marginTop: 24, marginBottom: 8 }}>
+                  <Text style={styles.sectionHeading}>
+                    4. Prior Purchase Invoices & History
+                  </Text>
+                  {editCustomerHistory && editCustomerHistory.length > 0 ? (
+                    <View style={styles.historyTableWrapper}>
+                      <View style={styles.historyTableHeader}>
+                        <Text style={[styles.hThCell, { width: 120 }]}>
+                          INVOICE NO
+                        </Text>
+                        <Text style={[styles.hThCell, { width: 100 }]}>
+                          DATE
+                        </Text>
+                        <Text style={[styles.hThCell, { width: 220 }]}>
+                          MEDICINES
+                        </Text>
+                        <Text
+                          style={[
+                            styles.hThCell,
+                            { width: 90, textAlign: "right" },
+                          ]}
+                        >
+                          AMOUNT
+                        </Text>
+                        <Text style={[styles.hThCell, { width: 90 }]}>
+                          PAYMENT
+                        </Text>
+                      </View>
+
+                      {editCustomerHistory.map((inv, idx) => (
+                        <View
+                          key={inv.invoiceNo || inv.id || idx}
+                          style={styles.historyTableRow}
+                        >
+                          <Text
+                            style={[
+                              styles.hTdCell,
+                              styles.invNoText,
+                              { width: 120 },
+                            ]}
+                          >
+                            {inv.invoiceNo || inv.id}
+                          </Text>
+                          <Text style={[styles.hTdCell, { width: 100 }]}>
+                            {inv.date || "—"}
+                          </Text>
+                          <Text
+                            style={[styles.hTdCell, { width: 220 }]}
+                            numberOfLines={1}
+                          >
+                            {inv.items || "Prescription Medicines"}
+                          </Text>
+                          <Text
+                            style={[
+                              styles.hTdCell,
+                              styles.amountText,
+                              { width: 90, textAlign: "right" },
+                            ]}
+                          >
+                            {inv.amount || `₹${Number(inv.numericAmount || 0).toFixed(2)}`}
+                          </Text>
+                          <Text style={[styles.hTdCell, { width: 90 }]}>
+                            {inv.paymentMode || "CASH"}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : (
+                    <View style={styles.noHistoryBox}>
+                      <Text style={styles.noHistoryText}>
+                        No prior purchase invoices recorded yet.
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
             </ScrollView>
 
             <View style={styles.modalFooter}>

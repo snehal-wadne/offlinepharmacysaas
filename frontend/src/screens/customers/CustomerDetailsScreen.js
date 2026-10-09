@@ -164,13 +164,25 @@ export default function CustomerDetailsScreen({
       console.log("[CustomerDetails] LEDGER:", data);
       console.log("FIRST ENTRY:", JSON.stringify(data?.entries?.[0], null, 2));
 
-      const invoices = Array.isArray(data?.invoices)
+      const rawInvoices = Array.isArray(data?.invoices)
         ? data.invoices
         : Array.isArray(data?.purchaseHistory)
           ? data.purchaseHistory
           : [];
 
-      setLedgerRecords(invoices);
+      const formattedInvoices = rawInvoices.map((inv, idx) => ({
+        id: inv.id || `inv-${idx}`,
+        invoiceNo: inv.invoiceNo || inv.invoice_number || inv.id,
+        dateTime: inv.dateTime || inv.date || (inv.createdAt ? new Date(inv.createdAt).toLocaleString("en-IN") : "Recent"),
+        date: inv.date || inv.dateTime || "Recent",
+        items: typeof inv.items === "number" ? `${inv.items}` : (inv.items ? (typeof inv.items === "string" ? inv.items : `${inv.items.length || 1}`) : "Prescription"),
+        amount: typeof inv.amount === "string" && inv.amount.startsWith("₹") ? inv.amount : `₹${Number(inv.numericAmount || inv.amount || 0).toFixed(2)}`,
+        numericAmount: Number(inv.numericAmount || (typeof inv.amount === "string" ? parseFloat(inv.amount.replace(/[^0-9.]/g, "")) : inv.amount) || 0),
+        paymentMethod: inv.paymentMethod || inv.paymentMode || "CASH",
+        status: inv.status || "Completed",
+      }));
+
+      setLedgerRecords(formattedInvoices);
 
       const rawEntries = Array.isArray(data?.entries)
         ? data.entries
@@ -369,7 +381,7 @@ export default function CustomerDetailsScreen({
     profile
   );
 
-  const invoices = customer?.invoices || [];
+  const invoices = ledgerRecords.length > 0 ? ledgerRecords : (customer?.invoices || []);
   const returns = customer?.returns || [];
   const ledger = ledgerEntries.length > 0 ? ledgerEntries : (customer?.ledger || []);
 

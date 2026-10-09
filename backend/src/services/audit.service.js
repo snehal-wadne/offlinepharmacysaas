@@ -103,9 +103,10 @@ class AuditService {
       query += ` AND (al.action ILIKE $${params.length} OR al.entity_type ILIKE $${params.length} OR u.name ILIKE $${params.length} OR al.metadata::text ILIKE $${params.length})`;
     }
 
-    if (branchId && branchId !== "All Branches" && branchId !== "all") {
+    if (branchId && branchId !== "All Branches" && branchId !== "all" && branchId !== "No Active Branch") {
       params.push(`%${branchId}%`);
-      query += ` AND (al.metadata::text ILIKE $${params.length})`;
+      const bIdx = params.length;
+      query += ` AND (al.metadata::text ILIKE $${bIdx} OR ba.branch_id::text ILIKE $${bIdx} OR al.metadata->>'branchId' ILIKE $${bIdx} OR al.metadata->>'branch_id' ILIKE $${bIdx} OR al.organisation_id IS NOT NULL)`;
     }
 
     query += ` ORDER BY al.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2};`;

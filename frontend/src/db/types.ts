@@ -45,7 +45,9 @@ export type MutationType =
   | 'CREATE_RETURN'
   | 'PROCESS_RETURN'
   | 'CREATE_CUSTOMER'
+  | 'UPDATE_CUSTOMER'
   | 'RECORD_CUSTOMER_PAYMENT'
+  | 'CREATE_PURCHASE'
   | 'RECEIVE_PURCHASE'
   | 'RECORD_CASH_EXPENSE'
   | 'UPDATE_INVENTORY'
@@ -53,11 +55,90 @@ export type MutationType =
   | 'TRANSFER_STOCK'
   | 'NOTIFY_SUPPLIER'
   | 'SEND_NOTIFICATION'
+  | 'RECORD_AUDIT_LOG'
   | 'REGISTER_OPEN'
   | 'REGISTER_CLOSE'
   | 'OPEN_REGISTER_SESSION'
   | 'RECORD_CASH_MOVEMENT'
   | 'CLOSE_REGISTER_SESSION';
+
+export interface PurchaseRecord {
+  id: string;
+  poNumber: string;
+  organisationId: string;
+  branchId?: string;
+  supplierId?: string;
+  supplierName?: string;
+  orderDate?: string;
+  expectedDate?: string;
+  totalAmount?: number;
+  itemsCount?: number;
+  status: string;
+  items?: any[];
+  notes?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface AuditLogRecord {
+  id: string;
+  organisationId: string;
+  branchId?: string;
+  action: string;
+  actionLabel?: string;
+  entityType?: string;
+  entityId?: string;
+  metadata?: any;
+  severity?: string;
+  userName?: string;
+  userRole?: string;
+  userEmail?: string;
+  ipAddress?: string;
+  device?: string;
+  createdAt: string;
+}
+
+export interface BranchRecord {
+  id: string;
+  organisationId: string;
+  name: string;
+  code?: string;
+  address?: string;
+  phone?: string;
+  status: string;
+  isMain?: boolean;
+}
+
+export interface UserRecord {
+  id: string;
+  organisationId: string;
+  name: string;
+  email: string;
+  role: string;
+  branchId?: string;
+  status: string;
+}
+
+export interface SubscriptionPlanRecord {
+  id: string;
+  name: string;
+  tierCode: string;
+  price: number;
+  billingInterval: string;
+  features: string[];
+  isPopular?: boolean;
+}
+
+export interface SupplierRecord {
+  id: string;
+  organisationId: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  contactPerson?: string;
+  category?: string;
+  status: string;
+}
 
 // ==========================================
 // 2. STORE RECORDS

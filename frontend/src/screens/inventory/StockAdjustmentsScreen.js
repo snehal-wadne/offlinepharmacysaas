@@ -1285,11 +1285,8 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
   // Active KPI Filter State
   const [activeKpiFilter, setActiveKpiFilter] = useState("ALL");
 
-  // Dynamic 4 KPI Cards calculated from stockItems (deduplicated by product to match Dashboard)
-  const uniqueProductIds = new Set(
-    stockItems.map((i) => i.productId || i.medicineName),
-  );
-  const totalProductsCount = uniqueProductIds.size || stockItems.length;
+  // Dynamic 4 KPI Cards calculated from stockItems (matching actual stock table items count)
+  const totalProductsCount = stockItems.length;
 
   const lowStockProductIds = new Set(
     stockItems

@@ -25,6 +25,12 @@ import {
   RegisterSessionRecord,
   CashMovementRecord,
   CashDenominationRecord,
+  PurchaseRecord,
+  AuditLogRecord,
+  BranchRecord,
+  UserRecord,
+  SubscriptionPlanRecord,
+  SupplierRecord,
 } from './types';
 
 export class PharmaFlowDatabase extends Dexie {
@@ -38,6 +44,12 @@ export class PharmaFlowDatabase extends Dexie {
   register_sessions!: Table<RegisterSessionRecord, string>;
   cash_movements!: Table<CashMovementRecord, string>;
   cash_denominations!: Table<CashDenominationRecord, string>;
+  purchases!: Table<PurchaseRecord, string>;
+  audit_logs!: Table<AuditLogRecord, string>;
+  branches!: Table<BranchRecord, string>;
+  users!: Table<UserRecord, string>;
+  subscription_plans!: Table<SubscriptionPlanRecord, string>;
+  suppliers!: Table<SupplierRecord, string>;
 
   constructor(dbName = 'pharmaflow_local') {
     super(dbName);
@@ -58,6 +70,16 @@ export class PharmaFlowDatabase extends Dexie {
       register_sessions: 'id, organisationId, branchId, cashRegisterId, status, sessionNumber, [organisationId+branchId], [branchId+status]',
       cash_movements: 'id, organisationId, branchId, cashRegisterSessionId, movementType, movementNumber, occurredAt, [organisationId+branchId], [cashRegisterSessionId+movementType]',
       cash_denominations: 'id, organisationId, cashRegisterSessionId, denominationValue, [cashRegisterSessionId+denominationValue]',
+    });
+
+    // Schema definition for Version 3: Comprehensive Offline SaaS Entities
+    this.version(3).stores({
+      purchases: 'id, poNumber, organisationId, branchId, supplierId, status, createdAt, [organisationId+branchId]',
+      audit_logs: 'id, organisationId, branchId, action, entityType, createdAt, [organisationId+branchId]',
+      branches: 'id, organisationId, name, status',
+      users: 'id, organisationId, email, name, role',
+      subscription_plans: 'id, tierCode, name',
+      suppliers: 'id, organisationId, name, phone, email',
     });
   }
 }

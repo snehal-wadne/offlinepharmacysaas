@@ -17,7 +17,7 @@ import {
   SkeletonItemCard,
 } from "../../components/common/SkeletonLoader";
 import PaginationControls from "../../components/common/PaginationControls";
-import { fetchInventory } from "../../api/inventoryApi";
+import { fetchInventory, saveInventoryEntry } from "../../api/inventoryApi";
 import BulkImportModal from "../../components/inventory/BulkImportModal";
 import {
   reorderStock,
@@ -31,11 +31,25 @@ const STOCK_STATUS_BADGES = {
   "Out of Stock": { bg: "#F7EDEE", text: "#B85C64" },
 };
 
+const SUB_STATUS_BADGES = {
+  Safe: { bg: "#EAF2EE", text: "#4F8A72" },
+  "Expiring Soon": { bg: "#F7F0E5", text: "#C49752" },
+  Expired: { bg: "#F7EDEE", text: "#B85C64" },
+  "Reorder Needed": { bg: "#FDF5E6", text: "#D97706" },
+  "Urgent Reorder": { bg: "#FEE2E2", text: "#DC2626" },
+  Optimal: { bg: "#ECFDF5", text: "#059669" },
+  "In Stock": { bg: "#EAF2EE", text: "#4F8A72" },
+  "Low Stock": { bg: "#F7F0E5", text: "#C49752" },
+  Critical: { bg: "#F7EDEE", text: "#B85C64" },
+  "Out of Stock": { bg: "#F7EDEE", text: "#B85C64" },
+};
+
 const BATCH_TIMELINE_BADGES = {
   Safe: { bg: "#EAF2EE", text: "#4F8A72" },
   "Expiring Soon": { bg: "#F7F0E5", text: "#C49752" },
   Expired: { bg: "#F7EDEE", text: "#B85C64" },
 };
+
 
 export default function StockStatusScreen({
   onNavigate,
@@ -46,12 +60,23 @@ export default function StockStatusScreen({
 }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
-  const isMobile = width < 768;
-
-  const [activeTab, setActiveTab] = useState("low-stock");
+  const [activeTab, setActiveTab] = useState("all-stock");
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
   const [rawInventory, setRawInventory] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [addStockModalOpen, setAddStockModalOpen] = useState(false);
+  const [isSubmittingStock, setIsSubmittingStock] = useState(false);
+  const [newStockForm, setNewStockForm] = useState({
+    medicineName: "",
+    genericName: "",
+    sku: "",
+    batchNo: "",
+    quantity: "100",
+    amount: "45.00",
+    expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+    shelfLocation: "Rack A1",
+    supplierName: "Sun Pharma Care",
+  });
 
   useEffect(() => {
     loadInventoryData();
@@ -236,6 +261,58 @@ export default function StockStatusScreen({
 
 
   // ============================================================
+  // ALL STOCK ITEMS (FULL INVENTORY WITH STATUS & SUB STATUS)
+  // ============================================================
+
+  const dbAllStockItems = normalizedInventory.map((item) => {
+    let status = "In Stock";
+    if (item.quantity === 0) {
+      status = "Out of Stock";
+    } else if (item.quantity < 15) {
+      status = "Critical";
+    } else if (item.quantity < 50) {
+      status = "Low Stock";
+    }
+
+    const expiryStatus = getExpiryStatus(item.expiryDate);
+    let subStatus = "Optimal";
+    if (expiryStatus === "Expired") {
+      subStatus = "Expired";
+    } else if (expiryStatus === "Expiring Soon") {
+      subStatus = "Expiring Soon";
+    } else if (item.quantity === 0) {
+      subStatus = "Out of Stock";
+    } else if (item.quantity < 15) {
+      subStatus = "Urgent Reorder";
+    } else if (item.quantity < 50) {
+      subStatus = "Reorder Needed";
+    }
+
+    return {
+      id: item.id,
+      medicine: item.medicine,
+      brandName: item.brandName,
+      genericName: item.genericName,
+      sku: item.sku,
+      currentStock: item.quantity,
+      minimumStock: 15,
+      reorderLevel: 50,
+      supplier: item.supplier,
+      branch: item.branch,
+      branchId: item.branchId,
+      status,
+      subStatus,
+      amount: item.amount,
+      batchNo: item.batchNo,
+      expiryDate: item.expiryDate,
+      shelfLocation: item.shelfLocation,
+      manufacturer: item.manufacturer,
+      packSize: item.packSize,
+      strength: item.strength,
+    };
+  });
+
+  // ============================================================
   // LOW STOCK ITEMS
   // ============================================================
 
@@ -250,43 +327,38 @@ export default function StockStatusScreen({
         status = "Critical";
       }
 
+      const expiryStatus = getExpiryStatus(item.expiryDate);
+      let subStatus = "Reorder Needed";
+      if (expiryStatus === "Expired") {
+        subStatus = "Expired";
+      } else if (expiryStatus === "Expiring Soon") {
+        subStatus = "Expiring Soon";
+      } else if (item.quantity === 0) {
+        subStatus = "Out of Stock";
+      } else if (item.quantity < 15) {
+        subStatus = "Urgent Reorder";
+      }
+
       return {
         id: item.id,
-
         medicine: item.medicine,
-
         brandName: item.brandName,
-
         genericName: item.genericName,
-
         sku: item.sku,
-
         currentStock: item.quantity,
-
         minimumStock: 15,
-
         reorderLevel: 50,
-
         supplier: item.supplier,
-
         branch: item.branch,
-
         branchId: item.branchId,
-
         status,
-
+        subStatus,
         amount: item.amount,
-
         batchNo: item.batchNo,
-
         expiryDate: item.expiryDate,
-
         shelfLocation: item.shelfLocation,
-
         manufacturer: item.manufacturer,
-
         packSize: item.packSize,
-
         strength: item.strength,
       };
     });
@@ -298,40 +370,33 @@ export default function StockStatusScreen({
 
   const dbExpiryItems = normalizedInventory.map((item) => {
     const expiryStatus = getExpiryStatus(item.expiryDate);
+    let subStatus = "In Stock";
+    if (item.quantity === 0) {
+      subStatus = "Out of Stock";
+    } else if (item.quantity < 15) {
+      subStatus = "Critical";
+    } else if (item.quantity < 50) {
+      subStatus = "Low Stock";
+    }
 
     return {
       id: item.id,
-
       medicine: item.medicine,
-
       brandName: item.brandName,
-
       genericName: item.genericName,
-
       batchNo: item.batchNo || "-",
-
       expiryDate: item.expiryDate || "-",
-
       quantity: item.quantity,
-
       mrp: item.amount || "-",
-
       shelfLocation: item.shelfLocation || "-",
-
       supplier: item.supplier || "-",
-
       branch: item.branch,
-
       branchId: item.branchId,
-
       status: expiryStatus,
-
+      subStatus,
       manufacturer: item.manufacturer,
-
       sku: item.sku,
-
       packSize: item.packSize,
-
       strength: item.strength,
     };
   });
@@ -353,6 +418,20 @@ export default function StockStatusScreen({
     !selectedBranchValue ||
     selectedBranchValue === "All Branches" ||
     selectedBranchValue === "all";
+
+
+  // ============================================================
+  // ALL STOCK BRANCH FILTER
+  // ============================================================
+
+  const allStockItemsList = isAllBranches
+    ? dbAllStockItems
+    : dbAllStockItems.filter((item) => {
+      return (
+        item.branch === selectedBranchValue ||
+        item.branchId === selectedBranchValue
+      );
+    });
 
 
   // ============================================================
@@ -385,6 +464,7 @@ export default function StockStatusScreen({
         item.branchId === selectedBranchValue
       );
     });
+
 
 
   // ============================================================
@@ -480,6 +560,30 @@ export default function StockStatusScreen({
 
 
   // ============================================================
+  // FILTER ALL STOCK
+  // ============================================================
+
+  const filteredAllStock = allStockItemsList.filter((item) => {
+    const matchesSearch =
+      !searchValue ||
+      normalizeSearchValue(item.brandName).includes(searchValue) ||
+      normalizeSearchValue(item.genericName).includes(searchValue) ||
+      normalizeSearchValue(item.medicine).includes(searchValue) ||
+      normalizeSearchValue(item.sku).includes(searchValue) ||
+      normalizeSearchValue(item.supplier).includes(searchValue) ||
+      normalizeSearchValue(item.batchNo).includes(searchValue);
+
+    const matchesCritical =
+      !criticalOnly ||
+      item.status === "Critical" ||
+      item.status === "Out of Stock" ||
+      item.subStatus === "Expired" ||
+      item.subStatus === "Urgent Reorder";
+
+    return matchesSearch && matchesCritical;
+  });
+
+  // ============================================================
   // FILTER LOW STOCK
   // ============================================================
 
@@ -556,9 +660,12 @@ export default function StockStatusScreen({
   // ============================================================
 
   const activeItemsList =
-    activeTab === "low-stock"
-      ? filteredLowStock
-      : filteredExpiry;
+    activeTab === "all-stock"
+      ? filteredAllStock
+      : activeTab === "low-stock"
+        ? filteredLowStock
+        : filteredExpiry;
+
 
 
   // ============================================================
@@ -777,6 +884,68 @@ export default function StockStatusScreen({
     handleOpenActionMenu(item, "expiry");
   };
 
+  const handleSaveNewStock = async () => {
+    if (!newStockForm.medicineName.trim()) {
+      if (onShowToast) onShowToast("Medicine Name is required.");
+      return;
+    }
+    try {
+      setIsSubmittingStock(true);
+      const rawBranch =
+        typeof selectedBranch === "object" && selectedBranch !== null
+          ? selectedBranch.id
+          : selectedBranch;
+      const branchParam =
+        rawBranch &&
+        rawBranch !== "All Branches" &&
+        rawBranch !== "all" &&
+        rawBranch !== "No Active Branch"
+          ? rawBranch
+          : undefined;
+
+      const payload = {
+        medicineName: newStockForm.medicineName.trim(),
+        brandName: newStockForm.medicineName.trim(),
+        genericName: newStockForm.genericName.trim() || newStockForm.medicineName.trim(),
+        sku: newStockForm.sku.trim() || `SKU-${Date.now().toString().slice(-6)}`,
+        batchNo: newStockForm.batchNo.trim() || `BAT-${Date.now().toString().slice(-4)}`,
+        quantity: parseInt(newStockForm.quantity, 10) || 100,
+        amount: parseFloat(newStockForm.amount) || 45.0,
+        expiryDate: newStockForm.expiryDate,
+        shelfLocation: newStockForm.shelfLocation.trim() || "Rack A1",
+        supplierName: newStockForm.supplierName.trim() || "Sun Pharma Care",
+        branchId: branchParam,
+      };
+
+      const res = await saveInventoryEntry(payload);
+      if (res && (res.success || res.data)) {
+        if (onShowToast) {
+          onShowToast(`✓ Added ${payload.medicineName} (${payload.quantity} units) to stock successfully!`);
+        }
+        setAddStockModalOpen(false);
+        setNewStockForm({
+          medicineName: "",
+          genericName: "",
+          sku: "",
+          batchNo: "",
+          quantity: "100",
+          amount: "45.00",
+          expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+          shelfLocation: "Rack A1",
+          supplierName: "Sun Pharma Care",
+        });
+        await loadInventoryData();
+      } else {
+        if (onShowToast) onShowToast(res?.error || "Failed to add stock entry.");
+      }
+    } catch (err) {
+      console.error("Save new stock entry failed:", err);
+      if (onShowToast) onShowToast("Error saving stock entry.");
+    } finally {
+      setIsSubmittingStock(false);
+    }
+  };
+
   return (
     <ScrollView
       style={styles.container}
@@ -813,6 +982,23 @@ export default function StockStatusScreen({
       <View style={styles.cardContainer}>
         {/* Navigation Tab Bar */}
         <View style={styles.tabBar}>
+          <Pressable
+            onPress={() => setActiveTab("all-stock")}
+            style={[
+              styles.tabButton,
+              activeTab === "all-stock" && styles.tabButtonActive,
+            ]}
+          >
+            <Text
+              style={[
+                styles.tabButtonText,
+                activeTab === "all-stock" && styles.tabButtonTextActive,
+              ]}
+            >
+              All Stock Items ({allStockItemsList.length})
+            </Text>
+          </Pressable>
+
           <Pressable
             onPress={() => setActiveTab("low-stock")}
             style={[
@@ -854,9 +1040,9 @@ export default function StockStatusScreen({
             <TextInput
               style={styles.searchInput}
               placeholder={
-                activeTab === "low-stock"
-                  ? "Search brand name, generic name, SKU, supplier..."
-                  : "Search brand name, batch, supplier..."
+                activeTab === "batch-timeline"
+                  ? "Search brand name, batch, supplier..."
+                  : "Search brand name, generic name, SKU, supplier..."
               }
               placeholderTextColor="#77717A"
               value={searchQuery}
@@ -962,11 +1148,38 @@ export default function StockStatusScreen({
                 Import CSV
               </Text>
             </Pressable>
+
+            {/* Add Stock Entry Button */}
+            <Pressable
+              onPress={() => setAddStockModalOpen(true)}
+              style={[
+                styles.filterTogglePill,
+                {
+                  backgroundColor: "#2E7D5B",
+                  borderColor: "#2E7D5B",
+                  flexDirection: "row",
+                  alignItems: "center",
+                },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Add new stock entry"
+            >
+              <Text style={{ fontSize: 13, marginRight: 5 }}>➕</Text>
+              <Text
+                style={[
+                  styles.filterToggleText,
+                  { color: "#FFFFFF", fontWeight: "700" },
+                ]}
+              >
+                Add Stock Entry
+              </Text>
+            </Pressable>
           </View>
         </View>
 
-        {/* Tab 1: Low Stock Items */}
-        {activeTab === "low-stock" &&
+
+        {/* Tab 1: All Stock & Low Stock Items */}
+        {(activeTab === "all-stock" || activeTab === "low-stock") &&
           (loading || isPageLoading ? (
             isMobile ? (
               <View style={styles.mobileCardList}>
@@ -976,20 +1189,22 @@ export default function StockStatusScreen({
               </View>
             ) : (
               <View style={{ padding: 12 }}>
-                <SkeletonTableRow columns={10} />
-                <SkeletonTableRow columns={10} />
-                <SkeletonTableRow columns={10} />
-                <SkeletonTableRow columns={10} />
-                <SkeletonTableRow columns={10} />
+                <SkeletonTableRow columns={11} />
+                <SkeletonTableRow columns={11} />
+                <SkeletonTableRow columns={11} />
+                <SkeletonTableRow columns={11} />
+                <SkeletonTableRow columns={11} />
               </View>
             )
           ) : isMobile ? (
-            /* Mobile Low Stock Card List */
+            /* Mobile Card List */
             <View style={styles.mobileCardList}>
               {paginatedItems.map((item) => {
                 const badge =
                   STOCK_STATUS_BADGES[item.status] ||
                   STOCK_STATUS_BADGES["Low Stock"];
+                const subBadge =
+                  SUB_STATUS_BADGES[item.subStatus] || badge;
                 const isCritical =
                   item.status === "Critical" || item.status === "Out of Stock";
                 return (
@@ -1003,20 +1218,39 @@ export default function StockStatusScreen({
                           {item.genericName || item.medicine}
                         </Text>
                       </View>
-                      <View
-                        style={[
-                          styles.statusBadge,
-                          { backgroundColor: badge.bg },
-                        ]}
-                      >
-                        <Text
+                      <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                        <View
                           style={[
-                            styles.statusBadgeText,
-                            { color: badge.text },
+                            styles.statusBadge,
+                            { backgroundColor: badge.bg },
                           ]}
                         >
-                          {item.status}
-                        </Text>
+                          <Text
+                            style={[
+                              styles.statusBadgeText,
+                              { color: badge.text },
+                            ]}
+                          >
+                            {item.status}
+                          </Text>
+                        </View>
+                        {item.subStatus ? (
+                          <View
+                            style={[
+                              styles.statusBadge,
+                              { backgroundColor: subBadge.bg },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.statusBadgeText,
+                                { color: subBadge.text },
+                              ]}
+                            >
+                              {item.subStatus}
+                            </Text>
+                          </View>
+                        ) : null}
                       </View>
                     </View>
 
@@ -1032,7 +1266,9 @@ export default function StockStatusScreen({
                             styles.mobileValBold,
                             isCritical
                               ? { color: "#B85C64" }
-                              : { color: "#C49752" },
+                              : item.status === "Low Stock"
+                                ? { color: "#C49752" }
+                                : { color: "#4F8A72" },
                           ]}
                         >
                           {item.currentStock} units
@@ -1078,7 +1314,7 @@ export default function StockStatusScreen({
               })}
             </View>
           ) : (
-            /* Desktop Low Stock Table */
+            /* Desktop Table */
             <ScrollView horizontal showsHorizontalScrollIndicator={true}>
               <View style={styles.tableWrapper}>
                 <View style={styles.tableHeader}>
@@ -1114,6 +1350,11 @@ export default function StockStatusScreen({
                     STATUS
                   </Text>
                   <Text
+                    style={[styles.thCell, { width: 110, textAlign: "center" }]}
+                  >
+                    SUB STATUS
+                  </Text>
+                  <Text
                     style={[styles.thCell, { width: 95, textAlign: "center" }]}
                   >
                     ACTION
@@ -1124,6 +1365,8 @@ export default function StockStatusScreen({
                   const badge =
                     STOCK_STATUS_BADGES[item.status] ||
                     STOCK_STATUS_BADGES["Low Stock"];
+                  const subBadge =
+                    SUB_STATUS_BADGES[item.subStatus] || badge;
                   const isCritical =
                     item.status === "Critical" ||
                     item.status === "Out of Stock";
@@ -1206,7 +1449,7 @@ export default function StockStatusScreen({
                         </Text>
                       )}
 
-                      {/* Status */}
+                      {/* Primary Status */}
                       <View style={[styles.statusWrapper, { width: 100 }]}>
                         <View
                           style={[
@@ -1221,6 +1464,25 @@ export default function StockStatusScreen({
                             ]}
                           >
                             {item.status}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Sub Status */}
+                      <View style={[styles.statusWrapper, { width: 110 }]}>
+                        <View
+                          style={[
+                            styles.statusBadge,
+                            { backgroundColor: subBadge.bg },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.statusBadgeText,
+                              { color: subBadge.text },
+                            ]}
+                          >
+                            {item.subStatus || "Optimal"}
                           </Text>
                         </View>
                       </View>
@@ -1244,6 +1506,7 @@ export default function StockStatusScreen({
               </View>
             </ScrollView>
           ))}
+
 
         {/* Tab 2: Batch Timeline */}
         {activeTab === "batch-timeline" &&
@@ -1284,20 +1547,39 @@ export default function StockStatusScreen({
                           Batch: {item.batchNo}
                         </Text>
                       </View>
-                      <View
-                        style={[
-                          styles.statusBadge,
-                          { backgroundColor: badge.bg },
-                        ]}
-                      >
-                        <Text
+                      <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                        <View
                           style={[
-                            styles.statusBadgeText,
-                            { color: badge.text },
+                            styles.statusBadge,
+                            { backgroundColor: badge.bg },
                           ]}
                         >
-                          {item.status}
-                        </Text>
+                          <Text
+                            style={[
+                              styles.statusBadgeText,
+                              { color: badge.text },
+                            ]}
+                          >
+                            {item.status}
+                          </Text>
+                        </View>
+                        {item.subStatus ? (
+                          <View
+                            style={[
+                              styles.statusBadge,
+                              { backgroundColor: (SUB_STATUS_BADGES[item.subStatus] || badge).bg },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.statusBadgeText,
+                                { color: (SUB_STATUS_BADGES[item.subStatus] || badge).text },
+                              ]}
+                            >
+                              {item.subStatus}
+                            </Text>
+                          </View>
+                        ) : null}
                       </View>
                     </View>
 
@@ -1374,6 +1656,11 @@ export default function StockStatusScreen({
                     STATUS
                   </Text>
                   <Text
+                    style={[styles.thCell, { width: 100, textAlign: "center" }]}
+                  >
+                    SUB STATUS
+                  </Text>
+                  <Text
                     style={[styles.thCell, { width: 95, textAlign: "center" }]}
                   >
                     ACTION
@@ -1384,6 +1671,8 @@ export default function StockStatusScreen({
                   const badge =
                     BATCH_TIMELINE_BADGES[item.status] ||
                     BATCH_TIMELINE_BADGES.Safe;
+                  const subBadge =
+                    SUB_STATUS_BADGES[item.subStatus] || badge;
                   const isExpired = item.status === "Expired";
                   const isSoon = item.status === "Expiring Soon";
 
@@ -1452,7 +1741,7 @@ export default function StockStatusScreen({
                         {item.supplier}
                       </Text>
 
-                      {/* Status */}
+                      {/* Primary Expiry Status */}
                       <View style={[styles.statusWrapper, { width: 110 }]}>
                         <View
                           style={[
@@ -1467,6 +1756,25 @@ export default function StockStatusScreen({
                             ]}
                           >
                             {item.status}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Sub Status */}
+                      <View style={[styles.statusWrapper, { width: 100 }]}>
+                        <View
+                          style={[
+                            styles.statusBadge,
+                            { backgroundColor: subBadge.bg },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.statusBadgeText,
+                              { color: subBadge.text },
+                            ]}
+                          >
+                            {item.subStatus || "In Stock"}
                           </Text>
                         </View>
                       </View>
@@ -1487,6 +1795,7 @@ export default function StockStatusScreen({
                 })}
               </View>
             </ScrollView>
+
           ))}
 
         {/* Pagination Controls */}
@@ -1609,11 +1918,209 @@ export default function StockStatusScreen({
         onShowToast={onShowToast}
         selectedBranch={selectedBranch}
       />
+
+      {/* Add Stock Entry Modal */}
+      <Modal
+        visible={addStockModalOpen}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setAddStockModalOpen(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.actionMenuCard, { maxWidth: 540, maxHeight: "90%" }]}>
+            <View style={styles.actionMenuHeader}>
+              <View>
+                <Text style={styles.actionMenuTitle}>Add Stock Entry</Text>
+                <Text style={styles.actionMenuSub}>
+                  Enter medicine batch details. Shows immediately with primary Status & Sub Status.
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => setAddStockModalOpen(false)}
+                style={styles.closeActionBtn}
+              >
+                <Text style={styles.closeActionText}>✕</Text>
+              </Pressable>
+            </View>
+
+            <ScrollView style={{ padding: 18 }} showsVerticalScrollIndicator={true}>
+              <View style={{ gap: 12 }}>
+                <View>
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#28242B", marginBottom: 4 }}>
+                    Medicine / Brand Name *
+                  </Text>
+                  <TextInput
+                    style={styles.formInput}
+                    placeholder="e.g. Paracetamol 500mg"
+                    placeholderTextColor="#77717A"
+                    value={newStockForm.medicineName}
+                    onChangeText={(val) => setNewStockForm({ ...newStockForm, medicineName: val })}
+                  />
+                </View>
+
+                <View>
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#28242B", marginBottom: 4 }}>
+                    Generic / Salt Name
+                  </Text>
+                  <TextInput
+                    style={styles.formInput}
+                    placeholder="e.g. Acetaminophen"
+                    placeholderTextColor="#77717A"
+                    value={newStockForm.genericName}
+                    onChangeText={(val) => setNewStockForm({ ...newStockForm, genericName: val })}
+                  />
+                </View>
+
+                <View style={{ flexDirection: "row", gap: 12 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#28242B", marginBottom: 4 }}>
+                      Batch Number
+                    </Text>
+                    <TextInput
+                      style={styles.formInput}
+                      placeholder="e.g. BAT-9081"
+                      placeholderTextColor="#77717A"
+                      value={newStockForm.batchNo}
+                      onChangeText={(val) => setNewStockForm({ ...newStockForm, batchNo: val })}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#28242B", marginBottom: 4 }}>
+                      SKU Code
+                    </Text>
+                    <TextInput
+                      style={styles.formInput}
+                      placeholder="e.g. SKU-PARA500"
+                      placeholderTextColor="#77717A"
+                      value={newStockForm.sku}
+                      onChangeText={(val) => setNewStockForm({ ...newStockForm, sku: val })}
+                    />
+                  </View>
+                </View>
+
+                <View style={{ flexDirection: "row", gap: 12 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#28242B", marginBottom: 4 }}>
+                      Quantity (Units) *
+                    </Text>
+                    <TextInput
+                      style={styles.formInput}
+                      placeholder="100"
+                      keyboardType="numeric"
+                      placeholderTextColor="#77717A"
+                      value={newStockForm.quantity}
+                      onChangeText={(val) => setNewStockForm({ ...newStockForm, quantity: val })}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#28242B", marginBottom: 4 }}>
+                      Unit Price / MRP (₹)
+                    </Text>
+                    <TextInput
+                      style={styles.formInput}
+                      placeholder="45.00"
+                      keyboardType="numeric"
+                      placeholderTextColor="#77717A"
+                      value={newStockForm.amount}
+                      onChangeText={(val) => setNewStockForm({ ...newStockForm, amount: val })}
+                    />
+                  </View>
+                </View>
+
+                <View style={{ flexDirection: "row", gap: 12 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#28242B", marginBottom: 4 }}>
+                      Expiry Date (YYYY-MM-DD)
+                    </Text>
+                    <TextInput
+                      style={styles.formInput}
+                      placeholder="2027-12-31"
+                      placeholderTextColor="#77717A"
+                      value={newStockForm.expiryDate}
+                      onChangeText={(val) => setNewStockForm({ ...newStockForm, expiryDate: val })}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#28242B", marginBottom: 4 }}>
+                      Shelf Location
+                    </Text>
+                    <TextInput
+                      style={styles.formInput}
+                      placeholder="e.g. Rack A1"
+                      placeholderTextColor="#77717A"
+                      value={newStockForm.shelfLocation}
+                      onChangeText={(val) => setNewStockForm({ ...newStockForm, shelfLocation: val })}
+                    />
+                  </View>
+                </View>
+
+                <View>
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#28242B", marginBottom: 4 }}>
+                    Supplier Name
+                  </Text>
+                  <TextInput
+                    style={styles.formInput}
+                    placeholder="e.g. Sun Pharma Care"
+                    placeholderTextColor="#77717A"
+                    value={newStockForm.supplierName}
+                    onChangeText={(val) => setNewStockForm({ ...newStockForm, supplierName: val })}
+                  />
+                </View>
+
+                <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 10, marginTop: 14 }}>
+                  <Pressable
+                    onPress={() => setAddStockModalOpen(false)}
+                    style={{
+                      paddingVertical: 10,
+                      paddingHorizontal: 16,
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor: "#E5DFE4",
+                      backgroundColor: "#F8F5F7",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#77717A" }}>Cancel</Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={handleSaveNewStock}
+                    disabled={isSubmittingStock}
+                    style={{
+                      paddingVertical: 10,
+                      paddingHorizontal: 18,
+                      borderRadius: 8,
+                      backgroundColor: "#2E7D5B",
+                      opacity: isSubmittingStock ? 0.7 : 1,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: "700", color: "#FFFFFF" }}>
+                      {isSubmittingStock ? "Saving..." : "Add Stock Entry"}
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
+  formInput: {
+    borderWidth: 1,
+    borderColor: "#E5DFE4",
+    borderRadius: 8,
+    backgroundColor: "#F8F5F7",
+    paddingHorizontal: 12,
+    height: 40,
+    fontSize: 13,
+    color: "#28242B",
+  },
+
   container: {
     flex: 1,
   },

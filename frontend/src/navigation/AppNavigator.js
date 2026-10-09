@@ -693,6 +693,33 @@ export default function AppNavigator() {
   };
 
   const handleNavigate = (routeKey, payload) => {
+    // Admin-only route guard
+    const ADMIN_ONLY_ROUTES = new Set([
+      "tax-settings",
+      "subscription-plans",
+      "roles",
+      "roles-permissions",
+      "page-permissions",
+      "audit-log",
+    ]);
+
+    const roleName = (currentUser?.role || "").toLowerCase();
+    const accessLevel = (currentUser?.accessLevel || "").toLowerCase();
+    const isUserAdmin =
+      !currentUser ||
+      Boolean(currentUser?.isOwner) ||
+      Boolean(currentUser?.isPlatformSuperadmin) ||
+      Boolean(currentUser?.is_platform_superadmin) ||
+      roleName.includes("owner") ||
+      roleName.includes("admin") ||
+      accessLevel.includes("owner") ||
+      accessLevel.includes("admin");
+
+    if (ADMIN_ONLY_ROUTES.has(routeKey) && currentUser && !isUserAdmin) {
+      showToast("Access restricted: Pharmacy Admin / Owner privileges required.");
+      return;
+    }
+
     // Check permission before allowing navigation
     const requiredPermission = ROUTE_PERMISSIONS[routeKey];
     if (requiredPermission && !hasPermission(currentUser, requiredPermission)) {
@@ -1077,6 +1104,7 @@ export default function AppNavigator() {
             onNavigate={handleNavigate}
             onShowToast={showToast}
             isMultiBranch={isMultiBranch}
+            currentUser={currentUser}
           />
         );
       default:

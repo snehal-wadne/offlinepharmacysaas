@@ -293,8 +293,95 @@ const createPurchase = async (purchaseData) => {
     items: resolvedItems,
   });
 
+  // Automatically dispatch notification to supplier portal & record compliance audit log
+  try {
+    let resolvedSupplierName = "Supplier";
+    let recipientEmail = null;
+    let recipientPhone = null;
+
+    if (supplierId) {
+      const sRow = await pool.query(
+        `SELECT name, email, phone FROM suppliers WHERE id = $1 LIMIT 1;`,
+        [supplierId],
+      );
+      if (sRow.rows.length > 0) {
+        resolvedSupplierName = sRow.rows[0].name || resolvedSupplierName;
+        recipientEmail = sRow.rows[0].email;
+        recipientPhone = sRow.rows[0].phone;
+      }
+    }
+
+    const firstItemName =
+      purchaseData.items?.[0]?.productName ||
+      purchaseData.items?.[0]?.medicine ||
+      `${resolvedItems.length} Product Items`;
+    const totalQty = resolvedItems.reduce(
+      (sum, it) => sum + (Number(it.orderedQuantity) || 0),
+      0,
+    );
+    const totalAmount = resolvedItems.reduce(
+      (sum, it) =>
+        sum +
+        (Number(it.orderedQuantity) || 0) * (Number(it.unitCost) || 0) +
+        (Number(it.taxAmount) || 0) -
+        (Number(it.discountAmount) || 0),
+      0,
+    );
+
+    const poMessage = `NEW PURCHASE ORDER CREATED:
+Order Ref: ${finalPO}
+Supplier: ${resolvedSupplierName}
+Total Items: ${resolvedItems.length} line item(s) (${totalQty} units total)
+Estimated Order Total: ₹${totalAmount.toFixed(2)}
+Expected Delivery: ${expectedDate || "Prompt dispatch requested"}
+Please review and confirm dispatch in the supplier portal.`;
+
+    await pool.query(
+      `INSERT INTO supplier_notifications (
+         organisation_id, branch_id, supplier_id,
+         medicine_name, supplier_name, current_stock, reorder_quantity,
+         notification_type, channel, priority, recipient_email, recipient_phone,
+         status, message
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'PURCHASE_ORDER', 'PORTAL', 'HIGH', $8, $9, 'SENT', $10);`,
+      [
+        organisationId,
+        branchId || null,
+        supplierId || null,
+        firstItemName,
+        resolvedSupplierName,
+        0,
+        totalQty,
+        recipientEmail || "orders@pharma-distributor.com",
+        recipientPhone || null,
+        poMessage,
+      ],
+    );
+
+    await pool.query(
+      `INSERT INTO audit_logs (organisation_id, user_id, action, entity_type, entity_id, metadata)
+       VALUES ($1, $2, 'PURCHASE_ORDER_NOTIFICATION', 'PURCHASE_ORDER', $3, $4);`,
+      [
+        organisationId,
+        createdBy || null,
+        createdPurchase.id,
+        JSON.stringify({
+          poNumber: finalPO,
+          supplierId,
+          supplierName: resolvedSupplierName,
+          itemsCount: resolvedItems.length,
+          totalQty,
+          totalAmount,
+        }),
+      ],
+    );
+  } catch (notifErr) {
+    console.warn("Supplier PO notification dispatch warning:", notifErr.message);
+  }
+
   return createdPurchase;
 };
+
 
 /**
  * Update purchase order status (e.g. PENDING -> APPROVED, CANCELLED, etc.)

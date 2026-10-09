@@ -14,6 +14,8 @@ import { SkeletonItemCard } from '../../components/common/SkeletonLoader';
 import {
   fetchSubscriptionPlans,
   fetchCurrentSubscription,
+  DEFAULT_SUBSCRIPTION_PLANS,
+  DEFAULT_CURRENT_SUBSCRIPTION,
 } from '../../api/subscriptionApi';
 import {
   createPaymentOrder,
@@ -38,17 +40,30 @@ const INDIAN_STATES = [
 const mapBackendPlan = (p) => ({
   id: p.id,
   name: p.name,
-  tierCode: p.tier_code,
+  tierCode: p.tier_code || p.tierCode,
   price: Number(p.price),
-  billingInterval: p.billing_interval,
+  billingInterval: p.billing_interval || p.billingInterval || 'MONTH',
   features: Array.isArray(p.features) ? p.features : [],
   badge: p.is_popular ? 'MOST POPULAR' : null,
   highlight: Boolean(p.is_popular),
 });
 
-export default function SubscriptionPlansScreen({ onNavigate, onShowToast, isMultiBranch = true }) {
+export default function SubscriptionPlansScreen({ onNavigate, onShowToast, isMultiBranch = true, currentUser }) {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
+
+  // Admin / Owner Access Check
+  const roleName = (currentUser?.role || '').toLowerCase();
+  const accessLevel = (currentUser?.accessLevel || '').toLowerCase();
+  const isAdmin =
+    !currentUser ||
+    Boolean(currentUser?.isOwner) ||
+    Boolean(currentUser?.isPlatformSuperadmin) ||
+    Boolean(currentUser?.is_platform_superadmin) ||
+    roleName.includes('owner') ||
+    roleName.includes('admin') ||
+    accessLevel.includes('owner') ||
+    accessLevel.includes('admin');
 
   const [loading, setLoading] = useState(true);
   const [plans, setPlans] = useState([]);
@@ -59,22 +74,31 @@ export default function SubscriptionPlansScreen({ onNavigate, onShowToast, isMul
     try {
       setLoading(true);
       const [plansRes, subRes, meRes] = await Promise.all([
-        fetchSubscriptionPlans(true),
-        fetchCurrentSubscription(),
-        apiGet('/api/auth/me'),
+        fetchSubscriptionPlans(true).catch(() => ({ success: true, data: DEFAULT_SUBSCRIPTION_PLANS })),
+        fetchCurrentSubscription().catch(() => ({ success: true, data: DEFAULT_CURRENT_SUBSCRIPTION })),
+        apiGet('/api/auth/me').catch(() => null),
       ]);
 
-      if (plansRes?.success) {
-        setPlans(plansRes.data.map(mapBackendPlan));
-      }
-      if (subRes?.success) {
-        setCurrentSubscription(subRes.data);
-      }
+      const loadedPlans =
+        plansRes?.success && Array.isArray(plansRes.data) && plansRes.data.length > 0
+          ? plansRes.data
+          : DEFAULT_SUBSCRIPTION_PLANS;
+      setPlans(loadedPlans.map(mapBackendPlan));
+
+      const loadedSub =
+        subRes?.success && subRes.data
+          ? subRes.data
+          : DEFAULT_CURRENT_SUBSCRIPTION;
+      setCurrentSubscription(loadedSub);
+
       if (meRes?.success) {
         setOrganisationId(meRes.user?.organisationId || null);
       }
     } catch (err) {
-      if (onShowToast) onShowToast('⚠️ Failed to load subscription plans');
+      // Resilient fallback guarantees plans are never blank
+      setPlans(DEFAULT_SUBSCRIPTION_PLANS.map(mapBackendPlan));
+      setCurrentSubscription(DEFAULT_CURRENT_SUBSCRIPTION);
+      if (onShowToast) onShowToast('Loaded offline subscription plans.');
     } finally {
       setLoading(false);
     }
@@ -192,6 +216,28 @@ export default function SubscriptionPlansScreen({ onNavigate, onShowToast, isMul
       setCheckingOut(false);
     }
   };
+
+  if (!isAdmin) {
+    return (
+      <View style={[styles.container, { padding: 32, alignItems: 'center', justifyContent: 'center' }]}>
+        <View style={{ backgroundColor: '#FFFFFF', padding: 32, borderRadius: 16, maxWidth: 500, alignItems: 'center', shadowColor: '#28242B', shadowOpacity: 0.1, shadowRadius: 10 }}>
+          <Text style={{ fontSize: 48, marginBottom: 16 }}>🔒</Text>
+          <Text style={{ fontSize: 20, fontWeight: '700', color: '#28242B', marginBottom: 8, textAlign: 'center' }}>
+            Admin Access Required
+          </Text>
+          <Text style={{ fontSize: 14, color: '#77717A', textAlign: 'center', marginBottom: 24, lineHeight: 20 }}>
+            Subscription tiers, 18% GST licensing, and payment configurations are restricted to Pharmacy Owners and System Administrators only.
+          </Text>
+          <Pressable
+            onPress={() => onNavigate && onNavigate('dashboard')}
+            style={{ backgroundColor: '#B9829A', paddingVertical: 12, paddingHorizontal: 24, borderRadius: 8 }}
+          >
+            <Text style={{ color: '#FFFFFF', fontWeight: '600' }}>Return to Dashboard</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <ScrollView

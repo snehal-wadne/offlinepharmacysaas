@@ -56,6 +56,7 @@ const getInventory = async ({
         p.is_active AS "isActive",
         p.is_rx_required AS "isRxRequired",
         COALESCE(s.name, '') AS "supplierName",
+        p.organisation_id AS "organisationId",
         ib.branch_id AS "branchId",
         COALESCE(b.name, 'Main Store') AS "branchName",
         u.name AS "updatedBy"
@@ -76,6 +77,7 @@ const getInventory = async ({
     return result.rows.map((row) => ({
       id: row.id,
       productId: row.productId,
+      organisationId: row.organisationId || organisationId,
       medicineName: row.medicineName,
       brandName: row.brandName,
       genericName: row.medicineName,
@@ -456,7 +458,7 @@ const getInventorySummary = async (organisationId, branchId = null) => {
 
   const kpiQuery = `
     SELECT
-      COUNT(DISTINCT p.id) AS "totalProducts",
+      COUNT(COALESCE(ib.id, p.id)) AS "totalProducts",
       COUNT(ib.id) AS "totalBatches",
       COUNT(DISTINCT CASE WHEN ib.quantity < 50 AND ib.quantity > 0 THEN p.id END) AS "lowStockCount",
       COUNT(DISTINCT CASE WHEN ib.quantity = 0 OR ib.id IS NULL THEN p.id END) AS "outOfStockCount",

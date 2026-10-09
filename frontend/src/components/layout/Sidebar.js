@@ -62,8 +62,8 @@ const REPORTS_SUBITEMS = [
 
 const SETTINGS_SUBITEMS = [
   { title: 'Tax and GST Settings', key: 'tax-settings', icon: '⚙️', adminOnly: true },
-  { title: 'Subscription & Plans', key: 'subscription-plans', icon: '💳' },
-  { title: 'Page Permissions', key: 'page-permissions', icon: '🛡️' },
+  { title: 'Subscription & Plans', key: 'subscription-plans', icon: '💳', adminOnly: true },
+  { title: 'Page Permissions', key: 'page-permissions', icon: '🛡️', adminOnly: true },
 ];
 
 export default function Sidebar({
