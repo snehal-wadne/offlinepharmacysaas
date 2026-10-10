@@ -18,7 +18,7 @@ const {
 const getPurchases = async (req, res) => {
   try {
     const organisationId = await getAuthorizedOrgId(req);
-    const branchId = await getAuthorizedBranchId(req, organisationId);
+    const branchId = await getAuthorizedBranchId(req, organisationId, { allowAll: true });
     const { status, search, supplierId, limit, offset } = req.query;
 
     const purchases = await purchaseService.getPurchases({

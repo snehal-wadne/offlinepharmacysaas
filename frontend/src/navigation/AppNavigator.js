@@ -21,6 +21,8 @@ import Header from "../components/layout/Header";
 import LoginScreen from "../screens/auth/LoginScreen";
 import { PosProvider } from "../context/PosContext";
 import { OfflineSyncProvider } from "../offline/OfflineSyncContext";
+import ScreenErrorBoundary from "../components/common/ScreenErrorBoundary";
+import { fetchBranches } from "../api/branchApi";
 import { syncEngine } from "../sync";
 
 // 0. Sales & Cashier Screens (Sales / POS Billing, Cash Register)
@@ -202,6 +204,27 @@ function updateBrowserRoute(routeKey, replace = false) {
   }
 }
 
+// An owner/admin's branch choice from the header dropdown, remembered per user across refreshes.
+const branchChoiceKey = (userId) => `selectedBranch:${userId || "anon"}`;
+const loadBranchChoice = (userId) => {
+  try {
+    const raw = window.localStorage?.getItem(branchChoiceKey(userId));
+    const b = raw ? JSON.parse(raw) : null;
+    return b && b.id ? b : null; // null = "All Branches"
+  } catch (e) {
+    return null;
+  }
+};
+const saveBranchChoice = (userId, branch) => {
+  try {
+    if (branch && branch.id) {
+      window.localStorage?.setItem(branchChoiceKey(userId), JSON.stringify({ id: branch.id, name: branch.name }));
+    } else {
+      window.localStorage?.removeItem(branchChoiceKey(userId));
+    }
+  } catch (e) {}
+};
+
 const hasPermission = (user, permission) => {
   if (!permission) return true;
   if (!user) return false;
@@ -234,6 +257,7 @@ export default function AppNavigator() {
   const [currentRoute, setCurrentRoute] = useState(getRouteFromLocation);
   const [selectedBranch, setSelectedBranch] = useState(null);
   const [selectedCustomerId, setSelectedCustomerId] = useState(null);
+  const [routePayload, setRoutePayload] = useState(null);
   const [toastMessage, setToastMessage] = useState("");
   const [authError, setAuthError] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -270,12 +294,45 @@ export default function AppNavigator() {
     };
   }, []);
 
+  // Remember the real branch so offline writes (stock, purchases, sales) are tagged with it
+  // instead of the "BRANCH-MAIN" placeholder.
+  useEffect(() => {
+    try {
+      const id =
+        (selectedBranch && typeof selectedBranch === "object" ? selectedBranch.id : null) ||
+        currentUser?.branchId ||
+        null;
+      if (id && id !== "main" && typeof window !== "undefined") {
+        window.localStorage?.setItem("activeBranchId", String(id));
+      }
+    } catch (e) {}
+  }, [selectedBranch, currentUser?.branchId]);
+
   const restoreAuthSession = async (session) => {
     if (!session?.access_token) {
       setCurrentUser(null);
       setGoogleOnboardingData(null);
       setAuthStatus("UNAUTHENTICATED");
       return;
+    }
+
+    // Provisional offline session (account created offline, not yet registered online):
+    // the server doesn't know this token, so restore straight from the local cache.
+    if (String(session.access_token).startsWith("offline-") && typeof window !== "undefined") {
+      try {
+        const cachedUser = JSON.parse(window.localStorage?.getItem("cachedAuthUser") || "null");
+        if (cachedUser?.id) {
+          setCurrentUser({ ...cachedUser, isOffline: true });
+          setIsMultiBranch(cachedUser.pharmacyMode === "multi");
+          setSelectedBranch(
+            cachedUser.pharmacyMode === "multi"
+              ? null
+              : { id: "main", name: cachedUser.organisationName || "Main Store" },
+          );
+          setAuthStatus("AUTHENTICATED");
+          return;
+        }
+      } catch (e) {}
     }
 
     let authIntent = null;
@@ -377,7 +434,7 @@ export default function AppNavigator() {
           (user?.role || "").toLowerCase().includes("owner")
         );
 
-        if (user && user.hasBranch === false && isMulti) {
+        if (user && user.hasBranch === false && isMulti && isAdmin) {
           setCurrentRoute("branches");
           updateBrowserRoute("branches", true);
           setSelectedBranch(null);
@@ -388,8 +445,8 @@ export default function AppNavigator() {
               user.branch || (user.branchId ? { id: user.branchId, name: user.branchName || "Main Store" } : { id: "main", name: user.organisationName || "Main Store" }),
             );
           } else if (isAdmin) {
-            // Admin can see all branches and defaults to "All Branches"
-            setSelectedBranch(null);
+            // Admin sees all branches unless they picked one earlier
+            setSelectedBranch(loadBranchChoice(user.id));
           } else {
             // Non-admin branch staff member MUST be pinned to their own branch
             const assignedBranch =
@@ -685,6 +742,40 @@ export default function AppNavigator() {
     return true;
   });
 
+  // An owner/admin whose organisation actually has several active branches must get the branch
+  // switcher even if the account was registered as "single store".
+  useEffect(() => {
+    if (!currentUser || isMultiBranch) return;
+    const roleText = String(currentUser.role || "").toLowerCase();
+    const isAdminUser = Boolean(
+      currentUser.isOwner || roleText.includes("owner") || roleText.includes("admin"),
+    );
+    if (!isAdminUser) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetchBranches();
+        const body = res?.data;
+        const list = Array.isArray(body?.data) ? body.data : Array.isArray(body) ? body : [];
+        const active = list.filter(
+          (b) => !b.status || String(b.status).toUpperCase() === "ACTIVE",
+        );
+        if (!cancelled && (isAdminUser || active.length > 1)) {
+          setIsMultiBranch(true);
+          setSelectedBranch(loadBranchChoice(currentUser.id) || { id: null, name: "All Branches & Stores" });
+          try {
+            window.localStorage?.setItem("pharmacyMode", "multi");
+          } catch (e) {}
+        }
+      } catch (e) {}
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.id, isMultiBranch]);
+
+
   const showToast = (msg) => {
     setToastMessage(msg);
     setTimeout(() => {
@@ -716,7 +807,7 @@ export default function AppNavigator() {
       accessLevel.includes("admin");
 
     if (ADMIN_ONLY_ROUTES.has(routeKey) && currentUser && !isUserAdmin) {
-      showToast("Access restricted: Pharmacy Admin / Owner privileges required.");
+      showToast(`Access restricted: Pharmacy Admin / Owner privileges required. (Your role: ${currentUser?.role || "unknown"})`);
       return;
     }
 
@@ -764,8 +855,25 @@ export default function AppNavigator() {
 
     const isSingleShopMode = !isMultiBranch;
 
+    const roleText = String(currentUser?.role || "").toLowerCase();
+    const canManageBranches = Boolean(
+      currentUser?.isOwner ||
+        currentUser?.isPlatformSuperadmin ||
+        roleText.includes("admin") ||
+        roleText.includes("owner"),
+    );
+    // Branch management is for the pharmacy admin only; staff stay on their own branch.
+    if (routeKey === "branches" && !canManageBranches) {
+      showToast("Only the pharmacy administrator can manage branches.");
+      setCurrentRoute("dashboard");
+      updateBrowserRoute("dashboard", true);
+      setMobileMenuOpen(false);
+      return;
+    }
+
     if (
       !isSingleShopMode &&
+      canManageBranches &&
       currentUser?.hasBranch === false &&
       (branchRequiredRoutes.includes(routeKey) || routeKey !== "branches")
     ) {
@@ -778,6 +886,7 @@ export default function AppNavigator() {
 
     updateErpLocation(routeKey, payload);
     setSelectedCustomerId(payload || null);
+    setRoutePayload(payload || null);
     setCurrentRoute(routeKey);
     updateBrowserRoute(routeKey);
     setMobileMenuOpen(false);
@@ -948,6 +1057,7 @@ export default function AppNavigator() {
             onShowToast={showToast}
             isMultiBranch={isMultiBranch}
             selectedBranch={selectedBranch}
+            routePayload={routePayload}
           />
         );
       case "goods-receiving":
@@ -1107,6 +1217,13 @@ export default function AppNavigator() {
             currentUser={currentUser}
           />
         );
+      case "supplier-portal":
+        return (
+          <SupplierPortalScreen
+            currentUser={currentUser}
+            onSignOut={handleSignOut}
+          />
+        );
       default:
         return (
           <InventoryDashboard
@@ -1226,18 +1343,6 @@ export default function AppNavigator() {
           setGoogleOnboardingData(null);
           setAuthError("");
           setAuthStatus("AUTHENTICATED");
-          const userMode =
-            user?.pharmacyMode ||
-            (typeof window !== "undefined"
-              ? window.localStorage?.getItem("pharmacyMode")
-              : null) ||
-            "single";
-          const isUserMulti = userMode === "multi";
-          setIsMultiBranch(isUserMulti);
-          if (typeof window !== "undefined") {
-            window.localStorage?.setItem("pharmacyMode", isUserMulti ? "multi" : "single");
-          }
-
           const isUserAdmin = Boolean(
             user?.isOwner ||
             user?.isPlatformSuperadmin ||
@@ -1249,24 +1354,40 @@ export default function AppNavigator() {
             (user?.role || "").toLowerCase().includes("owner")
           );
 
+          const storedMode =
+            typeof window !== "undefined"
+              ? window.localStorage?.getItem("pharmacyMode")
+              : null;
+          const userMode =
+            storedMode ||
+            user?.pharmacyMode ||
+            (isUserAdmin ? "multi" : "single");
+          const isUserMulti = isUserAdmin || userMode === "multi";
+          setIsMultiBranch(isUserMulti);
+          if (typeof window !== "undefined") {
+            window.localStorage?.setItem("pharmacyMode", isUserMulti ? "multi" : "single");
+          }
+
           const isSingleShopMode = !isUserMulti;
 
           if (user?.role === "SUPPLIER") {
             setCurrentRoute("supplier-portal");
             setSelectedBranch(null);
-          } else if (user && user.hasBranch === false && !isSingleShopMode) {
+          } else if (user && user.hasBranch === false && !isSingleShopMode && isUserAdmin) {
             setCurrentRoute("branches");
             updateBrowserRoute("branches", true);
             setSelectedBranch(null);
+          } else if (isUserAdmin) {
+            // Admin sees all branches unless they picked one earlier
+            setSelectedBranch(
+              loadBranchChoice(user?.id) || { id: null, name: "All Branches & Stores" }
+            );
+            setCurrentRoute("dashboard");
+            updateBrowserRoute("dashboard", true);
           } else if (isSingleShopMode) {
             setSelectedBranch(
               user?.branch || { id: user?.branchId || "main", name: "Main Store" },
             );
-            setCurrentRoute("dashboard");
-            updateBrowserRoute("dashboard", true);
-          } else if (isUserAdmin) {
-            // Admin defaults to All Branches
-            setSelectedBranch(null);
             setCurrentRoute("dashboard");
             updateBrowserRoute("dashboard", true);
           } else {
@@ -1466,12 +1587,41 @@ export default function AppNavigator() {
                 const branchObj =
                   typeof b === "string" ? { id: null, name: b } : b;
                 setSelectedBranch(branchObj);
+                saveBranchChoice(currentUser?.id, branchObj);
                 if (typeof syncEngine?.setActiveBranch === "function") {
                   syncEngine.setActiveBranch(branchObj?.id || branchObj?.name);
                 }
                 showToast(`Switched active branch to ${branchObj?.name || b}`);
               }}
               isMultiBranch={isMultiBranch}
+              onTogglePharmacyMode={(mode) => {
+                const nextMulti =
+                  mode === "multi" ? true : mode === "single" ? false : !isMultiBranch;
+                setIsMultiBranch(nextMulti);
+                try {
+                  window.localStorage?.setItem(
+                    "pharmacyMode",
+                    nextMulti ? "multi" : "single",
+                  );
+                } catch (e) {}
+                showToast(
+                  `Switched mode to ${nextMulti ? "Multi-Branch Chain" : "Single Store"}`,
+                );
+              }}
+              onSetPharmacyMode={(mode) => {
+                const nextMulti =
+                  mode === "multi" ? true : mode === "single" ? false : !isMultiBranch;
+                setIsMultiBranch(nextMulti);
+                try {
+                  window.localStorage?.setItem(
+                    "pharmacyMode",
+                    nextMulti ? "multi" : "single",
+                  );
+                } catch (e) {}
+                showToast(
+                  `Switched mode to ${nextMulti ? "Multi-Branch Chain" : "Single Store"}`,
+                );
+              }}
               currentUser={currentUser}
               onSignOut={handleSignOut}
               syncStatus="online"
@@ -1490,7 +1640,18 @@ export default function AppNavigator() {
             ) : null}
 
             {/* Dynamic Screen View */}
-            <View style={styles.screenContainer}>{renderScreen()}</View>
+            <View style={styles.screenContainer}>
+              <ScreenErrorBoundary
+                resetKey={currentRoute}
+                routeName={currentRoute}
+                onGoHome={() => {
+                  setCurrentRoute("dashboard");
+                  updateBrowserRoute("dashboard", true);
+                }}
+              >
+                {renderScreen()}
+              </ScreenErrorBoundary>
+            </View>
           </View>
         </View>
       </PosProvider>

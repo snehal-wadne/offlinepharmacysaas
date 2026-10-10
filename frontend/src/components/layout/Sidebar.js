@@ -96,14 +96,14 @@ export default function Sidebar({
     console.error('Context extraction error:', e);
   }
 
-  // Inventory subitems: Stock Transfer is strictly for Multi-Branch architecture
+  // Inventory subitems: Stock Transfer is strictly for Multi-Branch architecture or Admins
   const inventorySubItems = ALL_INVENTORY_SUBITEMS.filter(
-    (item) => item.key !== 'stock-transfer' || isMultiBranch
+    (item) => item.key !== 'stock-transfer' || isMultiBranch || isAdmin
   );
 
-  // Management subitems: Branches is strictly for Multi-Branch architecture
+  // Management subitems: Branches is visible to Admins and in Multi-Branch mode
   const managementSubItems = MANAGEMENT_SUBITEMS.filter(
-    (item) => item.key !== 'branches' || isMultiBranch
+    (item) => item.key !== 'branches' || isAdmin || isMultiBranch
   );
 
   const settingsSubItems = SETTINGS_SUBITEMS.filter(

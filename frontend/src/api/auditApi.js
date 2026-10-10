@@ -162,13 +162,14 @@ export async function fetchAuditLogs(params = {}) {
           entityRef: l.entityId || "System Record",
           severity: l.severity || "Info",
           timestamp: new Date(l.createdAt).toLocaleString("en-IN"),
-          branch: "Main Pharmacy Store",
+          branch: l.branchName || "Main Branch",
           ipAddress: l.ipAddress || "127.0.0.1",
           device: l.device || "Offline POS",
           actor: {
             name: l.userName || "Staff User",
-            role: l.userRole || "Pharmacist",
-            email: l.userEmail || "staff@pharmacy.local",
+            role: l.userRole || "Staff",
+            email: l.userEmail || "",
+            phone: l.userPhone || "",
             avatarInitials: (l.userName || "SU").slice(0, 2).toUpperCase(),
           },
         })),
@@ -188,33 +189,7 @@ export async function fetchAuditLogs(params = {}) {
     console.warn("[AuditApi] Offline fallback error:", offlineErr?.message);
   }
 
-  // Pre-seed canonical fallback logs into Dexie so they persist offline
-  db.audit_logs
-    .bulkPut(
-      CANONICAL_AUDIT_LOGS.map((l) => ({
-        id: l.id,
-        organisationId: "ORG-DEFAULT",
-        branchId: "BRANCH-MAIN",
-        action: l.action,
-        actionLabel: l.actionLabel,
-        entityType: l.entityType,
-        entityId: l.entityRef,
-        severity: l.severity,
-        userName: l.actor.name,
-        userRole: l.actor.role,
-        userEmail: l.actor.email,
-        ipAddress: l.ipAddress,
-        device: l.device,
-        createdAt: l.createdAt,
-      }))
-    )
-    .catch(() => {});
-
-  return {
-    success: true,
-    isOffline: true,
-    data: CANONICAL_AUDIT_LOGS,
-  };
+  return { success: true, isOffline: true, data: [] };
 }
 
 /**

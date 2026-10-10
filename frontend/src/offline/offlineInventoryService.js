@@ -145,11 +145,15 @@ export async function getOfflineInventory(params = {}) {
     } catch (_) {}
   }
 
-  let items = records.map((r) => mapInventoryRecord(r, products));
+  let items = records
+    .filter((r) => r.isActive !== false)
+    .map((r) => mapInventoryRecord(r, products));
 
   // Filter by branch if requested
   if (params.branchId && params.branchId !== "All Branches" && params.branchId !== "all") {
-    items = items.filter((i) => i.branchId === params.branchId);
+    // Records saved before a real branch was known carry a placeholder id: keep them visible.
+    const isPlaceholder = (b) => !b || b === "BRANCH-MAIN" || b === "main";
+    items = items.filter((i) => i.branchId === params.branchId || isPlaceholder(i.branchId));
   }
 
   // Filter by search term
@@ -175,9 +179,11 @@ export async function getOfflineInventory(params = {}) {
 /**
  * Save a new inventory entry to IndexedDB outbox for later sync
  */
-export async function saveOfflineInventoryEntry(itemData) {
+export async function saveOfflineInventoryEntry(itemData, opts = {}) {
   const { organisationId, branchId } = getOrgBranch();
-  const id = `LOCAL-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  // opts.id: reuse the server's id when mirroring an online save (so a later pull updates this
+  // record instead of duplicating it). opts.queue === false: don't add a sync-outbox entry.
+  const id = opts.id || `LOCAL-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
   const record = {
     id,
@@ -205,6 +211,10 @@ export async function saveOfflineInventoryEntry(itemData) {
   // Save to local IndexedDB
   await db.inventory.put(record);
 
+  if (opts.queue === false) {
+    return { success: true, data: mapInventoryRecord(record) };
+  }
+
   // Queue for sync to backend when online
   await db.sync_outbox.add({
     mutationId: `MUT-${id}`,
@@ -229,11 +239,11 @@ export async function saveOfflineInventoryEntry(itemData) {
 /**
  * Update an inventory entry offline
  */
-export async function updateOfflineInventoryEntry(id, itemData) {
+export async function updateOfflineInventoryEntry(id, itemData, opts = {}) {
   const existing = await db.inventory.get(id);
   if (!existing) {
     // If not in local DB, create a minimal shell
-    return saveOfflineInventoryEntry({ ...itemData, id });
+    return saveOfflineInventoryEntry({ ...itemData, id }, { ...opts, id });
   }
 
   const updated = {
@@ -259,13 +269,36 @@ export async function updateOfflineInventoryEntry(id, itemData) {
 
   await db.inventory.put(updated);
 
+  if (opts.queue === false) {
+    return { success: true, data: mapInventoryRecord(updated) };
+  }
+
+  const orgId = existing.organisationId || (typeof window !== "undefined" && window.localStorage?.getItem("organisationId")) || "ORG-DEFAULT";
+  const branchId = existing.branchId || (typeof window !== "undefined" && window.localStorage?.getItem("activeBranchId")) || "BRANCH-MAIN";
+
   // Queue for sync
   await db.sync_outbox.add({
     mutationId: `MUT-UPD-${id}-${Date.now()}`,
     mutationType: "UPDATE_INVENTORY",
-    organisationId: existing.organisationId,
-    branchId: existing.branchId,
-    payload: { action: "UPDATE", id, data: itemData },
+    organisationId: orgId,
+    branchId: branchId,
+    payload: {
+      action: "UPDATE",
+      id,
+      productId: updated.productId || id,
+      batchNumber: updated.batchNumber,
+      quantity: updated.availableQuantity,
+      data: {
+        ...itemData,
+        id,
+        productId: updated.productId || id,
+        batchNo: updated.batchNumber,
+        batchNumber: updated.batchNumber,
+        quantity: updated.availableQuantity,
+        branchId,
+        organisationId: orgId,
+      },
+    },
     status: "PENDING",
     retryCount: 0,
     nextRetryAt: new Date().toISOString(),
@@ -284,8 +317,13 @@ export async function updateOfflineInventoryEntry(id, itemData) {
 /**
  * Delete (soft-delete / deactivate) an inventory entry offline
  */
-export async function deleteOfflineInventoryEntry(id) {
+export async function deleteOfflineInventoryEntry(id, opts = {}) {
   const existing = await db.inventory.get(id);
+  if (existing && opts.queue === false) {
+    // Server already deleted it: just drop the local copy.
+    await db.inventory.delete(id);
+    return { success: true };
+  }
   if (existing) {
     await db.inventory.put({ ...existing, isActive: false, updatedAt: new Date().toISOString() });
 
@@ -372,6 +410,19 @@ export async function seedInventoryFromServer(serverItems = [], organisationId, 
   }));
 
   await db.inventory.bulkPut(records);
+
+  // Stock added offline carries a temporary LOCAL- id. Once the server has the same SKU+batch,
+  // drop the temporary copy so the item isn't listed twice.
+  try {
+    const keyOf = (r) =>
+      `${String(r.sku || r.barcode || "").toLowerCase()}|${String(r.batchNumber || "").toLowerCase()}`;
+    const serverKeys = new Set(records.map(keyOf));
+    const temporary = await db.inventory.filter((r) => String(r.id).startsWith("LOCAL-")).toArray();
+    const duplicates = temporary.filter((r) => serverKeys.has(keyOf(r))).map((r) => r.id);
+    if (duplicates.length) await db.inventory.bulkDelete(duplicates);
+  } catch (e) {
+    console.warn("[OfflineInventory] duplicate cleanup skipped:", e?.message);
+  }
 
   // Also seed into Dexie products table for catalog lookups
   try {

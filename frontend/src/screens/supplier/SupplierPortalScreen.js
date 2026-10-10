@@ -118,6 +118,9 @@ export default function SupplierPortalScreen({ currentUser, onSignOut }) {
 
   useEffect(() => {
     loadPortalData();
+    // Poll so new purchase orders from branches show up without a manual refresh
+    const timer = setInterval(loadPortalData, 20000);
+    return () => clearInterval(timer);
   }, [loadPortalData]);
 
   const handleRefresh = () => {

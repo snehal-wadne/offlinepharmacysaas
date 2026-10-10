@@ -13,6 +13,12 @@ import {
 } from "react-native";
 import { API_URL } from "../../config";
 import { supabase, signInWithGoogle } from "../../api/supabaseClient";
+import {
+  saveOfflineCredential,
+  verifyOfflineLogin,
+  hasOfflineCredential,
+  createOfflineSignup,
+} from "../../offline/offlineAuth";
 
 export default function LoginScreen({
   onLoginSuccess,
@@ -76,6 +82,11 @@ export default function LoginScreen({
   const [staffPassword, setStaffPassword] = useState("");
   const [staffConfirmPassword, setStaffConfirmPassword] = useState("");
   const [showStaffPassword, setShowStaffPassword] = useState(false);
+  const [staffPharmacyCode, setStaffPharmacyCode] = useState("");
+  const [staffPharmacyName, setStaffPharmacyName] = useState("");
+  const [staffBranches, setStaffBranches] = useState([]);
+  const [staffBranchId, setStaffBranchId] = useState("");
+  const [isLoadingBranches, setIsLoadingBranches] = useState(false);
 
   // Pharmacy Owner Onboarding (Sign Up) States
   const [signUpPharmacyName, setSignUpPharmacyName] = useState("");
@@ -258,22 +269,24 @@ export default function LoginScreen({
         }
       }
 
-      // Check offline cached user if network failed to connect
-      if (!token && typeof window !== "undefined") {
-        try {
-          const cached = JSON.parse(window.localStorage?.getItem("cachedAuthUser") || "null");
-          if (cached && cached.email?.toLowerCase() === email.toLowerCase()) {
-            token = cached.token || window.localStorage?.getItem("authToken") || "offline_token";
-            authUser = { ...cached, isOffline: true };
-          }
-        } catch (e) {}
+      // Offline: verify email AND password against the locally stored hash
+      if (!token && backendNetworkFailed) {
+        const offline = await verifyOfflineLogin(email, signInPassword).catch(() => null);
+        if (offline) {
+          token = offline.token || "offline_token";
+          authUser = offline.user;
+        } else if (hasOfflineCredential(email)) {
+          setIsLoading(false);
+          setErrorMessage("Invalid email or password. Please check your credentials.");
+          return;
+        }
       }
 
       if (!token) {
         setIsLoading(false);
         if (backendNetworkFailed) {
           setErrorMessage(
-            "Unable to connect to backend server. Please verify that the backend API is running on http://localhost:5000."
+            "You're offline and this device has no saved login for this account. Connect to the internet and sign in once to enable offline sign-in."
           );
         } else {
           setErrorMessage("Invalid email or password. Please check your credentials.");
@@ -334,6 +347,9 @@ export default function LoginScreen({
           if (authUser.organisationId) {
             window.localStorage?.setItem("organisationId", authUser.organisationId);
           }
+          if (!authUser.isOffline) {
+            await saveOfflineCredential(email, signInPassword, authUser, token).catch(() => {});
+          }
           if (rememberMe) {
             window.localStorage?.setItem("lastLoginEmail", email);
           }
@@ -374,6 +390,33 @@ export default function LoginScreen({
         setErrorMessage("Authentication error: " + (err?.message || "Unknown error"));
       }
     }
+  };
+
+  // If a sign-up failed because we're offline, save it locally and let the user in.
+  // It is sent to the server automatically once the device is back online.
+  const finishOfflineSignup = async (err, payload, message) => {
+    const msg = (err?.message || "").toLowerCase();
+    const isNetworkError =
+      msg.includes("failed to fetch") ||
+      msg.includes("networkerror") ||
+      msg.includes("network request failed") ||
+      (typeof navigator !== "undefined" && navigator.onLine === false);
+    if (!isNetworkError) return false;
+    try {
+      const { user, token } = await createOfflineSignup(payload);
+      if (typeof window !== "undefined") {
+        window.localStorage?.setItem("authToken", token);
+        window.localStorage?.setItem("cachedAuthUser", JSON.stringify({ ...user, token }));
+        window.localStorage?.setItem("organisationId", user.organisationId);
+        window.localStorage?.setItem("lastLoginEmail", user.email);
+        window.localStorage?.setItem("pharmacyMode", pharmacyMode);
+      }
+      setSuccessMessage(`${message}. It will be registered online automatically when you reconnect.`);
+      if (onLoginSuccess) onLoginSuccess(user, token);
+    } catch (e) {
+      setErrorMessage(e?.message || "Could not create the account offline.");
+    }
+    return true;
   };
 
   // Sign Up Handler (Pharmacy Owner Onboarding)
@@ -509,28 +552,31 @@ export default function LoginScreen({
 
     setIsLoading(true);
 
+    const ownerPayload = {
+      pharmacyName,
+      adminName,
+      name: adminName,
+      ownerName: adminName,
+      email,
+      phone,
+      address,
+      city,
+      state,
+      pincode,
+      gstNumber,
+      businessType,
+      createInitialBranch: true,
+      branchName: initialBranchName,
+      pharmacyMode,
+      password: signUpPassword,
+    };
+
     try {
       // 1. Call Backend Pharmacy Owner Onboarding endpoint
       const response = await fetch(`${API_URL}/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          pharmacyName,
-          adminName,
-          name: adminName,
-          ownerName: adminName,
-          email,
-          phone,
-          address,
-          city,
-          state,
-          pincode,
-          gstNumber,
-          businessType,
-          createInitialBranch: true,
-          branchName: initialBranchName,
-          password: signUpPassword,
-        }),
+        body: JSON.stringify(ownerPayload),
       });
 
       const data = await response.json().catch(() => ({}));
@@ -605,17 +651,8 @@ export default function LoginScreen({
       );
     } catch (err) {
       setIsLoading(false);
-      const isNetworkError =
-        err?.message &&
-        (err.message.toLowerCase().includes("failed to fetch") ||
-          err.message.toLowerCase().includes("networkerror"));
-      if (isNetworkError) {
-        setErrorMessage(
-          "Unable to connect to backend server. Please verify that the backend API is running on http://localhost:5000."
-        );
-      } else {
-        setErrorMessage("Registration error: " + err.message);
-      }
+      if (await finishOfflineSignup(err, ownerPayload, "Pharmacy account saved offline")) return;
+      setErrorMessage("Registration error: " + err.message);
     }
   };
 
@@ -661,22 +698,24 @@ export default function LoginScreen({
 
     setIsLoading(true);
 
+    const supplierPayload = {
+      accountType: "SUPPLIER",
+      role: "SUPPLIER",
+      companyName,
+      contactPerson: contactPerson || companyName,
+      email,
+      phone,
+      city: city || "Mumbai",
+      gstin: gstin || null,
+      category,
+      password: supplierPassword,
+    };
+
     try {
       const response = await fetch(`${API_URL}/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          accountType: "SUPPLIER",
-          role: "SUPPLIER",
-          companyName,
-          contactPerson: contactPerson || companyName,
-          email,
-          phone,
-          city: city || "Mumbai",
-          gstin: gstin || null,
-          category,
-          password: supplierPassword,
-        }),
+        body: JSON.stringify(supplierPayload),
       });
 
       const data = await response.json().catch(() => ({}));
@@ -705,18 +744,44 @@ export default function LoginScreen({
       }
     } catch (err) {
       setIsLoading(false);
-      const isNetworkError =
-        err?.message &&
-        (err.message.toLowerCase().includes("failed to fetch") ||
-          err.message.toLowerCase().includes("networkerror"));
-      if (isNetworkError) {
-        setErrorMessage(
-          "Unable to connect to backend server. Please verify that the backend API is running on http://localhost:5000."
-        );
-      } else {
-        setErrorMessage("Supplier registration error: " + (err?.message || "Unknown error"));
-      }
+      if (await finishOfflineSignup(err, supplierPayload, "Supplier account saved offline")) return;
+      setErrorMessage("Supplier registration error: " + (err?.message || "Unknown error"));
     }
+  };
+
+  // Look up the branches of the pharmacy a staff member is joining (by pharmacy code)
+  const handleLoadStaffBranches = async () => {
+    const code = staffPharmacyCode.trim();
+    setErrorMessage("");
+    setStaffBranches([]);
+    setStaffBranchId("");
+    setStaffPharmacyName("");
+    if (!code) {
+      setErrorMessage("Please enter your pharmacy code.");
+      return;
+    }
+    setIsLoadingBranches(true);
+    try {
+      const res = await fetch(
+        `${API_URL}/api/auth/pharmacy-branches?code=${encodeURIComponent(code)}`,
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        setErrorMessage(data.error || "Could not find that pharmacy.");
+      } else {
+        setStaffPharmacyName(data.pharmacyName || "");
+        setStaffBranches(data.branches || []);
+        if ((data.branches || []).length === 1) setStaffBranchId(data.branches[0].id);
+        if (!(data.branches || []).length) {
+          setErrorMessage("This pharmacy has no active branch yet. Ask your administrator to add one.");
+        }
+      }
+    } catch (e) {
+      setErrorMessage(
+        "Can't load branches while offline. Connect to the internet to choose your branch.",
+      );
+    }
+    setIsLoadingBranches(false);
   };
 
   // Staff Member Registration Handler
@@ -741,6 +806,14 @@ export default function LoginScreen({
       setErrorMessage("Please enter your mobile / phone number.");
       return;
     }
+    if (!staffPharmacyCode.trim()) {
+      setErrorMessage("Please enter your pharmacy code.");
+      return;
+    }
+    if (staffBranches.length > 0 && !staffBranchId) {
+      setErrorMessage("Please select the branch you work at.");
+      return;
+    }
     if (!staffPassword || staffPassword.length < 6) {
       setErrorMessage("Password must be at least 6 characters long.");
       return;
@@ -752,19 +825,23 @@ export default function LoginScreen({
 
     setIsLoading(true);
 
+    const staffPayload = {
+      accountType: "STAFF",
+      role: "STAFF",
+      name,
+      email,
+      phone,
+      staffRole: roleTitle,
+      pharmacyCode: staffPharmacyCode.trim(),
+      branchId: staffBranchId || undefined,
+      password: staffPassword,
+    };
+
     try {
       const response = await fetch(`${API_URL}/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          accountType: "STAFF",
-          role: "STAFF",
-          name,
-          email,
-          phone,
-          staffRole: roleTitle,
-          password: staffPassword,
-        }),
+        body: JSON.stringify(staffPayload),
       });
 
       const data = await response.json().catch(() => ({}));
@@ -793,17 +870,8 @@ export default function LoginScreen({
       }
     } catch (err) {
       setIsLoading(false);
-      const isNetworkError =
-        err?.message &&
-        (err.message.toLowerCase().includes("failed to fetch") ||
-          err.message.toLowerCase().includes("networkerror"));
-      if (isNetworkError) {
-        setErrorMessage(
-          "Unable to connect to backend server. Please verify that the backend API is running on http://localhost:5000."
-        );
-      } else {
-        setErrorMessage("Staff registration error: " + (err?.message || "Unknown error"));
-      }
+      if (await finishOfflineSignup(err, staffPayload, "Staff account saved offline")) return;
+      setErrorMessage("Staff registration error: " + (err?.message || "Unknown error"));
     }
   };
 
@@ -1685,6 +1753,79 @@ export default function LoginScreen({
                           Pharmacy Staff & Pharmacist Sign Up
                         </Text>
                       </View>
+
+                      {/* Pharmacy code -> branch picker */}
+                      <View style={styles.fieldContainer}>
+                        <Text style={styles.label}>Pharmacy Code *</Text>
+                        <View style={styles.inputWrapper}>
+                          <Text style={styles.inputPrefixIcon}>🏥</Text>
+                          <TextInput
+                            style={styles.input}
+                            placeholder="Code given by your pharmacy admin"
+                            placeholderTextColor="#77717A"
+                            value={staffPharmacyCode}
+                            onChangeText={(t) => {
+                              setStaffPharmacyCode(t);
+                              setStaffBranches([]);
+                              setStaffBranchId("");
+                              setStaffPharmacyName("");
+                            }}
+                            autoCapitalize="characters"
+                            autoCorrect={false}
+                            editable={!isLoading}
+                            onSubmitEditing={handleLoadStaffBranches}
+                          />
+                          <Pressable
+                            style={styles.eyeButton}
+                            onPress={handleLoadStaffBranches}
+                            disabled={isLoadingBranches}
+                          >
+                            <Text style={[styles.eyeIcon, { fontSize: 12, fontWeight: "700" }]}>
+                              {isLoadingBranches ? "..." : "Find"}
+                            </Text>
+                          </Pressable>
+                        </View>
+                      </View>
+
+                      {staffBranches.length > 0 && (
+                        <View style={styles.fieldContainer}>
+                          <Text style={styles.label}>
+                            Select Your Branch * {staffPharmacyName ? `(${staffPharmacyName})` : ""}
+                          </Text>
+                          <View style={{ flexDirection: "row", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
+                            {staffBranches.map((b) => {
+                              const selected = staffBranchId === b.id;
+                              return (
+                                <Pressable
+                                  key={b.id}
+                                  onPress={() => {
+                                    setStaffBranchId(b.id);
+                                    if (errorMessage) setErrorMessage("");
+                                  }}
+                                  style={{
+                                    paddingVertical: 8,
+                                    paddingHorizontal: 12,
+                                    borderRadius: 8,
+                                    borderWidth: 1.5,
+                                    borderColor: selected ? "#A66D86" : "#E5DFE4",
+                                    backgroundColor: selected ? "#E8D5DD" : "#FFFFFF",
+                                  }}
+                                >
+                                  <Text
+                                    style={{
+                                      fontSize: 12,
+                                      fontWeight: "700",
+                                      color: selected ? "#A66D86" : "#77717A",
+                                    }}
+                                  >
+                                    {b.name}{b.city ? ` · ${b.city}` : ""}
+                                  </Text>
+                                </Pressable>
+                              );
+                            })}
+                          </View>
+                        </View>
+                      )}
 
                       {/* Full Name */}
                       <View style={styles.fieldContainer}>

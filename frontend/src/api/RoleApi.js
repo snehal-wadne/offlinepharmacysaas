@@ -4,14 +4,14 @@ import { apiGet, apiPost, apiPut, apiDelete } from './apiClient';
  * GET /api/roles - List organisation roles with their assigned permissions
  */
 export async function fetchRoles() {
-  return apiGet('/api/roles');
+  return apiGet('/api/roles', { offlineCache: true });
 }
 
 /**
  * GET /api/roles/permissions - Global permission catalogue grouped by domain
  */
 export async function fetchPermissions() {
-  return apiGet('/api/roles/permissions');
+  return apiGet('/api/roles/permissions', { offlineCache: true });
 }
 
 /**

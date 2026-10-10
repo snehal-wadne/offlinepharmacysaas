@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ import OfflineQRCode from '../../components/common/OfflineQRCode';
 import BarcodeScannerModal from '../../components/common/BarcodeScannerModal';
 import { generateOfflineQRCode } from '../../utils/qrGenerator';
 import { fetchCashierProducts } from '../../api/cashierApi';
+import { usePos } from '../../context/PosContext';
 
 export default function PosBillingScreen({
   onNavigate,
@@ -26,14 +27,32 @@ export default function PosBillingScreen({
   isMultiBranch = true,
 }) {
   const offlineSync = useOfflineSync();
+  let pos = null;
+  try {
+    pos = usePos();
+  } catch (e) {
+    pos = null;
+  }
 
   const [liveProducts, setLiveProducts] = useState([]);
-  const productsList =
-    liveProducts.length > 0
-      ? liveProducts
-      : Array.isArray(offlineSync?.products)
-        ? offlineSync.products
-        : [];
+  const productsList = useMemo(() => {
+    const map = new Map();
+    // 1. Add offlineSync.products first (locally cached records from Dexie IndexedDB)
+    if (Array.isArray(offlineSync?.products)) {
+      for (const p of offlineSync.products) {
+        const id = p.id || p.productId || p.sku;
+        if (id) map.set(id, p);
+      }
+    }
+    // 2. Add or overwrite with liveProducts (freshest from server or dynamic query)
+    if (Array.isArray(liveProducts)) {
+      for (const p of liveProducts) {
+        const id = p.id || p.productId || p.sku;
+        if (id) map.set(id, p);
+      }
+    }
+    return Array.from(map.values());
+  }, [liveProducts, offlineSync?.products]);
 
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
@@ -50,9 +69,12 @@ export default function PosBillingScreen({
     async function loadCustomers() {
       try {
         const res = await fetchCustomers();
-        if (isMounted && res && Array.isArray(res.data)) {
-          setCustomersList(res.data);
-        }
+        const rows = Array.isArray(res?.data?.data)
+          ? res.data.data
+          : Array.isArray(res?.data)
+            ? res.data
+            : [];
+        if (isMounted) setCustomersList(rows);
       } catch (err) {
         console.warn('Failed to load customers for POS:', err.message);
       }
@@ -86,6 +108,41 @@ export default function PosBillingScreen({
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+
+  // Reset pagination to first page when search query or category filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedCategory]);
+
+  // Debounced catalog search against backend API (online) or Dexie IndexedDB (offline)
+  useEffect(() => {
+    const q = (searchQuery || "").trim();
+    if (!q) return;
+
+    const timer = setTimeout(async () => {
+      try {
+        const results = await fetchCashierProducts(q);
+        if (Array.isArray(results) && results.length > 0) {
+          setLiveProducts((prev) => {
+            const map = new Map();
+            for (const item of prev) {
+              const id = item.id || item.productId || item.sku;
+              if (id) map.set(id, item);
+            }
+            for (const item of results) {
+              const id = item.id || item.productId || item.sku;
+              if (id) map.set(id, item);
+            }
+            return Array.from(map.values());
+          });
+        }
+      } catch (err) {
+        console.warn("[PosBilling] Debounced search query error:", err?.message);
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   // Customer Selection State (BIL-11, RX-04)
   const [selectedCustomer, setSelectedCustomer] = useState({
@@ -158,14 +215,27 @@ export default function PosBillingScreen({
     if (prod.isActive === false || prod.is_active === false || prod.status === 'Inactive' || prod.status === 'Disabled') {
       return false;
     }
-    const q = searchQuery.toLowerCase();
-    const matchSearch =
-      prod.name.toLowerCase().includes(q) ||
-      prod.generic.toLowerCase().includes(q) ||
-      (prod.barcode && String(prod.barcode).includes(q)) ||
-      prod.sku.toLowerCase().includes(q);
+    const q = (searchQuery || "").trim().toLowerCase();
     const matchCat =
       selectedCategory === "All" || prod.category === selectedCategory;
+
+    if (!q) {
+      return matchCat;
+    }
+
+    const nameStr = String(prod.name || prod.medicineName || prod.brandName || "").toLowerCase();
+    const genericStr = String(prod.generic || prod.genericName || "").toLowerCase();
+    const barcodeStr = String(prod.barcode || "").toLowerCase();
+    const skuStr = String(prod.sku || "").toLowerCase();
+    const batchStr = String(prod.batch || prod.batchNumber || "").toLowerCase();
+
+    const matchSearch =
+      nameStr.includes(q) ||
+      genericStr.includes(q) ||
+      barcodeStr.includes(q) ||
+      skuStr.includes(q) ||
+      batchStr.includes(q);
+
     return matchSearch && matchCat;
   });
 
@@ -350,6 +420,20 @@ export default function PosBillingScreen({
       status: "Hold",
     };
 
+    // Park it where the Held Bills screen reads from (kept on this device, works offline).
+    try {
+      pos?.holdBill?.({
+        customerName: billData.customerName,
+        customerPhone: billData.customerPhone,
+        items: billData.items,
+        subtotal: billData.subtotal,
+        tax: billData.tax,
+        total: billData.total,
+        note: "Parked from New Sale",
+      });
+    } catch (e) {
+      console.warn("[PosBilling] holdBill failed:", e?.message);
+    }
     if (offlineSync?.recordHoldBillOffline) {
       offlineSync.recordHoldBillOffline(billData);
     }
@@ -373,23 +457,32 @@ export default function PosBillingScreen({
     setCheckoutModalVisible(true);
   };
 
-  // Finalize Sale (BIL-10)
-  const handleFinalizeSale = () => {
-    const invNo = `INV-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+  // Finalize Sale (BIL-10): saved on this device first (works with no network), then uploaded.
+  const [isSavingSale, setIsSavingSale] = useState(false);
+  const handleFinalizeSale = async () => {
+    if (isSavingSale) return;
+    setIsSavingSale(true);
+
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    const invNo = `INV-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${String(
+      now.getTime() % 100000,
+    ).padStart(5, "0")}${Math.floor(Math.random() * 10)}`;
+
+    let cashierName = "Cashier";
+    try {
+      const u = JSON.parse(window.localStorage.getItem("cachedAuthUser") || "null");
+      cashierName = u?.name || cashierName;
+    } catch (e) {}
+
     const newInv = {
       invoiceNo: invNo,
       date:
-        new Date().toLocaleDateString("en-GB", {
-          day: "2-digit",
-          month: "short",
-          year: "numeric",
-        }) +
+        now.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) +
         ", " +
-        new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
+        now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       customer: selectedCustomer.name,
+      customerId: selectedCustomer.id || selectedCustomer.customerId,
       customerPhone: selectedCustomer.phone || "N/A",
       paymentMode,
       subtotal: totals.subtotal,
@@ -397,23 +490,38 @@ export default function PosBillingScreen({
       tax: totals.totalTax,
       grandTotal: totals.grandTotal,
       items: [...cart],
-      cashier: "Cashier 01",
+      cashier: cashierName,
     };
 
-    // Deduct stock, store invoice offline, and enqueue sync mutation
-    if (offlineSync?.recordSaleOffline) {
-      offlineSync.recordSaleOffline(newInv, cart);
-    }
+    try {
+      if (!offlineSync?.recordSaleOffline) {
+        throw new Error("Offline sales storage is not ready. Please reload the app.");
+      }
+      // Wait for the save: only show "generated" when it really is stored.
+      const saved = await offlineSync.recordSaleOffline(newInv, cart);
+      const finalInv = { ...newInv, ...(saved || {}) };
 
-    setCompletedInvoice(newInv);
-    setCheckoutModalVisible(false);
-    setReceiptModalVisible(true);
-    setCart([]);
+      // Stock changed locally: drop stale server-sourced stock so the list shows what is left.
+      setLiveProducts([]);
+      setCompletedInvoice(finalInv);
+      setCheckoutModalVisible(false);
+      setReceiptModalVisible(true);
+      setCart([]);
 
-    if (onShowToast) {
-      onShowToast(
-        `✓ Invoice ${invNo} generated! Stock deducted offline & queued for sync.`,
-      );
+      if (onShowToast) {
+        onShowToast(
+          offlineSync?.isOnline === false
+            ? `✓ Invoice ${finalInv.invoiceNo} saved on this device. It will upload when you're back online.`
+            : `✓ Invoice ${finalInv.invoiceNo} generated.`,
+        );
+      }
+    } catch (err) {
+      console.error("[PosBilling] Sale could not be saved:", err);
+      if (onShowToast) {
+        onShowToast(`⚠️ Sale not saved: ${err?.message || "unknown error"}. Nothing was deducted.`);
+      }
+    } finally {
+      setIsSavingSale(false);
     }
   };
 

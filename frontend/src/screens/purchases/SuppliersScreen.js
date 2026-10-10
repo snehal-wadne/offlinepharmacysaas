@@ -412,7 +412,7 @@ export default function SuppliersScreen({ onShowToast, onNavigate }) {
 
   const handleCreatePOWithSupplier = (sup) => {
     if (onNavigate) {
-      onNavigate("purchases");
+      onNavigate("purchases", { supplier: sup?.name || sup });
     }
     if (onShowToast) {
       onShowToast(`Created draft PO with ${sup.name}`);

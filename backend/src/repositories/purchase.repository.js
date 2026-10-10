@@ -98,6 +98,15 @@ const createPurchase = async ({
         client: dbClient,
       }));
 
+    const parseSafeDate = (val) => {
+      if (!val) return null;
+      if (val instanceof Date && !isNaN(val.getTime())) return val;
+      const d = new Date(val);
+      return !isNaN(d.getTime()) ? d : null;
+    };
+    const sanitizedOrderDate = parseSafeDate(orderDate) || new Date();
+    const sanitizedExpectedDate = parseSafeDate(expectedDate);
+
     /*
      * Create the purchase header first.
      */
@@ -134,8 +143,8 @@ const createPurchase = async ({
         resolvedPurchaseNumber,
         supplierId,
         branchId,
-        orderDate,
-        expectedDate,
+        sanitizedOrderDate,
+        sanitizedExpectedDate,
         status,
         notes,
         createdBy,

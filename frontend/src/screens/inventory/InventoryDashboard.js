@@ -23,6 +23,7 @@ export default function InventoryDashboard({
 }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 1100;
+  const isMobile = width < 768;
 
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -272,7 +273,10 @@ export default function InventoryDashboard({
   return (
     <ScrollView
       style={styles.scrollBody}
-      contentContainerStyle={styles.scrollContent}
+      contentContainerStyle={[
+        styles.scrollContent,
+        isMobile && styles.scrollContentMobile,
+      ]}
       showsVerticalScrollIndicator={true}
     >
       <View style={styles.titleSection}>
@@ -292,28 +296,33 @@ export default function InventoryDashboard({
         style={[
           styles.kpiRow,
           isCompact && styles.kpiRowCompact,
+          isMobile && styles.kpiRowMobile,
         ]}
       >
         {kpiData.map((kpi) => (
-          <InventoryStatCard
+          <View
             key={kpi.id}
-            label={kpi.label}
-            value={kpi.value}
-            subtext={kpi.subtext}
-            variant={kpi.variant}
-            onPress={() => {
-              if (kpi.id === "kpi-2") {
-                onNavigate?.("stock-status");
-              } else if (
-                kpi.id === "kpi-3" ||
-                kpi.id === "kpi-4"
-              ) {
-                onNavigate?.("expiry-reports");
-              } else {
-                onNavigate?.("stock-adjustments");
-              }
-            }}
-          />
+            style={[styles.kpiCol, isMobile && styles.kpiColMobile]}
+          >
+            <InventoryStatCard
+              label={kpi.label}
+              value={kpi.value}
+              subtext={kpi.subtext}
+              variant={kpi.variant}
+              onPress={() => {
+                if (kpi.id === "kpi-2") {
+                  onNavigate?.("stock-status");
+                } else if (
+                  kpi.id === "kpi-3" ||
+                  kpi.id === "kpi-4"
+                ) {
+                  onNavigate?.("expiry-reports");
+                } else {
+                  onNavigate?.("stock-adjustments");
+                }
+              }}
+            />
+          </View>
         ))}
       </View>
 
@@ -399,6 +408,13 @@ const styles = StyleSheet.create({
     gap: 24,
   },
 
+  scrollContentMobile: {
+    paddingHorizontal: 12,
+    paddingTop: 14,
+    paddingBottom: 32,
+    gap: 14,
+  },
+
   titleSection: {
     marginBottom: 4,
   },
@@ -425,6 +441,24 @@ const styles = StyleSheet.create({
 
   kpiRowCompact: {
     gap: 12,
+  },
+
+  kpiRowMobile: {
+    gap: 10,
+    justifyContent: "space-between",
+  },
+
+  kpiCol: {
+    flex: 1,
+    minWidth: 160,
+  },
+
+  kpiColMobile: {
+    width: "48.5%",
+    minWidth: "48.5%",
+    maxWidth: "48.5%",
+    flex: 0,
+    flexGrow: 0,
   },
 
   gridRow: {

@@ -10,6 +10,7 @@ import React, {
 import {
   fetchCashierProducts,
   fetchHeldBills,
+  removeHeldBillRemote,
   fetchRecentInvoices,
   fetchReturnHistory,
   createPosSale,
@@ -38,8 +39,23 @@ export function PosProvider({
     selectedBranch && selectedBranch !== "All Branches" ? selectedBranch : null,
   );
   const [taxConfig, setTaxConfig] = useState(null);
-  const [heldBills, setHeldBills] = useState([]);
+  const [heldBills, setHeldBills] = useState(() => {
+    try {
+      const raw = window.localStorage?.getItem("pharma_local_held_bills");
+      const list = raw ? JSON.parse(raw) : [];
+      return Array.isArray(list) ? list : [];
+    } catch (e) {
+      return [];
+    }
+  });
   const [activeResumedDraft, setActiveResumedDraft] = useState(null);
+
+  // Keep parked bills across refreshes and offline sessions.
+  useEffect(() => {
+    try {
+      window.localStorage?.setItem("pharma_local_held_bills", JSON.stringify(heldBills));
+    } catch (e) {}
+  }, [heldBills]);
   const [invoices, setInvoices] = useState([]);
   const [returnHistory, setReturnHistory] = useState([]);
   const [syncState, setSyncState] = useState(
@@ -92,7 +108,7 @@ export function PosProvider({
         const [liveProds, liveHeld, liveInvs, liveReturns, liveCustomers] = await Promise.all([
           fetchCashierProducts("", "", branchParam),
           fetchHeldBills(),
-          fetchRecentInvoices(),
+          fetchRecentInvoices(20, branchParam),
           fetchReturnHistory ? fetchReturnHistory() : Promise.resolve([]),
           fetchCustomers ? fetchCustomers() : Promise.resolve([]),
         ]);
@@ -129,41 +145,8 @@ export function PosProvider({
               category: c.category || "Regular",
             })),
           );
-          setHeldBills(
-            Array.isArray(liveHeld)
-              ? liveHeld.map((b) => ({
-                  ...b,
-                  total: parseFloat(b.total) || Number(b.total) || 0,
-                  subtotal: parseFloat(b.subtotal) || Number(b.subtotal) || 0,
-                  tax: parseFloat(b.tax) || Number(b.tax) || 0,
-                  items: Array.isArray(b.items)
-                    ? b.items
-                    : Array.isArray(b.cart)
-                      ? b.cart
-                      : [],
-                  itemsCount:
-                    parseInt(b.itemsCount, 10) ||
-                    (Array.isArray(b.items) ? b.items.length : 0) ||
-                    (Array.isArray(b.cart) ? b.cart.length : 0) ||
-                    0,
-                  customerPhone: b.customerPhone || b.phone || "",
-                  heldAt:
-                    b.heldAt ||
-                    (b.savedAt
-                      ? new Date(b.savedAt).toLocaleDateString("en-GB", {
-                          day: "2-digit",
-                          month: "short",
-                          year: "numeric",
-                        }) +
-                        ", " +
-                        new Date(b.savedAt).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })
-                      : "Recently"),
-                }))
-              : [],
-          );
+          const serverHeld = (Array.isArray(liveHeld) ? liveHeld : []).map(mapServerHeld);
+          setHeldBills((prev) => mergeHeld(prev, serverHeld));
 
           let invsToSet = Array.isArray(liveInvs) ? liveInvs : [];
           if (invsToSet.length === 0) {
@@ -402,12 +385,19 @@ export function PosProvider({
       isMounted = false;
       unsubscribeSync();
     };
-  }, [effectiveOrgId, effectiveBranchId, effectiveUserId, effectiveToken]);
+  }, [
+    effectiveOrgId,
+    effectiveBranchId,
+    effectiveUserId,
+    effectiveToken,
+    // Re-load products, invoices and held bills when the header's branch changes
+    typeof selectedBranch === "object" && selectedBranch !== null ? selectedBranch.id : selectedBranch,
+  ]);
 
   /**
    * Save or Update a Bill in Hold Bills (Email Draft pattern)
    */
-  const holdBill = (billData, existingDraftId = null) => {
+  const holdBill = (billData, existingDraftId = null, meta = {}) => {
     const draftId =
       existingDraftId ||
       activeResumedDraft?.holdId ||
@@ -449,8 +439,10 @@ export function PosProvider({
               discountPercent: billData.discountPercent ?? b.discountPercent,
               total: billData.total ?? b.total,
               heldAt: formattedDate,
+              customerId: billData.customerId ?? b.customerId ?? null,
               items: [...(billData.items || [])],
               note: billData.note || b.note || "Draft updated in POS",
+              localOnly: meta.synced ? false : b.localOnly ?? true,
             };
           }
           return b;
@@ -472,7 +464,7 @@ export function PosProvider({
               ),
             ) + 1
           : 9;
-      const newBillNo = `HB-00${nextNum < 10 ? "0" + nextNum : nextNum}`;
+      const newBillNo = meta.id || `HB-00${nextNum < 10 ? "0" + nextNum : nextNum}`;
 
       const newDraft = {
         holdId: newBillNo,
@@ -494,12 +486,24 @@ export function PosProvider({
         status: "Hold",
         branch: "Main Branch",
         note: billData.note || "Saved as draft from New Sale",
+        customerId: billData.customerId || null,
         items: [...(billData.items || [])],
+        localOnly: !meta.synced,
       };
 
       setHeldBills((prev) => [newDraft, ...prev]);
       setActiveResumedDraft(null);
       return newBillNo;
+    }
+  };
+
+  /** Re-read drafts from the server (merged with those parked on this device). */
+  const refreshHeldBills = async () => {
+    try {
+      const live = await fetchHeldBills();
+      setHeldBills((prev) => mergeHeld(prev, (Array.isArray(live) ? live : []).map(mapServerHeld)));
+    } catch (e) {
+      console.warn("[PosContext] held bills refresh failed:", e?.message);
     }
   };
 
@@ -528,6 +532,8 @@ export function PosProvider({
    * Discard/Delete a single draft
    */
   const discardHeldBill = (draftId) => {
+    const target = heldBills.find((b) => b.holdId === draftId || b.billNo === draftId);
+    if (target && !target.localOnly) removeHeldBillRemote(target.holdId || target.billNo);
     setHeldBills((prev) =>
       prev.filter((b) => b.holdId !== draftId && b.billNo !== draftId),
     );
@@ -555,9 +561,22 @@ export function PosProvider({
    */
   const finalizeSale = async (saleData) => {
     // 1. Prepare invoice details
-    const newInvNo =
-      saleData.invoiceNo || `INV-${Math.floor(1026 + Math.random() * 8000)}`;
     const now = new Date();
+    // Date + time-of-day + random digit: unique enough to avoid two offline sales sharing a number.
+    const two = (n) => String(n).padStart(2, "0");
+    const newInvNo =
+      saleData.invoiceNo ||
+      `INV-${now.getFullYear()}${two(now.getMonth() + 1)}${two(now.getDate())}-${two(now.getHours())}${two(now.getMinutes())}${two(now.getSeconds())}${Math.floor(Math.random() * 100)
+        .toString()
+        .padStart(2, "0")}`;
+    const cashierLabel =
+      saleData.cashier && saleData.cashier !== "Cashier 01"
+        ? saleData.cashier
+        : currentUser?.name || "Cashier";
+    const branchLabel =
+      saleData.branch && saleData.branch !== "Main Branch"
+        ? saleData.branch
+        : activeBranch?.name || currentUser?.branchName || "Main Branch";
     const dateStr =
       now.toLocaleDateString("en-GB", {
         day: "2-digit",
@@ -586,8 +605,8 @@ export function PosProvider({
       tax: saleData.tax || 0,
       total: saleData.total || 0,
       status: "Completed",
-      cashier: saleData.cashier || "Cashier 01",
-      branch: saleData.branch || "Main Branch",
+      cashier: cashierLabel,
+      branch: branchLabel,
       items: saleData.items || [],
       upiRefNumber: saleData.upiRefNumber || null,
       attachedPrescription: saleData.attachedPrescription || null,
@@ -666,7 +685,11 @@ export function PosProvider({
         newInvoice.isOffline = true;
       }
     } catch (localErr) {
-      console.warn("Local persistence commit notice:", localErr?.message);
+      console.warn("Local persistence commit failed:", localErr?.message);
+      // Neither the server nor this device has the sale: don't show it as completed.
+      if (!committedOnline) {
+        throw new Error(`The sale could not be saved on this device (${localErr?.message}). Nothing was deducted.`);
+      }
     }
 
     // 3. Update React UI state (stock, drafts, invoices) ONLY after local DB succeeds
@@ -691,6 +714,8 @@ export function PosProvider({
       activeResumedDraft?.holdId ||
       activeResumedDraft?.billNo;
     if (draftIdToRemove) {
+      const paidDraft = heldBills.find((b) => b.holdId === draftIdToRemove || b.billNo === draftIdToRemove);
+      if (paidDraft && !paidDraft.localOnly) removeHeldBillRemote(draftIdToRemove);
       setHeldBills((prev) =>
         prev.filter(
           (b) => b.holdId !== draftIdToRemove && b.billNo !== draftIdToRemove,
@@ -862,6 +887,7 @@ export function PosProvider({
         closeResumedDraft,
         discardHeldBill,
         clearAllHeldBills,
+        refreshHeldBills,
         finalizeSale,
         processReturnRefund,
         syncState,
@@ -882,6 +908,38 @@ export function PosProvider({
       {children}
     </PosContext.Provider>
   );
+}
+
+// Server held-bill row -> the draft shape the screens use.
+function mapServerHeld(b) {
+  return {
+    ...b,
+    holdId: b.holdId || b.billNo,
+    total: parseFloat(b.total) || Number(b.total) || 0,
+    subtotal: parseFloat(b.subtotal) || Number(b.subtotal) || 0,
+    tax: parseFloat(b.tax) || Number(b.tax) || 0,
+    items: Array.isArray(b.items) ? b.items : Array.isArray(b.cart) ? b.cart : [],
+    itemsCount:
+      parseInt(b.itemsCount, 10) ||
+      (Array.isArray(b.items) ? b.items.length : 0) ||
+      (Array.isArray(b.cart) ? b.cart.length : 0) ||
+      0,
+    customerPhone: b.customerPhone || b.phone || "",
+    heldAt:
+      b.heldAt ||
+      (b.savedAt
+        ? new Date(b.savedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) +
+          ", " +
+          new Date(b.savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        : "Recently"),
+  };
+}
+
+// Server drafts + drafts that only exist on this device (never dropped by a refresh).
+function mergeHeld(prev, serverHeld) {
+  const serverIds = new Set(serverHeld.map((b) => b.holdId || b.billNo));
+  const deviceOnly = prev.filter((b) => b.localOnly && !serverIds.has(b.holdId || b.billNo));
+  return [...deviceOnly, ...serverHeld];
 }
 
 export function usePos() {

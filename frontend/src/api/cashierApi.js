@@ -159,8 +159,11 @@ export async function fetchCashierProducts(
         const s = search.toLowerCase();
         filtered = filtered.filter(
           (p) =>
-            (p.name && p.name.toLowerCase().includes(s)) ||
-            (p.generic && p.generic.toLowerCase().includes(s)) ||
+            (p.name && String(p.name).toLowerCase().includes(s)) ||
+            (p.brand && String(p.brand).toLowerCase().includes(s)) ||
+            (p.brandName && String(p.brandName).toLowerCase().includes(s)) ||
+            (p.generic && String(p.generic).toLowerCase().includes(s)) ||
+            (p.genericName && String(p.genericName).toLowerCase().includes(s)) ||
             (p.barcode && String(p.barcode).toLowerCase().includes(s)) ||
             (p.sku && String(p.sku).toLowerCase().includes(s)),
         );
@@ -194,7 +197,13 @@ export async function createPosSale(saleData) {
   return res.data?.data || res.data;
 }
 
-export async function fetchRecentInvoices(limit = 20) {
+export async function fetchRecentInvoices(limit = 20, branchFilter = "") {
+  const wantedBranch =
+    typeof branchFilter === "object" && branchFilter !== null ? branchFilter.id : branchFilter;
+  const branchQuery =
+    wantedBranch && !["All Branches", "all", "No Active Branch"].includes(wantedBranch)
+      ? `&branchId=${encodeURIComponent(wantedBranch)}`
+      : "";
   let orgId = "ORG-DEFAULT";
   let branchId = "BRANCH-MAIN";
   try {
@@ -205,11 +214,20 @@ export async function fetchRecentInvoices(limit = 20) {
   } catch (_) {}
 
   try {
-    const res = await apiGet(`/cashier/sales/recent?limit=${limit}`);
+    const res = await apiGet(`/cashier/sales/recent?limit=${limit}${branchQuery}`);
     if (res && res.success) {
       const list = res.data?.data || res.data || [];
-      if (Array.isArray(list) && list.length > 0) {
-        return list;
+      if (Array.isArray(list)) {
+        // Sales made on this device that haven't uploaded yet must be listed too.
+        let pending = [];
+        try {
+          const local = await localPersistenceService.getRecentInvoices(wantedBranch || branchId, limit, orgId);
+          const have = new Set(list.map((i) => i.invoiceNo || i.invoiceNumber));
+          pending = local.filter((i) => i.syncStatus === "PENDING" && !have.has(i.invoiceNo));
+        } catch (_) {}
+        if (list.length > 0 || pending.length > 0) {
+          return [...pending, ...list].slice(0, Math.max(limit, pending.length));
+        }
       }
     }
   } catch (err) {
@@ -218,7 +236,7 @@ export async function fetchRecentInvoices(limit = 20) {
 
   try {
     const localInvs = await localPersistenceService.getRecentInvoices(
-      branchId,
+      wantedBranch || branchId,
       limit,
       orgId,
     );
@@ -237,50 +255,17 @@ export async function fetchRecentInvoices(limit = 20) {
 // ==========================================
 
 export async function fetchHeldBills() {
-  try {
-    const res = await apiGet("/cashier/held-bills");
-    if (res && res.success) {
-      const list = res.data?.data || res.data || [];
-      if (Array.isArray(list)) {
-        if (typeof window !== "undefined" && window.localStorage) {
-          window.localStorage.setItem("pharma_held_bills", JSON.stringify(list));
-        }
-        return list;
-      }
-    }
-  } catch (err) {
-    console.warn("[CashierApi] Online held bills fetch failed, using local storage:", err?.message);
+  const res = await apiGet("/cashier/held-bills");
+  if (res && res.success) {
+    const list = res.data?.data || res.data || [];
+    return Array.isArray(list) ? list : [];
   }
-
-  try {
-    if (typeof window !== "undefined" && window.localStorage) {
-      const raw = window.localStorage.getItem("pharma_held_bills");
-      if (raw) return JSON.parse(raw);
-    }
-  } catch (_) {}
-
+  // Offline or refused: drafts parked on this device are kept by the POS context itself.
   return [];
 }
 
 export async function holdCurrentBill(billData) {
-  try {
-    const res = await apiPost("/cashier/held-bills", billData);
-    if (res && res.success) {
-      return res.data?.data || res.data;
-    }
-  } catch (err) {
-    console.warn("[CashierApi] Online hold bill failed, saving locally:", err?.message);
-  }
-
-  try {
-    if (typeof window !== "undefined" && window.localStorage) {
-      const raw = window.localStorage.getItem("pharma_held_bills");
-      const list = raw ? JSON.parse(raw) : [];
-      list.unshift(billData);
-      window.localStorage.setItem("pharma_held_bills", JSON.stringify(list));
-    }
-  } catch (_) {}
-  return billData;
+  return saveHeldBill(billData);
 }
 
 export async function resumeHeldBill(holdId) {
@@ -307,17 +292,27 @@ export async function resumeHeldBill(holdId) {
   return { success: true };
 }
 
+// Tries to store the draft on the server once. Never throws: when the server can't take it
+// (offline, refused) the caller keeps the draft on this device instead.
 export async function saveHeldBill(billData) {
   try {
-    const res = await apiPost('/cashier/held-bills', billData);
+    const res = await apiPost("/cashier/held-bills", billData);
     if (res && res.success) {
-      return res.data;
+      const body = res.data?.data || res.data || {};
+      return { ...body, synced: true };
     }
+    return { synced: false, error: res?.error };
   } catch (err) {
-    console.warn("[CashierApi] Online save held bill failed, saving locally:", err?.message);
+    console.warn("[CashierApi] Held bill not saved to server:", err?.message);
+    return { synced: false, error: err?.message };
   }
+}
 
-  return holdCurrentBill(billData);
+/** Remove a draft from the server once it is paid or discarded (best effort). */
+export async function removeHeldBillRemote(holdId) {
+  try {
+    await apiDelete(`/cashier/held-bills/${encodeURIComponent(holdId)}`);
+  } catch (e) {}
 }
 
 // ==========================================

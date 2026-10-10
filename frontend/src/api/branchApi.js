@@ -1,212 +1,163 @@
 /**
  * Branch API Client (Offline-First)
  *
- * Communicates with backend /api/branches endpoints.
- * Integrates Dexie local storage (db.branches), sync outbox queueing, and localStorage fallback.
+ * Reads: server when reachable (and cached in db.branches), otherwise the local copy,
+ *        always including branches created offline that haven't uploaded yet.
+ * Writes: server first; with no network the change is stored locally and queued
+ *         (see offline/offlineCrud.js) so it shows immediately and uploads later.
  */
 
-import { apiGet, apiPost, apiPut, apiDelete } from "./apiClient";
+import { apiGet } from "./apiClient";
 import { db } from "../db/pharmaflowDb";
+import { mutate, newLocalId, pendingLocalRows } from "../offline/offlineCrud";
 
-const CANONICAL_BRANCHES = [
-  {
-    id: "branch-main-01",
-    name: "Main Pharmacy Store",
-    facility_type: "RETAIL_DISPENSARY",
-    status: "ACTIVE",
-    isMain: true,
-    address: "Shop 12, Ground Floor, Linking Road, Bandra West, Mumbai",
-    phone: "+91 98200 12345",
-  },
-  {
-    id: "branch-east-02",
-    name: "Andheri East Dispensary",
-    facility_type: "RETAIL_DISPENSARY",
-    status: "ACTIVE",
-    isMain: false,
-    address: "Station Road, Near Metro Gate 2, Andheri East, Mumbai",
-    phone: "+91 98200 54321",
-  },
-];
+const orgId = () => {
+  try {
+    return window.localStorage?.getItem("organisationId") || "ORG-DEFAULT";
+  } catch (e) {
+    return "ORG-DEFAULT";
+  }
+};
+
+function unwrap(body) {
+  return Array.isArray(body) ? body : body?.data || body?.items || [];
+}
 
 export async function fetchBranches(params = {}) {
   const hasParams = params.limit !== undefined || params.offset !== undefined;
   const query = hasParams ? `?${new URLSearchParams(params).toString()}` : "";
 
-  try {
-    const res = await apiGet(`/api/branches${query}`);
-    if (res && res.success) {
-      const items = res.data?.data || res.data || [];
-      if (Array.isArray(items) && items.length > 0) {
-        db.branches
-          .bulkPut(
-            items.map((b) => ({
-              id: String(b.id || `br-${Date.now()}`),
-              organisationId: b.organisation_id || b.organisationId || "ORG-DEFAULT",
-              name: b.name || "Pharmacy Branch",
-              status: b.status || "ACTIVE",
-              address: b.address || "",
-              phone: b.phone || "",
-              isMain: Boolean(b.is_main || b.isMain),
-            }))
-          )
-          .catch((e) => console.warn("[BranchApi] Dexie cache notice:", e?.message));
+  const res = await apiGet(`/api/branches${query}`);
 
-        if (typeof window !== "undefined") {
-          window.localStorage?.setItem("cached_branches", JSON.stringify(items));
-        }
+  if (res && res.success) {
+    const items = unwrap(res.data);
+    const pending = await pendingLocalRows("branches");
+
+    // Keep the local copy equal to the server: add/update what it has, drop what it removed.
+    try {
+      const serverIds = new Set(items.map((b) => String(b.id)));
+      const pendingIds = new Set(pending.map((b) => b.id));
+      const stale = (await db.branches.toArray())
+        .filter((b) => !serverIds.has(b.id) && !pendingIds.has(b.id))
+        .map((b) => b.id);
+      if (stale.length) await db.branches.bulkDelete(stale);
+      if (items.length) {
+        await db.branches.bulkPut(
+          items.map((b) => ({
+            ...b,
+            id: String(b.id),
+            organisationId: b.organisation_id || b.organisationId || orgId(),
+            isMain: Boolean(b.is_main || b.isMain),
+          })),
+        );
       }
-      return res;
+    } catch (e) {
+      console.warn("[BranchApi] Local cache notice:", e?.message);
     }
-  } catch (err) {
-    console.warn("[BranchApi] Online fetchBranches failed, reading local database:", err?.message);
+
+    const merged = [...pending, ...items];
+    const data = Array.isArray(res.data)
+      ? merged
+      : { ...res.data, count: merged.length, data: merged };
+    return { ...res, data };
   }
 
-  // Resilient Offline Fallback
+  // The server answered but refused (401/403/500): report it, don't show a fake empty list.
+  if (res && !res.isOffline) return res;
+
+  // Offline: what is stored on this device
+  let local = [];
   try {
-    const localBranches = await db.branches.toArray();
-    if (localBranches && localBranches.length > 0) {
-      return {
-        success: true,
-        isOffline: true,
-        data: localBranches.map((b) => ({
-          ...b,
-          facility_type: b.facilityType || "RETAIL_DISPENSARY",
-        })),
-      };
-    }
-
-    if (typeof window !== "undefined") {
-      const cached = window.localStorage?.getItem("cached_branches");
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return { success: true, isOffline: true, data: parsed };
-        }
-      }
-    }
-  } catch (offlineErr) {
-    console.warn("[BranchApi] Offline fallback error:", offlineErr?.message);
+    local = await db.branches.toArray();
+  } catch (e) {
+    console.warn("[BranchApi] Local read notice:", e?.message);
   }
+  const pendingIds = new Set((await pendingLocalRows("branches")).map((b) => b.id));
+  local = local.map((b) => ({
+    ...b,
+    facility_type: b.facility_type || b.facilityType || "RETAIL_DISPENSARY",
+    isOfflinePending: pendingIds.has(b.id),
+  }));
 
-  // Seed canonical branches into Dexie so they persist offline
-  db.branches
-    .bulkPut(
-      CANONICAL_BRANCHES.map((b) => ({
-        id: b.id,
-        organisationId: "ORG-DEFAULT",
-        name: b.name,
-        status: b.status,
-        address: b.address,
-        phone: b.phone,
-        isMain: b.isMain,
-      }))
-    )
-    .catch(() => {});
-
-  return {
-    success: true,
-    isOffline: true,
-    data: CANONICAL_BRANCHES,
-  };
+  return { success: true, isOffline: true, data: { success: true, count: local.length, data: local } };
 }
 
 export async function fetchBranchById(id) {
-  try {
-    const res = await apiGet(`/api/branches/${id}`);
-    if (res && res.success) return res;
-  } catch (err) {}
+  const res = await apiGet(`/api/branches/${id}`);
+  if (res && res.success) return res;
+  if (res && !res.isOffline) return res;
 
   const local = await db.branches.get(String(id)).catch(() => null);
-  if (local) {
-    return { success: true, isOffline: true, data: local };
-  }
-  return { success: false, error: "Branch not found offline" };
+  if (local) return { success: true, isOffline: true, data: local };
+  return { success: false, error: "Branch not found on this device" };
 }
 
 export async function createBranch(payload) {
-  const localId = `branch-local-${Date.now()}`;
-  const localBranch = {
+  const localId = newLocalId("branch");
+  const localRecord = {
+    ...payload,
     id: localId,
-    organisationId: payload.organisationId || "ORG-DEFAULT",
+    organisationId: payload.organisationId || orgId(),
     name: payload.name || "New Branch",
     status: payload.status || "ACTIVE",
     address: payload.address || "",
     phone: payload.phone || "",
     isMain: false,
-    facility_type: payload.facilityType || "RETAIL_DISPENSARY",
+    facility_type: payload.facilityType || payload.facility_type || "RETAIL_DISPENSARY",
   };
-
-  try {
-    await db.branches.put(localBranch);
-    await db.sync_outbox.add({
-      table: "branches",
-      action: "INSERT",
-      entityId: localId,
-      payload,
-      status: "PENDING",
-      createdAt: new Date().toISOString(),
-    });
-  } catch (e) {
-    console.warn("[BranchApi] Offline save notice:", e?.message);
-  }
-
-  try {
-    const res = await apiPost("/api/branches", payload);
-    if (res && res.success) return res;
-  } catch (err) {
-    console.warn("[BranchApi] Online createBranch failed, queued offline:", err?.message);
-  }
-
-  return {
-    success: true,
-    isOffline: true,
-    data: localBranch,
-    message: "Branch saved offline and queued for cloud sync.",
-  };
+  return mutate({
+    table: "branches",
+    action: "INSERT",
+    method: "POST",
+    url: "/api/branches",
+    payload,
+    entityId: localId,
+    localRecord,
+  });
 }
 
 export async function updateBranch(id, payload) {
-  try {
-    await db.branches.update(String(id), { ...payload }).catch(() => {});
-    await db.sync_outbox.add({
-      table: "branches",
-      action: "UPDATE",
-      entityId: String(id),
-      payload,
-      status: "PENDING",
-      createdAt: new Date().toISOString(),
-    });
-  } catch (e) {}
-
-  try {
-    const res = await apiPut(`/api/branches/${id}`, payload);
-    if (res && res.success) return res;
-  } catch (err) {}
-
-  return { success: true, isOffline: true, data: { id, ...payload } };
+  const res = await mutate({
+    table: "branches",
+    action: "UPDATE",
+    method: "PUT",
+    url: `/api/branches/${id}`,
+    payload,
+    entityId: String(id),
+    localChanges: payload,
+  });
+  if (res.success && !res.isOffline) {
+    db.branches.update(String(id), { ...payload }).catch(() => {});
+  }
+  return res;
 }
 
 export async function updateBranchStatus(id, status) {
-  try {
-    await db.branches.update(String(id), { status }).catch(() => {});
-  } catch (e) {}
-
-  try {
-    return await apiPut(`/api/branches/${id}/status`, { status });
-  } catch (err) {
-    return { success: true, isOffline: true, data: { id, status } };
+  const res = await mutate({
+    table: "branches",
+    action: "UPDATE",
+    method: "PUT",
+    url: `/api/branches/${id}/status`,
+    payload: { status },
+    entityId: String(id),
+    localChanges: { status },
+  });
+  if (res.success && !res.isOffline) {
+    db.branches.update(String(id), { status }).catch(() => {});
   }
+  return res;
 }
 
 export async function deleteBranch(id) {
-  try {
-    await db.branches.delete(String(id)).catch(() => {});
-  } catch (e) {}
-
-  try {
-    return await apiDelete(`/api/branches/${id}`);
-  } catch (err) {
-    return { success: true, isOffline: true, message: "Deleted locally." };
+  const res = await mutate({
+    table: "branches",
+    action: "DELETE",
+    method: "DELETE",
+    url: `/api/branches/${id}`,
+    entityId: String(id),
+  });
+  if (res.success && !res.isOffline) {
+    db.branches.delete(String(id)).catch(() => {});
   }
+  return res;
 }

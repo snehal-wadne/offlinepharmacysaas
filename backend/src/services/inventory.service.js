@@ -69,7 +69,7 @@ const getInventory = async ({
         AND (p.is_active IS NULL OR p.is_active = TRUE)
         ${branchClause}
         ${searchClause}
-      ORDER BY COALESCE(ib.updated_at, p.updated_at) DESC, COALESCE(ib.created_at, p.created_at) DESC
+      ORDER BY COALESCE(ib.updated_at, p.updated_at) DESC, COALESCE(ib.created_at, p.created_at) DESC, ib.id, p.id
       LIMIT $${limitIdx} OFFSET $${offsetIdx};
     `;
 
@@ -1032,6 +1032,7 @@ module.exports = {
   getInventory,
   getInventorySummary,
   saveOrUpdateInventory,
+  saveInventoryEntry: saveOrUpdateInventory,
   deleteInventoryEntry,
   recordStockMovement,
   getStockMovements,

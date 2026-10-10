@@ -25,8 +25,13 @@ export default function HeldBillsScreen({
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
 
-  const { heldBills, resumeDraftBill, discardHeldBill, clearAllHeldBills } =
+  const { heldBills, resumeDraftBill, discardHeldBill, clearAllHeldBills, refreshHeldBills } =
     usePos();
+
+  // Always show every saved draft: re-read them whenever this page is opened.
+  useEffect(() => {
+    if (typeof refreshHeldBills === "function") refreshHeldBills();
+  }, []);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDateFilter, setSelectedDateFilter] = useState("All Dates");

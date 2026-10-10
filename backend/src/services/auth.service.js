@@ -31,6 +31,39 @@ class AuthService {
   /**
    * Authenticate with email and password via Supabase Auth & PostgreSQL
    */
+  /**
+   * Public lookup used by the staff sign-up form: given a pharmacy code, return that
+   * pharmacy's active branches (id, name, city only) so the new staff member can pick one.
+   */
+  async getBranchesByPharmacyCode(code) {
+    const clean = String(code || "").trim();
+    if (!clean) {
+      const err = new Error("Pharmacy code is required.");
+      err.statusCode = 400;
+      throw err;
+    }
+    const orgRes = await pool.query(
+      "SELECT id, name, pharmacy_mode FROM organisations WHERE LOWER(pharmacy_code) = LOWER($1) AND status = 'ACTIVE' LIMIT 1;",
+      [clean],
+    );
+    if (orgRes.rows.length === 0) {
+      const err = new Error("No pharmacy found for that pharmacy code.");
+      err.statusCode = 404;
+      throw err;
+    }
+    const org = orgRes.rows[0];
+    const branchRes = await pool.query(
+      "SELECT id, name, city FROM branches WHERE organisation_id = $1 AND status = 'ACTIVE' ORDER BY created_at ASC;",
+      [org.id],
+    );
+    return {
+      success: true,
+      pharmacyName: org.name,
+      pharmacyMode: org.pharmacy_mode || "single",
+      branches: branchRes.rows,
+    };
+  }
+
   async login({ emailOrPhone, password, email, branchId }) {
     const identifier = emailOrPhone || email;
     if (!identifier || !password) {
@@ -508,45 +541,41 @@ class AuthService {
 
       const passwordHash = await bcrypt.hash(password, 10);
 
-      // Link to organization
-      let orgId = null;
-      let orgName = "Pharmacy";
-      if (userData.pharmacyCode) {
-        const orgByCode = await pool.query(
-          "SELECT id, name FROM organisations WHERE LOWER(pharmacy_code) = LOWER($1) OR LOWER(name) LIKE '%' || LOWER($1) || '%' OR id::text = $1 LIMIT 1;",
-          [userData.pharmacyCode.trim()],
-        );
-        if (orgByCode.rows.length > 0) {
-          orgId = orgByCode.rows[0].id;
-          orgName = orgByCode.rows[0].name;
-        }
+      // Link to the pharmacy the staff member chose. The pharmacy code is mandatory:
+      // falling back to "the first pharmacy" would drop people into another tenant.
+      const pharmacyCode = String(userData.pharmacyCode || "").trim();
+      if (!pharmacyCode) {
+        throw new Error("Pharmacy code is required. Ask your pharmacy administrator for it.");
       }
-      if (!orgId) {
-        const defaultOrg = await pool.query(
-          "SELECT id, name FROM organisations WHERE status = 'ACTIVE' ORDER BY created_at ASC LIMIT 1;",
-        );
-        orgId = defaultOrg.rows[0]?.id;
-        orgName = defaultOrg.rows[0]?.name || "Pharmacy";
+      const orgByCode = await pool.query(
+        "SELECT id, name, pharmacy_mode FROM organisations WHERE LOWER(pharmacy_code) = LOWER($1) AND status = 'ACTIVE' LIMIT 1;",
+        [pharmacyCode],
+      );
+      if (orgByCode.rows.length === 0) {
+        throw new Error("No pharmacy found for that pharmacy code. Please check it and try again.");
       }
+      const orgId = orgByCode.rows[0].id;
+      const orgName = orgByCode.rows[0].name || "Pharmacy";
+      const orgPharmacyMode = orgByCode.rows[0].pharmacy_mode || "single";
 
-      // Pick or create first active branch of the organisation
+      // The branch the staff member picked must belong to that pharmacy.
+      // Never auto-create a branch here: only the pharmacy admin does that.
       let branch = null;
-      if (orgId) {
+      if (userData.branchId) {
+        const picked = await pool.query(
+          "SELECT id, name, branch_code AS \"branchCode\" FROM branches WHERE id = $1 AND organisation_id = $2 AND status = 'ACTIVE' LIMIT 1;",
+          [userData.branchId, orgId],
+        );
+        if (picked.rows.length === 0) {
+          throw new Error("The selected branch does not belong to that pharmacy.");
+        }
+        branch = picked.rows[0];
+      } else {
         const branchRes = await pool.query(
           "SELECT id, name, branch_code AS \"branchCode\" FROM branches WHERE organisation_id = $1 AND status = 'ACTIVE' ORDER BY created_at ASC LIMIT 1;",
           [orgId],
         );
         branch = branchRes.rows[0] || null;
-
-        if (!branch) {
-          const newBranch = await pool.query(
-            `INSERT INTO branches (organisation_id, name, branch_code, status)
-             VALUES ($1, 'Main Branch', 'BR-01', 'ACTIVE')
-             RETURNING id, name, branch_code AS "branchCode";`,
-            [orgId],
-          ).catch(() => null);
-          branch = newBranch?.rows?.[0] || null;
-        }
       }
 
       // Seed / ensure system roles exist for this organisation
@@ -667,10 +696,13 @@ class AuthService {
           role: assignedRoleIdentifier,
           roleName: assignedRoleName,
           accessLevel: roleRecord?.clearance_level || "Clinical Dispensing",
+          isOwner: false,
+          pharmacyMode: orgPharmacyMode,
           organisationId: orgId,
           organisationName: orgName,
           branchId: branch?.id || null,
           branchName: branch?.name || null,
+          branch: branch ? { id: branch.id, name: branch.name, branchCode: branch.branchCode } : null,
           hasBranch: Boolean(branch?.id),
         },
       };
@@ -1919,6 +1951,12 @@ class AuthService {
         }
 
         if (effectiveRoleId) {
+          // Only one primary branch per member: demote earlier assignments first,
+          // otherwise login/me can resolve to the previous branch.
+          await client.query(
+            "UPDATE branch_assignments SET is_primary = FALSE WHERE membership_id = $1 AND branch_id <> $2;",
+            [membershipId, branchId],
+          );
           await client.query(
             `INSERT INTO branch_assignments (membership_id, branch_id, role_id, is_primary)
              VALUES ($1, $2, $3, TRUE)

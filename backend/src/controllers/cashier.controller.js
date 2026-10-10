@@ -1,3 +1,4 @@
+const auditService = require("../services/audit.service");
 /**
  * Cashier Controller
  *
@@ -465,6 +466,19 @@ const createSale = async (req, res) => {
       cashierId: authCtx.cashierId,
     });
     const result = await cashierService.createSale(saleData);
+    const sale = result?.data || result || {};
+    auditService.logFromRequest(req, {
+      action: "SALE_COMPLETED",
+      entityType: "INVOICE",
+      entityId: sale.id || sale.invoiceId,
+      branchId: authCtx.branchId,
+      metadata: {
+        invoiceNumber: sale.invoiceNumber || sale.invoiceNo,
+        totalAmount: sale.totalAmount ?? saleData.totalAmount,
+        customerName: saleData.customerName,
+        reason: `Sale ${sale.invoiceNumber || sale.invoiceNo || ""} completed.`.trim(),
+      },
+    });
     res.status(201).json(result);
   } catch (error) {
     console.error("Error processing sale:", error);
@@ -476,7 +490,9 @@ const createSale = async (req, res) => {
 
 const getRecentSales = async (req, res) => {
   try {
-    const { organisationId, branchId } = await resolveAuthContext(req);
+    // Owners/admins with no branch chosen see every branch; branch staff stay on their own.
+    const organisationId = await getAuthorizedOrgId(req);
+    const branchId = await getAuthorizedBranchId(req, organisationId, { allowAll: true });
     const limit = Number(req.query.limit) || 20;
     const result = await cashierService.getRecentSales(
       organisationId,

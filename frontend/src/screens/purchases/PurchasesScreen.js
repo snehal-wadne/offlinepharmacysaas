@@ -197,11 +197,15 @@ const normalizePurchaseOrder = (po = {}) => {
 const PurchasesScreen = ({
   selectedBranch,
   onNavigate,
+  onShowToast,
+  isMultiBranch = true,
+  routePayload = null,
 }) => {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [isOfflineMode, setIsOfflineMode] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -214,13 +218,18 @@ const PurchasesScreen = ({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const defaultBranchName =
+    (selectedBranch && typeof selectedBranch === "object"
+      ? selectedBranch.name
+      : selectedBranch) || (!isMultiBranch ? "Main Store" : "");
+
   // ==========================================================
   // CREATE PO FORM
   // ==========================================================
 
   const [formData, setFormData] = useState({
     supplier: "",
-    branch: "",
+    branch: defaultBranchName,
     medicine: "",
     quantity: "",
     unitCost: "",
@@ -234,6 +243,27 @@ const PurchasesScreen = ({
   });
 
   const [taxRate, setTaxRate] = useState("0");
+
+  useEffect(() => {
+    if (routePayload) {
+      const sup =
+        typeof routePayload === "string"
+          ? routePayload
+          : routePayload.supplier?.name ||
+            routePayload.supplier ||
+            routePayload.supplierName ||
+            routePayload.name ||
+            "";
+      if (sup) {
+        setFormData((prev) => ({
+          ...prev,
+          supplier: sup,
+          branch: prev.branch || defaultBranchName,
+        }));
+        setShowCreateModal(true);
+      }
+    }
+  }, [routePayload, defaultBranchName]);
 
   // ==========================================================
   // LOAD PURCHASES
@@ -261,17 +291,24 @@ const PurchasesScreen = ({
         branchId: branchParam,
       });
 
-      console.log("========================================");
-      console.log("PURCHASE API RESPONSE");
-      console.log("========================================");
-      console.log(res);
+      const isOffline = Boolean(
+        res?.isOffline ||
+          (typeof navigator !== "undefined" && !navigator.onLine)
+      );
+      setIsOfflineMode(isOffline);
 
       const backendData =
-        res &&
-        res.data &&
-        Array.isArray(res.data.data)
-          ? res.data.data
-          : [];
+        res && res.data
+          ? Array.isArray(res.data.data)
+            ? res.data.data
+            : Array.isArray(res.data)
+              ? res.data
+              : Array.isArray(res.data.items)
+                ? res.data.items
+                : []
+          : Array.isArray(res)
+            ? res
+            : [];
 
       console.log("BACKEND PURCHASE DATA:", backendData);
 
@@ -484,6 +521,22 @@ const PurchasesScreen = ({
         orders.length + 1
       ).padStart(3, "0")}`;
 
+      const activeBranchName =
+        formData.branch?.trim() ||
+        (selectedBranch && typeof selectedBranch === "object"
+          ? selectedBranch.name
+          : selectedBranch) ||
+        (!isMultiBranch ? "Main Store" : "Main Branch");
+
+      const activeBranchId =
+        selectedBranch &&
+        typeof selectedBranch === "object" &&
+        selectedBranch.id &&
+        selectedBranch.id !== "all" &&
+        selectedBranch.id !== "main"
+          ? selectedBranch.id
+          : undefined;
+
       const payload = {
         purchaseNumber: poNum,
 
@@ -491,8 +544,10 @@ const PurchasesScreen = ({
           formData.supplier,
 
         branchName:
-          formData.branch ||
-          "Main Branch",
+          activeBranchName,
+
+        branchId:
+          activeBranchId,
 
         expectedDate:
           formData.expectedDate ||
@@ -646,8 +701,7 @@ const PurchasesScreen = ({
             : "PENDING",
 
         branch:
-          formData.branch ||
-          "Main Branch",
+          activeBranchName,
 
         medicine:
           formData.medicine,
@@ -727,7 +781,7 @@ const PurchasesScreen = ({
   const resetForm = () => {
     setFormData({
       supplier: "",
-      branch: "",
+      branch: defaultBranchName,
       medicine: "",
       quantity: "",
       unitCost: "",
@@ -1756,6 +1810,14 @@ const PurchasesScreen = ({
         </TouchableOpacity>
       </View>
 
+      {/* Offline Limitation / Resilient Notice */}
+      {isOfflineMode && (
+        <View style={styles.offlineBanner}>
+          <Text style={styles.offlineBannerText}>
+            ⚡ Offline Mode — Showing locally cached purchase orders. New orders are saved offline and will automatically sync when connected.
+          </Text>
+        </View>
+      )}
 
       {/* ======================================================
           SUMMARY
@@ -2001,30 +2063,42 @@ const PurchasesScreen = ({
               />
 
 
-              <Text
-                style={
-                  styles.inputLabel
-                }
-              >
-                Branch
-              </Text>
-
-              <TextInput
-                value={
-                  formData.branch
-                }
-                onChangeText={(text) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    branch: text,
-                  }))
-                }
-                style={
-                  styles.input
-                }
-                placeholder="Branch"
-                placeholderTextColor="#77717A"
-              />
+              {!isMultiBranch ? (
+                <View style={{ marginBottom: 12 }}>
+                  <Text style={styles.inputLabel}>Receiving Store</Text>
+                  <View
+                    style={[
+                      styles.input,
+                      {
+                        justifyContent: "center",
+                        backgroundColor: "#F3F4F6",
+                        borderWidth: 1,
+                        borderColor: "#E5E7EB",
+                      },
+                    ]}
+                  >
+                    <Text style={{ color: "#374151", fontWeight: "600", fontSize: 13 }}>
+                      {formData.branch || defaultBranchName || "Single Store (Primary)"}
+                    </Text>
+                  </View>
+                </View>
+              ) : (
+                <>
+                  <Text style={styles.inputLabel}>Branch</Text>
+                  <TextInput
+                    value={formData.branch}
+                    onChangeText={(text) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        branch: text,
+                      }))
+                    }
+                    style={styles.input}
+                    placeholder="Branch name"
+                    placeholderTextColor="#77717A"
+                  />
+                </>
+              )}
 
 
               <Text
@@ -2987,6 +3061,22 @@ const styles = StyleSheet.create({
     color: "#B9829A",
     fontSize: 12,
     fontWeight: "700",
+  },
+  offlineBanner: {
+    backgroundColor: "#FDF8E2",
+    borderColor: "#E6C84F",
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginBottom: 16,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  offlineBannerText: {
+    color: "#7A5A00",
+    fontSize: 13,
+    fontWeight: "600",
   },
 });
 

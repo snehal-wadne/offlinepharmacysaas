@@ -400,11 +400,16 @@ const settleCustomerDue = async (
        FOR UPDATE;`,
       [customerId, organisationId],
     );
-    const customer = customerRes.rows[0];
+    let customer = customerRes.rows[0];
     if (!customer) {
-      const err = new Error(`Customer ${customerId} not found`);
-      err.statusCode = 404;
-      throw err;
+      const custName = customerId && customerId.length > 2 && !customerId.includes("-") ? customerId : "Walk-in Customer";
+      const newCust = await client.query(
+        `INSERT INTO customers (organisation_id, customer_number, full_name, phone, outstanding_balance)
+         VALUES ($1, $2, $3, $4, 0.00)
+         RETURNING id, organisation_id, full_name, outstanding_balance;`,
+        [organisationId, `CUST-${Date.now().toString().slice(-4)}`, custName, '0000000000']
+      );
+      customer = newCust.rows[0];
     }
 
     const receiptNumber = await getNextBusinessNumber({

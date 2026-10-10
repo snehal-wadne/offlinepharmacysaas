@@ -90,12 +90,15 @@ export default function AuditLogScreen({
               ? new Date(l.createdAt).toLocaleString("en-IN")
               : "Recent"),
             branch: l.branch || l.branchName || "Main Branch",
+            branchId: l.branchId || l.metadata?.branchId || null,
             ipAddress: l.ipAddress || "127.0.0.1",
             device: l.device || "Web Browser",
             actor: {
               name: l.actor?.name || l.userName || "Staff User",
               role: l.actor?.role || l.userRole || "Staff",
               email: l.actor?.email || l.userEmail || "",
+              phone: l.actor?.phone || l.userPhone || "",
+              staffId: l.actor?.staffId || l.userStaffId || "",
               avatarInitials:
                 l.actor?.avatarInitials ||
                 (l.userName
@@ -130,14 +133,25 @@ export default function AuditLogScreen({
   const [selectedLog, setSelectedLog] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
 
-  // Branch-scoped base logs
-  const isBranchFiltered = selectedBranch && selectedBranch !== "All Branches";
+  // Branch-scoped base logs. selectedBranch is null ("All Branches"), a name, or { id, name }.
+  const selectedBranchId =
+    typeof selectedBranch === "object" && selectedBranch !== null ? selectedBranch.id : null;
+  const selectedBranchName = String(
+    typeof selectedBranch === "object" && selectedBranch !== null
+      ? selectedBranch.name || ""
+      : selectedBranch || "",
+  ).toLowerCase();
+  const isBranchFiltered =
+    Boolean(selectedBranchId) ||
+    (selectedBranchName &&
+      selectedBranchName !== "all branches" &&
+      selectedBranchName !== "all branches & stores");
   const scopedLogs = isBranchFiltered
     ? logs.filter((l) => {
+        if (selectedBranchId && l.branchId) return String(l.branchId) === String(selectedBranchId);
         if (!l.branch) return true;
-        const b = l.branch.toLowerCase();
-        const s = selectedBranch.toLowerCase();
-        return b.includes(s) || s.includes(b);
+        const b = String(l.branch).toLowerCase();
+        return !selectedBranchName || b.includes(selectedBranchName) || selectedBranchName.includes(b);
       })
     : logs;
 
@@ -165,13 +179,13 @@ export default function AuditLogScreen({
     const q = searchQuery.toLowerCase().trim();
     const matchesSearch =
       !q ||
-      log.id.toLowerCase().includes(q) ||
-      log.actor.name.toLowerCase().includes(q) ||
-      log.actor.role.toLowerCase().includes(q) ||
-      log.actionLabel.toLowerCase().includes(q) ||
-      log.actionType.toLowerCase().includes(q) ||
-      log.entityRef.toLowerCase().includes(q) ||
-      (log.reason && log.reason.toLowerCase().includes(q));
+      String(log.id || "").toLowerCase().includes(q) ||
+      String(log.actor?.name || "").toLowerCase().includes(q) ||
+      String(log.actor?.role || "").toLowerCase().includes(q) ||
+      String(log.actionLabel || "").toLowerCase().includes(q) ||
+      String(log.actionType || "").toLowerCase().includes(q) ||
+      String(log.entityRef || "").toLowerCase().includes(q) ||
+      String(log.reason || "").toLowerCase().includes(q);
 
     let matchesKpi = true;
     if (activeKpiFilter === "CRITICAL") {
@@ -866,6 +880,16 @@ export default function AuditLogScreen({
                     <Text style={styles.metaSubVal}>
                       {selectedLog.actor.email}
                     </Text>
+                    {selectedLog.actor.phone ? (
+                      <Text style={styles.metaSubVal}>
+                        📞 {selectedLog.actor.phone}
+                      </Text>
+                    ) : null}
+                    {selectedLog.actor.staffId ? (
+                      <Text style={styles.metaSubVal}>
+                        Staff ID: {selectedLog.actor.staffId}
+                      </Text>
+                    ) : null}
                   </View>
 
                   <View style={styles.metaCard}>

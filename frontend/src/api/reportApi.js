@@ -5,6 +5,13 @@
  */
 
 import { apiGet } from "./apiClient";
+import {
+  buildOfflineInventoryReport,
+  buildOfflineExpiryReport,
+  buildOfflineProfitLoss,
+  buildOfflineSalesReport,
+  asApiResponse,
+} from "../offline/offlineReports";
 
 const cleanBranchId = (branchId) => {
   const bid =
@@ -30,7 +37,11 @@ export async function fetchSalesReport(params = {}) {
   if (params.startDate) query.append("startDate", params.startDate);
   if (params.endDate) query.append("endDate", params.endDate);
   const queryString = query.toString() ? `?${query.toString()}` : "";
-  return apiGet(`/reports/sales${queryString}`);
+  const res = await apiGet(`/reports/sales${queryString}`);
+  if (res.success || !res.isOffline) return res;
+  // Sales screens read the report body directly (res.data.overview), so unwrap one level.
+  const offline = asApiResponse(await buildOfflineSalesReport({ ...params, branchId: bid }));
+  return { ...offline, data: offline.data.data };
 }
 
 /**
@@ -41,7 +52,10 @@ export async function fetchInventoryReport(params = {}) {
   const bid = cleanBranchId(params.branchId);
   if (bid) query.append("branchId", bid);
   const queryString = query.toString() ? `?${query.toString()}` : "";
-  return apiGet(`/reports/inventory${queryString}`);
+  const res = await apiGet(`/reports/inventory${queryString}`);
+  if (res.success || !res.isOffline) return res;
+  // Offline: build the report from the stock stored on this device
+  return asApiResponse(await buildOfflineInventoryReport({ branchId: bid }));
 }
 
 /**
@@ -54,7 +68,9 @@ export async function fetchProfitLossReport(params = {}) {
   if (params.startDate) query.append("startDate", params.startDate);
   if (params.endDate) query.append("endDate", params.endDate);
   const queryString = query.toString() ? `?${query.toString()}` : "";
-  return apiGet(`/reports/profit-loss${queryString}`);
+  const res = await apiGet(`/reports/profit-loss${queryString}`);
+  if (res.success || !res.isOffline) return res;
+  return asApiResponse(await buildOfflineProfitLoss({ ...params, branchId: bid }));
 }
 
 /**
@@ -66,7 +82,9 @@ export async function fetchExpiryReport(params = {}) {
   if (bid) query.append("branchId", bid);
   if (params.days) query.append("days", params.days);
   const queryString = query.toString() ? `?${query.toString()}` : "";
-  return apiGet(`/reports/expiry${queryString}`);
+  const res = await apiGet(`/reports/expiry${queryString}`);
+  if (res.success || !res.isOffline) return res;
+  return asApiResponse(await buildOfflineExpiryReport({ branchId: bid }));
 }
 
 /**
@@ -79,5 +97,5 @@ export async function fetchGstReport(params = {}) {
   if (params.startDate) query.append("startDate", params.startDate);
   if (params.endDate) query.append("endDate", params.endDate);
   const queryString = query.toString() ? `?${query.toString()}` : "";
-  return apiGet(`/reports/gst${queryString}`);
+  return apiGet(`/reports/gst${queryString}`, { offlineCache: true });
 }

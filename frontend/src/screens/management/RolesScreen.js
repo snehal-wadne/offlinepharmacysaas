@@ -75,21 +75,31 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
           fetchRoles(),
         ]);
 
-        const staff = usersRes?.success
-          ? usersRes.data.data.map((u) => ({
-            id: u.id,
-            name: u.name || u.email || "Staff",
-            email: u.email || "",
-            role: u.role || "Staff",
-            roleId: u.role_id,
-            branch: u.primaryBranch || "Main Branch",
-            status: u.status === "ACTIVE" ? "Active" : "Inactive",
-          }))
-          : [];
+        // The staff list arrives as { data: { data: [...] } } online and { data: [...] } offline.
+        const userRows = Array.isArray(usersRes?.data?.data)
+          ? usersRes.data.data
+          : Array.isArray(usersRes?.data)
+            ? usersRes.data
+            : [];
+        const staff = userRows.map((u) => ({
+          id: u.id,
+          name: u.name || u.email || "Staff",
+          email: u.email || "",
+          phone: u.phone || "",
+          staffId: u.staffId || u.staff_id || "",
+          role: u.role || "Staff",
+          roleId: u.role_id || u.roleId,
+          branch: u.primaryBranch || "Main Branch",
+          status: String(u.status || "").toUpperCase() === "ACTIVE" ? "Active" : "Inactive",
+        }));
 
         if (!isMounted) return;
         setStaffList(staff);
-        const backendRoles = rolesRes?.success ? rolesRes.data.data : [];
+        const backendRoles = Array.isArray(rolesRes?.data?.data)
+          ? rolesRes.data.data
+          : Array.isArray(rolesRes?.data)
+            ? rolesRes.data
+            : [];
         setRoles(
           backendRoles.map((r) =>
             mapBackendRole(
@@ -796,9 +806,15 @@ export default function RolesScreen({ onShowToast, onNavigate }) {
                         🏛️ {staff.branch || staff.primaryBranch}
                       </Text>
                       <Text style={styles.staffEmailText}>{staff.email}</Text>
+                      {staff.phone ? (
+                        <Text style={styles.staffEmailText}>📞 {staff.phone}</Text>
+                      ) : null}
+                      {staff.staffId ? (
+                        <Text style={styles.staffEmailText}>ID: {staff.staffId}</Text>
+                      ) : null}
                     </View>
                     <View style={styles.staffActivePill}>
-                      <Text style={styles.staffActiveText}>Active</Text>
+                      <Text style={styles.staffActiveText}>{staff.status || "Active"}</Text>
                     </View>
                   </View>
                 ))

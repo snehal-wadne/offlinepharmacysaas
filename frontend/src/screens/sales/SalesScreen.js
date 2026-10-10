@@ -65,6 +65,24 @@ const EMPTY_CUSTOMER = {
   currentBalance: "₹0.00",
 };
 
+// Customer record (server, local or POS shape) -> the shape the billing screen uses.
+function toPosCustomer(c) {
+  const outstanding = parseFloat(c.balance ?? c.outstandingBalance ?? 0) || 0;
+  return {
+    id: c.id || c.customerId,
+    customerNumber: c.customerNumber || "",
+    name: c.name || c.full_name || "Customer",
+    phone: c.phone || c.mobile || "",
+    email: c.email || "",
+    category: c.category || "Regular",
+    city: c.city || "",
+    address: c.address || "",
+    doctorName: c.doctorName || "",
+    creditLimit: Number(c.creditLimit || 0),
+    currentBalance: c.currentBalance || `\u20b9${outstanding.toFixed(2)}`,
+  };
+}
+
 function readSalesDraft() {
   if (typeof window === "undefined") return {};
   try {
@@ -220,52 +238,54 @@ export default function SalesScreen({
   );
   const [customerModalVisible, setCustomerModalVisible] = useState(false);
   const [customerSearchQuery, setCustomerSearchQuery] = useState("");
+
+  // Always work from the latest customer list (includes customers just added, even offline).
+  const reloadCustomers = async () => {
+    try {
+      const res = await fetchCustomers();
+      const rows = Array.isArray(res?.data?.data)
+        ? res.data.data
+        : Array.isArray(res?.data)
+          ? res.data
+          : [];
+      const fresh = rows.map(toPosCustomer).filter((c) => c.id);
+      if (fresh.length > 0) setCustomers(fresh);
+      return fresh;
+    } catch (err) {
+      console.warn("Failed to refresh customers for POS:", err?.message);
+      return [];
+    }
+  };
+
+  useEffect(() => {
+    reloadCustomers();
+  }, []);
+
+  useEffect(() => {
+    if (customerModalVisible) reloadCustomers();
+  }, [customerModalVisible]);
+
+  // Customer handed over from the Customers page: select exactly that customer, once.
+  const appliedCustomerIdRef = useRef(null);
   useEffect(() => {
     if (!selectedCustomerId) return;
+    if (appliedCustomerIdRef.current === String(selectedCustomerId)) return;
 
     let isMounted = true;
     (async () => {
-      let customer = (customers || []).find(
-        (c) =>
-          String(c.id) === String(selectedCustomerId) ||
-          String(c.customerNumber) === String(selectedCustomerId),
-      );
+      const matches = (c) =>
+        String(c.id) === String(selectedCustomerId) ||
+        String(c.customerNumber) === String(selectedCustomerId);
 
+      let customer = (customers || []).find(matches);
       if (!customer) {
-        try {
-          const res = await fetchCustomers({ search: selectedCustomerId });
-          const rawList = Array.isArray(res?.data?.data)
-            ? res.data.data
-            : Array.isArray(res?.data)
-              ? res.data
-              : Array.isArray(res)
-                ? res
-                : [];
-          const match =
-            rawList.find(
-              (c) =>
-                String(c.id) === String(selectedCustomerId) ||
-                String(c.customerNumber) === String(selectedCustomerId),
-            ) || rawList[0];
-
-          if (match) {
-            customer = {
-              id: match.id,
-              name: match.name || match.full_name || "Customer",
-              phone: match.phone || match.mobile || "",
-              currentBalance:
-                match.currentBalance ||
-                `₹${parseFloat(match.balance || match.outstandingBalance || 0).toFixed(2)}`,
-              category: match.category || "Regular",
-            };
-          }
-        } catch (err) {
-          console.warn("Failed to fetch customer for POS:", err);
-        }
+        const fresh = await reloadCustomers();
+        customer = fresh.find(matches);
       }
 
       if (isMounted && customer) {
-        setSelectedCustomer(customer);
+        appliedCustomerIdRef.current = String(selectedCustomerId);
+        setSelectedCustomer(toPosCustomer(customer));
         setCustomCustomerInput(customer.name || "");
       }
     })();
@@ -353,49 +373,71 @@ const [splitUpi, setSplitUpi] = useState("");
     upiRefNumber,
   ]);
 
-  // Load Resumed Draft whenever activeResumedDraft is set
+  // Load Resumed Draft whenever activeResumedDraft is set: customer, every medicine, discount.
   useEffect(() => {
-    if (activeResumedDraft) {
-      // 1. Populate Customer
-      const custName = activeResumedDraft.customerName || "Walk-in Customer";
-      const custPhone = activeResumedDraft.customerPhone || "";
+    if (!activeResumedDraft) return;
+
+    // 1. Customer: restore the real customer record when we can find it, otherwise the saved name/phone
+    const custName = activeResumedDraft.customerName || "Walk-in Customer";
+    const custPhone = activeResumedDraft.customerPhone || "";
+    const knownCustomer = (customers || []).find(
+      (c) =>
+        (activeResumedDraft.customerId && String(c.id) === String(activeResumedDraft.customerId)) ||
+        (custPhone && c.phone && c.phone === custPhone) ||
+        (custName !== "Walk-in Customer" && c.name === custName),
+    );
+    if (knownCustomer) {
+      setSelectedCustomer(toPosCustomer(knownCustomer));
+    } else if (custName === "Walk-in Customer") {
+      setSelectedCustomer(EMPTY_CUSTOMER);
+    } else {
       setSelectedCustomer({
-        id: "DRAFT-CUST",
+        id: activeResumedDraft.customerId || "DRAFT-CUST",
         name: custName,
         phone: custPhone,
         currentBalance: "₹0.00",
       });
-      setCustomCustomerInput(custPhone || custName);
-
-      // 2. Populate Cart Items
-      if (activeResumedDraft.items && activeResumedDraft.items.length > 0) {
-        setCart(
-          activeResumedDraft.items.map((item) => ({
-            ...item,
-            id: item.id || `PRD-${Math.random().toString().slice(-4)}`,
-            stock: item.stock || 100,
-            sellingPrice: item.sellingPrice || item.price || 0,
-            qty: item.qty || 1,
-            gstRate: item.gstRate || 5,
-            batch: item.batch || "B001",
-          })),
-        );
-      }
-
-      // 3. Populate Discount if any
-      if (activeResumedDraft.discountPercent) {
-        setBillDiscountInput(String(activeResumedDraft.discountPercent));
-        setAppliedDiscount(Number(activeResumedDraft.discountPercent));
-      }
-
-      // 4. Show top notification banner (Image 4 top banner)
-      const bannerText = `Draft ${activeResumedDraft.billNo || activeResumedDraft.holdId} loaded for ${custName}`;
-      setTopToastBanner(bannerText);
-
-      if (onShowToast) {
-        onShowToast(bannerText);
-      }
     }
+    setCustomCustomerInput(custName === "Walk-in Customer" ? "" : custName);
+
+    // 2. Medicines: put back exactly what was saved (no invented stock or batch)
+    const savedItems = Array.isArray(activeResumedDraft.items)
+      ? activeResumedDraft.items
+      : Array.isArray(activeResumedDraft.cart)
+        ? activeResumedDraft.cart
+        : [];
+    if (savedItems.length > 0) {
+      setCart(
+        savedItems.map((item, idx) => {
+          const live = (products || []).find(
+            (p) => String(p.id) === String(item.id || item.productId) || p.name === item.name,
+          );
+          const qty = Number(item.qty || item.quantity || 1);
+          return {
+            ...item,
+            id: item.id || item.productId || live?.id || `PRD-${idx}`,
+            name: item.name || item.medicineName || live?.name,
+            qty,
+            sellingPrice: Number(item.sellingPrice ?? item.price ?? live?.sellingPrice ?? 0),
+            gstRate: item.gstRate ?? live?.gstRate ?? 5,
+            batch: item.batch || item.batchNo || live?.batch || "",
+            // Current stock if the product is known, so the quantity buttons behave correctly
+            stock: live?.stock ?? item.stock ?? qty,
+          };
+        }),
+      );
+    }
+
+    // 3. Discount
+    if (activeResumedDraft.discountPercent) {
+      setBillDiscountInput(String(activeResumedDraft.discountPercent));
+      setAppliedDiscount(Number(activeResumedDraft.discountPercent));
+    }
+
+    // 4. Banner
+    const bannerText = `Draft ${activeResumedDraft.billNo || activeResumedDraft.holdId} loaded for ${custName} (${savedItems.length} item${savedItems.length === 1 ? "" : "s"})`;
+    setTopToastBanner(bannerText);
+    if (onShowToast) onShowToast(bannerText);
   }, [activeResumedDraft]);
 
   // Popular medicines (Image 1 quick add list)
@@ -542,61 +584,54 @@ const handleHoldBillAction = async () => {
     const custPhone =
       selectedCustomer.phone ||
       (customCustomerInput.includes("+") ? customCustomerInput : "");
+    const realCustomerId =
+      selectedCustomer?.id && !["WALK-IN", "DRAFT-CUST"].includes(selectedCustomer.id)
+        ? selectedCustomer.id
+        : null;
+    const resumedId = activeResumedDraft?.holdId || activeResumedDraft?.billNo;
 
     const billPayload = {
       customerName: custName,
       customerPhone: custPhone,
+      customerId: realCustomerId,
       items: cart,
       subtotal: totals.subtotal,
       tax: totals.includedTax,
       discountPercent: appliedDiscount,
       total: totals.grandTotal,
-      note: activeResumedDraft
-        ? "Draft updated from New Sale"
-        : "Saved as draft from New Sale",
-      ...(activeResumedDraft?.holdId || activeResumedDraft?.billNo
-        ? { holdId: activeResumedDraft.holdId || activeResumedDraft.billNo }
-        : {}),
+      note: activeResumedDraft ? "Draft updated from New Sale" : "Saved as draft from New Sale",
+      ...(resumedId ? { holdId: resumedId } : {}),
     };
 
     try {
-      // 1. Call Backend API
-      const responseData = await saveHeldBill(billPayload);
-      
-      const savedDraftId =
-        responseData?.holdId || responseData?.id || responseData?.billNo || "DRAFT";
+      // 1. Try the server once. If it can't take it (offline, error) the draft stays on this device.
+      const serverRes = await saveHeldBill(billPayload);
+      const serverId = serverRes?.synced ? serverRes.holdId || serverRes.billNo : null;
 
-      // 2. Sync locally if holdBill state/context helper exists
-      if (typeof holdBill === "function") {
-        holdBill(
-          billPayload,
-          activeResumedDraft?.holdId || activeResumedDraft?.billNo
+      // 2. Always keep it in the POS draft list (persisted on this device)
+      const draftId =
+        typeof holdBill === "function"
+          ? holdBill(billPayload, resumedId, { id: serverId, synced: Boolean(serverId) })
+          : serverId || "DRAFT";
+
+      if (onShowToast) {
+        onShowToast(
+          serverId
+            ? `✓ Bill saved as draft #${draftId} in Hold Bills!`
+            : `✓ Bill saved as draft #${draftId} on this device.`,
         );
       }
 
-      // 3. Show Success Toast
-      if (onShowToast) {
-        onShowToast(`✓ Bill saved as draft #${savedDraftId} in Hold Bills!`);
-      }
-
-      // 4. Reset Local UI State
+      // 3. Reset the screen for the next customer
       setCart([]);
       setCustomCustomerInput("");
-      setSelectedCustomer({
-        id: "WALK-IN",
-        name: "Walk-in Customer",
-        phone: "",
-        currentBalance: "₹0.00",
-      });
+      setSelectedCustomer(EMPTY_CUSTOMER);
       setTopToastBanner("");
-      
-      if (typeof clearSalesDraft === "function") {
-        clearSalesDraft();
-      }
+      if (typeof clearSalesDraft === "function") clearSalesDraft();
     } catch (error) {
       console.error("Error holding bill:", error);
       if (onShowToast) {
-        onShowToast(`❌ Failed to hold bill: ${error.message || "Server Error"}`);
+        onShowToast(`❌ Failed to hold bill: ${error.message || "unexpected error"}`);
       }
     }
   };
@@ -645,8 +680,8 @@ const handleHoldBillAction = async () => {
         draftId: activeResumedDraft?.holdId || activeResumedDraft?.billNo,
         cashTendered: tendered,
         changeDue: Math.max(0, tendered - totals.grandTotal),
-        cashier: "Cashier 01",
-        branch: "Main Branch",
+        cashier: undefined, // filled in from the signed-in user
+        branch: undefined, // filled in from the selected branch
         attachedPrescription: attachedPrescription
           ? { ...attachedPrescription }
           : null,
@@ -1316,11 +1351,26 @@ const handleHoldBillAction = async () => {
                 onPress={() => setCustomerModalVisible(true)}
                 style={styles.customerPickerBtn}
               >
-                <Text style={styles.customerPickerName}>
-  {customCustomerInput.trim() ||
-    selectedCustomer?.name ||
-    "Walk-in Customer"}
-</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.customerPickerName}>
+                    {customCustomerInput.trim() ||
+                      selectedCustomer?.name ||
+                      "Walk-in Customer"}
+                  </Text>
+                  {selectedCustomer?.id !== "WALK-IN" && selectedCustomer?.id !== "DRAFT-CUST" ? (
+                    <Text style={{ fontSize: 11, color: "#77717A", marginTop: 2 }} numberOfLines={1}>
+                      {[
+                        selectedCustomer?.phone || null,
+                        selectedCustomer?.category || null,
+                        selectedCustomer?.currentBalance
+                          ? `Due ${selectedCustomer.currentBalance}`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join("  \u2022  ")}
+                    </Text>
+                  ) : null}
+                </View>
                 <Text style={styles.customerPickerArrow}>▾</Text>
               </Pressable>
             </View>
@@ -1980,7 +2030,7 @@ const handleHoldBillAction = async () => {
 
             <TextInput
               style={styles.customerSearchInput}
-              placeholder="Search by name or phone..."
+              placeholder="Search by name, phone, email or customer no..."
               placeholderTextColor="#77717A"
               value={customerSearchQuery}
               onChangeText={setCustomerSearchQuery}
@@ -2006,36 +2056,60 @@ const handleHoldBillAction = async () => {
               </Text>
             </Pressable>
 
-            <ScrollView style={{ maxHeight: 260 }}>
-              {customers
-                .filter(
-                  (c) =>
-                    c.name
-                      .toLowerCase()
-                      .includes(customerSearchQuery.toLowerCase()) ||
-                    c.phone.includes(customerSearchQuery),
-                )
-                .map((cust) => (
+            <ScrollView style={{ maxHeight: 320 }}>
+              {(() => {
+                const q = customerSearchQuery.toLowerCase().trim();
+                const matches = customers.filter((c) => {
+                  if (!q) return true;
+                  return [c.name, c.phone, c.email, c.customerNumber, c.city, c.doctorName]
+                    .map((v) => String(v || "").toLowerCase())
+                    .some((v) => v.includes(q));
+                });
+                if (matches.length === 0) {
+                  return (
+                    <Text style={{ padding: 16, textAlign: "center", color: "#77717A" }}>
+                      {q ? `No customer matches "${customerSearchQuery}".` : "No customers yet."}
+                    </Text>
+                  );
+                }
+                return matches.map((cust) => (
                   <Pressable
                     key={cust.id}
                     onPress={() => {
-                     setSelectedCustomer(cust);
-setCustomCustomerInput(cust.name);
-setCustomerModalVisible(false);
+                      setSelectedCustomer(cust);
+                      setCustomCustomerInput(cust.name);
+                      setCustomerModalVisible(false);
                     }}
                     style={styles.customerOptionRow}
                   >
-                    <View>
-                      <Text style={styles.custOptionName}>{cust.name}</Text>
-                      <Text style={styles.custOptionPhone}>
-                        {cust.phone || "No phone"}
+                    <View style={{ flex: 1, paddingRight: 8 }}>
+                      <Text style={styles.custOptionName}>
+                        {cust.name}
+                        {cust.customerNumber ? `  \u00b7  ${cust.customerNumber}` : ""}
                       </Text>
+                      <Text style={styles.custOptionPhone}>
+                        {[cust.phone || "No phone", cust.category].filter(Boolean).join("  \u2022  ")}
+                      </Text>
+                      {cust.email || cust.city || cust.address ? (
+                        <Text style={styles.custOptionPhone} numberOfLines={1}>
+                          {[cust.email, cust.city || cust.address].filter(Boolean).join("  \u2022  ")}
+                        </Text>
+                      ) : null}
+                      {cust.doctorName ? (
+                        <Text style={styles.custOptionPhone} numberOfLines={1}>
+                          Dr. {cust.doctorName}
+                        </Text>
+                      ) : null}
                     </View>
-                    <Text style={styles.custOptionBalance}>
-                      {cust.currentBalance}
-                    </Text>
+                    <View style={{ alignItems: "flex-end" }}>
+                      <Text style={styles.custOptionBalance}>{cust.currentBalance}</Text>
+                      {cust.creditLimit ? (
+                        <Text style={styles.custOptionPhone}>Limit ₹{cust.creditLimit}</Text>
+                      ) : null}
+                    </View>
                   </Pressable>
-                ))}
+                ));
+              })()}
             </ScrollView>
           </View>
         </View>

@@ -11,6 +11,9 @@ import {
 } from "react-native";
 
 import { apiGet } from "../../api/apiClient";
+import { fetchBranches } from "../../api/branchApi";
+import { fetchCashierProducts } from "../../api/cashierApi";
+import { fetchCustomers } from "../../api/customerApi";
 import { useOfflineSync } from "../../offline/OfflineSyncContext";
 
 const DEFAULT_BRANCH_OPTIONS = [{ id: null, name: "All Branches" }];
@@ -64,7 +67,7 @@ export default function Header({
 
   const fetchBranchesFromDb = async () => {
     try {
-      const result = await apiGet("/api/branches");
+      const result = await fetchBranches();
 
       if (result.success) {
         const json = result.data;
@@ -148,26 +151,20 @@ export default function Header({
     setIsSearching(true);
 
     try {
-      const [productsRes, customersRes] = await Promise.all([
-        apiGet(
-          `/api/cashier/products?search=${encodeURIComponent(query)}`
-        ),
-        apiGet(
-          `/api/customers?search=${encodeURIComponent(query)}`
-        ),
+      // Offline-aware lookups: server when reachable, this device's copy otherwise.
+      const [productList, customersRes] = await Promise.all([
+        fetchCashierProducts(query),
+        fetchCustomers({ search: query }),
       ]);
 
-      const products =
-        productsRes.success &&
-        Array.isArray(productsRes.data?.data)
-          ? productsRes.data.data.slice(0, 5)
-          : [];
+      const products = Array.isArray(productList) ? productList.slice(0, 5) : [];
 
-      const customers =
-        customersRes.success &&
-        Array.isArray(customersRes.data?.data)
-          ? customersRes.data.data.slice(0, 5)
+      const customerRows = Array.isArray(customersRes?.data?.data)
+        ? customersRes.data.data
+        : Array.isArray(customersRes?.data)
+          ? customersRes.data
           : [];
+      const customers = customerRows.slice(0, 5);
 
       setSearchResults({ products, customers });
     } catch (err) {
@@ -297,13 +294,13 @@ export default function Header({
         >
           {!isMobile && (
             <Text style={styles.branchLabel}>
-              {isMultiBranch ? "Store / Branch" : "Single Store"}
+              {isMultiBranch || isAdminOrOwner ? "Store / Branch" : "Single Store"}
             </Text>
           )}
 
           <View style={styles.branchAnchorContainer}>
-            {!isMultiBranch ? (
-              /* Single Store: Solid Non-Clickable Badge */
+            {!isMultiBranch && !isAdminOrOwner ? (
+              /* Single Store: Solid Non-Clickable Badge for staff */
               <View
                 style={[
                   styles.branchButton,
@@ -474,6 +471,70 @@ export default function Header({
                             </Pressable>
                           );
                         })
+                      )}
+
+                      {isAdminOrOwner && (
+                        <View
+                          style={{
+                            borderTopWidth: 1,
+                            borderTopColor: "#E5DFE4",
+                            marginTop: 6,
+                            paddingTop: 6,
+                          }}
+                        >
+                          <Pressable
+                            onPress={() => {
+                              setDropdownOpen(false);
+                              if (onNavigate) onNavigate("branches");
+                            }}
+                            style={[
+                              styles.dropdownItem,
+                              { backgroundColor: "#F8F5F7" },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.dropdownItemText,
+                                {
+                                  color: "#B9829A",
+                                  fontWeight: "700",
+                                },
+                              ]}
+                            >
+                              🏢 Manage Branches & Stores ↗
+                            </Text>
+                          </Pressable>
+
+                          {onTogglePharmacyMode && (
+                            <Pressable
+                              onPress={() => {
+                                setDropdownOpen(false);
+                                onTogglePharmacyMode(
+                                  isMultiBranch ? "single" : "multi"
+                                );
+                              }}
+                              style={[
+                                styles.dropdownItem,
+                                { backgroundColor: "#FFFFFF" },
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.dropdownItemText,
+                                  {
+                                    color: "#77717A",
+                                    fontSize: 12,
+                                  },
+                                ]}
+                              >
+                                🔄 Switch to{" "}
+                                {isMultiBranch
+                                  ? "Single Store Mode"
+                                  : "Multi-Branch Chain Mode"}
+                              </Text>
+                            </Pressable>
+                          )}
+                        </View>
                       )}
                     </View>
                   </>

@@ -20,6 +20,7 @@ import PaginationControls from "../../components/common/PaginationControls";
 import { localPersistenceService } from "../../db";
 import { syncEngine } from "../../sync";
 import { printPaymentReceipt } from "../../utils/exportUtils";
+import { settleCustomerDue, fetchCustomers } from "../../api/customerApi";
 
 const PAYMENT_MODE_BADGES = {
   "UPI / QR": { bg: "#E8D5DD", text: "#A66D86" },
@@ -65,25 +66,69 @@ export default function CustomerPaymentsScreen({ onShowToast, onNavigate }) {
   const [voucherModalVisible, setVoucherModalVisible] = useState(false);
   const [selectedReceipt, setSelectedReceipt] = useState(null);
 
-  // Load offline data from Dexie on mount and sync events
+  // Load offline and server data on mount and sync events
   const loadOfflineData = async () => {
     try {
+      let combinedReceipts = [];
       if (typeof localPersistenceService?.getPaymentReceipts === "function") {
         const persistedReceipts =
           await localPersistenceService.getPaymentReceipts();
         if (persistedReceipts && persistedReceipts.length > 0) {
-          setPayments(persistedReceipts);
+          combinedReceipts = persistedReceipts;
         }
       }
+      if (typeof window !== "undefined") {
+        try {
+          const raw = window.localStorage?.getItem("cached_customer_receipts");
+          if (raw) {
+            const cached = JSON.parse(raw);
+            if (Array.isArray(cached) && cached.length > 0) {
+              const existingIds = new Set(combinedReceipts.map((r) => r.id));
+              const missing = cached.filter((c) => !existingIds.has(c.id));
+              combinedReceipts = [...combinedReceipts, ...missing];
+            }
+          }
+        } catch (e) {}
+      }
+      if (combinedReceipts.length > 0) {
+        setPayments(combinedReceipts);
+      }
+
+      // Load customers (Dexie + Online)
+      let custs = [];
       if (typeof localPersistenceService?.getCustomersForPos === "function") {
-        const custs = await localPersistenceService.getCustomersForPos();
-        if (custs && custs.length > 0) {
-          setAvailableCustomers(custs);
+        const localCusts = await localPersistenceService.getCustomersForPos();
+        if (localCusts && localCusts.length > 0) {
+          custs = localCusts;
         }
+      }
+      try {
+        const apiRes = await fetchCustomers();
+        const serverCusts =
+          apiRes?.data?.data ||
+          apiRes?.data?.items ||
+          (Array.isArray(apiRes?.data) ? apiRes.data : []);
+        if (Array.isArray(serverCusts) && serverCusts.length > 0) {
+          const mapped = serverCusts.map((c) => ({
+            customerId: String(c.id || c.customerId),
+            name: c.name || c.full_name || "Customer",
+            phone: c.phone || "",
+            outstandingBalance: Number(c.outstandingBalance || 0),
+          }));
+          const existingIds = new Set(custs.map((c) => c.customerId));
+          custs = [
+            ...custs,
+            ...mapped.filter((m) => !existingIds.has(m.customerId)),
+          ];
+        }
+      } catch (e) {}
+
+      if (custs.length > 0) {
+        setAvailableCustomers(custs);
       }
     } catch (err) {
       console.warn(
-        "[CustomerPayments] Error loading offline payment records:",
+        "[CustomerPayments] Error loading payment records:",
         err,
       );
     }
@@ -189,78 +234,111 @@ export default function CustomerPaymentsScreen({ onShowToast, onNavigate }) {
       if (!resolvedCustomerId && availableCustomers.length > 0) {
         const matched = availableCustomers.find(
           (c) =>
-            c.name.toLowerCase() ===
-              formData.customerName.trim().toLowerCase() ||
-            (c.phone && c.phone === formData.phone.trim()),
+            (c.name &&
+              c.name.toLowerCase() ===
+                formData.customerName.trim().toLowerCase()) ||
+            (c.phone && formData.phone && c.phone === formData.phone.trim()),
         );
-        if (matched) resolvedCustomerId = matched.customerId;
+        if (matched) resolvedCustomerId = matched.customerId || matched.id;
       }
 
-      if (
-        typeof localPersistenceService?.recordLocalCustomerPayment ===
-        "function"
-      ) {
-        const result = await localPersistenceService.recordLocalCustomerPayment(
-          {
-            customerId: resolvedCustomerId || "WALK-IN",
+      const receiptId = `REC-${Date.now().toString().slice(-6)}`;
+      const newReceipt = {
+        id: receiptId,
+        date: new Date().toLocaleString("en-GB", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        customerId: resolvedCustomerId || "WALK-IN",
+        customerName: formData.customerName.trim(),
+        phone: formData.phone.trim() || "—",
+        amount: `₹${amountNum.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        amountRaw: amountNum,
+        paymentMode: formData.paymentMode,
+        transactionRef:
+          formData.transactionRef ||
+          `REF-${Date.now().toString().slice(-6)}`,
+        linkedRef: formData.linkedRef || "Ledger Dues",
+        receivedBy: "Pharmacist",
+        branch: "Main Branch",
+        status: "Completed",
+        syncStatus: "SYNCED",
+      };
+
+      // 1. Settle online if customer ID exists
+      if (resolvedCustomerId && resolvedCustomerId !== "WALK-IN") {
+        try {
+          await settleCustomerDue(resolvedCustomerId, {
             amount: amountNum,
             paymentMethod: formData.paymentMode,
-            reference: formData.transactionRef || undefined,
-            notes: formData.linkedRef || undefined,
-          },
-        );
-
-        // Refresh Dexie-backed receipts list
-        const updatedReceipts =
-          await localPersistenceService.getPaymentReceipts();
-        setPayments(updatedReceipts);
-        setRecordModalVisible(false);
-
-        if (onShowToast) {
-          onShowToast(
-            `✓ Recorded payment of ₹${amountNum.toFixed(2)} for ${formData.customerName}!`,
+            notes:
+              formData.linkedRef ||
+              formData.transactionRef ||
+              "Payment Receipt",
+          });
+        } catch (apiErr) {
+          console.warn(
+            "[CustomerPayments] Online settle notice:",
+            apiErr?.message,
           );
-        }
-
-        // Opportunistically synchronize if online
-        if (typeof syncEngine?.sync === "function") {
-          syncEngine.sync().catch(() => {});
-        }
-      } else {
-        // Fallback for mock environment
-        const newReceipt = {
-          id: `REC-${Date.now().toString().slice(-6)}`,
-          date: new Date().toLocaleString("en-GB", {
-            day: "2-digit",
-            month: "short",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-          customerId: resolvedCustomerId || "CUST-1041",
-          customerName: formData.customerName,
-          phone: formData.phone,
-          amount: `₹${amountNum.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`,
-          paymentMode: formData.paymentMode,
-          transactionRef: formData.transactionRef || "DIRECT-RECEIPT",
-          linkedRef: formData.linkedRef,
-          receivedBy: "Pharmacist",
-          branch: "Main Branch",
-          status: "Completed",
-          syncStatus: "PENDING",
-        };
-
-        setPayments((prev) => [newReceipt, ...prev]);
-        setRecordModalVisible(false);
-
-        if (onShowToast) {
-          onShowToast(
-            `✓ Logged receipt ${newReceipt.id} of ${newReceipt.amount} for ${newReceipt.customerName}!`,
-          );
+          newReceipt.syncStatus = "PENDING";
         }
       }
+
+      // 2. Persist to Dexie
+      try {
+        if (
+          typeof localPersistenceService?.recordLocalCustomerPayment ===
+          "function"
+        ) {
+          await localPersistenceService.recordLocalCustomerPayment({
+            customerId: resolvedCustomerId || "WALK-IN",
+            customerName: formData.customerName.trim(),
+            customerPhone: formData.phone.trim(),
+            amount: amountNum,
+            paymentMethod: formData.paymentMode,
+            receiptNumber: receiptId,
+            reference: formData.transactionRef || undefined,
+            notes: formData.linkedRef || undefined,
+          });
+        }
+      } catch (dexieErr) {
+        console.warn(
+          "[CustomerPayments] Dexie record notice:",
+          dexieErr?.message,
+        );
+      }
+
+      // 3. Immediately prepend receipt to state and localStorage cache
+      setPayments((prev) => {
+        const updated = [newReceipt, ...prev.filter((p) => p.id !== receiptId)];
+        try {
+          if (typeof window !== "undefined") {
+            window.localStorage?.setItem(
+              "cached_customer_receipts",
+              JSON.stringify(updated.slice(0, 100)),
+            );
+          }
+        } catch (e) {}
+        return updated;
+      });
+
+      setRecordModalVisible(false);
+
+      if (onShowToast) {
+        onShowToast(
+          `✓ Successfully saved payment receipt #${receiptId} of ₹${amountNum.toFixed(2)} for ${formData.customerName}!`,
+        );
+      }
+
+      if (typeof syncEngine?.sync === "function") {
+        syncEngine.sync().catch(() => {});
+      }
     } catch (err) {
-      console.error("Failed to record customer payment offline:", err);
+      console.error("Failed to record customer payment:", err);
       setFormErrors({
         submit: "Failed to record payment: " + (err.message || err),
       });
@@ -367,7 +445,13 @@ export default function CustomerPaymentsScreen({ onShowToast, onNavigate }) {
       </View>
 
       {/* Top 4 Responsive KPI Cards */}
-      <View style={[styles.kpiRow, isCompact && styles.kpiRowCompact]}>
+      <View
+        style={[
+          styles.kpiRow,
+          isCompact && styles.kpiRowCompact,
+          isMobile && styles.kpiRowMobile,
+        ]}
+      >
         {dynamicKpis.map((kpi) => (
           <View
             key={kpi.id}
@@ -1275,13 +1359,20 @@ const styles = StyleSheet.create({
   kpiRowCompact: {
     gap: 12,
   },
+  kpiRowMobile: {
+    gap: 10,
+    justifyContent: "space-between",
+  },
   kpiCol: {
     flex: 1,
     minWidth: 220,
   },
   kpiColMobile: {
-    minWidth: "47%",
+    width: "48.5%",
+    minWidth: "48.5%",
     maxWidth: "48.5%",
+    flex: 0,
+    flexGrow: 0,
   },
   /* Mobile Receipt Card Styles */
   mobileCardList: {

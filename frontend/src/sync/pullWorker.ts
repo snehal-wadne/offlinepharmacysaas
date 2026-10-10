@@ -144,6 +144,7 @@ export class PullWorker {
         this.db.cash_registers,
         this.db.register_sessions,
         this.db.cash_movements,
+        this.db.purchases,
       ],
       async () => {
         for (const change of changes) {
@@ -168,7 +169,28 @@ export class PullWorker {
               if (change.operation === 'DELETE') {
                 await this.db.inventory.delete(change.entityId);
               } else if (itemData) {
-                await this.db.inventory.put(itemData);
+                const invId = String(itemData.id || change.entityId);
+                const existing = await this.db.inventory.get(invId);
+                const availableQty = itemData.availableQuantity !== undefined
+                  ? Number(itemData.availableQuantity)
+                  : itemData.quantity !== undefined
+                    ? Number(itemData.quantity)
+                    : existing?.availableQuantity || 0;
+                await this.db.inventory.put({
+                  ...(existing || {}),
+                  ...itemData,
+                  id: invId,
+                  availableQuantity: availableQty,
+                });
+                // Also update matching batches by productId and batchNumber if present
+                if (itemData.productId && itemData.batchNumber) {
+                  const matching = await this.db.inventory
+                    .filter((b) => b.productId === itemData.productId && b.batchNumber === itemData.batchNumber && b.id !== invId)
+                    .toArray();
+                  for (const mb of matching) {
+                    await this.db.inventory.update(mb.id, { availableQuantity: availableQty });
+                  }
+                }
               }
               break;
 
@@ -362,6 +384,29 @@ export class PullWorker {
               break;
 
             case 'EXPENSE':
+              break;
+
+            case 'PURCHASE':
+            case 'PURCHASE_ORDER':
+              if (change.operation === 'DELETE') {
+                await this.db.purchases.delete(change.entityId);
+              } else if (itemData) {
+                await this.db.purchases.put({
+                  id: String(itemData.id || change.entityId),
+                  purchaseNumber: itemData.purchaseNumber || itemData.purchase_number || itemData.poNumber || change.entityId,
+                  organisationId: itemData.organisationId || itemData.organisation_id || change.organisationId,
+                  branchId: itemData.branchId || itemData.branch_id || change.branchId,
+                  supplierId: itemData.supplierId || itemData.supplier_id || null,
+                  supplierName: itemData.supplierName || itemData.supplier || 'Supplier',
+                  status: itemData.status || 'PENDING',
+                  totalAmount: Number(itemData.totalAmount || itemData.total_amount || 0),
+                  itemsCount: Number(itemData.itemsCount || itemData.items_count || 1),
+                  orderDate: itemData.orderDate || itemData.order_date || new Date().toISOString().split('T')[0],
+                  createdAt: itemData.createdAt || itemData.created_at || new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                  notes: itemData.notes || '',
+                });
+              }
               break;
 
             case 'ADJUSTMENT':

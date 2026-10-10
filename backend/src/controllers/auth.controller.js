@@ -45,6 +45,15 @@ const register = async (req, res) => {
   }
 };
 
+const getBranchesByPharmacyCode = async (req, res) => {
+  try {
+    const result = await authService.getBranchesByPharmacyCode(req.query.code);
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ success: false, error: error.message });
+  }
+};
+
 const getMe = async (req, res) => {
   try {
     const user = req.user;
@@ -269,6 +278,7 @@ module.exports = {
   login,
   pinLogin,
   register,
+  getBranchesByPharmacyCode,
   googleLogin,
   googleOnboard,
   forgotPassword,

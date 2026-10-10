@@ -11,7 +11,7 @@ import { apiGet, apiPost, apiPut, apiDelete, apiRequest } from './apiClient';
  * GET /api/taxes - Fetch all tax slabs
  */
 export async function fetchTaxes() {
-  const res = await apiGet('/taxes');
+  const res = await apiGet('/taxes', { offlineCache: true });
   return res.success ? (res.data.data || res.data || []) : null;
 }
 
@@ -66,7 +66,7 @@ export async function deleteTax(id) {
  * GET /api/taxes/branch-gst/:branchId - Fetch GST configuration
  */
 export async function fetchBranchGst(branchId = 'main') {
-  const res = await apiGet(`/taxes/branch-gst/${branchId}`);
+  const res = await apiGet(`/taxes/branch-gst/${branchId}`, { offlineCache: true });
   return res.success ? (res.data.data || res.data) : null;
 }
 

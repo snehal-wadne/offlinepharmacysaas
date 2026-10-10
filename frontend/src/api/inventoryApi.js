@@ -20,6 +20,17 @@ import { localPersistenceService } from "../db";
 /**
  * GET /api/inventory
  */
+// Callers read either `res.data` (array) or `res.data.data` (array). Online the server returns
+// { success, count, data: [...] }; offline we used to return a bare array. Return a list that
+// answers to both so every screen sees the same thing in both modes.
+function withInventoryShape(res, items) {
+  const list = Array.isArray(items) ? items.slice() : [];
+  Object.defineProperty(list, "data", { value: list, enumerable: false });
+  Object.defineProperty(list, "count", { value: list.length, enumerable: false });
+  Object.defineProperty(list, "success", { value: true, enumerable: false });
+  return { ...res, data: list };
+}
+
 export async function fetchInventory(params = {}) {
   const query = new URLSearchParams();
   if (params.search) query.append("search", params.search);
@@ -40,14 +51,15 @@ export async function fetchInventory(params = {}) {
           (err) => console.warn("[InventoryApi] Seed local inventory notice:", err?.message)
         );
       }
-      return res;
+      return withInventoryShape(res, items);
     }
   } catch (err) {
     console.warn("[InventoryApi] Online fetchInventory failed, loading from local Dexie:", err?.message);
   }
 
   // Resilient Offline Fallback
-  return getOfflineInventory(params);
+  const offline = await getOfflineInventory(params);
+  return withInventoryShape(offline, offline?.data);
 }
 
 /**
@@ -167,6 +179,8 @@ export async function recordStockMovementApi(movementData) {
         .catch((e) => console.warn("[InventoryApi] Local stock sync notice:", e?.message));
       return res;
     }
+    // The server answered and refused: report it instead of adjusting locally behind its back.
+    if (res && !res.isOffline) return res;
   } catch (err) {
     console.warn("[InventoryApi] Online recordStockMovement failed, adjusting locally in Dexie:", err?.message);
   }
@@ -198,20 +212,19 @@ export async function recordStockMovementApi(movementData) {
  * Creates a new inventory entry (online or queued offline)
  */
 export async function saveInventoryEntry(itemData) {
-  try {
-    const res = await apiPost("/inventory", itemData);
-    if (res && res.success) {
-      // Mirror to local Dexie
-      saveOfflineInventoryEntry(res.data?.data || res.data || itemData).catch((e) =>
-        console.warn("[InventoryApi] Local cache mirror notice:", e?.message)
-      );
-      return res;
-    }
-  } catch (err) {
-    console.warn("[InventoryApi] Online saveInventoryEntry failed, storing offline:", err?.message);
+  const res = await apiPost("/inventory", itemData);
+  if (res && res.success) {
+    // Mirror the server's record locally (same id, no second sync entry) so it is there offline.
+    const saved = res.data?.data || res.data || {};
+    saveOfflineInventoryEntry({ ...itemData, ...saved }, { id: saved.id, queue: false }).catch((e) =>
+      console.warn("[InventoryApi] Local cache mirror notice:", e?.message)
+    );
+    return res;
   }
+  // The server answered and refused (validation, permission...): show that, don't pretend it saved.
+  if (res && !res.isOffline) return res;
 
-  // Offline entry creation
+  // No network: keep it on this device and queue it.
   return saveOfflineInventoryEntry(itemData);
 }
 
@@ -220,19 +233,15 @@ export async function saveInventoryEntry(itemData) {
  * Updates an inventory entry (online or queued offline)
  */
 export async function updateInventoryEntry(id, itemData) {
-  try {
-    const res = await apiPut(`/inventory/${id}`, itemData);
-    if (res && res.success) {
-      updateOfflineInventoryEntry(id, itemData).catch((e) =>
-        console.warn("[InventoryApi] Local update mirror notice:", e?.message)
-      );
-      return res;
-    }
-  } catch (err) {
-    console.warn("[InventoryApi] Online updateInventoryEntry failed, storing offline:", err?.message);
+  const res = await apiPut(`/inventory/${id}`, itemData);
+  if (res && res.success) {
+    updateOfflineInventoryEntry(id, itemData, { queue: false }).catch((e) =>
+      console.warn("[InventoryApi] Local update mirror notice:", e?.message)
+    );
+    return res;
   }
+  if (res && !res.isOffline) return res;
 
-  // Offline entry update
   return updateOfflineInventoryEntry(id, itemData);
 }
 
@@ -240,19 +249,15 @@ export async function updateInventoryEntry(id, itemData) {
  * DELETE /api/inventory/:id
  */
 export async function deleteInventoryEntry(id) {
-  try {
-    const res = await apiDelete(`/inventory/${id}`);
-    if (res && res.success) {
-      deleteOfflineInventoryEntry(id).catch((e) =>
-        console.warn("[InventoryApi] Local delete notice:", e?.message)
-      );
-      return res;
-    }
-  } catch (err) {
-    console.warn("[InventoryApi] Online deleteInventoryEntry failed, recording offline:", err?.message);
+  const res = await apiDelete(`/inventory/${id}`);
+  if (res && res.success) {
+    deleteOfflineInventoryEntry(id, { queue: false }).catch((e) =>
+      console.warn("[InventoryApi] Local delete notice:", e?.message)
+    );
+    return res;
   }
+  if (res && !res.isOffline) return res;
 
-  // Offline entry delete
   return deleteOfflineInventoryEntry(id);
 }
 

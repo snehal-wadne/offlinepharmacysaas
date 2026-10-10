@@ -22,6 +22,8 @@ function setStorageItem(key, value) {
 }
 
 import { signOut, getAccessToken, refreshSession } from "./supabaseClient";
+import { hasProvisionalSession, syncPendingSignups } from "../offline/offlineAuth";
+import { cacheResponse, readCachedResponse, clearApiCache } from "../offline/apiCache";
 
 export function setAuthSession({ organisationId, token } = {}) {
   setStorageItem("organisationId", organisationId || "");
@@ -34,6 +36,7 @@ export async function clearAuthSession() {
   setStorageItem("organisationId", "");
   setStorageItem("authToken", "");
   setStorageItem("superadminToken", "");
+  await clearApiCache();
   try {
     await signOut();
   } catch (e) {}
@@ -62,7 +65,9 @@ export async function getAuthHeaders() {
   }
 }
 
-export async function apiRequest(endpoint, options = {}, isRetry = false) {
+export async function apiRequest(endpoint, rawOptions = {}, isRetry = false) {
+  // offlineCache: opt-in. Successful GETs are stored and served back when the network is down.
+  const { offlineCache, ...options } = rawOptions;
   const controller = new AbortController();
   const timeoutId = setTimeout(
     () => controller.abort(),
@@ -70,6 +75,10 @@ export async function apiRequest(endpoint, options = {}, isRetry = false) {
   );
 
   try {
+    // Known-offline: don't even try the network (it only produces red console errors and a wait).
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      throw new Error("Network unavailable");
+    }
     const headers = await getAuthHeaders();
     const response = await fetch(`${API_URL}${endpoint}`, {
       ...options,
@@ -79,10 +88,16 @@ export async function apiRequest(endpoint, options = {}, isRetry = false) {
 
     clearTimeout(timeoutId);
 
+    // Token was minted offline and the account isn't registered yet: register it now, then retry.
+    if (response.status === 401 && !isRetry && hasProvisionalSession()) {
+      await syncPendingSignups();
+      return apiRequest(endpoint, rawOptions, true);
+    }
+
     if (response.status === 401 && !isRetry) {
       const refreshedToken = await refreshSession().catch(() => null);
       if (refreshedToken) {
-        return apiRequest(endpoint, options, true);
+        return apiRequest(endpoint, rawOptions, true);
       }
     }
 
@@ -104,6 +119,7 @@ export async function apiRequest(endpoint, options = {}, isRetry = false) {
     }
 
     const data = await response.json();
+    if (offlineCache) cacheResponse(endpoint, data);
     return { success: true, data, isOffline: false };
   } catch (err) {
     clearTimeout(timeoutId);
@@ -117,9 +133,23 @@ export async function apiRequest(endpoint, options = {}, isRetry = false) {
         connectivityService.handleNetworkFailure?.();
       } catch (_) {}
     }
+    if (isOffline && offlineCache) {
+      const cached = await readCachedResponse(endpoint);
+      if (cached) {
+        return {
+          success: true,
+          data: cached.data,
+          isOffline: true,
+          fromCache: true,
+          cachedAt: cached.savedAt,
+        };
+      }
+    }
     return {
       success: false,
-      error: isOffline ? "Network unavailable" : err.message,
+      error: isOffline
+        ? "You're offline. This needs an internet connection the first time; once opened online it will be available offline."
+        : err.message,
       isOffline,
       status: 0,
     };

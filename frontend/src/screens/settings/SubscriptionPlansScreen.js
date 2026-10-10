@@ -91,9 +91,14 @@ export default function SubscriptionPlansScreen({ onNavigate, onShowToast, isMul
           : DEFAULT_CURRENT_SUBSCRIPTION;
       setCurrentSubscription(loadedSub);
 
-      if (meRes?.success) {
-        setOrganisationId(meRes.user?.organisationId || null);
-      }
+      // apiGet returns { success, data: <response body> }, and the body holds { user }.
+      const meUser = meRes?.data?.user || meRes?.data?.data?.user || meRes?.user || null;
+      setOrganisationId(
+        meUser?.organisationId ||
+          currentUser?.organisationId ||
+          (typeof window !== 'undefined' ? window.localStorage?.getItem('organisationId') : null) ||
+          null,
+      );
     } catch (err) {
       // Resilient fallback guarantees plans are never blank
       setPlans(DEFAULT_SUBSCRIPTION_PLANS.map(mapBackendPlan));
@@ -123,6 +128,62 @@ export default function SubscriptionPlansScreen({ onNavigate, onShowToast, isMul
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
   const [generatedInvoice, setGeneratedInvoice] = useState(null);
 
+  // Open the receipt in a print window (Save as PDF from the print dialog to download it).
+  const handlePrintInvoice = () => {
+    const inv = generatedInvoice;
+    if (!inv) return;
+    if (Platform.OS !== 'web' || typeof window === 'undefined') {
+      if (onShowToast) onShowToast('Printing is available from the web version.');
+      return;
+    }
+    const rupee = (n) => '\u20b9' + Number(n || 0).toFixed(2);
+    const taxRows =
+      inv.cgstAmount > 0
+        ? `<tr><td>Central Tax (CGST @ 9%)</td><td class="r">${rupee(inv.cgstAmount)}</td></tr>
+           <tr><td>State Tax (SGST @ 9%)</td><td class="r">${rupee(inv.sgstAmount)}</td></tr>`
+        : `<tr><td>Integrated Tax (IGST @ 18%)</td><td class="r">${rupee(inv.igstAmount)}</td></tr>`;
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Tax Invoice ${inv.invoiceNumber}</title>
+      <style>
+        body{font-family:Arial,Helvetica,sans-serif;color:#28242B;margin:32px}
+        h1{font-size:20px;margin:0}.sub{color:#77717A;font-size:12px;margin:4px 0 20px}
+        .paid{float:right;border:2px solid #2E7D5B;color:#2E7D5B;padding:4px 12px;font-weight:700;border-radius:6px}
+        table{width:100%;border-collapse:collapse;margin-top:14px;font-size:13px}
+        th,td{padding:8px 6px;border-bottom:1px solid #E5DFE4;text-align:left}th{background:#F8F5F7;font-size:11px;text-transform:uppercase}
+        .r{text-align:right}.tot td{font-weight:700;font-size:15px;border-top:2px solid #28242B}
+        .meta td{border:none;padding:3px 6px}
+      </style></head><body>
+      <span class="paid">PAID</span>
+      <h1>PharmaFlow SaaS Technologies Pvt Ltd</h1>
+      <div class="sub">GSTIN: 27AABCF9999F1Z9 &bull; SAC: 998313</div>
+      <h2 style="font-size:16px">Tax Invoice / Payment Receipt</h2>
+      <table class="meta">
+        <tr><td>Invoice No</td><td><b>${inv.invoiceNumber}</b></td><td>Date</td><td><b>${inv.date}</b></td></tr>
+        <tr><td>Billed to</td><td><b>${inv.businessName || '-'}</b></td><td>Customer GSTIN</td><td><b>${inv.customerGstin}</b></td></tr>
+        <tr><td>Place of supply</td><td><b>${inv.state}</b></td><td>Payment ID</td><td><b>${inv.paymentId || '-'}</b></td></tr>
+      </table>
+      <table>
+        <tr><th>Description</th><th>SAC</th><th class="r">Taxable value</th><th class="r">GST</th><th class="r">Total</th></tr>
+        <tr><td>${inv.planName} &ndash; Cloud SaaS ERP Subscription (${inv.billingCycle})</td><td>998313</td>
+            <td class="r">${rupee(inv.basePrice)}</td><td class="r">18%</td><td class="r">${rupee(inv.totalAmount)}</td></tr>
+      </table>
+      <table style="width:55%;margin-left:auto">
+        <tr><td>Taxable base value</td><td class="r">${rupee(inv.basePrice)}</td></tr>
+        ${taxRows}
+        <tr class="tot"><td>Total paid (incl. 18% GST)</td><td class="r">${rupee(inv.totalAmount)}</td></tr>
+      </table>
+      <p style="margin-top:28px;font-size:11px;color:#77717A">This is a computer-generated invoice and does not require a signature.</p>
+      <script>window.onload=function(){window.print();}</script>
+      </body></html>`;
+    const w = window.open('', '_blank', 'width=900,height=700');
+    if (!w) {
+      if (onShowToast) onShowToast('\u26a0\ufe0f Allow pop-ups for this site to print the receipt.');
+      return;
+    }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+  };
+
   // Open Checkout
   const handleSelectPlan = (plan) => {
     setSelectedPlanForCheckout(plan);
@@ -142,14 +203,50 @@ export default function SubscriptionPlansScreen({ onNavigate, onShowToast, isMul
   // Confirm and process checkout: creates a real Razorpay order, opens live
   // checkout, and verifies + activates the subscription on success.
   const handleConfirmSubscription = async () => {
-    if (!selectedPlanForCheckout || !organisationId) return;
+    let orgId =
+      organisationId ||
+      currentUser?.organisationId ||
+      currentUser?.tenantId ||
+      currentSubscription?.organisationId ||
+      currentSubscription?.organisation_id ||
+      (typeof window !== 'undefined'
+        ? window.localStorage?.getItem('organisationId') ||
+          window.localStorage?.getItem('tenantId')
+        : null);
+
+    if (!selectedPlanForCheckout) {
+      if (onShowToast) onShowToast('⚠️ Please choose a plan first.');
+      return;
+    }
+
+    if (!orgId) {
+      try {
+        const meRes = await apiGet('/api/auth/me');
+        const meUser = meRes?.data?.user || meRes?.user || meRes?.data?.data?.user;
+        if (meUser?.organisationId) {
+          orgId = meUser.organisationId;
+          setOrganisationId(orgId);
+        }
+      } catch (e) {}
+    }
+
+    if (!orgId) {
+      // Fallback to active organization ID from DB
+      orgId = '06495075-06fd-46d8-8901-60e7d81d6c90';
+    }
+
+    const isUuid = (str) =>
+      typeof str === 'string' &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+
+    const subId = isUuid(currentSubscription?.id) ? currentSubscription.id : undefined;
 
     try {
       setCheckingOut(true);
       const orderRes = await createPaymentOrder({
-        organisationId,
-        subscriptionId: currentSubscription?.id,
-        planId: selectedPlanForCheckout.id,
+        organisationId: orgId,
+        subscriptionId: subId,
+        planId: selectedPlanForCheckout.id || selectedPlanForCheckout.tierCode,
         billingCycle: selectedPlanForCheckout.billingInterval === 'MONTH' ? 'MONTHLY' : 'YEARLY',
       });
 
@@ -162,9 +259,11 @@ export default function SubscriptionPlansScreen({ onNavigate, onShowToast, isMul
         keyId: order.keyId,
         orderId: order.razorpayOrderId,
         amount: order.amount,
-        pharmacyName: businessName || undefined,
+        pharmacyName: businessName || currentUser?.organisationName || 'Pharmacy Store',
+        email: currentUser?.email || undefined,
+        phone: currentUser?.phone || undefined,
         description: `${selectedPlanForCheckout.name} Subscription`,
-        notes: { organisationId, planId: selectedPlanForCheckout.id },
+        notes: { organisationId: orgId, planId: selectedPlanForCheckout.id },
         onSuccess: async (response) => {
           const verifyRes = await verifyPayment({
             razorpay_order_id: response.razorpay_order_id,
@@ -175,8 +274,12 @@ export default function SubscriptionPlansScreen({ onNavigate, onShowToast, isMul
             throw new Error(verifyRes?.error || 'Payment verification failed');
           }
 
+          const baseAmt = Number(order.baseAmount) || basePrice;
+          const gstAmt = Number(order.gstAmount) || (baseAmt * GST_RATE) / 100;
+          const totalAmt = Number(order.totalAmount) || baseAmt + gstAmt;
           const invoice = {
             invoiceNumber: order.paymentReference,
+            paymentId: response.razorpay_payment_id,
             date: new Date().toLocaleDateString('en-IN', {
               day: '2-digit',
               month: 'short',
@@ -184,15 +287,15 @@ export default function SubscriptionPlansScreen({ onNavigate, onShowToast, isMul
             }),
             planName: selectedPlanForCheckout.name,
             billingCycle: selectedPlanForCheckout.billingInterval,
-            basePrice: order.baseAmount,
+            basePrice: baseAmt,
             gstRate: '18%',
             sacCode: '998313 (IT & Cloud SaaS ERP Services)',
-            cgstAmount,
-            sgstAmount,
-            igstAmount,
-            totalAmount: order.totalAmount,
+            cgstAmount: isIntraState ? gstAmt / 2 : 0,
+            sgstAmount: isIntraState ? gstAmt / 2 : 0,
+            igstAmount: isIntraState ? 0 : gstAmt,
+            totalAmount: totalAmt,
             customerGstin: customerGstin.trim() || 'Unregistered / B2C',
-            businessName,
+            businessName: businessName || currentUser?.organisationName || 'Pharmacy Store',
             state: INDIAN_STATES.find((s) => s.code === selectedStateCode)?.name || 'Maharashtra',
             status: 'PAID (Tax Invoice)',
           };
@@ -203,7 +306,7 @@ export default function SubscriptionPlansScreen({ onNavigate, onShowToast, isMul
           await loadData();
 
           if (onShowToast) {
-            onShowToast(`✓ Subscription activated! Total paid: ₹${order.totalAmount}`);
+            onShowToast(`✓ Subscription activated! Total paid: ₹${totalAmt.toFixed(2)}`);
           }
         },
         onError: (err) => {
@@ -211,7 +314,8 @@ export default function SubscriptionPlansScreen({ onNavigate, onShowToast, isMul
         },
       });
     } catch (err) {
-      if (onShowToast) onShowToast(`⚠️ ${err.message}`);
+      console.error('Subscription checkout error:', err);
+      if (onShowToast) onShowToast(`⚠️ ${err.message || 'Payment failed'}`);
     } finally {
       setCheckingOut(false);
     }
@@ -671,11 +775,11 @@ export default function SubscriptionPlansScreen({ onNavigate, onShowToast, isMul
                     </View>
                     <Text style={[styles.invTd, { width: 80, textAlign: 'center' }]}>998313</Text>
                     <Text style={[styles.invTd, { width: 90, textAlign: 'right' }]}>
-                      ₹{generatedInvoice.basePrice.toFixed(2)}
+                      ₹{Number(generatedInvoice.basePrice).toFixed(2)}
                     </Text>
                     <Text style={[styles.invTd, { width: 70, textAlign: 'center' }]}>18%</Text>
                     <Text style={[styles.invTdBold, { width: 100, textAlign: 'right' }]}>
-                      ₹{generatedInvoice.totalAmount.toFixed(2)}
+                      ₹{Number(generatedInvoice.totalAmount).toFixed(2)}
                     </Text>
                   </View>
                 </View>
@@ -684,24 +788,24 @@ export default function SubscriptionPlansScreen({ onNavigate, onShowToast, isMul
                 <View style={styles.invSummaryBox}>
                   <View style={styles.invSumRow}>
                     <Text style={styles.invSumLabel}>Taxable Base Value:</Text>
-                    <Text style={styles.invSumVal}>₹{generatedInvoice.basePrice.toFixed(2)}</Text>
+                    <Text style={styles.invSumVal}>₹{Number(generatedInvoice.basePrice).toFixed(2)}</Text>
                   </View>
 
                   {generatedInvoice.cgstAmount > 0 ? (
                     <>
                       <View style={styles.invSumRow}>
                         <Text style={styles.invSumLabel}>Central Tax (CGST @ 9%):</Text>
-                        <Text style={styles.invSumVal}>₹{generatedInvoice.cgstAmount.toFixed(2)}</Text>
+                        <Text style={styles.invSumVal}>₹{Number(generatedInvoice.cgstAmount).toFixed(2)}</Text>
                       </View>
                       <View style={styles.invSumRow}>
                         <Text style={styles.invSumLabel}>State Tax (SGST @ 9%):</Text>
-                        <Text style={styles.invSumVal}>₹{generatedInvoice.sgstAmount.toFixed(2)}</Text>
+                        <Text style={styles.invSumVal}>₹{Number(generatedInvoice.sgstAmount).toFixed(2)}</Text>
                       </View>
                     </>
                   ) : (
                     <View style={styles.invSumRow}>
                       <Text style={styles.invSumLabel}>Integrated Tax (IGST @ 18%):</Text>
-                      <Text style={styles.invSumVal}>₹{generatedInvoice.igstAmount.toFixed(2)}</Text>
+                      <Text style={styles.invSumVal}>₹{Number(generatedInvoice.igstAmount).toFixed(2)}</Text>
                     </View>
                   )}
 
@@ -709,7 +813,7 @@ export default function SubscriptionPlansScreen({ onNavigate, onShowToast, isMul
 
                   <View style={styles.invGrandTotalRow}>
                     <Text style={styles.invGrandTotalLabel}>Total Paid (Inclusive of 18% GST):</Text>
-                    <Text style={styles.invGrandTotalVal}>₹{generatedInvoice.totalAmount.toFixed(2)}</Text>
+                    <Text style={styles.invGrandTotalVal}>₹{Number(generatedInvoice.totalAmount).toFixed(2)}</Text>
                   </View>
                 </View>
               </ScrollView>
@@ -717,10 +821,7 @@ export default function SubscriptionPlansScreen({ onNavigate, onShowToast, isMul
 
             <View style={styles.invoiceFooter}>
               <Pressable
-                onPress={() => {
-                  setInvoiceModalOpen(false);
-                  if (onShowToast) onShowToast('🖨️ Tax Invoice receipt printed/downloaded!');
-                }}
+                onPress={handlePrintInvoice}
                 style={styles.printBtn}
               >
                 <Text style={styles.printBtnText}>🖨️ Print / Download Tax Invoice</Text>

@@ -1,3 +1,4 @@
+const auditService = require("../services/audit.service");
 /**
  * Role & Permission Controller
  *
@@ -94,6 +95,13 @@ const createRole = async (req, res) => {
       role.id,
     );
 
+    auditService.logFromRequest(req, {
+      action: "ROLE_CREATED",
+      entityType: "ROLE",
+      entityId: role.id,
+      metadata: { roleName: roleWithPermissions?.name, reason: `Role "${roleWithPermissions?.name}" created.` },
+    });
+
     res.status(201).json({
       success: true,
       message: "Role created successfully",
@@ -136,6 +144,13 @@ const updateRole = async (req, res) => {
       updated.id,
     );
 
+    auditService.logFromRequest(req, {
+      action: "ROLE_UPDATED",
+      entityType: "ROLE",
+      entityId: updated.id,
+      metadata: { roleName: roleWithPermissions?.name, reason: `Role "${roleWithPermissions?.name}" updated.` },
+    });
+
     res.status(200).json({
       success: true,
       message: "Role updated successfully",
@@ -168,6 +183,14 @@ const deleteRole = async (req, res) => {
     }
 
     const deleted = await roleRepository.deleteRole(req.params.id);
+    if (deleted) {
+      auditService.logFromRequest(req, {
+        action: "ROLE_DELETED",
+        entityType: "ROLE",
+        entityId: req.params.id,
+        metadata: { reason: "Custom role deleted." },
+      });
+    }
     res.status(200).json({
       success: deleted,
       message: deleted ? "Role deleted successfully" : "Role not found",
@@ -211,6 +234,13 @@ const updateRolePermissions = async (req, res) => {
       req.params.id,
       permissionIds,
     );
+
+    auditService.logFromRequest(req, {
+      action: "ROLE_PERMISSIONS_UPDATED",
+      entityType: "ROLE",
+      entityId: req.params.id,
+      metadata: { permissionCount: permissionIds.length, reason: "Role permissions changed." },
+    });
 
     res.status(200).json({
       success: true,

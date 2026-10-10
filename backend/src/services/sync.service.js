@@ -155,7 +155,8 @@ class SyncService {
           case "ADJUST_STOCK": {
             const orgId = payload.organisationId || fallbackOrgId;
             if (orgId) {
-              await inventoryService.saveInventoryEntry(orgId, payload.data || payload);
+              const saveFn = inventoryService.saveOrUpdateInventory || inventoryService.saveInventoryEntry;
+              await saveFn.call(inventoryService, orgId, payload.data || payload);
               syncedIds.push(id);
               console.log(`✓ Synced offline stock adjustment: ${payload.adjustmentNumber || id}`);
             }
@@ -167,9 +168,25 @@ class SyncService {
             if (orgId) {
               const itemData = payload.data || payload;
               if (payload.id) itemData.id = payload.id;
-              await inventoryService.saveInventoryEntry(orgId, itemData);
+              const saveFn = inventoryService.saveOrUpdateInventory || inventoryService.saveInventoryEntry;
+              await saveFn.call(inventoryService, orgId, itemData);
               syncedIds.push(id);
               console.log(`✓ Synced offline inventory update: ${itemData.medicineName || id}`);
+            }
+            break;
+          }
+
+          case "CREATE_PURCHASE": {
+            const orgId = payload.organisationId || fallbackOrgId;
+            if (orgId) {
+              const purchaseService = require("./purchase.service");
+              const purchaseData = {
+                ...payload,
+                organisationId: orgId,
+              };
+              await purchaseService.createPurchase(purchaseData);
+              syncedIds.push(id);
+              console.log(`✓ Synced offline purchase order: ${payload.purchaseNumber || id}`);
             }
             break;
           }
@@ -2921,6 +2938,113 @@ class SyncService {
   }
 
   /**
+   * Process CREATE_PURCHASE sync mutation
+   */
+  async processCreatePurchase({
+    mutationId,
+    organisationId,
+    branchId,
+    effectiveUserId,
+    payload = {},
+    occurredAt,
+    deviceId,
+  }) {
+    const purchaseService = require("./purchase.service");
+    try {
+      const { resolvedOrgId, resolvedBranchId } = await this.resolveTenantContext(
+        organisationId,
+        branchId,
+      );
+
+      const purchaseData = {
+        ...payload,
+        organisationId: resolvedOrgId,
+        branchId: resolvedBranchId,
+        purchaseNumber: payload.purchaseNumber || payload.poNumber,
+        supplierId: payload.supplierId,
+        supplierName: payload.supplierName || payload.supplier,
+        branchName: payload.branchName || payload.branch,
+        expectedDate: payload.expectedDate,
+        notes: payload.notes,
+        status: payload.status || "PENDING",
+        isCustomerOrder: payload.isCustomerOrder,
+        customerName: payload.customerName,
+        customerPhone: payload.customerPhone,
+        prescriptionRef: payload.prescriptionRef,
+        subtotal: payload.subtotal,
+        taxAmount: payload.taxAmount,
+        totalAmount: payload.totalAmount,
+        items: payload.items || [],
+        createdBy: effectiveUserId || null,
+      };
+
+      const created = await purchaseService.createPurchase(purchaseData);
+
+      // Record idempotency in sync_mutations
+      await pool.query(
+        `INSERT INTO sync_mutations (
+          mutation_id, organisation_id, branch_id, user_id, device_id, mutation_type,
+          occurred_at, status, payload, result, processed_at
+        ) VALUES ($1, $2, $3, $4, $5, 'CREATE_PURCHASE', $6, 'PROCESSED', $7, $8, NOW())
+        ON CONFLICT (organisation_id, mutation_id) DO UPDATE
+        SET status = 'PROCESSED', result = EXCLUDED.result, processed_at = NOW()`,
+        [
+          mutationId,
+          resolvedOrgId,
+          resolvedBranchId || null,
+          effectiveUserId || null,
+          deviceId || null,
+          occurredAt || new Date().toISOString(),
+          JSON.stringify(payload),
+          JSON.stringify(created || {}),
+        ],
+      );
+
+      // Record in sync_changes for pull propagation
+      await pool.query(
+        `INSERT INTO sync_changes (
+          organisation_id, branch_id, entity_type, entity_id, operation, changed_at, payload
+        ) VALUES ($1, $2, 'PURCHASE', $3, 'INSERT', NOW(), $4)`,
+        [
+          resolvedOrgId,
+          resolvedBranchId || null,
+          created.id,
+          JSON.stringify({
+            id: created.id,
+            purchaseNumber: created.purchase_number || purchaseData.purchaseNumber,
+            supplierId: created.supplier_id,
+            supplierName: purchaseData.supplierName,
+            status: created.status,
+            totalAmount: created.total_amount,
+            branchId: resolvedBranchId,
+          }),
+        ],
+      );
+
+      return {
+        status: "SUCCESS",
+        result: {
+          mutationType: "CREATE_PURCHASE",
+          purchaseId: created.id,
+          purchaseNumber: created.purchase_number || purchaseData.purchaseNumber,
+          synced: true,
+          occurredAt: occurredAt || new Date().toISOString(),
+        },
+      };
+    } catch (err) {
+      console.error(
+        `[SyncService] Error processing CREATE_PURCHASE ${mutationId}:`,
+        err,
+      );
+      return {
+        status: "RETRYABLE_ERROR",
+        errorCode: "PURCHASE_ERROR",
+        errorMessage: err.message,
+      };
+    }
+  }
+
+  /**
    * Process UPDATE_INVENTORY sync mutation
    */
   async processUpdateInventory({
@@ -2940,11 +3064,56 @@ class SyncService {
       const itemData = payload.data || payload;
       if (payload.id) itemData.id = payload.id;
       if (!itemData.branchId) itemData.branchId = resolvedBranchId;
-      const res = await inventoryService.saveInventoryEntry(
+      const saveFn =
+        inventoryService.saveOrUpdateInventory ||
+        inventoryService.saveInventoryEntry;
+      const res = await saveFn.call(
+        inventoryService,
         resolvedOrgId,
         itemData,
         effectiveUserId,
       );
+
+      // Record in sync_mutations
+      await pool.query(
+        `INSERT INTO sync_mutations (
+          mutation_id, organisation_id, branch_id, user_id, device_id, mutation_type,
+          occurred_at, status, payload, result, processed_at
+        ) VALUES ($1, $2, $3, $4, $5, 'UPDATE_INVENTORY', $6, 'PROCESSED', $7, $8, NOW())
+        ON CONFLICT (organisation_id, mutation_id) DO UPDATE
+        SET status = 'PROCESSED', result = EXCLUDED.result, processed_at = NOW()`,
+        [
+          mutationId,
+          resolvedOrgId,
+          resolvedBranchId || null,
+          effectiveUserId || null,
+          deviceId || null,
+          occurredAt || new Date().toISOString(),
+          JSON.stringify(payload),
+          JSON.stringify(res || {}),
+        ],
+      );
+
+      // Record in sync_changes
+      await pool.query(
+        `INSERT INTO sync_changes (
+          organisation_id, branch_id, entity_type, entity_id, operation, changed_at, payload
+        ) VALUES ($1, $2, 'INVENTORY', $3, 'UPDATE', NOW(), $4)`,
+        [
+          resolvedOrgId,
+          resolvedBranchId || null,
+          res?.id || itemData.id || "INVENTORY",
+          JSON.stringify({
+            id: res?.id || itemData.id,
+            productId: res?.productId || itemData.productId,
+            quantity: itemData.quantity !== undefined ? itemData.quantity : res?.quantity,
+            availableQuantity: itemData.quantity !== undefined ? itemData.quantity : res?.quantity,
+            batchNumber: itemData.batchNo || itemData.batchNumber || res?.batchNo,
+            branchId: resolvedBranchId,
+          }),
+        ],
+      );
+
       return {
         status: "SUCCESS",
         result: {
@@ -3911,6 +4080,16 @@ class SyncService {
             break;
           case "CREATE_RETURN":
             outcome = await this.processCreateReturn({
+              ...mutation,
+              organisationId: targetOrgId,
+              branchId: targetBranchId,
+              effectiveUserId,
+              userContext,
+              deviceId,
+            });
+            break;
+          case "CREATE_PURCHASE":
+            outcome = await this.processCreatePurchase({
               ...mutation,
               organisationId: targetOrgId,
               branchId: targetBranchId,

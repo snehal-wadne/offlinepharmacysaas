@@ -1317,13 +1317,27 @@ class CashierService {
       ORDER BY hb.created_at DESC;
     `;
     const res = await pool.query(query, params);
-    const bills = res.rows.map((r) => ({
-      ...r,
-      total: parseFloat(r.total) || 0,
-      itemsCount:
-        parseInt(r.itemsCount, 10) ||
-        (Array.isArray(r.cart) ? r.cart.length : 1),
-    }));
+    const bills = res.rows.map((r) => {
+      // cart_data is either a plain array (older drafts) or { items, meta }
+      const items = Array.isArray(r.cart)
+        ? r.cart
+        : Array.isArray(r.cart?.items)
+          ? r.cart.items
+          : [];
+      const meta = Array.isArray(r.cart) ? {} : r.cart?.meta || {};
+      return {
+        ...r,
+        holdId: r.billNo,
+        cart: items,
+        items,
+        customerId: meta.customerId || null,
+        discountPercent: Number(meta.discountPercent) || 0,
+        subtotal: Number(meta.subtotal) || 0,
+        tax: Number(meta.tax) || 0,
+        total: parseFloat(r.total) || 0,
+        itemsCount: parseInt(r.itemsCount, 10) || items.length,
+      };
+    });
     return {
       success: true,
       count: bills.length,
@@ -1333,79 +1347,131 @@ class CashierService {
 
   async saveHeldBill(billData) {
     const {
-      cart = [],
       customerName = "Walk-in Customer",
       customerPhone = "",
-      notes = "",
       total = 0,
       organisationId: reqOrgId,
       branchId: reqBranchId,
     } = billData;
 
+    // The app sends the medicines as `items`; older callers used `cart`.
+    const items = Array.isArray(billData.items)
+      ? billData.items
+      : Array.isArray(billData.cart)
+        ? billData.cart
+        : [];
+    const notes = billData.notes ?? billData.note ?? "";
+    // Kept with the draft so Resume restores the customer and discount, not just the medicines.
+    const cartData = {
+      items,
+      meta: {
+        customerId: billData.customerId || null,
+        discountPercent: Number(billData.discountPercent) || 0,
+        subtotal: Number(billData.subtotal) || 0,
+        tax: Number(billData.tax) || 0,
+      },
+    };
+
     const { organisationId, branchId, cashierId, customerId } =
       await this._resolveContext(reqOrgId, reqBranchId);
+
+    const totalAmount =
+      Number(total) ||
+      items.reduce(
+        (acc, it) =>
+          acc +
+          Number(it.price || it.sellingPrice || 0) *
+            Number(it.qty || it.quantity || 1),
+        0,
+      );
 
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
 
-      // Generate sequence number (HB-1001)
-      const holdToken = await getNextBusinessNumber({
-        organisationId,
-        branchId,
-        sequenceType: "HELD_BILL",
-        client,
-      });
-
-      const totalAmount =
-        Number(total) ||
-        cart.reduce(
-          (acc, it) =>
-            acc +
-            Number(it.price || it.sellingPrice || 0) * Number(it.quantity || 1),
-          0,
+      // Re-holding a resumed draft updates it instead of creating a second copy.
+      let saved = null;
+      if (billData.holdId) {
+        const existing = await client.query(
+          `SELECT id FROM held_bills
+            WHERE organisation_id = $1 AND status = 'HOLD'
+              AND (hold_token = $2 OR id::text = $2)
+            LIMIT 1;`,
+          [organisationId, String(billData.holdId)],
         );
+        if (existing.rows.length > 0) {
+          const upd = await client.query(
+            `UPDATE held_bills
+                SET customer_name = $1, customer_phone = $2, items_count = $3,
+                    total_amount = $4, cart_data = $5, notes = $6, updated_at = NOW()
+              WHERE id = $7
+              RETURNING *;`,
+            [
+              customerName,
+              customerPhone,
+              items.length,
+              totalAmount,
+              JSON.stringify(cartData),
+              notes,
+              existing.rows[0].id,
+            ],
+          );
+          saved = upd.rows[0];
+        }
+      }
 
-      const insertRes = await client.query(
-        `
-        INSERT INTO held_bills (
-          organisation_id, branch_id, held_by, customer_id, hold_token,
-          customer_name, customer_phone, items_count, total_amount,
-          cart_data, status, notes
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'HOLD', $11)
-        RETURNING *;
-      `,
-        [
+      if (!saved) {
+        // Generate sequence number (HB-1001)
+        const holdToken = await getNextBusinessNumber({
           organisationId,
           branchId,
-          cashierId,
-          customerId,
-          holdToken,
-          customerName,
-          customerPhone,
-          cart.length,
-          totalAmount,
-          JSON.stringify(cart),
-          notes,
-        ],
-      );
+          sequenceType: "HELD_BILL",
+          client,
+        });
+
+        const insertRes = await client.query(
+          `
+          INSERT INTO held_bills (
+            organisation_id, branch_id, held_by, customer_id, hold_token,
+            customer_name, customer_phone, items_count, total_amount,
+            cart_data, status, notes
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'HOLD', $11)
+          RETURNING *;
+        `,
+          [
+            organisationId,
+            branchId,
+            cashierId,
+            customerId,
+            holdToken,
+            customerName,
+            customerPhone,
+            items.length,
+            totalAmount,
+            JSON.stringify(cartData),
+            notes,
+          ],
+        );
+        saved = insertRes.rows[0];
+      }
 
       await client.query("COMMIT");
 
-      const saved = insertRes.rows[0];
       return {
         success: true,
         message: "Bill parked successfully in PostgreSQL",
         data: {
           id: saved.id,
+          holdId: saved.hold_token,
           billNo: saved.hold_token,
           token: saved.hold_token,
           customerName: saved.customer_name,
           phone: saved.customer_phone,
           itemsCount: saved.items_count,
           total: Number(saved.total_amount),
-          cart,
+          cart: items,
+          items,
           notes: saved.notes,
           savedAt: saved.created_at,
         },

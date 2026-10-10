@@ -22,6 +22,7 @@ router.put("/users/:id", authenticate, authController.updateStaffUser);
 router.patch("/users/:id/status", authenticate, authController.updateStaffStatus);
 router.post("/login", authController.login);
 router.post("/register", authController.register);
+router.get("/pharmacy-branches", authController.getBranchesByPharmacyCode);
 router.post("/google", authController.googleLogin);
 router.post("/google-onboard", authController.googleOnboard);
 router.post("/forgot-password", authController.forgotPassword);

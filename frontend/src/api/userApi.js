@@ -1,204 +1,134 @@
 /**
  * User & Staff Management API Client Service (Offline-First)
  *
- * Communicates with backend /api/auth/users endpoints.
- * Integrates Dexie local storage (db.users), sync outbox queueing, and localStorage fallback.
+ * Reads: server when reachable (cached in db.users), otherwise the local copy, always
+ *        including staff created offline that haven't uploaded yet.
+ * Writes: server first; with no network the change is stored locally and queued.
  */
 
-import { apiGet, apiPost, apiPut, apiPatch } from './apiClient';
+import { apiGet } from './apiClient';
 import { db } from '../db/pharmaflowDb';
 import { fetchStaffMembers } from "./Staffapi";
+import { mutate, newLocalId, pendingLocalRows } from '../offline/offlineCrud';
 
 export const fetchUsersstaff = () => fetchStaffMembers();
 
-const CANONICAL_USERS = [
-  {
-    id: "usr-admin-01",
-    name: "Dr. Farooq Siddiqui",
-    email: "farooq@pharmaflow.com",
-    role: "Owner / Admin",
-    primaryBranch: "Main Pharmacy Store",
-    status: "ACTIVE",
-    isOwner: true,
-  },
-  {
-    id: "usr-mgr-02",
-    name: "Snehal Wadne",
-    email: "snehal@pharmaflow.com",
-    role: "Store Manager",
-    primaryBranch: "Main Pharmacy Store",
-    status: "ACTIVE",
-    isOwner: false,
-  },
-  {
-    id: "usr-cashier-03",
-    name: "Harshal Pharmacist",
-    email: "harshal@pharmaflow.com",
-    role: "Lead Pharmacist",
-    primaryBranch: "Main Pharmacy Store",
-    status: "ACTIVE",
-    isOwner: false,
-  },
-];
+const orgId = () => {
+  try {
+    return window.localStorage?.getItem('organisationId') || 'ORG-DEFAULT';
+  } catch (e) {
+    return 'ORG-DEFAULT';
+  }
+};
+
+const unwrap = (body) =>
+  Array.isArray(body) ? body : body?.data || body?.users || body?.items || [];
 
 export async function fetchUsers() {
-  try {
-    const res = await apiGet('/api/auth/users');
-    if (res && res.success) {
-      const items = res.data?.data || res.data?.users || (Array.isArray(res.data) ? res.data : []);
-      if (Array.isArray(items) && items.length > 0) {
-        db.users
-          .bulkPut(
-            items.map((u) => ({
-              id: String(u.id || `usr-${Date.now()}`),
-              organisationId: u.organisation_id || u.organisationId || 'ORG-DEFAULT',
-              name: u.name || u.email?.split('@')[0] || 'Staff User',
-              email: u.email || '',
-              role: u.role || 'Staff',
-              branchId: u.branchId || u.primaryBranchId || '',
-              status: u.status || 'ACTIVE',
-            }))
-          )
-          .catch((e) => console.warn('[UserApi] Dexie cache notice:', e?.message));
+  const res = await apiGet('/api/auth/users');
 
-        if (typeof window !== 'undefined') {
-          window.localStorage?.setItem('cached_users', JSON.stringify(items));
-        }
+  if (res && res.success) {
+    const items = unwrap(res.data);
+    const pending = await pendingLocalRows('users');
+    try {
+      const serverIds = new Set(items.map((u) => String(u.id)));
+      const pendingIds = new Set(pending.map((u) => u.id));
+      const stale = (await db.users.toArray())
+        .filter((u) => !serverIds.has(u.id) && !pendingIds.has(u.id))
+        .map((u) => u.id);
+      if (stale.length) await db.users.bulkDelete(stale);
+      if (items.length) {
+        await db.users.bulkPut(
+          items.map((u) => ({
+            ...u,
+            id: String(u.id),
+            organisationId: u.organisation_id || u.organisationId || orgId(),
+            branchId: u.branchId || u.primaryBranchId || '',
+          })),
+        );
       }
-      return res;
+    } catch (e) {
+      console.warn('[UserApi] Local cache notice:', e?.message);
     }
-  } catch (err) {
-    console.warn('[UserApi] Online fetchUsers failed, reading local database:', err?.message);
+    const merged = [...pending, ...items];
+    const data = Array.isArray(res.data) ? merged : { ...res.data, count: merged.length, data: merged };
+    return { ...res, data };
   }
 
-  // Resilient Offline Fallback
+  if (res && !res.isOffline) return res;
+
+  let local = [];
   try {
-    const localUsers = await db.users.toArray();
-    if (localUsers && localUsers.length > 0) {
-      const mapped = localUsers.map((u) => ({
-        ...u,
-        primaryBranch: 'Main Pharmacy Store',
-      }));
-      return {
-        success: true,
-        isOffline: true,
-        data: { data: mapped, users: mapped },
-      };
-    }
-
-    if (typeof window !== 'undefined') {
-      const cached = window.localStorage?.getItem('cached_users');
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return {
-            success: true,
-            isOffline: true,
-            data: { data: parsed, users: parsed },
-          };
-        }
-      }
-    }
-  } catch (offlineErr) {
-    console.warn('[UserApi] Offline fallback error:', offlineErr?.message);
+    local = await db.users.toArray();
+  } catch (e) {
+    console.warn('[UserApi] Local read notice:', e?.message);
   }
+  const pendingIds = new Set((await pendingLocalRows('users')).map((u) => u.id));
+  local = local.map((u) => ({ ...u, isOfflinePending: pendingIds.has(u.id) }));
+  return { success: true, isOffline: true, data: { success: true, count: local.length, data: local } };
+}
 
-  // Seed canonical users into Dexie
-  db.users
-    .bulkPut(
-      CANONICAL_USERS.map((u) => ({
-        id: u.id,
-        organisationId: 'ORG-DEFAULT',
-        name: u.name,
-        email: u.email,
-        role: u.role,
-        status: u.status,
-      }))
-    )
-    .catch(() => {});
-
-  return {
-    success: true,
-    isOffline: true,
-    data: { data: CANONICAL_USERS, users: CANONICAL_USERS },
-  };
+async function branchNameFor(branchId) {
+  if (!branchId) return 'Main Branch';
+  try {
+    const b = await db.branches.get(String(branchId));
+    return b?.name || 'Main Branch';
+  } catch (e) {
+    return 'Main Branch';
+  }
 }
 
 export async function createUser(userData) {
-  const localId = `usr-local-${Date.now()}`;
-  const localUser = {
+  const localId = newLocalId('usr');
+  const localRecord = {
     id: localId,
-    organisationId: userData.organisationId || 'ORG-DEFAULT',
+    organisationId: userData.organisationId || orgId(),
     name: userData.name || userData.email?.split('@')[0] || 'New Staff',
     email: userData.email || '',
-    role: userData.role || 'Pharmacist',
+    phone: userData.phone || '',
+    role: userData.roleName || userData.role || 'Staff',
+    role_id: userData.roleId || null,
     branchId: userData.branchId || '',
+    primaryBranch: await branchNameFor(userData.branchId),
     status: 'ACTIVE',
-    primaryBranch: 'Main Pharmacy Store',
   };
-
-  try {
-    await db.users.put(localUser);
-    await db.sync_outbox.add({
-      table: 'users',
-      action: 'INSERT',
-      entityId: localId,
-      payload: userData,
-      status: 'PENDING',
-      createdAt: new Date().toISOString(),
-    });
-  } catch (e) {
-    console.warn('[UserApi] Offline save notice:', e?.message);
-  }
-
-  try {
-    const res = await apiPost('/api/auth/users', userData);
-    if (res && res.success) return res;
-  } catch (err) {
-    console.warn('[UserApi] Online createUser failed, saved offline:', err?.message);
-  }
-
-  return {
-    success: true,
-    isOffline: true,
-    data: localUser,
-    message: 'User created offline and queued for cloud sync.',
-  };
+  return mutate({
+    table: 'users',
+    action: 'INSERT',
+    method: 'POST',
+    url: '/api/auth/users',
+    payload: userData,
+    entityId: localId,
+    localRecord,
+  });
 }
 
 export async function updateUser(userId, userData) {
-  try {
-    await db.users.update(String(userId), { ...userData }).catch(() => {});
-    await db.sync_outbox.add({
-      table: 'users',
-      action: 'UPDATE',
-      entityId: String(userId),
-      payload: userData,
-      status: 'PENDING',
-      createdAt: new Date().toISOString(),
-    });
-  } catch (e) {}
-
-  try {
-    const res = await apiPut(`/api/auth/users/${userId}`, userData);
-    if (res && res.success) return res;
-  } catch (err) {}
-
-  return {
-    success: true,
-    isOffline: true,
-    data: { id: userId, ...userData },
-  };
+  const changes = { ...userData };
+  if (userData.branchId) changes.primaryBranch = await branchNameFor(userData.branchId);
+  const res = await mutate({
+    table: 'users',
+    action: 'UPDATE',
+    method: 'PUT',
+    url: `/api/auth/users/${userId}`,
+    payload: userData,
+    entityId: String(userId),
+    localChanges: changes,
+  });
+  if (res.success && !res.isOffline) db.users.update(String(userId), changes).catch(() => {});
+  return res;
 }
 
 export async function updateUserStatus(userId, status) {
-  try {
-    await db.users.update(String(userId), { status }).catch(() => {});
-  } catch (e) {}
-
-  try {
-    return await apiPatch(`/api/auth/users/${userId}/status`, { status });
-  } catch (err) {
-    return { success: true, isOffline: true, data: { id: userId, status } };
-  }
+  const res = await mutate({
+    table: 'users',
+    action: 'UPDATE',
+    method: 'PATCH',
+    url: `/api/auth/users/${userId}/status`,
+    payload: { status },
+    entityId: String(userId),
+    localChanges: { status },
+  });
+  if (res.success && !res.isOffline) db.users.update(String(userId), { status }).catch(() => {});
+  return res;
 }

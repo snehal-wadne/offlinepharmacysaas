@@ -274,6 +274,22 @@ const startServer = () => {
     console.log("=================================================");
   });
 
+process.on("uncaughtException", (err) => {
+  if (
+    err.code === "ECONNRESET" ||
+    err.message?.includes("ECONNRESET") ||
+    err.message?.includes("Connection terminated")
+  ) {
+    console.warn("⚠️ Non-fatal network reset caught at process level:", err.message);
+    return;
+  }
+  console.error("❌ Uncaught Exception:", err);
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.warn("⚠️ Unhandled Rejection at:", promise, "reason:", reason?.message || reason);
+});
+
   server.on("error", (err) => {
     if (err.code === "EADDRINUSE") {
       console.error(`❌ Port ${PORT} is already in use by another process.`);

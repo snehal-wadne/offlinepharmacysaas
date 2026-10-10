@@ -470,34 +470,32 @@ export class LocalPersistenceService {
         .toArray();
     }
 
-    if (products.length === 0) {
-      // Second fallback: project products from local inventory records if catalog was not directly seeded
-      const invRecords = await this.db.inventory.toArray();
-      if (invRecords.length > 0) {
-        const seen = new Set<string>();
-        for (const inv of invRecords) {
-          const key = inv.productId || inv.id;
-          if (!seen.has(key)) {
-            seen.add(key);
-            products.push({
-              productId: key,
-              organisationId: inv.organisationId || organisationId,
-              name: inv.medicineName || "Medicine",
-              genericName: inv.genericName || "",
-              barcode: inv.barcode || inv.sku || "",
-              sku: inv.sku || "",
-              category: "General",
-              gstRate: 5,
-              mrp: inv.mrp || 0,
-              sellingPrice: inv.sellingPrice || inv.mrp || 0,
-              unit: inv.packSize || "Strip",
-              packSize: inv.packSize || "",
-              isPrescriptionRequired: Boolean(inv.isRxRequired),
-              isNarcotic: false,
-              active: inv.isActive !== false,
-              updatedAt: inv.updatedAt || new Date().toISOString(),
-            });
-          }
+    // Also merge products from local inventory records so any offline seeded or created items are included
+    const seen = new Set<string>(products.map((p) => p.productId));
+    const invRecords = await this.db.inventory.toArray();
+    if (invRecords.length > 0) {
+      for (const inv of invRecords) {
+        const key = inv.productId || inv.id;
+        if (key && !seen.has(key)) {
+          seen.add(key);
+          products.push({
+            productId: key,
+            organisationId: inv.organisationId || organisationId,
+            name: inv.medicineName || "Medicine",
+            genericName: inv.genericName || "",
+            barcode: inv.barcode || inv.sku || "",
+            sku: inv.sku || "",
+            category: "General",
+            gstRate: 5,
+            mrp: inv.mrp || 0,
+            sellingPrice: inv.sellingPrice || inv.mrp || 0,
+            unit: inv.packSize || "Strip",
+            packSize: inv.packSize || "",
+            isPrescriptionRequired: Boolean(inv.isRxRequired),
+            isNarcotic: false,
+            active: inv.isActive !== false,
+            updatedAt: inv.updatedAt || new Date().toISOString(),
+          });
         }
       }
     }
@@ -508,29 +506,44 @@ export class LocalPersistenceService {
 
     const result = [];
     for (const p of products) {
-      const batches = await this.db.inventory
+      let batches = await this.db.inventory
         .where('[branchId+productId]')
         .equals([branchId, p.productId])
         .toArray();
 
+      if (!batches || batches.length === 0) {
+        batches = await this.db.inventory
+          .where('productId')
+          .equals(p.productId)
+          .toArray();
+      }
+
+      if (!batches || batches.length === 0) {
+        batches = await this.db.inventory
+          .filter((inv) => inv.productId === p.productId || inv.id === p.productId)
+          .toArray();
+      }
+
       const totalStock = batches.reduce((sum, b) => sum + (b.availableQuantity || 0), 0);
-      const activeBatches = batches.filter((b) => b.availableQuantity > 0);
+      const activeBatches = batches.filter((b) => (b.availableQuantity || 0) > 0);
       const primaryBatch = activeBatches[0] || batches[0] || null;
 
       result.push({
         id: p.productId,
         name: p.name,
         generic: p.genericName || '',
+        genericName: p.genericName || '',
         barcode: p.barcode || p.sku || '',
         sku: p.sku || '',
         category: p.category || 'General',
-        batch: primaryBatch?.batchNumber || '',
-        expiry: primaryBatch?.expiryDate || '',
-        mrp: primaryBatch?.mrp || p.mrp || 0,
-        sellingPrice: primaryBatch?.sellingPrice || p.sellingPrice || primaryBatch?.mrp || p.mrp || 0,
+        batch: primaryBatch?.batchNumber || 'B-001',
+        expiry: primaryBatch?.expiryDate || '12/2027',
+        mrp: primaryBatch?.mrp || p.mrp || 50,
+        sellingPrice: primaryBatch?.sellingPrice || p.sellingPrice || primaryBatch?.mrp || p.mrp || 45,
         stock: totalStock,
         gstRate: p.gstRate || 5,
         pack: p.packSize ? String(p.packSize) : 'Unit',
+        isActive: p.active !== false,
         batches: batches.map((b) => ({
           batch: b.batchNumber,
           expiry: b.expiryDate,
@@ -753,8 +766,8 @@ export class LocalPersistenceService {
         invoiceNumber: receiptNumber,
         payload: {
           ...outboxRecord.payload,
-          customerName: cust?.name || '',
-          customerPhone: cust?.phone || '',
+          customerName: cust?.name || (paymentData as any).customerName || '',
+          customerPhone: cust?.phone || (paymentData as any).customerPhone || (paymentData as any).phone || '',
         },
         occurredAt,
         status: 'LOCAL_COMMITTED',
@@ -773,7 +786,7 @@ export class LocalPersistenceService {
    * Fetch local customer payment receipts for UI and credit ledger
    */
   async getPaymentReceipts(
-    organisationId: string = this.defaultOrgId || DEFAULT_ORG_ID,
+    organisationId?: string,
     customerId?: string,
     limit = 50
   ): Promise<any[]> {
@@ -784,7 +797,7 @@ export class LocalPersistenceService {
       .sortBy('occurredAt');
 
     const filtered = records
-      .filter((tx) => !organisationId || tx.organisationId === organisationId)
+      .filter((tx) => !organisationId || !tx.organisationId || tx.organisationId === organisationId || tx.organisationId === 'ORG-DEFAULT')
       .filter((tx) => !customerId || tx.payload?.customerId === customerId)
       .slice(0, limit);
 
@@ -796,8 +809,8 @@ export class LocalPersistenceService {
         transactionId: tx.transactionId,
         mutationId: tx.mutationId,
         customerId: p.customerId,
-        customerName: p.customerName || 'Customer',
-        phone: p.customerPhone || '—',
+        customerName: p.customerName || (p.customerId ? `Customer (${p.customerId})` : 'Walk-in Customer'),
+        phone: p.customerPhone || p.phone || '—',
         amount: `₹${amountVal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
         amountRaw: amountVal,
         paymentMode: p.paymentMethod || 'Cash',

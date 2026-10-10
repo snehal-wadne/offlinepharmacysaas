@@ -7,7 +7,7 @@
 
 import { apiGet, apiPost, apiPut } from "./apiClient";
 
-export const fetchStaffMembers = () => apiGet("/api/staff");
+export const fetchStaffMembers = () => apiGet("/api/staff", { offlineCache: true });
 
 // payload: { email, name, phone?, roleId, branchId,
 //            professionalRegistrationNumber?, workingShift? }

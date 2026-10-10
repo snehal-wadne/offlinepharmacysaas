@@ -111,14 +111,21 @@ const styles = StyleSheet.create({
   cardContainerMobile: {
     flexGrow: 1,
     flexShrink: 0,
-    minWidth: '47%',
-    maxWidth: '48.5%',
-    minHeight: 95,
+    width: '100%',
+    minHeight: 88,
     justifyContent: 'space-between',
     paddingVertical: 10,
-    paddingHorizontal: 10,
-    borderRadius: 10,
-    borderLeftWidth: 3.5,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 2px 4px rgba(40, 36, 43, 0.04), 0 1px 2px rgba(40, 36, 43, 0.02)',
+      },
+      default: {
+        elevation: 1,
+      },
+    }),
   },
   activeRing: {
     borderColor: '#B9829A',

@@ -14,7 +14,7 @@ const {
 const getInventory = async (req, res) => {
   try {
     const organisationId = await getAuthorizedOrgId(req);
-    const branchId = await getAuthorizedBranchId(req, organisationId);
+    const branchId = await getAuthorizedBranchId(req, organisationId, { allowAll: true });
     const { search, limit, offset } = req.query;
 
     const inventory = await inventoryService.getInventory({
@@ -125,7 +125,7 @@ const deleteInventory = async (req, res) => {
 const getInventorySummary = async (req, res) => {
   try {
     const organisationId = await getAuthorizedOrgId(req);
-    const branchId = await getAuthorizedBranchId(req, organisationId);
+    const branchId = await getAuthorizedBranchId(req, organisationId, { allowAll: true });
 
     const summary = await inventoryService.getInventorySummary(
       organisationId,
@@ -148,7 +148,7 @@ const getInventorySummary = async (req, res) => {
 const getRecentStockMovements = async (req, res) => {
   try {
     const organisationId = await getAuthorizedOrgId(req);
-    const branchId = await getAuthorizedBranchId(req, organisationId);
+    const branchId = await getAuthorizedBranchId(req, organisationId, { allowAll: true });
     const limit = Number(req.query.limit) || 10;
 
     const movements = await inventoryService.getStockMovements(

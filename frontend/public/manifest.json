@@ -1,0 +1,14 @@
+{
+  "name": "PharmaFlow ERP",
+  "short_name": "PharmaFlow",
+  "description": "Pharmacy billing, inventory and ERP that works offline.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0F766E",
+  "theme_color": "#0F766E",
+  "icons": [
+    { "src": "/icon.png", "sizes": "192x192 512x512 1024x1024", "type": "image/png", "purpose": "any" }
+  ]
+}

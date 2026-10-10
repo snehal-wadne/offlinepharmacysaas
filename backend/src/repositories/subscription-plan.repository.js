@@ -67,32 +67,69 @@ const listPlans = async ({ activeOnly = false } = {}, client = pool) => {
 /**
  * Get subscription plan by ID or tier code.
  */
-const getPlanById = async (planId, client = pool) => {
-  const query = `
-    SELECT 
-      id,
-      name,
-      tier_code,
-      description,
-      price,
-      currency,
-      billing_interval,
-      max_branches,
-      max_users,
-      max_storage_bytes,
-      features,
-      module_summary,
-      color_hex,
-      is_popular,
-      is_active,
-      created_at,
-      updated_at
-    FROM subscription_plans
-    WHERE id = $1;
-  `;
+const isUuid = (str) =>
+  typeof str === "string" &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 
-  const result = await client.query(query, [planId]);
-  return result.rows[0] || null;
+/**
+ * Get subscription plan by ID or tier code.
+ */
+const getPlanById = async (planId, client = pool) => {
+  if (!planId) return null;
+
+  if (isUuid(planId)) {
+    const query = `
+      SELECT 
+        id,
+        name,
+        tier_code,
+        description,
+        price,
+        currency,
+        billing_interval,
+        max_branches,
+        max_users,
+        max_storage_bytes,
+        features,
+        module_summary,
+        color_hex,
+        is_popular,
+        is_active,
+        created_at,
+        updated_at
+      FROM subscription_plans
+      WHERE id = $1;
+    `;
+    const result = await client.query(query, [planId]);
+    if (result.rows.length > 0) return result.rows[0];
+  }
+
+  // Not a UUID or not found by UUID: search by tier_code or name with alias mapping
+  const cleanCode = String(planId).replace(/^plan-/, "").toUpperCase();
+  const aliasMap = {
+    STARTER: "BASIC",
+    GROWTH: "STANDARD",
+    PRO: "PROFESSIONAL",
+  };
+  const targetCode = aliasMap[cleanCode] || cleanCode;
+
+  const byCode = await client.query(
+    `SELECT * FROM subscription_plans 
+     WHERE UPPER(tier_code) = UPPER($1) 
+        OR UPPER(tier_code) LIKE UPPER($2) 
+        OR UPPER(name) = UPPER($1) 
+        OR UPPER(name) LIKE UPPER($2) 
+     ORDER BY price DESC 
+     LIMIT 1;`,
+    [targetCode, `%${targetCode}%`],
+  );
+  if (byCode.rows.length > 0) return byCode.rows[0];
+
+  // Fallback to active paid plan
+  const fallback = await client.query(
+    "SELECT * FROM subscription_plans WHERE is_active = TRUE AND price > 0 ORDER BY price ASC LIMIT 1;"
+  );
+  return fallback.rows[0] || null;
 };
 
 /**

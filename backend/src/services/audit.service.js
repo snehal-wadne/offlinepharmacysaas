@@ -67,6 +67,41 @@ class AuditService {
     }
   }
 
+  /**
+   * Record an audit event for the signed-in user of a request. Never throws.
+   * The acting branch is stored in the metadata so the log can show where it happened.
+   */
+  async logFromRequest(req, { action, entityType, entityId = null, metadata = {}, branchId = null }) {
+    try {
+      const organisationId = req.user?.organisationId || req.user?.organisation_id;
+      if (!organisationId || !action) return null;
+      const actingBranchId = branchId || req.user?.branchId || null;
+      let branchName = null;
+      if (actingBranchId) {
+        const b = await pool
+          .query("SELECT name FROM branches WHERE id::text = $1 LIMIT 1;", [String(actingBranchId)])
+          .catch(() => null);
+        branchName = b?.rows?.[0]?.name || null;
+      }
+      return await this.log({
+        organisationId,
+        userId: req.user?.id || null,
+        action,
+        entityType,
+        entityId,
+        metadata: {
+          ...metadata,
+          ...(actingBranchId ? { branchId: actingBranchId } : {}),
+          ...(branchName ? { branchName } : {}),
+        },
+        ipAddress: req.ip,
+        userAgent: req.headers?.["user-agent"],
+      });
+    } catch (e) {
+      return null;
+    }
+  }
+
   async getLogs({
     organisationId,
     branchId,
@@ -83,12 +118,17 @@ class AuditService {
       SELECT 
         al.id, al.action, al.entity_type AS "entityType", al.entity_id AS "entityId",
         al.metadata, al.ip_address AS "ipAddress", al.user_agent AS "userAgent", al.created_at AS "createdAt",
-        u.name AS "userName", u.email AS "userEmail", r.name AS "userRole"
+        u.name AS "userName", u.email AS "userEmail", u.phone AS "userPhone",
+        u.staff_id AS "userStaffId", r.name AS "userRole",
+        COALESCE(mb.name, CASE WHEN COALESCE(r.role_identifier, '') IN ('ADMIN', 'OWNER') THEN NULL ELSE pb.name END) AS "branchName",
+        COALESCE(mb.id, CASE WHEN COALESCE(r.role_identifier, '') IN ('ADMIN', 'OWNER') THEN NULL ELSE pb.id END) AS "branchId"
       FROM audit_logs al
       LEFT JOIN users u ON u.id = al.user_id
       LEFT JOIN organisation_memberships om ON om.user_id = u.id AND om.organisation_id = al.organisation_id
       LEFT JOIN branch_assignments ba ON ba.membership_id = om.id AND ba.is_primary = true
       LEFT JOIN roles r ON r.id = ba.role_id
+      LEFT JOIN branches pb ON pb.id = ba.branch_id
+      LEFT JOIN branches mb ON mb.id::text = al.metadata->>'branchId'
       WHERE al.organisation_id = $1
     `;
     const params = [organisationId];
@@ -104,9 +144,10 @@ class AuditService {
     }
 
     if (branchId && branchId !== "All Branches" && branchId !== "all" && branchId !== "No Active Branch") {
-      params.push(`%${branchId}%`);
-      const bIdx = params.length;
-      query += ` AND (al.metadata::text ILIKE $${bIdx} OR ba.branch_id::text ILIKE $${bIdx} OR al.metadata->>'branchId' ILIKE $${bIdx} OR al.metadata->>'branch_id' ILIKE $${bIdx} OR al.organisation_id IS NOT NULL)`;
+      // Only events that belong to this branch: explicitly tagged with it, or done by staff assigned to it.
+      // Owner/admin actions with no branch tag are organisation-wide and are not attributed to one branch.
+      params.push(String(branchId));
+      query += ` AND COALESCE(mb.id, CASE WHEN COALESCE(r.role_identifier, '') IN ('ADMIN', 'OWNER') THEN NULL ELSE pb.id END)::text = $${params.length}`;
     }
 
     query += ` ORDER BY al.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2};`;
@@ -136,6 +177,8 @@ class AuditService {
           name: row.userName || "System Operator",
           role: row.userRole || "Staff",
           email: row.userEmail || "system@pharmacy.internal",
+          phone: row.userPhone || "",
+          staffId: row.userStaffId || "",
           avatarInitials: row.userName
             ? row.userName.slice(0, 2).toUpperCase()
             : "SO",
@@ -151,10 +194,12 @@ class AuditService {
           (row.entityId
             ? `${row.entityType || "Record"} #${row.entityId}`
             : "Transaction"),
+        branchId: row.branchId || meta.branchId || null,
         branch:
           meta.branchName ||
           meta.fromBranchName ||
-          (branchId && branchId !== "All Branches" ? branchId : "Main Branch"),
+          row.branchName ||
+          "All Branches",
         severity:
           row.action &&
           (row.action.includes("CANCEL") ||

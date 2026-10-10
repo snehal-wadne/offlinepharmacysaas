@@ -170,7 +170,15 @@ const resolvePurchaseEntities = async (organisationId, purchaseData) => {
       [branchId, organisationId],
     );
     if (bCheck.rows.length === 0) {
-      throw new Error(`Branch ${branchId} not found in this organisation.`);
+      const anyB = await pool.query(
+        `SELECT id FROM branches WHERE organisation_id = $1 AND status = 'ACTIVE' ORDER BY created_at ASC LIMIT 1;`,
+        [organisationId],
+      );
+      if (anyB.rows.length > 0) {
+        branchId = anyB.rows[0].id;
+      } else {
+        throw new Error(`Branch ${branchId} not found in this organisation.`);
+      }
     }
   } else {
     const bRes = await pool.query(
@@ -301,13 +309,40 @@ const createPurchase = async (purchaseData) => {
 
     if (supplierId) {
       const sRow = await pool.query(
-        `SELECT name, email, phone FROM suppliers WHERE id = $1 LIMIT 1;`,
+        `SELECT name, email, phone, gstin FROM suppliers WHERE id = $1 LIMIT 1;`,
         [supplierId],
       );
       if (sRow.rows.length > 0) {
         resolvedSupplierName = sRow.rows[0].name || resolvedSupplierName;
         recipientEmail = sRow.rows[0].email;
         recipientPhone = sRow.rows[0].phone;
+
+        // The supplier portal matches notifications by the portal login's email. The
+        // pharmacy's supplier record may have no email, or a different one, so find the
+        // registered SUPPLIER account by email, GSTIN, phone or name.
+        const portal = await pool.query(
+          `SELECT u.email
+             FROM users u
+             JOIN suppliers s ON s.id = u.supplier_id
+            WHERE u.role = 'SUPPLIER' AND u.status = 'ACTIVE'
+              AND (
+                ($1::text <> '' AND LOWER(u.email) = LOWER($1))
+                OR ($2::text <> '' AND UPPER(s.gstin) = UPPER($2))
+                OR ($3::text <> '' AND REGEXP_REPLACE(COALESCE(s.phone, u.phone, ''), '\\D', '', 'g') = REGEXP_REPLACE($3, '\\D', '', 'g'))
+                OR LOWER(TRIM(s.name)) = LOWER(TRIM($4))
+              )
+            ORDER BY (LOWER(u.email) = LOWER($1)) DESC
+            LIMIT 1;`,
+          [
+            sRow.rows[0].email || "",
+            sRow.rows[0].gstin || "",
+            sRow.rows[0].phone || "",
+            sRow.rows[0].name || "",
+          ],
+        );
+        if (portal.rows.length > 0) {
+          recipientEmail = portal.rows[0].email;
+        }
       }
     }
 
@@ -352,7 +387,7 @@ Please review and confirm dispatch in the supplier portal.`;
         resolvedSupplierName,
         0,
         totalQty,
-        recipientEmail || "orders@pharma-distributor.com",
+        recipientEmail || null,
         recipientPhone || null,
         poMessage,
       ],

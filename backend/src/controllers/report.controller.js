@@ -14,7 +14,7 @@ class ReportController {
   async getSalesSummary(req, res) {
     try {
       const organisationId = await getAuthorizedOrgId(req);
-      const branchId = await getAuthorizedBranchId(req, organisationId);
+      const branchId = await getAuthorizedBranchId(req, organisationId, { allowAll: true });
       const { startDate, endDate } = req.query;
 
       const report = await reportService.getSalesSummary({
@@ -40,7 +40,7 @@ class ReportController {
   async getGstReport(req, res) {
     try {
       const organisationId = await getAuthorizedOrgId(req);
-      const branchId = await getAuthorizedBranchId(req, organisationId);
+      const branchId = await getAuthorizedBranchId(req, organisationId, { allowAll: true });
       const { month, year } = req.query;
 
       const report = await reportService.getGstReport({
@@ -66,7 +66,7 @@ class ReportController {
   async getCashierReconciliation(req, res) {
     try {
       const organisationId = await getAuthorizedOrgId(req);
-      const branchId = await getAuthorizedBranchId(req, organisationId);
+      const branchId = await getAuthorizedBranchId(req, organisationId, { allowAll: true });
       const { limit } = req.query;
 
       const report = await reportService.getCashierReconciliationReport({
@@ -95,7 +95,7 @@ class ReportController {
   async getExpiryReport(req, res) {
     try {
       const organisationId = await getAuthorizedOrgId(req);
-      const branchId = await getAuthorizedBranchId(req, organisationId);
+      const branchId = await getAuthorizedBranchId(req, organisationId, { allowAll: true });
 
       const report = await reportService.getExpiryReport({
         organisationId,
@@ -118,7 +118,7 @@ class ReportController {
   async getFastMoving(req, res) {
     try {
       const organisationId = await getAuthorizedOrgId(req);
-      const branchId = await getAuthorizedBranchId(req, organisationId);
+      const branchId = await getAuthorizedBranchId(req, organisationId, { allowAll: true });
       const { limit } = req.query;
 
       const report = await reportService.getFastMovingReport({
@@ -144,7 +144,7 @@ class ReportController {
   async getInventoryReport(req, res) {
     try {
       const organisationId = await getAuthorizedOrgId(req);
-      const branchId = await getAuthorizedBranchId(req, organisationId);
+      const branchId = await getAuthorizedBranchId(req, organisationId, { allowAll: true });
 
       const report = await reportService.getInventoryReport({
         organisationId,
@@ -167,7 +167,7 @@ class ReportController {
   async getProfitLossReport(req, res) {
     try {
       const organisationId = await getAuthorizedOrgId(req);
-      const branchId = await getAuthorizedBranchId(req, organisationId);
+      const branchId = await getAuthorizedBranchId(req, organisationId, { allowAll: true });
       const { startDate, endDate } = req.query;
 
       const report = await reportService.getProfitLossReport({

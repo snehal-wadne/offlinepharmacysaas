@@ -719,35 +719,23 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
     try {
       setAdjustSaving(true);
 
-      // 1. Persist directly to backend database (PostgreSQL)
+      // One operation: set the new quantity. Online, the server records the stock movement and
+      // audit entry itself; offline, the change is stored on this device and queued. (Recording a
+      // separate movement as well would apply the change twice offline.)
       const updatedPayload = {
         ...selectedItemForAction,
+        productId: selectedItemForAction.productId || selectedItemForAction.id,
+        batchNumber: selectedItemForAction.batchNo || selectedItemForAction.batchNumber || "B-1001",
         quantity: newQty,
+        reason: adjustReason,
       };
-      await updateInventoryEntry(selectedItemForAction.id, updatedPayload);
-
-      // 2. Record stock movement in backend audit history
-      const movementType =
-        adjustType === "DAMAGE_WRITEOFF"
-          ? "DAMAGE"
-          : adjustType === "CORRECTION"
-            ? "CORRECTION"
-            : "CYCLE_COUNT";
-
-      await recordStockMovementApi({
-        branchName:
-          selectedItemForAction.branchName ||
-          selectedItemForAction.branchId ||
-          "Main Dispensary",
-        type: movementType,
-        item:
-          selectedItemForAction.brandName ||
-          selectedItemForAction.medicineName,
-        quantity: rawDelta,
-        reference: `ADJ-${selectedItemForAction.sku || selectedItemForAction.batchNo || "MANUAL"}`,
-        status: signedDelta >= 0 ? "STOCK_IN" : "STOCK_OUT",
-        notes: adjustReason,
-      }).catch((e) => console.warn("Stock movement audit warning:", e.message));
+      const saved = await updateInventoryEntry(selectedItemForAction.id, updatedPayload);
+      if (!saved || saved.success === false) {
+        if (onShowToast) {
+          onShowToast(`✗ Adjustment not saved: ${saved?.error || "please try again"}`);
+        }
+        return;
+      }
 
       // 3. Update in-memory table state
       setStockItems((prev) =>
@@ -777,7 +765,9 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
 
       if (onShowToast) {
         onShowToast(
-          `✓ Stock adjustment of ${signedDelta > 0 ? `+${signedDelta}` : signedDelta} units saved to database! (New stock: ${newQty})`,
+          saved.isOffline
+            ? `✓ Stock adjustment of ${signedDelta > 0 ? `+${signedDelta}` : signedDelta} units saved on this device (New stock: ${newQty}). It will upload when you're back online.`
+            : `✓ Stock adjustment of ${signedDelta > 0 ? `+${signedDelta}` : signedDelta} units saved to database! (New stock: ${newQty})`,
         );
       }
     } catch (err) {
@@ -1524,7 +1514,8 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
           return;
         }
 
-        const updatedItem = res.data?.data || payload;
+        // Online: res.data.data; offline: res.data is the stored record itself.
+        const updatedItem = res.data?.data || (res.data?.id ? res.data : payload);
 
         setStockItems((prev) =>
           prev.map((item) =>
@@ -1558,7 +1549,7 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
           return;
         }
 
-        const newItem = res.data?.data || {
+        const newItem = res.data?.data || (res.data?.id ? res.data : null) || {
           ...payload,
           id: `adj-stk-${Date.now()}`,
           updatedBy: "Manager",
@@ -1572,7 +1563,9 @@ Note: ${supplierForm.notes || "Urgent stock replenishment requested."}`,
 
         if (onShowToast) {
           onShowToast(
-            `✓ Added "${newItem.brandName}" to database products table!`,
+            res.isOffline
+              ? `✓ Added "${newItem.brandName}" on this device. It will upload when you're back online.`
+              : `✓ Added "${newItem.brandName}" to database products table!`,
           );
         }
         refreshPosCatalog();

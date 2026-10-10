@@ -17,8 +17,26 @@ import { LocalPersistenceService } from "../db/services/localPersistenceService"
 import { syncEngine } from "../sync/syncEngine";
 import { connectivityService } from "../sync/connectivityService";
 import { getAccessToken } from "../api/supabaseClient";
+import { initOfflineAuthSync } from "./offlineAuth";
+import { startOfflineDataSync } from "./offlineDataSync";
 
 const localPersistenceService = new LocalPersistenceService(db);
+
+// This instance is separate from the app-wide one, so it must be told which pharmacy,
+// branch and user it is working for; otherwise records are filed under placeholder ids.
+function readTenantContext() {
+  try {
+    const ls = window.localStorage;
+    const cached = JSON.parse(ls?.getItem("cachedAuthUser") || "null");
+    return {
+      organisationId: ls?.getItem("organisationId") || cached?.organisationId || undefined,
+      branchId: ls?.getItem("activeBranchId") || cached?.branchId || undefined,
+      userId: cached?.id || undefined,
+    };
+  } catch (e) {
+    return {};
+  }
+}
 const OfflineSyncContext = createContext(null);
 
 export function OfflineSyncProvider({ children }) {
@@ -71,6 +89,8 @@ export function OfflineSyncProvider({ children }) {
           syncEngine.start();
         }
       });
+    initOfflineAuthSync();
+    startOfflineDataSync();
     const handleOnlineEvent = () => setIsOnline(true);
     const handleOfflineEvent = () => setIsOnline(false);
 
@@ -99,9 +119,34 @@ export function OfflineSyncProvider({ children }) {
 
     const loadData = async () => {
       try {
-        const prods = await db.products.toArray();
-        setProducts(prods);
-        console.log("Offline Products: ", prods);
+        const catalogProds = await localPersistenceService.getCatalogForPos(
+          localOrgId || "ORG-DEFAULT",
+          "BRANCH-MAIN",
+        );
+        if (catalogProds && catalogProds.length > 0) {
+          setProducts(catalogProds);
+        } else {
+          const prods = await db.products.toArray();
+          setProducts(
+            prods.map((p) => ({
+              id: p.productId || p.id,
+              name: p.name || "",
+              generic: p.genericName || p.generic || "",
+              genericName: p.genericName || p.generic || "",
+              barcode: p.barcode || p.sku || "",
+              sku: p.sku || "",
+              category: p.category || "General",
+              batch: "B-001",
+              expiry: "12/2027",
+              mrp: p.mrp || 50,
+              sellingPrice: p.sellingPrice || p.mrp || 45,
+              stock: 100,
+              gstRate: p.gstRate || 5,
+              pack: p.packSize ? String(p.packSize) : "Unit",
+              isActive: p.active !== false,
+            })),
+          );
+        }
 
         const custs = await db.customers.toArray();
         setCustomers(custs);
@@ -133,6 +178,13 @@ export function OfflineSyncProvider({ children }) {
                 : null;
               await seedInventoryFromServer(items, orgId, null);
               console.log("[OfflineSyncContext] Inventory cached to IndexedDB:", items.length, "items");
+              const updatedCatalog = await localPersistenceService.getCatalogForPos(
+                orgId || localOrgId || "ORG-DEFAULT",
+                "BRANCH-MAIN",
+              );
+              if (updatedCatalog && updatedCatalog.length > 0) {
+                setProducts(updatedCatalog);
+              }
             }
           } catch (err) {
             console.warn("[OfflineSyncContext] Inventory seeding skipped:", err.message);
@@ -204,15 +256,23 @@ export function OfflineSyncProvider({ children }) {
 
   const recordSaleOffline = useCallback(async (invoiceData, cartItems = []) => {
     const saleData = { ...invoiceData, items: cartItems };
-    await localPersistenceService.commitLocalSale(saleData);
+    const ctx = readTenantContext();
+    const result = await localPersistenceService.commitLocalSale(saleData, ctx);
 
-    // Reload data
-    const prods = await db.products.toArray();
-    setProducts(prods);
+    // Reload from the device: POS-shaped catalog (with the stock left after this sale)
+    try {
+      const catalog = await localPersistenceService.getCatalogForPos(
+        ctx.organisationId,
+        ctx.branchId,
+      );
+      setProducts(catalog);
+    } catch (e) {
+      console.warn("[OfflineSync] catalog reload after sale failed:", e?.message);
+    }
     const invRecords = await localPersistenceService.getRecentInvoices();
     setInvoices(invRecords);
 
-    return invoiceData;
+    return { ...invoiceData, invoiceNo: result.invoiceNumber };
   }, []);
 
   const recordHoldBillOffline = useCallback(async (billData) => {
@@ -241,7 +301,7 @@ export function OfflineSyncProvider({ children }) {
   }, []);
 
   const recordCustomerOffline = useCallback(async (customerData) => {
-    await localPersistenceService.saveCustomer(customerData);
+    await localPersistenceService.saveCustomer(customerData, readTenantContext());
     const custs = await db.customers.toArray();
     setCustomers(custs);
     return customerData;

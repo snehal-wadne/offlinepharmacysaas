@@ -1,3 +1,4 @@
+const auditService = require("../services/audit.service");
 /**
  * Branch Controller
  *
@@ -179,6 +180,17 @@ const createBranch = async (req, res) => {
       }
     }
 
+    auditService.logFromRequest(req, {
+      action: "BRANCH_CREATED",
+      entityType: "BRANCH",
+      entityId: newBranch?.id,
+      branchId: newBranch?.id,
+      metadata: {
+        branchName: newBranch?.name || branchData.name,
+        reason: `Branch "${newBranch?.name || branchData.name}" created.`,
+      },
+    });
+
     res.status(201).json({
       success: true,
       data: newBranch,
@@ -215,6 +227,18 @@ const updateBranch = async (req, res) => {
       updateData,
       organisationId,
     );
+    auditService.logFromRequest(req, {
+      action: "BRANCH_UPDATED",
+      entityType: "BRANCH",
+      entityId: id,
+      branchId: id,
+      metadata: {
+        branchName: updatedBranch?.name || updateData.name,
+        updatedFields: Object.keys(updateData || {}),
+        reason: `Branch "${updatedBranch?.name || updateData.name || id}" updated.`,
+      },
+    });
+
     res.status(200).json({
       success: true,
       data: updatedBranch,

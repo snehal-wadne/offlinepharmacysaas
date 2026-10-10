@@ -17,7 +17,7 @@ import {
   SkeletonItemCard,
 } from "../../components/common/SkeletonLoader";
 import PaginationControls from "../../components/common/PaginationControls";
-import { fetchInventory, saveInventoryEntry } from "../../api/inventoryApi";
+import { fetchInventory } from "../../api/inventoryApi";
 import BulkImportModal from "../../components/inventory/BulkImportModal";
 import {
   reorderStock,
@@ -59,24 +59,12 @@ export default function StockStatusScreen({
   selectedBranch = "All Branches",
 }) {
   const { width } = useWindowDimensions();
+  const isMobile = width < 768;
   const isCompact = width < 1100;
   const [activeTab, setActiveTab] = useState("all-stock");
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
   const [rawInventory, setRawInventory] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [addStockModalOpen, setAddStockModalOpen] = useState(false);
-  const [isSubmittingStock, setIsSubmittingStock] = useState(false);
-  const [newStockForm, setNewStockForm] = useState({
-    medicineName: "",
-    genericName: "",
-    sku: "",
-    batchNo: "",
-    quantity: "100",
-    amount: "45.00",
-    expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-    shelfLocation: "Rack A1",
-    supplierName: "Sun Pharma Care",
-  });
 
   useEffect(() => {
     loadInventoryData();
@@ -100,14 +88,32 @@ export default function StockStatusScreen({
           rawBranch !== "No Active Branch"
           ? rawBranch
           : undefined;
-      const res = await fetchInventory({ branchId: branchParam });
-      console.log(res.data?.data);
-
-      if (res && res.data?.data && Array.isArray(res.data?.data)) {
-        setRawInventory(res.data?.data);
-      } else {
-        setRawInventory([]);
+      // The API returns a page at a time (100 by default): keep fetching until every
+      // batch is loaded so Stock Status shows all the stock that is present.
+      const PAGE = 500;
+      const MAX_PAGES = 40;
+      const all = [];
+      const seen = new Set();
+      for (let page = 0; page < MAX_PAGES; page++) {
+        const res = await fetchInventory({
+          branchId: branchParam,
+          limit: PAGE,
+          offset: page * PAGE,
+        });
+        const rows = Array.isArray(res?.data?.data) ? res.data.data : [];
+        let added = 0;
+        for (const row of rows) {
+          const key = row.id || row.inventoryId || `${row.productId}-${row.batchNo}-${row.branchId}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            all.push(row);
+            added++;
+          }
+        }
+        // Stop on a short page, or when the (offline) source ignores paging and repeats rows.
+        if (rows.length < PAGE || added === 0) break;
       }
+      setRawInventory(all);
     } catch (err) {
       console.warn("Failed to load inventory for Stock Status:", err.message);
       setRawInventory([]);
@@ -127,7 +133,6 @@ export default function StockStatusScreen({
   const [bulkImportModalOpen, setBulkImportModalOpen] = useState(false);
 
   // Live DB Low Stock Items (Quantity < 50 Rule)
-  console.log(rawInventory);
 
   // Live DB Batch Expiry Timeline Mapping
   // ============================================================
@@ -884,68 +889,6 @@ export default function StockStatusScreen({
     handleOpenActionMenu(item, "expiry");
   };
 
-  const handleSaveNewStock = async () => {
-    if (!newStockForm.medicineName.trim()) {
-      if (onShowToast) onShowToast("Medicine Name is required.");
-      return;
-    }
-    try {
-      setIsSubmittingStock(true);
-      const rawBranch =
-        typeof selectedBranch === "object" && selectedBranch !== null
-          ? selectedBranch.id
-          : selectedBranch;
-      const branchParam =
-        rawBranch &&
-        rawBranch !== "All Branches" &&
-        rawBranch !== "all" &&
-        rawBranch !== "No Active Branch"
-          ? rawBranch
-          : undefined;
-
-      const payload = {
-        medicineName: newStockForm.medicineName.trim(),
-        brandName: newStockForm.medicineName.trim(),
-        genericName: newStockForm.genericName.trim() || newStockForm.medicineName.trim(),
-        sku: newStockForm.sku.trim() || `SKU-${Date.now().toString().slice(-6)}`,
-        batchNo: newStockForm.batchNo.trim() || `BAT-${Date.now().toString().slice(-4)}`,
-        quantity: parseInt(newStockForm.quantity, 10) || 100,
-        amount: parseFloat(newStockForm.amount) || 45.0,
-        expiryDate: newStockForm.expiryDate,
-        shelfLocation: newStockForm.shelfLocation.trim() || "Rack A1",
-        supplierName: newStockForm.supplierName.trim() || "Sun Pharma Care",
-        branchId: branchParam,
-      };
-
-      const res = await saveInventoryEntry(payload);
-      if (res && (res.success || res.data)) {
-        if (onShowToast) {
-          onShowToast(`✓ Added ${payload.medicineName} (${payload.quantity} units) to stock successfully!`);
-        }
-        setAddStockModalOpen(false);
-        setNewStockForm({
-          medicineName: "",
-          genericName: "",
-          sku: "",
-          batchNo: "",
-          quantity: "100",
-          amount: "45.00",
-          expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-          shelfLocation: "Rack A1",
-          supplierName: "Sun Pharma Care",
-        });
-        await loadInventoryData();
-      } else {
-        if (onShowToast) onShowToast(res?.error || "Failed to add stock entry.");
-      }
-    } catch (err) {
-      console.error("Save new stock entry failed:", err);
-      if (onShowToast) onShowToast("Error saving stock entry.");
-    } finally {
-      setIsSubmittingStock(false);
-    }
-  };
-
   return (
     <ScrollView
       style={styles.container}
@@ -1149,31 +1092,6 @@ export default function StockStatusScreen({
               </Text>
             </Pressable>
 
-            {/* Add Stock Entry Button */}
-            <Pressable
-              onPress={() => setAddStockModalOpen(true)}
-              style={[
-                styles.filterTogglePill,
-                {
-                  backgroundColor: "#2E7D5B",
-                  borderColor: "#2E7D5B",
-                  flexDirection: "row",
-                  alignItems: "center",
-                },
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Add new stock entry"
-            >
-              <Text style={{ fontSize: 13, marginRight: 5 }}>➕</Text>
-              <Text
-                style={[
-                  styles.filterToggleText,
-                  { color: "#FFFFFF", fontWeight: "700" },
-                ]}
-              >
-                Add Stock Entry
-              </Text>
-            </Pressable>
           </View>
         </View>
 
@@ -1919,192 +1837,6 @@ export default function StockStatusScreen({
         selectedBranch={selectedBranch}
       />
 
-      {/* Add Stock Entry Modal */}
-      <Modal
-        visible={addStockModalOpen}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setAddStockModalOpen(false)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.actionMenuCard, { maxWidth: 540, maxHeight: "90%" }]}>
-            <View style={styles.actionMenuHeader}>
-              <View>
-                <Text style={styles.actionMenuTitle}>Add Stock Entry</Text>
-                <Text style={styles.actionMenuSub}>
-                  Enter medicine batch details. Shows immediately with primary Status & Sub Status.
-                </Text>
-              </View>
-              <Pressable
-                onPress={() => setAddStockModalOpen(false)}
-                style={styles.closeActionBtn}
-              >
-                <Text style={styles.closeActionText}>✕</Text>
-              </Pressable>
-            </View>
-
-            <ScrollView style={{ padding: 18 }} showsVerticalScrollIndicator={true}>
-              <View style={{ gap: 12 }}>
-                <View>
-                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#28242B", marginBottom: 4 }}>
-                    Medicine / Brand Name *
-                  </Text>
-                  <TextInput
-                    style={styles.formInput}
-                    placeholder="e.g. Paracetamol 500mg"
-                    placeholderTextColor="#77717A"
-                    value={newStockForm.medicineName}
-                    onChangeText={(val) => setNewStockForm({ ...newStockForm, medicineName: val })}
-                  />
-                </View>
-
-                <View>
-                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#28242B", marginBottom: 4 }}>
-                    Generic / Salt Name
-                  </Text>
-                  <TextInput
-                    style={styles.formInput}
-                    placeholder="e.g. Acetaminophen"
-                    placeholderTextColor="#77717A"
-                    value={newStockForm.genericName}
-                    onChangeText={(val) => setNewStockForm({ ...newStockForm, genericName: val })}
-                  />
-                </View>
-
-                <View style={{ flexDirection: "row", gap: 12 }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#28242B", marginBottom: 4 }}>
-                      Batch Number
-                    </Text>
-                    <TextInput
-                      style={styles.formInput}
-                      placeholder="e.g. BAT-9081"
-                      placeholderTextColor="#77717A"
-                      value={newStockForm.batchNo}
-                      onChangeText={(val) => setNewStockForm({ ...newStockForm, batchNo: val })}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#28242B", marginBottom: 4 }}>
-                      SKU Code
-                    </Text>
-                    <TextInput
-                      style={styles.formInput}
-                      placeholder="e.g. SKU-PARA500"
-                      placeholderTextColor="#77717A"
-                      value={newStockForm.sku}
-                      onChangeText={(val) => setNewStockForm({ ...newStockForm, sku: val })}
-                    />
-                  </View>
-                </View>
-
-                <View style={{ flexDirection: "row", gap: 12 }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#28242B", marginBottom: 4 }}>
-                      Quantity (Units) *
-                    </Text>
-                    <TextInput
-                      style={styles.formInput}
-                      placeholder="100"
-                      keyboardType="numeric"
-                      placeholderTextColor="#77717A"
-                      value={newStockForm.quantity}
-                      onChangeText={(val) => setNewStockForm({ ...newStockForm, quantity: val })}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#28242B", marginBottom: 4 }}>
-                      Unit Price / MRP (₹)
-                    </Text>
-                    <TextInput
-                      style={styles.formInput}
-                      placeholder="45.00"
-                      keyboardType="numeric"
-                      placeholderTextColor="#77717A"
-                      value={newStockForm.amount}
-                      onChangeText={(val) => setNewStockForm({ ...newStockForm, amount: val })}
-                    />
-                  </View>
-                </View>
-
-                <View style={{ flexDirection: "row", gap: 12 }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#28242B", marginBottom: 4 }}>
-                      Expiry Date (YYYY-MM-DD)
-                    </Text>
-                    <TextInput
-                      style={styles.formInput}
-                      placeholder="2027-12-31"
-                      placeholderTextColor="#77717A"
-                      value={newStockForm.expiryDate}
-                      onChangeText={(val) => setNewStockForm({ ...newStockForm, expiryDate: val })}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#28242B", marginBottom: 4 }}>
-                      Shelf Location
-                    </Text>
-                    <TextInput
-                      style={styles.formInput}
-                      placeholder="e.g. Rack A1"
-                      placeholderTextColor="#77717A"
-                      value={newStockForm.shelfLocation}
-                      onChangeText={(val) => setNewStockForm({ ...newStockForm, shelfLocation: val })}
-                    />
-                  </View>
-                </View>
-
-                <View>
-                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#28242B", marginBottom: 4 }}>
-                    Supplier Name
-                  </Text>
-                  <TextInput
-                    style={styles.formInput}
-                    placeholder="e.g. Sun Pharma Care"
-                    placeholderTextColor="#77717A"
-                    value={newStockForm.supplierName}
-                    onChangeText={(val) => setNewStockForm({ ...newStockForm, supplierName: val })}
-                  />
-                </View>
-
-                <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 10, marginTop: 14 }}>
-                  <Pressable
-                    onPress={() => setAddStockModalOpen(false)}
-                    style={{
-                      paddingVertical: 10,
-                      paddingHorizontal: 16,
-                      borderRadius: 8,
-                      borderWidth: 1,
-                      borderColor: "#E5DFE4",
-                      backgroundColor: "#F8F5F7",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#77717A" }}>Cancel</Text>
-                  </Pressable>
-
-                  <Pressable
-                    onPress={handleSaveNewStock}
-                    disabled={isSubmittingStock}
-                    style={{
-                      paddingVertical: 10,
-                      paddingHorizontal: 18,
-                      borderRadius: 8,
-                      backgroundColor: "#2E7D5B",
-                      opacity: isSubmittingStock ? 0.7 : 1,
-                      cursor: "pointer",
-                    }}
-                  >
-                    <Text style={{ fontSize: 13, fontWeight: "700", color: "#FFFFFF" }}>
-                      {isSubmittingStock ? "Saving..." : "Add Stock Entry"}
-                    </Text>
-                  </Pressable>
-                </View>
-              </View>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
     </ScrollView>
   );
 }

@@ -20,8 +20,6 @@ const getMainDashboard = async (req, res, next) => {
     // ----------------------------------------------------------
     // Get organisation from authenticated user
     // ----------------------------------------------------------
-    console.log("this is user" , req.user);
-
     const organisationId =
       req.user?.organisationId ||
       req.user?.organisation_id ||
@@ -54,6 +52,15 @@ const getMainDashboard = async (req, res, next) => {
       !UUID_REGEX.test(branchId)
     ) {
       branchId = null;
+    }
+
+    // Branch-assigned staff only ever see their own branch's dashboard,
+    // regardless of what the client sends.
+    const isOrgWide = ["OWNER", "ADMIN", "SUPERADMIN"].includes(
+      String(req.user?.role || "").toUpperCase(),
+    );
+    if (!isOrgWide && req.user?.branchId) {
+      branchId = req.user.branchId;
     }
 
     // ----------------------------------------------------------

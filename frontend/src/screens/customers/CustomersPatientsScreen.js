@@ -377,7 +377,10 @@ if (Object.keys(errors).length > 0) {
 
     if (isEditing && editingId) {
       try {
-        await updateCustomer(editingId, payload);
+        const updated = await updateCustomer(editingId, payload);
+        if (!updated?.success) {
+          throw new Error(updated?.error || "The server rejected this change.");
+        }
         await loadCustomersData();
         setAddModalVisible(false);
         setIsEditing(false);
@@ -388,25 +391,24 @@ if (Object.keys(errors).length > 0) {
           );
         }
       } catch (err) {
-        console.warn("DB customer update failed, fallback local:", err.message);
-        setCustomers((prev) =>
-          prev.map((c) => (c.id === editingId ? { ...c, ...payload } : c)),
-        );
-        setAddModalVisible(false);
-        setIsEditing(false);
-        setEditingId(null);
+        console.error("Customer update failed:", err);
         if (onShowToast) {
-          onShowToast(`✓ Updated ${formData.name}`);
+          onShowToast(`✗ Could not update "${formData.name}": ${err?.message || "please try again"}`);
         }
       }
     } else {
       try {
-        await createCustomer(payload);
+        const created = await createCustomer(payload);
+        if (!created?.success) {
+          throw new Error(created?.error || "The server rejected this customer.");
+        }
         await loadCustomersData();
         setAddModalVisible(false);
         if (onShowToast) {
           onShowToast(
-            `✓ Added customer profile "${formData.name}" to database!`,
+            created.isOffline
+              ? `✓ Saved "${formData.name}" on this device. It will upload when you're back online.`
+              : `✓ Added customer profile "${formData.name}" to database!`,
           );
         }
      } catch (err) {
@@ -429,7 +431,10 @@ const confirmDeleteCustomer = async () => {
   if (!customerToDelete) return;
 
   try {
-    await deleteCustomer(customerToDelete.id);
+    const removed = await deleteCustomer(customerToDelete.id);
+    if (!removed?.success) {
+      throw new Error(removed?.error || "The server rejected this delete.");
+    }
     await loadCustomersData();
 
     if (onShowToast) {

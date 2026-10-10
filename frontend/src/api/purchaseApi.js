@@ -6,6 +6,7 @@
  * for stock additions (Goods Receipts) and supplier reorder notifications.
  */
 
+import { mutate, newLocalId, pendingLocalRows } from "../offline/offlineCrud";
 import { apiGet, apiPost, apiPut, apiDelete } from "./apiClient";
 import { localPersistenceService } from "../db";
 import { db } from "../db/pharmaflowDb";
@@ -46,7 +47,7 @@ export async function fetchPurchases(params = {}) {
           organisationId: p.organisationId || "ORG-DEFAULT",
           branchId: p.branchId || "BRANCH-MAIN",
           supplierId: p.supplierId || null,
-          supplierName: p.supplier || p.supplierName || "Sun Pharma Care",
+          supplierName: p.supplier || p.supplierName || "Supplier",
           status: p.rawStatus || p.status || "PENDING",
           totalAmount: p.numericAmount || parseFloat(String(p.amount || 0).replace(/[^0-9.]/g, "")) || 0,
           itemsCount: p.itemsCount || 1,
@@ -68,7 +69,15 @@ export async function fetchPurchases(params = {}) {
 
   // Resilient Offline Fallback
   try {
-    const localPurchases = await db.purchases.toArray();
+    let localPurchases = await db.purchases.toArray();
+    const wantedBranch =
+      typeof params.branchId === "object" && params.branchId !== null ? params.branchId.id : params.branchId;
+    if (wantedBranch && !["All Branches", "all", "No Active Branch"].includes(wantedBranch)) {
+      localPurchases = localPurchases.filter(
+        (p) => p.branchId === wantedBranch || !p.branchId || p.branchId === "BRANCH-MAIN",
+      );
+    }
+    const branchNames = new Map((await db.branches.toArray().catch(() => [])).map((b) => [b.id, b.name]));
     if (localPurchases && localPurchases.length > 0) {
       return {
         success: true,
@@ -77,13 +86,13 @@ export async function fetchPurchases(params = {}) {
           id: p.purchaseNumber || p.id,
           dbId: p.id,
           poNumber: p.purchaseNumber || p.id,
-          supplier: p.supplierName || "Sun Pharma Care",
+          supplier: p.supplierName || "Supplier",
           orderDate: p.orderDate || "Recent",
           expectedDate: "Standard",
           amount: `₹${Number(p.totalAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
           numericAmount: Number(p.totalAmount || 0),
           itemsCount: Number(p.itemsCount || 1),
-          branch: "Main Branch",
+          branch: branchNames.get(p.branchId) || "Main Branch",
           status: p.status || "Pending",
           rawStatus: p.status || "PENDING",
           notes: p.notes || "",
@@ -108,61 +117,80 @@ export async function fetchPurchases(params = {}) {
   return { success: true, isOffline: true, data: [] };
 }
 
+const localOrgId = () => {
+  try {
+    return window.localStorage?.getItem("organisationId") || "ORG-DEFAULT";
+  } catch (e) {
+    return "ORG-DEFAULT";
+  }
+};
+const localBranchId = () => {
+  try {
+    return window.localStorage?.getItem("activeBranchId") || "BRANCH-MAIN";
+  } catch (e) {
+    return "BRANCH-MAIN";
+  }
+};
+// Real order total from the lines; never an invented figure.
+const poTotal = (po) => {
+  const explicit = Number(po.totalAmount ?? po.subtotal);
+  if (Number.isFinite(explicit) && explicit > 0) return explicit;
+  return (po.items || []).reduce(
+    (sum, it) =>
+      sum +
+      (Number(it.orderedQuantity ?? it.quantity) || 0) * (Number(it.unitCost ?? it.price) || 0) +
+      (Number(it.taxAmount) || 0) -
+      (Number(it.discountAmount) || 0),
+    0,
+  );
+};
+
 /**
  * POST /api/purchases
  */
 export async function createPurchaseOrder(poData) {
-  try {
-    const res = await apiPost("/purchases", poData);
-    if (res && res.success) {
-      // Also notify supplier API asynchronously
-      notifySupplierApi({
-        supplierId: poData.supplierId,
-        supplierName: poData.supplierName || poData.supplier || "Sun Pharma Care",
-        medicineName: poData.items?.[0]?.productName || poData.medicine || "Purchase Order",
-        currentStock: 0,
-        reorderQuantity: poData.items?.reduce((s, it) => s + (Number(it.orderedQuantity || it.quantity) || 0), 0) || Number(poData.quantity) || 10,
-        channel: "PORTAL",
-        priority: "HIGH",
-        message: `New Purchase Order created for ${poData.supplierName || poData.supplier || "Supplier"}.`,
-      }).catch((e) => console.warn("[PurchaseApi] Supplier notify warning:", e?.message));
-
-      // Cache locally in Dexie
-      const created = res.data?.data || res.data || poData;
-      db.purchases.put({
+  const res = await apiPost("/purchases", poData);
+  if (res && res.success) {
+    // The backend already notifies the supplier when it creates the order: don't send a second one.
+    const created = res.data?.data || res.data || poData;
+    db.purchases
+      .put({
         id: String(created.id || `po-${Date.now()}`),
-        purchaseNumber: created.purchaseNumber || created.purchase_number || poData.purchaseNumber || `PO-${Date.now().toString().slice(-4)}`,
-        organisationId: poData.organisationId || "ORG-DEFAULT",
-        branchId: poData.branchId || "BRANCH-MAIN",
+        purchaseNumber:
+          created.purchaseNumber || created.purchase_number || poData.purchaseNumber || `PO-${Date.now().toString().slice(-4)}`,
+        organisationId: poData.organisationId || localOrgId(),
+        branchId: poData.branchId || localBranchId(),
         supplierId: poData.supplierId || null,
-        supplierName: poData.supplierName || poData.supplier || "Sun Pharma Care",
+        supplierName: poData.supplierName || poData.supplier || "Supplier",
         status: poData.status || "PENDING",
-        totalAmount: Number(poData.totalAmount || poData.subtotal || 12450),
+        totalAmount: poTotal(poData),
         itemsCount: poData.items?.length || 1,
         orderDate: new Date().toISOString(),
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         notes: poData.notes || "",
-      }).catch((e) => console.warn("[PurchaseApi] Cache single PO warning:", e?.message));
-
-      return res;
-    }
-  } catch (err) {
-    console.warn("[PurchaseApi] Online createPurchaseOrder failed, storing locally:", err?.message);
+      })
+      .catch((e) => console.warn("[PurchaseApi] Cache single PO warning:", e?.message));
+    return res;
   }
+  // Server answered and refused: show why, don't pretend it was saved.
+  if (res && !res.isOffline) return res;
 
   // Durable Offline Fallback
   const offlineId = `po-offline-${Date.now()}`;
   const finalPoNum = poData.purchaseNumber || `PO-${Date.now().toString().slice(-4)}`;
+  const orgId = poData.organisationId || (typeof window !== "undefined" && window.localStorage?.getItem("organisationId")) || "ORG-DEFAULT";
+  const branchId = poData.branchId || (typeof window !== "undefined" && window.localStorage?.getItem("activeBranchId")) || "BRANCH-MAIN";
+
   const offlineRecord = {
     id: offlineId,
     purchaseNumber: finalPoNum,
-    organisationId: poData.organisationId || "ORG-DEFAULT",
-    branchId: poData.branchId || "BRANCH-MAIN",
+    organisationId: orgId,
+    branchId: branchId,
     supplierId: poData.supplierId || null,
-    supplierName: poData.supplierName || poData.supplier || "Sun Pharma Care",
+    supplierName: poData.supplierName || poData.supplier || "Supplier",
     status: poData.status || "PENDING",
-    totalAmount: Number(poData.totalAmount || poData.subtotal || 12450),
+    totalAmount: poTotal(poData),
     itemsCount: poData.items?.length || 1,
     orderDate: new Date().toISOString().split("T")[0],
     createdAt: new Date().toISOString(),
@@ -173,16 +201,25 @@ export async function createPurchaseOrder(poData) {
   try {
     await db.purchases.put(offlineRecord);
     await db.sync_outbox.add({
-      table: "purchases",
-      action: "INSERT",
-      entityId: offlineId,
-      payload: poData,
+      mutationId: `MUT-PO-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      mutationType: "CREATE_PURCHASE",
+      organisationId: orgId,
+      branchId: branchId,
+      payload: {
+        ...poData,
+        id: offlineId,
+        purchaseNumber: finalPoNum,
+        organisationId: orgId,
+        branchId: branchId,
+      },
       status: "PENDING",
+      retryCount: 0,
+      nextRetryAt: new Date().toISOString(),
       createdAt: new Date().toISOString(),
     });
     notifySupplierApi({
       supplierId: poData.supplierId,
-      supplierName: poData.supplierName || poData.supplier || "Sun Pharma Care",
+      supplierName: poData.supplierName || poData.supplier || "Supplier",
       medicineName: poData.items?.[0]?.productName || "Purchase Order",
       currentStock: 0,
       reorderQuantity: 10,
@@ -344,48 +381,141 @@ export async function updateGoodsReceiptStatus(id, status) {
 }
 
 /**
- * GET /api/suppliers
+ * GET /api/suppliers  (cached in db.suppliers; offline uses that copy plus pending offline ones)
  */
 export async function fetchSuppliers(params = {}) {
   const query = new URLSearchParams();
   if (params.search) query.append("search", params.search);
-
   const queryString = query.toString() ? `?${query.toString()}` : "";
-  try {
-    const res = await apiGet(`/api/suppliers${queryString}`);
-    if (res && res.success) return res;
-  } catch (err) {
-    console.warn("[PurchaseApi] Online fetchSuppliers failed:", err?.message);
+
+  const res = await apiGet(`/api/suppliers${queryString}`);
+
+  if (res && res.success) {
+    const items = Array.isArray(res.data) ? res.data : res.data?.data || [];
+    const pending = await pendingLocalRows("suppliers");
+    if (!params.search) {
+      try {
+        const serverIds = new Set(items.map((x) => String(x.id)));
+        const pendingIds = new Set(pending.map((x) => x.id));
+        const stale = (await db.suppliers.toArray())
+          .filter((x) => !serverIds.has(x.id) && !pendingIds.has(x.id))
+          .map((x) => x.id);
+        if (stale.length) await db.suppliers.bulkDelete(stale);
+        if (items.length) {
+          await db.suppliers.bulkPut(
+            items.map((x) => ({
+              ...x,
+              id: String(x.id),
+              organisationId: x.organisation_id || x.organisationId || supplierOrgId(),
+            })),
+          );
+        }
+      } catch (e) {
+        console.warn("[PurchaseApi] Supplier cache notice:", e?.message);
+      }
+    }
+    const merged = [...pending, ...items];
+    const data = Array.isArray(res.data) ? merged : { ...res.data, count: merged.length, data: merged };
+    return { ...res, data };
   }
-  return { success: true, isOffline: true, data: [] };
+
+  if (res && !res.isOffline) return res;
+
+  let local = [];
+  try {
+    local = await db.suppliers.toArray();
+  } catch (e) {}
+  if (params.search) {
+    const q = String(params.search).toLowerCase();
+    local = local.filter(
+      (x) =>
+        String(x.name || "").toLowerCase().includes(q) ||
+        String(x.phone || "").toLowerCase().includes(q) ||
+        String(x.email || "").toLowerCase().includes(q),
+    );
+  }
+  const pendingIds = new Set((await pendingLocalRows("suppliers")).map((x) => x.id));
+  local = local.map((x) => ({ ...x, isOfflinePending: pendingIds.has(x.id) }));
+  return { success: true, isOffline: true, data: { success: true, count: local.length, data: local } };
 }
+
+const supplierOrgId = () => {
+  try {
+    return window.localStorage?.getItem("organisationId") || "ORG-DEFAULT";
+  } catch (e) {
+    return "ORG-DEFAULT";
+  }
+};
 
 /**
  * POST /api/suppliers
  */
 export async function createSupplier(supplierData) {
-  return apiPost("/api/suppliers", supplierData);
+  const localId = newLocalId("sup");
+  return mutate({
+    table: "suppliers",
+    action: "INSERT",
+    method: "POST",
+    url: "/api/suppliers",
+    payload: supplierData,
+    entityId: localId,
+    localRecord: {
+      status: "ACTIVE",
+      ...supplierData,
+      id: localId,
+      organisationId: supplierData.organisationId || supplierOrgId(),
+      name: supplierData.name || supplierData.companyName || "New Supplier",
+    },
+  });
 }
 
 /**
  * PATCH /api/suppliers/:id/status
  */
 export async function updateSupplierStatus(id, status) {
-  return apiPut(`/api/suppliers/${id}/status`, { status }, { method: "PATCH" });
+  const res = await mutate({
+    table: "suppliers",
+    action: "UPDATE",
+    method: "PATCH",
+    url: `/api/suppliers/${id}/status`,
+    payload: { status },
+    entityId: String(id),
+    localChanges: { status },
+  });
+  if (res.success && !res.isOffline) db.suppliers.update(String(id), { status }).catch(() => {});
+  return res;
 }
 
 /**
  * PUT /api/suppliers/:id
  */
 export async function updateSupplier(id, supplierData) {
-  return apiPut(`/api/suppliers/${id}`, supplierData);
+  const res = await mutate({
+    table: "suppliers",
+    action: "UPDATE",
+    method: "PUT",
+    url: `/api/suppliers/${id}`,
+    payload: supplierData,
+    entityId: String(id),
+    localChanges: supplierData,
+  });
+  if (res.success && !res.isOffline) db.suppliers.update(String(id), supplierData).catch(() => {});
+  return res;
 }
 
 /**
  * DELETE /api/suppliers/:id
  */
 export async function deleteSupplier(id) {
-  return apiDelete(`/api/suppliers/${id}`);
+  const res = await mutate({
+    table: "suppliers",
+    action: "DELETE",
+    method: "DELETE",
+    url: `/api/suppliers/${id}`,
+    entityId: String(id),
+  });
+  if (res.success && !res.isOffline) db.suppliers.delete(String(id)).catch(() => {});
+  return res;
 }
 
 /**

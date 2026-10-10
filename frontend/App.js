@@ -124,7 +124,6 @@ export default function App() {
     <ErrorBoundary>
       <View style={styles.container}>
         <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-        <GlobalNetworkBanner />
         {isSuperAdmin ? <SuperAdminLayout /> : <AppNavigator />}
       </View>
     </ErrorBoundary>

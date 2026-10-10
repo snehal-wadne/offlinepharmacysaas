@@ -109,7 +109,7 @@ const getAuthorizedOrgId = async (req) => {
 const getAuthorizedBranchId = async (
   req,
   organisationId,
-  { required = false } = {},
+  { required = false, allowAll = false } = {},
 ) => {
   if (!organisationId) {
     throw new Error("organisationId is required to resolve branch context.");
@@ -139,6 +139,16 @@ const getAuthorizedBranchId = async (
     candidateBranchId = null;
   }
 
+  // Read/list/report endpoints: no branch chosen means "all branches" for owners and admins.
+  // Branch staff are always held to their own branch.
+  if (!candidateBranchId && allowAll && !required) {
+    const role = String(req.user?.role || "").toUpperCase();
+    const orgWide = isSuperadmin || ["OWNER", "ADMIN", "SUPERADMIN"].includes(role);
+    if (orgWide) return null;
+    const own = req.user?.branchId || req.user?.branch_id;
+    if (own) return own;
+  }
+
   // Only fall back to user's assigned branch if branch context is required for this operation
   if (!candidateBranchId && required) {
     candidateBranchId =
@@ -149,6 +159,13 @@ const getAuthorizedBranchId = async (
   }
 
   if (!candidateBranchId) {
+    const defaultBranchRes = await pool.query(
+      "SELECT id FROM branches WHERE organisation_id = $1 AND status = 'ACTIVE' ORDER BY created_at ASC LIMIT 1;",
+      [organisationId]
+    );
+    if (defaultBranchRes.rows.length > 0) {
+      return defaultBranchRes.rows[0].id;
+    }
     if (required) {
       const err = new Error("Branch context is required for this operation.");
       err.statusCode = 400;
@@ -170,13 +187,24 @@ const getAuthorizedBranchId = async (
     );
 
     if (nameRes.rows.length === 0) {
-      const err = new Error(
-        `Branch '${candidateBranchId}' not found in the active organisation.`,
+      const defaultBranchRes = await pool.query(
+        "SELECT id FROM branches WHERE organisation_id = $1 AND status = 'ACTIVE' ORDER BY created_at ASC LIMIT 1;",
+        [organisationId]
       );
-      err.statusCode = 404;
-      throw err;
+      if (defaultBranchRes.rows.length > 0) {
+        resolvedBranchId = defaultBranchRes.rows[0].id;
+      } else if (required) {
+        const err = new Error(
+          `Branch '${candidateBranchId}' not found in the active organisation.`,
+        );
+        err.statusCode = 404;
+        throw err;
+      } else {
+        resolvedBranchId = null;
+      }
+    } else {
+      resolvedBranchId = nameRes.rows[0].id;
     }
-    resolvedBranchId = nameRes.rows[0].id;
   } else {
     // Verify branch belongs to organisation and is ACTIVE
     const branchCheck = await pool.query(

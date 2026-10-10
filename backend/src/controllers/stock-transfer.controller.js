@@ -39,7 +39,7 @@ class StockTransferController {
   async getTransfers(req, res) {
     try {
       const organisationId = await getAuthorizedOrgId(req);
-      const branchId = await getAuthorizedBranchId(req, organisationId);
+      const branchId = await getAuthorizedBranchId(req, organisationId, { allowAll: true });
       const { limit, offset } = req.query;
 
       const transfers = await stockTransferService.getTransfers({
