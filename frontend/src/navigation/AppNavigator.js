@@ -560,15 +560,54 @@ export default function AppNavigator() {
         console.warn("Auto Google onboard error:", onboardErr.message);
       }
 
-      // Fallback only if auto-onboarding network request failed
-      if (authIntent === "signup") {
-        setGoogleOnboardingData({
-          token: session.access_token,
-          email: session.user?.email || "",
-          name: gName,
+      // Secondary fallback: Try /api/auth/google
+      try {
+        const googleRes = await fetch(`${API_URL}/api/auth/google`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            token: session.access_token,
+            email: gEmail,
+            name: gName,
+          }),
         });
-        setAuthStatus("AUTHENTICATED_INCOMPLETE_ONBOARDING");
-        return;
+        const gData = await googleRes.json().catch(() => ({}));
+        if (googleRes.ok && gData.success && gData.user) {
+          const newUser = gData.user;
+          const userWithToken = { ...newUser, token: session.access_token };
+          setCurrentUser(userWithToken);
+          setGoogleOnboardingData(null);
+          setAuthError("");
+          setAuthSession({ organisationId: newUser.organisationId, token: session.access_token });
+          const isNewMulti = newUser.pharmacyMode === "multi" || chosenMode === "multi";
+          setIsMultiBranch(isNewMulti);
+          if (typeof window !== "undefined") {
+            window.localStorage?.setItem("pharmacyMode", isNewMulti ? "multi" : "single");
+          }
+          if (isNewMulti) {
+            setSelectedBranch(null);
+          } else {
+            setSelectedBranch(
+              newUser.branch || { id: newUser.branchId || "main", name: newUser.branchName || "Main Store" }
+            );
+          }
+          setCurrentRoute("dashboard");
+          updateBrowserRoute("dashboard", true);
+          setAuthStatus("AUTHENTICATED");
+          showToast(`Welcome, ${newUser.name}! Your pharmacy workspace is ready.`);
+          if (typeof window !== "undefined") {
+            try {
+              window.sessionStorage?.removeItem("pharmaflow_auth_intent");
+              window.sessionStorage?.removeItem("pharmaflow_pharmacy_name");
+              if (window.history && window.location.search) {
+                window.history.replaceState({}, document.title, window.location.pathname);
+              }
+            } catch (e) {}
+          }
+          return;
+        }
+      } catch (gErr) {
+        console.warn("Google login fallback error:", gErr.message);
       }
 
       // Check if we have an offline cached session before signing out

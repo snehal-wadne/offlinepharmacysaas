@@ -60,73 +60,35 @@ const authenticate = async (req, res, next) => {
           user = foundUser;
         } else if (supabaseDecoded.email) {
           // Automatic JIT provisioning for Google Auth Admin (Zero-form onboarding)
-          const googleEmail = supabaseDecoded.email.trim().toLowerCase();
-          const rawName =
-            supabaseDecoded.user_metadata?.full_name ||
-            supabaseDecoded.user_metadata?.name ||
-            googleEmail.split("@")[0] ||
-            "Pharmacy Admin";
-          const googleName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
-          const pharmacyName = `${googleName}'s Pharmacy`;
-
+          const authService = require("../services/auth.service");
           try {
-            // 1. Create Organization
-            const orgRes = await pool.query(
-              `INSERT INTO organisations (name, status)
-               VALUES ($1, 'ACTIVE')
-               RETURNING id, name;`,
-              [pharmacyName],
-            );
-            const orgId = orgRes.rows[0].id;
-
-            // 2. Create User as ADMIN
-            const newUserRes = await pool.query(
-              `INSERT INTO users (name, email, supabase_auth_id, role, status)
-               VALUES ($1, $2, $3, 'ADMIN', 'ACTIVE')
-               RETURNING id, name, email, phone, staff_id AS "staffId", status, 
-                         is_platform_superadmin, supabase_auth_id, role, supplier_id;`,
-              [googleName, googleEmail, subUuid],
-            );
-            user = newUserRes.rows[0];
-
-            // 3. Link owner to organisation
-            await pool
-              .query(
-                `UPDATE organisations SET owner_id = $1 WHERE id = $2;`,
-                [user.id, orgId],
-              )
-              .catch(() => {});
-
-            // 4. Create primary branch
-            const branchRes = await pool.query(
-              `INSERT INTO branches (organisation_id, name, branch_code, status)
-               VALUES ($1, 'Main Branch', 'BR-01', 'ACTIVE')
-               RETURNING id;`,
-              [orgId],
-            );
-            const branchId = branchRes.rows[0]?.id;
-
-            // 5. Create organisation membership
-            const memRes = await pool.query(
-              `INSERT INTO organisation_memberships (organisation_id, user_id, status)
-               VALUES ($1, $2, 'ACTIVE')
-               RETURNING id;`,
-              [orgId, user.id],
-            );
-            const memId = memRes.rows[0]?.id;
-
-            // 6. Assign to branch
-            if (branchId && memId) {
-              await pool
-                .query(
-                  `INSERT INTO branch_assignments (membership_id, branch_id, is_primary)
-                   VALUES ($1, $2, TRUE);`,
-                  [memId, branchId],
-                )
-                .catch(() => {});
+            const rawName =
+              supabaseDecoded.user_metadata?.full_name ||
+              supabaseDecoded.user_metadata?.name ||
+              supabaseDecoded.email.split("@")[0] ||
+              "Pharmacy Admin";
+            const provisioned = await authService.provisionGoogleAdminUser({
+              token,
+              email: supabaseDecoded.email,
+              name: rawName,
+              supabaseAuthId: subUuid,
+              pharmacyMode: "multi",
+            });
+            if (provisioned?.user) {
+              const freshUserRes = await pool.query(
+                `SELECT id, name, email, phone, staff_id AS "staffId", status, 
+                        is_platform_superadmin, role, supplier_id, supabase_auth_id
+                 FROM users
+                 WHERE id = $1
+                 LIMIT 1;`,
+                [provisioned.user.id],
+              );
+              if (freshUserRes.rows.length > 0) {
+                user = freshUserRes.rows[0];
+              }
             }
           } catch (jitErr) {
-            console.warn("JIT Google onboarding warning:", jitErr.message);
+            console.error("[AuthMiddleware] JIT Google provisioning error:", jitErr.message);
           }
         }
       }
@@ -324,9 +286,32 @@ const authenticate = async (req, res, next) => {
               organisation_name: m.organisation_name,
               owner_id: m.owner_id,
               branch_id: null,
-              role_name: user.role || "Staff Member",
-              role_identifier: user.role || "STAFF",
+              role_name: user.role || "Administrator",
+              role_identifier: user.role || "ADMIN",
             };
+          } else {
+            // Auto-provision organisation for admin with no organisation
+            try {
+              const authService = require("../services/auth.service");
+              const provisioned = await authService.provisionGoogleAdminUser({
+                email: user.email,
+                name: user.name,
+                supabaseAuthId: user.supabase_auth_id,
+                pharmacyMode: "multi",
+              });
+              if (provisioned?.organisation) {
+                selectedMembership = {
+                  organisation_id: provisioned.organisation.id,
+                  organisation_name: provisioned.organisation.name,
+                  owner_id: user.id,
+                  branch_id: provisioned.user?.branchId || null,
+                  role_name: "Pharmacy Owner",
+                  role_identifier: "OWNER",
+                };
+              }
+            } catch (pErr) {
+              console.warn("[AuthMiddleware] Organisation auto-provision warning:", pErr.message);
+            }
           }
         }
       }

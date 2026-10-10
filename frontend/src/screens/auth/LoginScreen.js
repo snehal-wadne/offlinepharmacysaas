@@ -173,19 +173,18 @@ export default function LoginScreen({
     try {
       const mode = overrideMode || (authMode === "signin" ? "login" : "signup");
       if (typeof window !== "undefined") {
-        window.sessionStorage?.setItem("pharmaflow_pharmacy_mode", pharmacyMode || "single");
-        if (ownerPharmacyName) {
-          window.sessionStorage?.setItem("pharmaflow_pharmacy_name", ownerPharmacyName.trim());
+        window.sessionStorage?.setItem("pharmaflow_pharmacy_mode", pharmacyMode || "multi");
+        if (typeof signUpPharmacyName !== "undefined" && signUpPharmacyName && signUpPharmacyName.trim()) {
+          window.sessionStorage?.setItem("pharmaflow_pharmacy_name", signUpPharmacyName.trim());
         }
       }
-      const { error } = await signInWithGoogle({ mode });
-      if (error) {
-        setErrorMessage(error.message || "Failed to initiate Google sign-in.");
-        setIsLoading(false);
+      const data = await signInWithGoogle({ mode });
+      if (data?.url && typeof window !== "undefined") {
+        window.location.assign(data.url);
       }
     } catch (err) {
       setIsLoading(false);
-      setErrorMessage(err.message || "Google sign-in failed.");
+      setErrorMessage(err?.message || "Google sign-in failed. Please check your internet connection.");
     }
   };
 
@@ -1237,11 +1236,52 @@ export default function LoginScreen({
                 </View>
               )}
 
-              {/* GOOGLE SIGN IN BUTTON (Hidden during Google Onboarding) */}
+              {/* GOOGLE SIGN IN BUTTON FOR PHARMACY ADMIN */}
               {!googleOnboardingData && (
                 <>
+                  <View
+                    style={{
+                      backgroundColor: "#F0FDF4",
+                      borderColor: "#86EFAC",
+                      borderWidth: 1,
+                      borderRadius: 10,
+                      padding: 10,
+                      marginBottom: 10,
+                    }}
+                  >
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      <Text style={{ fontSize: 13 }}>👑</Text>
+                      <Text
+                        style={{
+                          fontSize: 12.5,
+                          fontWeight: "700",
+                          color: "#166534",
+                        }}
+                      >
+                        Pharmacy Admin & Owner Access
+                      </Text>
+                    </View>
+                    <Text
+                      style={{
+                        fontSize: 11,
+                        color: "#15803D",
+                        marginTop: 3,
+                        lineHeight: 16,
+                      }}
+                    >
+                      Admins should log in directly with their Google email ID. Zero setup required: branch management, inventory & full admin rights are enabled automatically.
+                    </Text>
+                  </View>
+
                   <Pressable
-                    style={styles.googleButton}
+                    style={[
+                      styles.googleButton,
+                      {
+                        backgroundColor: "#FFFFFF",
+                        borderColor: "#10B981",
+                        borderWidth: 1.5,
+                      },
+                    ]}
                     onPress={() =>
                       handleGoogleAuth(
                         authMode === "signin" ? "login" : "signup",
@@ -1252,17 +1292,17 @@ export default function LoginScreen({
                     <View style={styles.googleIconCircle}>
                       <Text style={styles.googleGText}>G</Text>
                     </View>
-                    <Text style={styles.googleButtonText}>
+                    <Text style={[styles.googleButtonText, { fontWeight: "700", color: "#1F2937" }]}>
                       {authMode === "signin"
-                        ? "Continue with Google ID"
-                        : "Sign up with Google ID"}
+                        ? "Sign in with Google ID (Admin)"
+                        : "Sign up with Google ID (Admin)"}
                     </Text>
                   </Pressable>
 
                   <View style={styles.dividerRow}>
                     <View style={styles.dividerLine} />
                     <Text style={styles.dividerText}>
-                      or continue with email & password
+                      or sign in staff with credentials
                     </Text>
                     <View style={styles.dividerLine} />
                   </View>
@@ -2022,6 +2062,48 @@ export default function LoginScreen({
                             ? "🏬 Single Shop Direct Inventory Registration"
                             : "🏥 Pharmacy Admin & Chain Registration"}
                         </Text>
+                      </View>
+
+                      {/* 1-CLICK GOOGLE SIGN UP BANNER FOR ADMINS */}
+                      <View
+                        style={{
+                          backgroundColor: "#F0FDF4",
+                          borderColor: "#86EFAC",
+                          borderWidth: 1.5,
+                          borderRadius: 12,
+                          padding: 14,
+                          marginBottom: 16,
+                        }}
+                      >
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                          <Text style={{ fontSize: 16 }}>👑</Text>
+                          <Text style={{ fontSize: 13.5, fontWeight: "800", color: "#166534" }}>
+                            Instant Admin Sign Up with Google ID
+                          </Text>
+                        </View>
+                        <Text style={{ fontSize: 12, color: "#15803D", lineHeight: 17, marginBottom: 10 }}>
+                          Branch details and manual passwords are NOT required during sign up. Sign up directly with your Google email ID — your workspace will be ready instantly with full access to add branches and manage inventory.
+                        </Text>
+                        <Pressable
+                          style={[
+                            styles.googleButton,
+                            {
+                              backgroundColor: "#FFFFFF",
+                              borderColor: "#10B981",
+                              borderWidth: 1.5,
+                              paddingVertical: 10,
+                            },
+                          ]}
+                          onPress={() => handleGoogleAuth("signup")}
+                          disabled={isLoading}
+                        >
+                          <View style={styles.googleIconCircle}>
+                            <Text style={styles.googleGText}>G</Text>
+                          </View>
+                          <Text style={[styles.googleButtonText, { fontWeight: "700", color: "#1F2937" }]}>
+                            1-Click Admin Sign Up with Google ID
+                          </Text>
+                        </Pressable>
                       </View>
 
                       {/* Architecture Mode Notification Banner */}

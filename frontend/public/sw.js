@@ -79,7 +79,12 @@ async function networkFirst(req, cacheName, cacheKey, timeoutMs) {
   const cache = await caches.open(cacheName);
   try {
     const fresh = await withTimeout(fetch(req), timeoutMs);
-    if (fresh.ok && fresh.type === "basic") cache.put(cacheKey || req, fresh.clone());
+    if (fresh.ok) {
+      if (fresh.type === "basic") cache.put(cacheKey || req, fresh.clone());
+      return fresh;
+    }
+    const cached = await cache.match(cacheKey || req);
+    if (cached) return cached;
     return fresh;
   } catch (e) {
     const cached = await cache.match(cacheKey || req);

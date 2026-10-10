@@ -1025,17 +1025,316 @@ class AuthService {
    * - organisation_memberships (Owner membership)
    * - branch_assignments (Administrator primary assignment if branch exists)
    */
+  /**
+   * Provision or ensure a Google Admin user and their pharmacy organisation.
+   * Zero-form onboarding: automatically sets up the user as ADMIN/OWNER with
+   * an active organisation (in multi mode so they can add branches freely),
+   * a default Main Branch, system roles, and active subscription.
+   */
+  async provisionGoogleAdminUser({
+    token,
+    email,
+    name,
+    supabaseAuthId,
+    pharmacyName,
+    pharmacyMode = "multi",
+    branchName = "Main Branch",
+  }) {
+    const verifiedEmail = String(email || "").trim().toLowerCase();
+    if (!verifiedEmail) {
+      throw new Error("Verified email is required for Google admin provisioning.");
+    }
+
+    const isUuid = (str) =>
+      typeof str === "string" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+
+    const uuidSub = isUuid(supabaseAuthId)
+      ? supabaseAuthId
+      : (() => {
+          const hash = crypto.createHash("md5").update(supabaseAuthId || verifiedEmail).digest("hex");
+          return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-a${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
+        })();
+
+    const cleanName = (
+      name ||
+      (verifiedEmail.split("@")[0]
+        ? verifiedEmail.split("@")[0].charAt(0).toUpperCase() + verifiedEmail.split("@")[0].slice(1)
+        : "Pharmacy Admin")
+    ).trim();
+
+    const cleanPharmacyName = (pharmacyName || `${cleanName}'s Pharmacy`).trim();
+    const cleanMode = (pharmacyMode || "multi").toLowerCase() === "single" ? "single" : "multi";
+    const cleanBranchName = (branchName || (cleanMode === "multi" ? "Main Branch" : "Main Store")).trim();
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      // 1. Check if user already exists in PostgreSQL
+      let user = null;
+      const userRes = await client.query(
+        `SELECT id, name, email, phone, staff_id AS "staffId", status, supabase_auth_id, role
+         FROM users
+         WHERE LOWER(email) = LOWER($1) OR supabase_auth_id = $2
+         LIMIT 1;`,
+        [verifiedEmail, uuidSub],
+      );
+
+      if (userRes.rows.length > 0) {
+        user = userRes.rows[0];
+        // Ensure user is active, role is ADMIN, and supabase_auth_id is linked
+        await client.query(
+          `UPDATE users 
+           SET supabase_auth_id = COALESCE($1, supabase_auth_id),
+               role = CASE WHEN role = 'STAFF' OR role IS NULL THEN 'ADMIN' ELSE role END,
+               status = 'ACTIVE'
+           WHERE id = $2;`,
+          [uuidSub, user.id],
+        );
+      } else {
+        // Create user as ADMIN
+        const insertUserRes = await client.query(
+          `INSERT INTO users (name, email, supabase_auth_id, role, status)
+           VALUES ($1, $2, $3, 'ADMIN', 'ACTIVE')
+           RETURNING id, name, email, phone, staff_id AS "staffId", status, supabase_auth_id, role, created_at;`,
+          [cleanName, verifiedEmail, uuidSub],
+        );
+        user = insertUserRes.rows[0];
+      }
+
+      // 2. Check if user already owns an organisation
+      let organisation = null;
+      const orgRes = await client.query(
+        `SELECT id, name, pharmacy_code, pharmacy_mode, status, owner_id
+         FROM organisations
+         WHERE owner_id = $1 AND status IN ('ACTIVE', 'PENDING_PAYMENT')
+         LIMIT 1;`,
+        [user.id],
+      );
+
+      if (orgRes.rows.length > 0) {
+        organisation = orgRes.rows[0];
+      } else {
+        // Check if user has an active membership
+        const memCheck = await client.query(
+          `SELECT o.id, o.name, o.pharmacy_code, o.pharmacy_mode, o.status, o.owner_id
+           FROM organisation_memberships om
+           JOIN organisations o ON o.id = om.organisation_id AND o.status IN ('ACTIVE', 'PENDING_PAYMENT')
+           WHERE om.user_id = $1 AND om.status = 'ACTIVE'
+           LIMIT 1;`,
+          [user.id],
+        );
+
+        if (memCheck.rows.length > 0) {
+          organisation = memCheck.rows[0];
+        } else {
+          // Generate sequential Pharmacy Code with fallback
+          let pharmacyCode = null;
+          try {
+            pharmacyCode = await getNextBusinessNumber({
+              sequenceType: "PHARMACY_CODE",
+              client,
+            });
+          } catch (seqErr) {
+            pharmacyCode = `PHARM-${Math.floor(1000 + Math.random() * 9000)}`;
+          }
+
+          // Insert Organisation with owner_id = user.id
+          const insertOrgRes = await client.query(
+            `INSERT INTO organisations (
+               owner_id, name, pharmacy_code, admin_name, email,
+               pharmacy_mode, status
+             )
+             VALUES ($1, $2, $3, $4, $5, $6, 'ACTIVE')
+             RETURNING *;`,
+            [user.id, cleanPharmacyName, pharmacyCode, cleanName, verifiedEmail, cleanMode],
+          );
+          organisation = insertOrgRes.rows[0];
+        }
+      }
+
+      // 3. Ensure Organisation System Roles exist
+      await seedOrganisationSystemRoles(organisation.id, client).catch(() => {});
+
+      let adminRoleId = null;
+      const roleRes = await client.query(
+        `SELECT id FROM roles
+         WHERE organisation_id = $1 AND (role_identifier = 'ADMIN' OR name = 'Administrator')
+         LIMIT 1;`,
+        [organisation.id],
+      );
+      if (roleRes.rows.length > 0) {
+        adminRoleId = roleRes.rows[0].id;
+      }
+
+      // 4. Ensure Organisation Membership exists
+      let membershipId = null;
+      const memRes = await client.query(
+        `SELECT id FROM organisation_memberships
+         WHERE organisation_id = $1 AND user_id = $2
+         LIMIT 1;`,
+        [organisation.id, user.id],
+      );
+      if (memRes.rows.length > 0) {
+        membershipId = memRes.rows[0].id;
+      } else {
+        const insertMemRes = await client.query(
+          `INSERT INTO organisation_memberships (organisation_id, user_id, status)
+           VALUES ($1, $2, 'ACTIVE')
+           RETURNING id;`,
+          [organisation.id, user.id],
+        );
+        membershipId = insertMemRes.rows[0].id;
+      }
+
+      // 5. Ensure at least one primary Branch exists
+      let branch = null;
+      const branchRes = await client.query(
+        `SELECT id, name, branch_code AS "branchCode"
+         FROM branches
+         WHERE organisation_id = $1 AND status = 'ACTIVE'
+         ORDER BY created_at ASC
+         LIMIT 1;`,
+        [organisation.id],
+      );
+
+      if (branchRes.rows.length > 0) {
+        branch = branchRes.rows[0];
+      } else {
+        let branchCode = "BR-1001";
+        try {
+          branchCode = await getNextBusinessNumber({
+            organisationId: organisation.id,
+            sequenceType: "BRANCH",
+            client,
+          });
+        } catch (bSeqErr) {
+          branchCode = "BR-1001";
+        }
+
+        const insertBranchRes = await client.query(
+          `INSERT INTO branches (
+             organisation_id, branch_code, name, facility_type,
+             admin_name, contact_person, status
+           )
+           VALUES ($1, $2, $3, 'RETAIL_DISPENSARY', $4, $4, 'ACTIVE')
+           RETURNING id, name, branch_code AS "branchCode";`,
+          [organisation.id, branchCode, cleanBranchName, cleanName],
+        );
+        branch = insertBranchRes.rows[0];
+
+        // Seed initial pharmacy inventory
+        await seedInitialPharmacyData(organisation.id, branch.id, client).catch(() => {});
+      }
+
+      // 6. Ensure Branch Assignment exists with ADMIN role
+      if (branch && membershipId && adminRoleId) {
+        await client.query(
+          `INSERT INTO branch_assignments (membership_id, branch_id, role_id, is_primary)
+           VALUES ($1, $2, $3, TRUE)
+           ON CONFLICT (membership_id, branch_id) 
+           DO UPDATE SET role_id = EXCLUDED.role_id, is_primary = TRUE;`,
+          [membershipId, branch.id, adminRoleId],
+        ).catch(() => {});
+      }
+
+      // 7. Ensure Active Subscription exists
+      const subRes = await client.query(
+        `SELECT id FROM subscriptions WHERE organisation_id = $1 AND status = 'ACTIVE' LIMIT 1;`,
+        [organisation.id],
+      );
+      if (subRes.rows.length === 0) {
+        const freePlanRes = await client.query(
+          `SELECT id FROM subscription_plans WHERE tier_code = 'FREE' LIMIT 1;`,
+        );
+        let freePlanId = freePlanRes.rows[0]?.id;
+        if (!freePlanId) {
+          const createPlanRes = await client.query(
+            `INSERT INTO subscription_plans (
+               name, tier_code, description, price, currency, billing_interval,
+               max_branches, max_users, color_hex, module_summary, is_popular, is_active, features
+             ) VALUES (
+               'Free', 'FREE', 'Free tier for pharmacy onboardings', 0.0, 'INR', 'YEAR',
+               10, 20, '#10B981', 'Core POS & Inventory', FALSE, TRUE, '["POS", "Inventory", "Branches"]'
+             ) RETURNING id;`,
+          );
+          freePlanId = createPlanRes.rows[0].id;
+        }
+
+        await client.query(
+          `INSERT INTO subscriptions (
+             organisation_id, plan_id, status, billing_cycle, auto_renew, started_at, current_period_start
+           ) VALUES ($1, $2, 'ACTIVE', 'YEARLY', TRUE, NOW(), NOW())
+           ON CONFLICT DO NOTHING;`,
+          [organisation.id, freePlanId],
+        ).catch(() => {});
+      }
+
+      await client.query("COMMIT");
+
+      return {
+        success: true,
+        message: "Google admin account ready.",
+        token,
+        user: {
+          id: user.id,
+          supabaseAuthId: user.supabase_auth_id || uuidSub,
+          name: user.name,
+          adminName: user.name,
+          email: user.email,
+          phone: user.phone || null,
+          role: "OWNER",
+          roleName: "Pharmacy Owner",
+          isOwner: true,
+          organisationId: organisation.id,
+          organisationName: organisation.name,
+          pharmacyMode: organisation.pharmacy_mode || cleanMode,
+          pharmacyCode: organisation.pharmacy_code,
+          branchId: branch?.id || null,
+          branchName: branch?.name || null,
+          hasBranch: Boolean(branch),
+          branch: branch
+            ? {
+                id: branch.id,
+                name: branch.name,
+                branchCode: branch.branchCode,
+              }
+            : null,
+        },
+        organisation: {
+          id: organisation.id,
+          name: organisation.name,
+          pharmacyCode: organisation.pharmacy_code,
+        },
+        branch: branch
+          ? {
+              id: branch.id,
+              name: branch.name,
+            }
+          : null,
+      };
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => {});
+      console.error("[Auth] Provision Google Admin Error:", err);
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
   async googleOnboard(onboardData) {
     const {
       token,
-      ownerName,
       adminName,
+      ownerName,
       name,
+      email,
+      phone,
       pharmacyName,
       organisationName,
-      branches,
       branchName,
-      phone,
+      branches,
       address,
       city,
       state,
@@ -1053,7 +1352,6 @@ class AuthService {
       );
     }
 
-    // Verify Supabase Google session token
     const decoded = await verifySupabaseToken(token);
     if (!decoded || !decoded.sub) {
       throw new Error("Invalid or unverified Supabase Google session token.");
@@ -1092,229 +1390,41 @@ class AuthService {
       decoded.user_metadata?.name ||
       "Pharmacy Owner"
     ).trim();
-    const cleanPharmacyMode =
-      (pharmacyMode || "single").trim().toLowerCase() === "multi"
-        ? "multi"
-        : "single";
+
     const cleanPharmacyName = (
       pharmacyName ||
       organisationName ||
       (cleanName ? `${cleanName}'s Pharmacy` : "My Pharmacy")
     ).trim();
+
+    const cleanPharmacyMode =
+      (pharmacyMode || "multi").trim().toLowerCase() === "single"
+        ? "single"
+        : "multi";
+
     const cleanBranchName = (
       branchName ||
       (isNaN(branches) ? branches : null) ||
       (cleanPharmacyMode === "multi" ? "Main Branch" : "Main Store")
     ).trim();
-    const cleanGstNumber = (gstNumber || gstin || "").trim() || null;
-    const cleanBusinessType = (businessType || "Private Limited").trim();
 
-    // Check if user already exists in PostgreSQL
-    const existingUser = await pool.query(
-      "SELECT id FROM users WHERE (supabase_auth_id = $1 OR LOWER(email) = LOWER($2)) AND status = 'ACTIVE' LIMIT 1;",
-      [uuidSub, verifiedEmail],
-    );
-    if (existingUser.rows.length > 0) {
-      return await this.googleLogin({ token });
-    }
-
-    // Execute transactional onboarding in PostgreSQL
-    const client = await pool.connect();
-    try {
-      await client.query("BEGIN");
-
-      // A. Insert Owner User
-      const insertUserRes = await client.query(
-        `INSERT INTO users (name, email, phone, supabase_auth_id, role, status)
-         VALUES ($1, $2, $3, $4, 'ADMIN', 'ACTIVE')
-         RETURNING id, name, email, phone, supabase_auth_id, role, status, created_at;`,
-        [cleanName, verifiedEmail, phone || null, uuidSub],
-      );
-      const user = insertUserRes.rows[0];
-
-      // B. Generate sequential Pharmacy Code (e.g. PHARM-1001)
-      const pharmacyCode = await getNextBusinessNumber({
-        sequenceType: "PHARMACY_CODE",
-        client,
-      });
-
-      // C. Insert Organisation
-      const insertOrgRes = await client.query(
-        `INSERT INTO organisations (
-           owner_id, name, pharmacy_code, admin_name, email, phone,
-           address, city, state, pincode, gst_number, business_type, pharmacy_mode, status
-         )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'ACTIVE')
-         RETURNING *;`,
-        [
-          user.id,
-          cleanPharmacyName,
-          pharmacyCode,
-          cleanName,
-          verifiedEmail,
-          phone || null,
-          address || "Registered Address",
-          city || "City",
-          state || "Maharashtra",
-          pincode || "400001",
-          cleanGstNumber,
-          cleanBusinessType,
-          cleanPharmacyMode,
-        ],
-      );
-      const organisation = insertOrgRes.rows[0];
-
-      // D. Free Plan Subscription Assignment
-      const freePlanRes = await client.query(
-        `SELECT id FROM subscription_plans 
-         WHERE tier_code = 'FREE' 
-         LIMIT 1;`,
-      );
-      let freePlanId = freePlanRes.rows[0]?.id;
-      if (!freePlanId) {
-        const createPlanRes = await client.query(
-          `INSERT INTO subscription_plans (
-             name, tier_code, description, price, currency, billing_interval,
-             max_branches, max_users, color_hex, module_summary, is_popular, is_active, features
-           ) VALUES (
-             'Free', 'FREE', 'Free tier for new pharmacy onboardings', 0.0, 'INR', 'YEAR',
-             1, 2, '#10B981', 'Core POS & Inventory', FALSE, TRUE, '["Basic POS", "Inventory Management", "Single Branch"]'
-           ) RETURNING id;`,
-        );
-        freePlanId = createPlanRes.rows[0].id;
-      }
-
-      await client.query(
-        `INSERT INTO subscriptions (
-           organisation_id, plan_id, status, billing_cycle, auto_renew, started_at, current_period_start
-         ) VALUES ($1, $2, 'ACTIVE', 'YEARLY', TRUE, NOW(), NOW());`,
-        [organisation.id, freePlanId],
-      );
-
-      // E. Generate sequential Branch Code & Insert Initial Branch (if requested)
-      let branch = null;
-      const shouldCreateBranch =
-        createInitialBranch !== false && Boolean(cleanBranchName);
-
-      if (shouldCreateBranch) {
-        const branchCode = await getNextBusinessNumber({
-          organisationId: organisation.id,
-          sequenceType: "BRANCH",
-          client,
-        });
-
-        const insertBranchRes = await client.query(
-          `INSERT INTO branches (
-             organisation_id, branch_code, name, facility_type,
-             admin_name, contact_person,
-             address, city, state, postal_code, phone, status
-           )
-           VALUES ($1, $2, $3, 'RETAIL_DISPENSARY', $4, $4, $5, $6, $7, $8, $9, 'ACTIVE')
-           RETURNING id, name, branch_code, admin_name, contact_person;`,
-          [
-            organisation.id,
-            branchCode,
-            cleanBranchName,
-            cleanName,
-            address || "Registered Address",
-            city || "City",
-            state || "Maharashtra",
-            pincode || "400001",
-            phone || null,
-          ],
-        );
-        branch = insertBranchRes.rows[0];
-      }
-
-      // F. Seed Organisation System Roles
-      await seedOrganisationSystemRoles(organisation.id, client);
-
-      const adminRoleRes = await client.query(
-        `SELECT id FROM roles 
-         WHERE organisation_id = $1 AND (role_identifier = 'ADMIN' OR name = 'Administrator')
-         LIMIT 1;`,
-        [organisation.id],
-      );
-      if (adminRoleRes.rows.length === 0) {
-        throw new Error(
-          "Failed to configure administrator role for new organisation.",
-        );
-      }
-      const adminRoleId = adminRoleRes.rows[0].id;
-
-      // G. Create Organisation Membership
-      const insertMemRes = await client.query(
-        `INSERT INTO organisation_memberships (organisation_id, user_id, status)
-         VALUES ($1, $2, 'ACTIVE')
-         RETURNING id;`,
-        [organisation.id, user.id],
-      );
-      const membershipId = insertMemRes.rows[0].id;
-
-      // H. Create Branch Assignment with Administrator Role as Primary (if branch created)
-      if (branch) {
-        await client.query(
-          `INSERT INTO branch_assignments (membership_id, branch_id, role_id, is_primary)
-           VALUES ($1, $2, $3, TRUE);`,
-          [membershipId, branch.id, adminRoleId],
-        );
-
-        // I. Seed Initial Pharmacy Inventory, Catalog & Purchase Orders
-        await seedInitialPharmacyData(organisation.id, branch.id, client).catch(
-          (seedErr) => console.warn("[Auth] Google initial pharmacy seed error:", seedErr.message)
-        );
-      }
-
-      await client.query("COMMIT");
-
-      return {
-        success: true,
-        message:
-          "Pharmacy organisation and owner account onboarded successfully via Google.",
-        token,
-        user: {
-          id: user.id,
-          supabaseAuthId: user.supabase_auth_id,
-          name: user.name,
-          adminName: user.name,
-          email: user.email,
-          role: "OWNER",
-          roleName: "Pharmacy Owner",
-          isOwner: true,
-          pharmacyMode: organisation.pharmacy_mode || cleanPharmacyMode,
-          organisationId: organisation.id,
-          organisationName: organisation.name,
-          pharmacyCode: organisation.pharmacy_code,
-          branchId: branch?.id || null,
-          branchName: branch?.name || null,
-          hasBranch: Boolean(branch),
-        },
-        organisation: {
-          id: organisation.id,
-          name: organisation.name,
-          pharmacyCode: organisation.pharmacy_code,
-        },
-        branch: branch
-          ? {
-              id: branch.id,
-              name: branch.name,
-            }
-          : null,
-      };
-    } catch (err) {
-      await client.query("ROLLBACK").catch(() => {});
-      console.error("Google onboarding transaction error:", err);
-      throw new Error(`Failed to complete pharmacy onboarding: ${err.message}`);
-    } finally {
-      client.release();
-    }
+    return await this.provisionGoogleAdminUser({
+      token,
+      email: verifiedEmail,
+      name: cleanName,
+      supabaseAuthId: uuidSub,
+      pharmacyName: cleanPharmacyName,
+      pharmacyMode: cleanPharmacyMode,
+      branchName: cleanBranchName,
+    });
   }
 
   /**
    * Google OAuth Login / Verification via Supabase Auth
    * Strictly requires verified Supabase JWT token.
+   * Auto-provisions new admins with zero-form onboarding.
    */
-  async googleLogin({ token, branchId }) {
+  async googleLogin({ token, email, name, googleSub, branchId }) {
     if (!token) {
       throw new Error(
         "Supabase authentication token is required for Google login verification.",
@@ -1354,7 +1464,7 @@ class AuthService {
 
     // Query user from PostgreSQL by supabase_auth_id, or email
     const userRes = await pool.query(
-      `SELECT id, name, email, phone, staff_id AS "staffId", status, supabase_auth_id, google_sub
+      `SELECT id, name, email, phone, staff_id AS "staffId", status, supabase_auth_id, google_sub, role
        FROM users
        WHERE (supabase_auth_id = $1 OR LOWER(email) = LOWER($2))
          AND status = 'ACTIVE'
@@ -1364,12 +1474,21 @@ class AuthService {
 
     let user = userRes.rows[0];
 
+    // If new admin account: automatically provision them with zero-form onboarding
     if (!user) {
-      const notFoundErr = new Error(
-        "Google account is not registered. A pharmacy owner must register their pharmacy using Sign Up, or an administrator must provision an employee account.",
-      );
-      notFoundErr.code = "ACCOUNT_NOT_FOUND";
-      throw notFoundErr;
+      const adminName =
+        name ||
+        decoded.user_metadata?.full_name ||
+        decoded.user_metadata?.name ||
+        decoded.name ||
+        (verifiedEmail ? verifiedEmail.split("@")[0] : "Admin");
+      return await this.provisionGoogleAdminUser({
+        token,
+        email: verifiedEmail,
+        name: adminName,
+        supabaseAuthId: uuidSub,
+        pharmacyMode: "multi",
+      });
     }
 
     // JIT link supabase_auth_id if needed
@@ -1386,10 +1505,10 @@ class AuthService {
     // Resolve organisation context legitimately from PostgreSQL
     let organisationId = null;
     let organisationName = null;
-    let pharmacyMode = "single";
+    let pharmacyMode = "multi";
     let isOwner = false;
-    let roleIdentifier = "STAFF";
-    let roleName = "Staff";
+    let roleIdentifier = "ADMIN";
+    let roleName = "Administrator";
 
     // Check if user owns an active organisation
     const ownerOrgRes = await pool.query(
@@ -1400,7 +1519,7 @@ class AuthService {
     if (ownerOrgRes.rows.length > 0) {
       organisationId = ownerOrgRes.rows[0].id;
       organisationName = ownerOrgRes.rows[0].name;
-      pharmacyMode = ownerOrgRes.rows[0].pharmacy_mode || "single";
+      pharmacyMode = ownerOrgRes.rows[0].pharmacy_mode || "multi";
       isOwner = true;
       roleIdentifier = "OWNER";
       roleName = "Pharmacy Owner";
@@ -1423,14 +1542,14 @@ class AuthService {
         const membership = memRes.rows[0];
         organisationId = membership.organisation_id;
         organisationName = membership.organisation_name;
-        pharmacyMode = membership.pharmacy_mode || "single";
-        isOwner = membership.owner_id === user.id;
+        pharmacyMode = membership.pharmacy_mode || "multi";
+        isOwner = membership.owner_id === user.id || user.role === "ADMIN";
         roleIdentifier = isOwner
           ? "OWNER"
-          : membership.role_identifier || "STAFF";
-        roleName = isOwner ? "Pharmacy Owner" : membership.role_name || "Staff";
+          : membership.role_identifier || "ADMIN";
+        roleName = isOwner ? "Pharmacy Owner" : membership.role_name || "Administrator";
       } else {
-        // Fallback: Check if user is owner or named admin
+        // Fallback: Check if user is named admin in any organisation
         const namedOrgRes = await pool.query(
           "SELECT id, name, owner_id, pharmacy_mode FROM organisations WHERE (owner_id = $1 OR LOWER(admin_name) = LOWER($2)) AND status IN ('ACTIVE', 'PENDING_PAYMENT') LIMIT 1;",
           [user.id, user.name || ""],
@@ -1438,20 +1557,19 @@ class AuthService {
         if (namedOrgRes.rows.length > 0) {
           organisationId = namedOrgRes.rows[0].id;
           organisationName = namedOrgRes.rows[0].name;
-          pharmacyMode = namedOrgRes.rows[0].pharmacy_mode || "single";
+          pharmacyMode = namedOrgRes.rows[0].pharmacy_mode || "multi";
           isOwner = true;
-          roleIdentifier = "ADMIN";
-          roleName = "Administrator";
+          roleIdentifier = "OWNER";
+          roleName = "Pharmacy Owner";
         } else {
-          // Global fallback to first active organisation
-          const defOrgRes = await pool.query(
-            "SELECT id, name, pharmacy_mode FROM organisations WHERE status IN ('ACTIVE', 'PENDING_PAYMENT') ORDER BY created_at ASC LIMIT 1;"
-          );
-          if (defOrgRes.rows.length > 0) {
-            organisationId = defOrgRes.rows[0].id;
-            organisationName = defOrgRes.rows[0].name;
-            pharmacyMode = defOrgRes.rows[0].pharmacy_mode || "single";
-          }
+          // User has no organisation yet: auto-provision organisation for them
+          return await this.provisionGoogleAdminUser({
+            token,
+            email: verifiedEmail,
+            name: user.name || name,
+            supabaseAuthId: uuidSub,
+            pharmacyMode: "multi",
+          });
         }
       }
     }
@@ -1495,7 +1613,7 @@ class AuthService {
         isOwner: Boolean(isOwner),
         organisationId: organisationId || null,
         organisationName: organisationName || null,
-        pharmacyMode: pharmacyMode || "single",
+        pharmacyMode: pharmacyMode || "multi",
         branchId: branch?.id || null,
         branchName: branch?.name || null,
         hasBranch: Boolean(branch),

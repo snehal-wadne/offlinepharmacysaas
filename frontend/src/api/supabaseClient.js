@@ -102,6 +102,9 @@ export async function signInWithGoogle({ mode = "login" } = {}) {
     },
   });
   if (error) throw error;
+  if (typeof window !== "undefined" && data?.url) {
+    window.location.assign(data.url);
+  }
   return data;
 }
 
